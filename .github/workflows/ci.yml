@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [master, dev]
+  pull_request:
+    branches: [master, dev]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.13"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Install PyTorch CPU-only for CI (no GPU available)
+          pip install torch==2.7.0+cpu torchaudio==2.7.0+cpu \
+            --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt
+
+      - name: Lint with Ruff
+        run: |
+          pip install ruff
+          ruff check src/ tests/
+
+      - name: Type check with Pyright
+        run: |
+          pip install pyright
+          pyright src/ --level basic
+        continue-on-error: true
+
+      - name: Run unit tests
+        run: |
+          python -m pytest tests/unit/ -v --tb=short -x
+        env:
+          # Prevent tests from requiring real API keys or services
+          AETHER_DATA_PATH: /tmp/aether_test_data
+          CHROMA_PATH: /tmp/aether_test_chroma
+          WEBSOCKET_PORT: "18765"
+          HEALTH_PORT: "18767"
+          DATA_SERVER_PORT: "18766"
+          LOG_LEVEL: WARNING

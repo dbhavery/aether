@@ -1,0 +1,178 @@
+"""Module 02 tests — verify Voice-In components."""
+
+from unittest.mock import AsyncMock, patch
+
+import numpy as np
+import pytest
+
+
+class TestVAD:
+    def test_vad_stream_initializes(self):
+        from src.voice.vad import VADStream
+
+        vad = VADStream()
+        assert vad.threshold > 0
+        assert vad.sample_rate == 16000
+
+    def test_vad_callbacks_fire(self):
+        from src.voice.vad import VADStream
+
+        speech_started = []
+        speech_ended = []
+
+        vad = VADStream(
+            on_speech_start=lambda: speech_started.append(True),
+            on_speech_end=lambda audio: speech_ended.append(audio),
+        )
+        # Simulate speech above threshold (need enough chunks to exceed min_speech_ms=250ms)
+        with patch("src.voice.vad.is_speech", return_value=0.9):
+            speech_chunk = np.ones(512, dtype=np.float32) * 0.5
+            for _ in range(10):  # 10 * 32ms = 320ms > 250ms min_speech_ms
+                vad.process_chunk(speech_chunk, 32.0)
+            assert len(speech_started) == 1
+
+        # Simulate end of speech (silence)
+        with patch("src.voice.vad.is_speech", return_value=0.1):
+            silence_chunk = np.zeros(512, dtype=np.float32)
+            for _ in range(30):  # enough silence chunks to trigger speech_end
+                vad.process_chunk(silence_chunk, 32.0)
+            assert len(speech_ended) == 1
+
+
+class TestSTT:
+    @pytest.mark.asyncio
+    async def test_transcribe_falls_back_gracefully(self):
+        """If ElevenLabs fails, Whisper fallback is attempted."""
+        with (
+            patch("src.voice.stt.transcribe_elevenlabs", new_callable=AsyncMock, return_value=None),
+            patch("src.voice.stt.transcribe_whisper", new_callable=AsyncMock, return_value="hello world"),
+        ):
+            from src.voice.stt import transcribe
+
+            result = await transcribe(np.zeros(16000, dtype=np.float32))
+            assert result == "hello world"
+
+    @pytest.mark.asyncio
+    async def test_transcribe_returns_none_if_both_fail(self):
+        with (
+            patch("src.voice.stt.transcribe_elevenlabs", new_callable=AsyncMock, return_value=None),
+            patch("src.voice.stt.transcribe_whisper", new_callable=AsyncMock, return_value=None),
+        ):
+            from src.voice.stt import transcribe
+
+            result = await transcribe(np.zeros(16000, dtype=np.float32))
+            assert result is None
+
+
+class TestCircuitBreaker:
+    def test_trips_after_threshold_failures(self):
+        from src.voice.stt import CircuitBreaker
+
+        cb = CircuitBreaker(failure_threshold=3, window_seconds=60.0, cooldown_seconds=1.0)
+        assert not cb.is_tripped
+        cb.record_failure()
+        cb.record_failure()
+        assert not cb.is_tripped
+        tripped = cb.record_failure()  # 3rd failure — should trip
+        assert tripped is True
+        assert cb.is_tripped
+        assert cb.trip_count == 1
+
+    def test_auto_resets_after_cooldown(self):
+        import time
+
+        from src.voice.stt import CircuitBreaker
+
+        cb = CircuitBreaker(failure_threshold=2, window_seconds=60.0, cooldown_seconds=0.1)
+        cb.record_failure()
+        cb.record_failure()
+        assert cb.is_tripped
+        time.sleep(0.15)  # Wait for cooldown
+        assert not cb.is_tripped  # Should auto-reset
+
+    def test_success_clears_failures(self):
+        from src.voice.stt import CircuitBreaker
+
+        cb = CircuitBreaker(failure_threshold=3, window_seconds=60.0, cooldown_seconds=1.0)
+        cb.record_failure()
+        cb.record_failure()
+        cb.record_success()  # Should clear accumulated failures
+        cb.record_failure()
+        assert not cb.is_tripped  # Only 1 failure after success clear
+
+    def test_manual_reset(self):
+        from src.voice.stt import CircuitBreaker
+
+        cb = CircuitBreaker(failure_threshold=2, window_seconds=60.0, cooldown_seconds=60.0)
+        cb.record_failure()
+        cb.record_failure()
+        assert cb.is_tripped
+        cb.reset()
+        assert not cb.is_tripped
+
+    def test_window_based_pruning(self):
+        import time
+
+        from src.voice.stt import CircuitBreaker
+
+        cb = CircuitBreaker(failure_threshold=3, window_seconds=0.1, cooldown_seconds=1.0)
+        cb.record_failure()
+        cb.record_failure()
+        time.sleep(0.15)  # Wait for failures to age out of window
+        cb.record_failure()  # Only 1 failure in window now
+        assert not cb.is_tripped
+
+    @pytest.mark.asyncio
+    async def test_transcribe_returns_none_when_tripped(self):
+        """When circuit breaker is tripped, transcribe() returns None immediately."""
+        from src.voice.stt import _circuit_breaker
+
+        # Save original state and trip the CB
+        original_tripped = _circuit_breaker._tripped
+        original_at = _circuit_breaker._tripped_at
+        original_cooldown = _circuit_breaker._cooldown_seconds
+        try:
+            import time
+
+            _circuit_breaker._tripped = True
+            _circuit_breaker._tripped_at = time.monotonic()
+            _circuit_breaker._cooldown_seconds = 60.0  # Long cooldown so it stays tripped
+
+            from src.voice.stt import transcribe
+
+            result = await transcribe(np.zeros(16000, dtype=np.float32))
+            assert result is None
+        finally:
+            _circuit_breaker._tripped = original_tripped
+            _circuit_breaker._tripped_at = original_at
+            _circuit_breaker._cooldown_seconds = original_cooldown
+
+
+class TestSpeakerVerify:
+    @pytest.mark.asyncio
+    async def test_fail_closed_when_no_enrollment(self):
+        """With a working backend but no enrollment, speaker is rejected (fail-closed)."""
+        with (
+            patch("src.voice.speaker_verify._get_don_embedding", return_value=None),
+            patch("src.voice.speaker_verify._backend", "ecapa"),
+            patch("src.voice.speaker_verify._get_verifier", return_value=object()),
+        ):
+            from src.voice.speaker_verify import verify_speaker
+
+            is_don, score = await verify_speaker(np.zeros(16000, dtype=np.float32))
+            assert is_don is False
+            assert score == 0.0
+
+    @pytest.mark.asyncio
+    async def test_sole_user_bypass_when_no_backend(self):
+        """When no verification backend loads, bypass for sole-user mode."""
+        with (
+            patch("src.voice.speaker_verify._backend", "none"),
+            patch("src.voice.speaker_verify._get_verifier"),
+        ):
+            import src.voice.speaker_verify as sv
+
+            sv._backend = "none"  # Ensure bypass stays after _get_verifier call
+            is_don, score = await sv.verify_speaker(np.zeros(16000, dtype=np.float32))
+            assert is_don is True
+            assert score == 1.0

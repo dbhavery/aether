@@ -1,0 +1,55 @@
+# Environment
+.env
+.env.*
+!.env.example
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Models and large files
+models/
+*.wav
+*.mp3
+*.onnx
+*.bin
+*.safetensors
+
+# Data
+data/
+!android/**/data/
+*.db
+*.sqlite
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Build
+dist/
+build/
+*.egg-info/
+.gradle/
+**/android/.gradle/
+**/android/app/build/
+local.properties
+
+# Memory MCP
+.memory/
+
+# Claude Code
+.claude/
+
+# Assets (large/binary)
+assets/
