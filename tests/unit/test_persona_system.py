@@ -99,13 +99,13 @@ class TestSilentGate:
         from src.voice.silent_gate import SilentGate
 
         gate = SilentGate()
-        assert gate.gate1_speaker_verified(is_don=False) is False
+        assert gate.gate1_speaker_verified(is_owner=False) is False
 
     def test_gate1_passes_don(self):
         from src.voice.silent_gate import SilentGate
 
         gate = SilentGate()
-        assert gate.gate1_speaker_verified(is_don=True) is True
+        assert gate.gate1_speaker_verified(is_owner=True) is True
 
     def test_manual_toggle_activate(self):
         from src.voice.silent_gate import SilentGate
@@ -165,7 +165,7 @@ class TestSilentGate:
         from src.voice.silent_gate import SilentGate
 
         gate = SilentGate()
-        result = await gate.should_respond("hello", is_don=False)
+        result = await gate.should_respond("hello", is_owner=False)
         assert result is False
 
     @pytest.mark.asyncio
@@ -173,7 +173,7 @@ class TestSilentGate:
         from src.voice.silent_gate import SilentGate
 
         gate = SilentGate()
-        result = await gate.should_respond("Aether, play some music", is_don=True)
+        result = await gate.should_respond("Aether, play some music", is_owner=True)
         assert result is True
 
     def test_singleton_get_silent_gate(self):

@@ -153,14 +153,14 @@ class TestSpeakerVerify:
     async def test_fail_closed_when_no_enrollment(self):
         """With a working backend but no enrollment, speaker is rejected (fail-closed)."""
         with (
-            patch("src.voice.speaker_verify._get_don_embedding", return_value=None),
+            patch("src.voice.speaker_verify._get_owner_embedding", return_value=None),
             patch("src.voice.speaker_verify._backend", "ecapa"),
             patch("src.voice.speaker_verify._get_verifier", return_value=object()),
         ):
             from src.voice.speaker_verify import verify_speaker
 
-            is_don, score = await verify_speaker(np.zeros(16000, dtype=np.float32))
-            assert is_don is False
+            is_owner, score = await verify_speaker(np.zeros(16000, dtype=np.float32))
+            assert is_owner is False
             assert score == 0.0
 
     @pytest.mark.asyncio
@@ -173,6 +173,6 @@ class TestSpeakerVerify:
             import src.voice.speaker_verify as sv
 
             sv._backend = "none"  # Ensure bypass stays after _get_verifier call
-            is_don, score = await sv.verify_speaker(np.zeros(16000, dtype=np.float32))
-            assert is_don is True
+            is_owner, score = await sv.verify_speaker(np.zeros(16000, dtype=np.float32))
+            assert is_owner is True
             assert score == 1.0

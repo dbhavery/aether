@@ -20,7 +20,7 @@ the audio through the system speakers.
   rejects transcript if The user is talking about Aether to someone else, not to her
 - `vad.py` — `VADStream` + `is_speech()`: Silero VAD streaming detector; buffers audio
   between speech_start/speech_end callbacks based on configurable thresholds
-- `speaker_verify.py` — `verify_speaker()` / `enroll_don()`: SpeechBrain ECAPA-TDNN
+- `speaker_verify.py` — `verify_speaker()` / `enroll_owner()`: SpeechBrain ECAPA-TDNN
   cosine similarity check against stored enrollment embedding; fails closed on error
 - `stt.py` — `transcribe()`: ElevenLabs Scribe v2 primary, faster-whisper
   distil-large-v3 CUDA fallback (falls further back to base.en if model unavailable)

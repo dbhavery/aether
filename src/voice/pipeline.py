@@ -160,15 +160,15 @@ class VoicePipeline:
         logger.info(f"Pipeline: Processing speech ({len(audio) / self._sample_rate:.1f}s)")
         try:
             # Speaker verification
-            is_don, score = await verify_speaker(audio, self._sample_rate)
-            if not is_don:
+            is_owner, score = await verify_speaker(audio, self._sample_rate)
+            if not is_owner:
                 logger.warning(f"Pipeline: Speaker verification failed (score={score:.3f}) — ignoring")
                 return
 
             await event_bus.publish(
                 AetherEvent(
                     type=EventType.SPEAKER_VERIFIED,
-                    data={"is_don": is_don, "score": score},
+                    data={"is_owner": is_owner, "score": score},
                     source_module="voice_pipeline",
                 )
             )
@@ -186,7 +186,7 @@ class VoicePipeline:
 
             # SilentGate: triple gate check — is this speech directed at Aether?
             gate = get_silent_gate()
-            should_respond = await gate.should_respond(text, is_don=is_don)
+            should_respond = await gate.should_respond(text, is_owner=is_owner)
             if not should_respond:
                 logger.info(f"Pipeline: SilentGate blocked response for: '{text[:60]}'")
                 return

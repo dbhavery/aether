@@ -106,7 +106,7 @@ async def watchdog_loop(server_cmd: list[str] | None = None) -> None:
 
                 stderr_log = Path(get_settings().aether_data_path) / "logs" / "server_stderr.log"
             except Exception:
-                stderr_log = Path("I:/AetherData/logs/server_stderr.log")
+                stderr_log = Path("./data/logs/server_stderr.log")
             stderr_log.parent.mkdir(parents=True, exist_ok=True)
             stderr_file = open(stderr_log, "a")  # noqa: SIM115
 

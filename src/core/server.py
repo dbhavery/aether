@@ -224,7 +224,7 @@ async def _on_speaker_verified(event: AetherEvent) -> None:
     await broadcast(
         {
             "type": "speaker_verified",
-            "is_don": event.data.get("is_don", True),
+            "is_owner": event.data.get("is_owner", True),
             "score": event.data.get("score", 0),
             "timestamp": event.timestamp,
         }

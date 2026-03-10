@@ -1,7 +1,7 @@
 """WebSocket connection authentication.
 
 Clients must present a valid token in the connection handshake.
-Token is generated on first run and stored in I:/AetherData/ws_token.txt
+Token is generated on first run and stored in <AETHER_DATA_PATH>/ws_token.txt
 Never hardcoded. Rotates on explicit request only.
 """
 

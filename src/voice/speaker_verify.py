@@ -15,13 +15,13 @@ from loguru import logger
 from src.shared.config import get_settings, get_yaml_config
 
 _verifier = None
-_don_embedding = None
+_owner_embedding = None
 _verifier_lock = threading.Lock()
 
 
 def _get_enrollment_path() -> Path:
     """Lazy accessor for enrollment path — avoids module-level get_settings() call."""
-    return Path(get_settings().aether_data_path) / "speaker_enrollment" / "don_embedding.pt"
+    return Path(get_settings().aether_data_path) / "speaker_enrollment" / "owner_embedding.pt"
 
 
 # Flag to track which backend is active
@@ -112,10 +112,10 @@ def _extract_embedding(waveform: torch.Tensor) -> torch.Tensor | None:
     return None
 
 
-def _get_don_embedding() -> torch.Tensor | None:
-    global _don_embedding
-    if _don_embedding is not None:
-        return _don_embedding
+def _get_owner_embedding() -> torch.Tensor | None:
+    global _owner_embedding
+    if _owner_embedding is not None:
+        return _owner_embedding
     enrollment_path = _get_enrollment_path()
     if enrollment_path.exists():
         data = torch.load(enrollment_path, weights_only=True)
@@ -127,17 +127,17 @@ def _get_don_embedding() -> torch.Tensor | None:
                     f"but current backend is {_backend} — re-enrollment required"
                 )
                 return None
-            _don_embedding = data["embedding"]
+            _owner_embedding = data["embedding"]
         else:
             # Legacy format — plain tensor without backend tag
-            _don_embedding = data
+            _owner_embedding = data
             logger.warning("SpeakerVerify: Legacy enrollment without backend tag — consider re-enrolling")
         logger.info(f"SpeakerVerify: Loaded the user's enrollment embedding (backend={_backend})")
-        return _don_embedding
+        return _owner_embedding
     return None
 
 
-async def enroll_don(audio: np.ndarray, sample_rate: int = 16000) -> bool:
+async def enroll_owner(audio: np.ndarray, sample_rate: int = 16000) -> bool:
     """Enroll the user's voice from the reference audio. Call once during setup."""
     try:
         import torchaudio
@@ -154,8 +154,8 @@ async def enroll_don(audio: np.ndarray, sample_rate: int = 16000) -> bool:
         enrollment_path = _get_enrollment_path()
         enrollment_path.parent.mkdir(parents=True, exist_ok=True)
         torch.save({"embedding": embedding, "backend": _backend}, enrollment_path)
-        global _don_embedding
-        _don_embedding = embedding
+        global _owner_embedding
+        _owner_embedding = embedding
         logger.info(f"SpeakerVerify: the user's voice enrolled via {_backend} and saved to {enrollment_path}")
         return True
     except Exception as e:
@@ -166,7 +166,7 @@ async def enroll_don(audio: np.ndarray, sample_rate: int = 16000) -> bool:
 async def verify_speaker(audio: np.ndarray, sample_rate: int = 16000) -> tuple[bool, float]:
     """Verify audio is the user's voice.
 
-    Returns (is_don, similarity_score).
+    Returns (is_owner, similarity_score).
     Fail-closed: returns (False, 0.0) if verification cannot be performed.
     """
     # If no verification backend could load, bypass verification.
@@ -179,8 +179,8 @@ async def verify_speaker(audio: np.ndarray, sample_rate: int = 16000) -> tuple[b
             logger.warning("SpeakerVerify: no backend available — bypassing verification (sole-user mode)")
             return True, 1.0
 
-    don_embedding = _get_don_embedding()
-    if don_embedding is None:
+    owner_embedding = _get_owner_embedding()
+    if owner_embedding is None:
         logger.error(
             "SpeakerVerify: No enrollment found — rejecting (fail-closed). Run: python scripts/enroll_from_wav.py"
         )
@@ -201,10 +201,10 @@ async def verify_speaker(audio: np.ndarray, sample_rate: int = 16000) -> tuple[b
             logger.warning("SpeakerVerify: embedding extraction failed — bypassing (sole-user mode)")
             return True, 1.0
 
-        score = torch.nn.functional.cosine_similarity(don_embedding.squeeze(), embedding.squeeze(), dim=0).item()
-        is_don = score >= threshold
-        logger.debug(f"SpeakerVerify ({_backend}): score={score:.3f}, threshold={threshold}, is_don={is_don}")
-        return is_don, score
+        score = torch.nn.functional.cosine_similarity(owner_embedding.squeeze(), embedding.squeeze(), dim=0).item()
+        is_owner = score >= threshold
+        logger.debug(f"SpeakerVerify ({_backend}): score={score:.3f}, threshold={threshold}, is_owner={is_owner}")
+        return is_owner, score
     except Exception as e:
         logger.error(f"SpeakerVerify: verification error: {e} — bypassing (sole-user mode)")
         return True, 1.0  # Sole user — don't block voice on model failures
@@ -231,6 +231,6 @@ async def initialize_enrollment() -> None:
     audio, sr = sf.read(str(ref_path))
     if audio.ndim > 1:
         audio = audio.mean(axis=1)
-    success = await enroll_don(audio, sr)
+    success = await enroll_owner(audio, sr)
     if success:
         logger.info("SpeakerVerify: Auto-enrolled owner from reference_voice.wav")

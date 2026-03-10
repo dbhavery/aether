@@ -306,8 +306,8 @@ class MainWindow(QMainWindow):
 
         # Handle speaker verification result
         if msg_type == "speaker_verified":
-            is_don = data.get("is_don", False)
-            if not is_don:
+            is_owner = data.get("is_owner", False)
+            if not is_owner:
                 self._voice_view.set_status("idle")
                 logger.debug("Desktop: speaker not verified — ignoring audio")
             return

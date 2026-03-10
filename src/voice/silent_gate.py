@@ -74,9 +74,9 @@ class SilentGate:
 
         return None
 
-    def gate1_speaker_verified(self, is_don: bool) -> bool:
+    def gate1_speaker_verified(self, is_owner: bool) -> bool:
         """Gate 1: Speaker verification. Returns True if speech should proceed."""
-        if not is_don:
+        if not is_owner:
             logger.debug("SilentGate: Gate 1 BLOCKED — not the user's voice")
             return False
         return True
@@ -136,10 +136,10 @@ class SilentGate:
             logger.warning(f"SilentGate: Gate 2 LLM classification failed: {e}")
             return True  # On error, default to responding (better to respond than miss)
 
-    async def should_respond(self, text: str, is_don: bool = True) -> bool:
+    async def should_respond(self, text: str, is_owner: bool = True) -> bool:
         """Run the full triple gate. Returns True if Aether should respond."""
         # Gate 1: Speaker verification
-        if not self.gate1_speaker_verified(is_don):
+        if not self.gate1_speaker_verified(is_owner):
             return False
 
         # Check manual toggle first
