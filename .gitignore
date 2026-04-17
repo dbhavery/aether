@@ -51,5 +51,9 @@ local.properties
 # Claude Code
 .claude/
 
+# Superpowers skill tooling state
+.superpowers/
+docs/superpowers/
+
 # Assets (large/binary)
 assets/
