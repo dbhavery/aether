@@ -25,6 +25,15 @@ class TestTTS:
 class TestAudioPlayer:
     @pytest.mark.asyncio
     async def test_play_audio_does_not_raise(self):
+        # CI runners have `sounddevice` the Python wrapper but no PortAudio
+        # native library. Skip when the sd module can't even load.
+        sd = pytest.importorskip(
+            "sounddevice", reason="sounddevice requires PortAudio native lib"
+        )
+        try:
+            sd.query_devices()
+        except OSError:
+            pytest.skip("PortAudio not installed on this runner")
         with patch("src.voice.audio_player.sd.play"):
             from src.voice.audio_player import play_audio
 
