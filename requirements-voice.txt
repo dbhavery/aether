@@ -1,0 +1,14 @@
+# Aether — local voice extras (optional)
+# Install alongside requirements.txt when local STT + TTS is wanted:
+#   pip install -r requirements.txt -r requirements-voice.txt
+#
+# Needs torch + torchaudio installed separately (see requirements.txt header).
+# chatterbox-tts 0.1.6 pins numpy<1.26, so it cannot share a resolver run with
+# the core requirements' numpy==2.1.1 — it lives here instead and users pick
+# it up only when they want local TTS. Cloud voice (ElevenLabs) and voice.mode
+# off both work without any of these.
+
+faster-whisper==1.2.1
+chatterbox-tts==0.1.6
+resemble-perth==1.0.1
+einops==0.8.2

@@ -35,13 +35,16 @@ litellm>=1.52.0
 chromadb==1.5.2
 rank-bm25==0.2.2
 
-# ── Voice (local, optional but recommended) ────────────────
+# ── Voice (audio I/O, lightweight — always installed) ─────
 sounddevice==0.5.0
 soundfile==0.12.1
-faster-whisper==1.2.1
-chatterbox-tts==0.1.6
-resemble-perth==1.0.1
-einops==0.8.2
+
+# Local STT + TTS (faster-whisper, chatterbox-tts, resemble-perth, einops)
+# live in requirements-voice.txt because chatterbox-tts 0.1.6 pins numpy<1.26
+# which conflicts with the core numpy==2.1.1 pin. Install with:
+#   pip install -r requirements.txt -r requirements-voice.txt
+# when you want local TTS. Cloud voice (ElevenLabs) and voice.mode=off
+# both work without it.
 
 # ── Voice (cloud, optional) ────────────────────────────────
 elevenlabs==2.38.0
