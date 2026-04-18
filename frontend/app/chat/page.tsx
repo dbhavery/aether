@@ -39,10 +39,10 @@ export default function ChatPage() {
       />
       {messages.length === 0 ? (
         <div className="flex-1 flex items-center justify-center px-6">
-          <div className="text-center">
+          <div className="text-center max-w-md">
             <p className="text-[18px] text-fg-secondary">Say hi to {assistantLabel}.</p>
             <p className="mt-2 text-[13px] text-fg-muted">
-              They're running on your machine. Speak freely.
+              Local-first, yours alone. Type when ready.
             </p>
           </div>
         </div>
