@@ -1,8 +1,36 @@
-"""WebSocket server — the central connection hub for all clients."""
+"""WebSocket server — the central connection hub for all clients.
+
+Protocol
+--------
+Every inbound JSON frame has the shape::
+
+    {"type": "<event-name>", "data": {...}, "request_id": "<optional>"}
+
+The server converts each frame into an ``AetherEvent`` and publishes it on
+the shared EventBus. Request/response correlation is carried by
+``request_id``: handlers echo it back on the corresponding result event, and
+the broadcaster copies it into the outgoing JSON payload so browser clients
+can match replies to requests.
+
+Two legacy message types are still recognised for backwards compatibility:
+``"ping"`` returns ``"pong"`` inline (never reaches the bus); ``"message"``
+is aliased to ``user_message``. Everything else flows through the generic
+bridge — unknown types are logged and dropped without closing the socket.
+
+Auth
+----
+Connections from localhost (127.0.0.1, ::1) skip the token check so the
+default Next.js dev flow doesn't need to fetch a token first. Non-localhost
+connections still require a valid token (query string or Authorization
+header) as before.
+"""
+
+from __future__ import annotations
 
 import asyncio
 import json
 import uuid
+from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 import websockets
@@ -13,248 +41,286 @@ from src.core.events import event_bus
 from src.core.health import register_module, update_module_status
 from src.core.rate_limiter import check_rate_limit, clear_bucket
 from src.shared.config import get_settings
-from src.shared.types import AetherEvent, EventType, InteractionMode
+from src.shared.types import AetherEvent, EventType
 
 _connected_clients: set = set()
 
+MAX_MESSAGE_SIZE = 1_000_000  # 1MB max frame
+MAX_CLIENTS = 10
+
+# Event types the server re-broadcasts to all connected WebSocket clients.
+_BROADCAST_EVENT_TYPES: tuple[EventType, ...] = (
+    EventType.RESPONSE_TEXT_CHUNK,
+    EventType.RESPONSE_TEXT_READY,
+    EventType.RESPONSE_START,
+    EventType.RESPONSE_END,
+    EventType.WIZARD_STEP_RESULT,
+    EventType.ONBOARDING_COMPLETE,
+    EventType.WIZARD_STATE_RESULT,
+    EventType.LLM_KEY_TEST_RESULT,
+    EventType.OLLAMA_PROBE_RESULT,
+    EventType.VOICE_HARDWARE_PROBE_RESULT,
+    EventType.PERSONA_CHANGED,
+    EventType.PROVIDER_CHANGED,
+    EventType.AVATAR_STATE_CHANGED,
+    EventType.MODULE_READY,
+    EventType.ERROR,
+)
+
+# Localhost hosts that bypass the token check.
+_LOCAL_HOSTS: frozenset[str] = frozenset({"127.0.0.1", "::1", "localhost"})
+
+_LOCAL_SOURCE = "websocket_client"
+
 
 async def broadcast(message: dict) -> None:
+    """Send ``message`` as JSON to every connected client. Drops the dead ones."""
     if not _connected_clients:
         return
     data = json.dumps(message)
     disconnected = set()
-    # Copy the set to avoid RuntimeError if _handle_client modifies it during iteration
+    # Copy the set — a send failure will mutate _connected_clients via the
+    # connection handler's finally block.
     for client in list(_connected_clients):
         try:
             await client.send(data)
         except websockets.exceptions.ConnectionClosed:
             disconnected.add(client)
-        except Exception as e:
-            logger.error(f"Server: broadcast error to client: {e}")
+        except Exception as exc:
+            logger.error(f"Server: broadcast error to client: {exc!r}")
             disconnected.add(client)
     _connected_clients.difference_update(disconnected)
 
 
-MAX_MESSAGE_SIZE = 1_000_000  # 1MB max message size (upgraded from 50KB)
-MAX_CLIENTS = 10
+# ---------------------------------------------------------------------------
+# Connection handling.
+# ---------------------------------------------------------------------------
 
 
-async def _handle_client(websocket) -> None:
-    if len(_connected_clients) >= MAX_CLIENTS:
-        logger.warning(f"Server: rejecting client — max connections ({MAX_CLIENTS}) reached")
-        await websocket.close(4000, "Max connections reached")
-        return
+def _is_localhost(websocket) -> bool:
+    """Return True iff this websocket is a loopback connection."""
+    remote = getattr(websocket, "remote_address", None)
+    if not remote:
+        return False
+    host = remote[0]
+    if not isinstance(host, str):
+        return False
+    return host in _LOCAL_HOSTS
 
-    # --- Auth check: extract token from query string or Authorization header ---
-    # websockets 15+: request info is on websocket.request
+
+def _extract_token(websocket) -> str:
+    """Pull a bearer token from query string or Authorization header, or ""."""
     request = getattr(websocket, "request", None)
-    token = None
     if request is not None:
         path = getattr(request, "path", "") or ""
         headers = getattr(request, "headers", None) or {}
     else:
-        # Fallback for older websockets API
         path = getattr(websocket, "path", "") or ""
         headers = getattr(websocket, "request_headers", None) or {}
+
     if "?" in path:
         qs = parse_qs(urlparse(path).query)
-        token = qs.get("token", [None])[0]
-    if not token:
-        auth_header = headers.get("Authorization", "")
-        token = auth_header.removeprefix("Bearer ").strip() if auth_header else ""
-    if not token or not verify_token(token):
-        logger.warning(f"Server: rejected unauthenticated connection from {websocket.remote_address}")
-        await websocket.close(4001, "Unauthorized")
+        token = qs.get("token", [""])[0] or ""
+        if token:
+            return token
+
+    auth_header = headers.get("Authorization", "") if hasattr(headers, "get") else ""
+    if auth_header:
+        return auth_header.removeprefix("Bearer ").strip()
+    return ""
+
+
+async def _reject(websocket, code: int, reason: str) -> None:
+    """Close the socket and log the reason."""
+    logger.warning(f"Server: rejecting client from {websocket.remote_address} — {reason}")
+    await websocket.close(code, reason)
+
+
+async def _handle_client(websocket) -> None:
+    if len(_connected_clients) >= MAX_CLIENTS:
+        await _reject(websocket, 4000, f"Max connections ({MAX_CLIENTS}) reached")
         return
+
+    client_addr = websocket.remote_address
+    if _is_localhost(websocket):
+        logger.debug(f"Server: localhost connection from {client_addr} — skipping token check")
+    else:
+        token = _extract_token(websocket)
+        if not token or not verify_token(token):
+            await _reject(websocket, 4001, "Unauthorized")
+            return
 
     connection_id = str(uuid.uuid4())
     _connected_clients.add(websocket)
-    client_addr = websocket.remote_address
-    logger.info(f"Server: authenticated client connected from {client_addr}. Total clients: {len(_connected_clients)}")
+    logger.info(
+        f"Server: client connected from {client_addr} "
+        f"(id={connection_id[:8]}, total={len(_connected_clients)})"
+    )
+
     try:
         async for raw_message in websocket:
-            try:
-                if len(raw_message) > MAX_MESSAGE_SIZE:
-                    logger.warning(f"Server: message too large ({len(raw_message)} bytes) from {client_addr}")
-                    continue
-
-                # Rate limit check
-                if not check_rate_limit(connection_id):
-                    await websocket.send(
-                        json.dumps(
-                            {
-                                "type": "error",
-                                "message": "Rate limit exceeded. Please slow down.",
-                            }
-                        )
-                    )
-                    continue
-
-                message = json.loads(raw_message)
-                msg_type = message.get("type", "")
-
-                if msg_type == "ping":
-                    await websocket.send(json.dumps({"type": "pong"}))
-                    continue
-
-                if msg_type == "approval_response":
-                    approval_id = message.get("approval_id", "")
-                    approved = message.get("approved", False)
-                    if approval_id:
-                        resolve_approval(approval_id, approved)
-                        logger.info(f"Server: approval '{approval_id}' -> {'approved' if approved else 'rejected'}")
-                    continue
-
-                if msg_type in ("message", "user_message"):
-                    text = message.get("text", "")
-                    if len(text) > 10_000:
-                        logger.warning(f"Server: message text truncated ({len(text)} chars) from {client_addr}")
-                        text = text[:10_000]
-                    # Validate interaction mode — reject invalid values
-                    raw_mode = message.get("mode", InteractionMode.TEXT)
-                    try:
-                        mode = InteractionMode(raw_mode) if isinstance(raw_mode, str) else raw_mode
-                    except ValueError:
-                        logger.warning(f"Server: invalid mode '{raw_mode}' from {client_addr}, defaulting to TEXT")
-                        mode = InteractionMode.TEXT
-                    event = AetherEvent(
-                        type=EventType.USER_MESSAGE,
-                        data={
-                            "text": text,
-                            "timestamp": message.get("timestamp", ""),
-                            "mode": mode,
-                        },
-                        source_module="websocket_server",
-                    )
-                    await event_bus.publish(event)
-                elif msg_type == "settings_changed":
-                    event = AetherEvent(
-                        type=EventType.SETTINGS_CHANGED,
-                        data=message.get("changes", {}),
-                        source_module="desktop_settings",
-                    )
-                    await event_bus.publish(event)
-                    logger.info("Server: settings changed, notifying modules")
-                else:
-                    logger.warning(f"Server: unknown message type '{msg_type}' from {client_addr}")
-
-            except json.JSONDecodeError as e:
-                logger.error(f"Server: invalid JSON from {client_addr}: {e}")
-            except Exception as e:
-                logger.error(f"Server: error handling message from {client_addr}: {e}")
-
+            await _dispatch_inbound(websocket, connection_id, raw_message)
     except websockets.exceptions.ConnectionClosed:
         logger.info(f"Server: client {client_addr} disconnected cleanly")
-    except Exception as e:
-        logger.error(f"Server: unexpected error with client {client_addr}: {e}")
+    except Exception as exc:
+        logger.error(f"Server: unexpected error with client {client_addr}: {exc!r}")
     finally:
         clear_bucket(connection_id)
         _connected_clients.discard(websocket)
-        logger.info(f"Server: removed {client_addr}. Total clients: {len(_connected_clients)}")
+        logger.info(
+            f"Server: removed {client_addr} "
+            f"(id={connection_id[:8]}, remaining={len(_connected_clients)})"
+        )
 
 
-# Subscribe to response events and broadcast to all clients
-async def _on_response_ready(event: AetherEvent) -> None:
-    await broadcast(
-        {
-            "type": "response",
-            "text": event.data.get("text", ""),
-            "emotion": event.data.get("emotion", "neutral"),
-            "timestamp": event.timestamp,
-            "is_interim": event.data.get("is_interim", False),
-        }
+async def _dispatch_inbound(websocket, connection_id: str, raw_message: Any) -> None:
+    """Parse one inbound frame and route it through the generic bridge."""
+    if isinstance(raw_message, bytes):
+        raw_message = raw_message.decode("utf-8", errors="replace")
+
+    if len(raw_message) > MAX_MESSAGE_SIZE:
+        logger.warning(f"Server: message too large ({len(raw_message)} bytes) from {connection_id[:8]}")
+        return
+
+    if not check_rate_limit(connection_id):
+        try:
+            await websocket.send(
+                json.dumps({"type": "error", "data": {"message": "Rate limit exceeded."}})
+            )
+        except Exception:
+            pass
+        return
+
+    try:
+        message = json.loads(raw_message)
+    except json.JSONDecodeError as exc:
+        logger.error(f"Server: invalid JSON from {connection_id[:8]}: {exc!r}")
+        return
+
+    if not isinstance(message, dict):
+        logger.warning(f"Server: ignored non-object frame from {connection_id[:8]}")
+        return
+
+    msg_type = message.get("type", "")
+    if not isinstance(msg_type, str) or not msg_type:
+        logger.warning(f"Server: frame from {connection_id[:8]} missing 'type'")
+        return
+
+    # --- Legacy / inline special cases ------------------------------------
+    if msg_type == "ping":
+        try:
+            await websocket.send(json.dumps({"type": "pong"}))
+        except Exception as exc:
+            logger.debug(f"Server: pong send failed: {exc!r}")
+        return
+
+    # "message" is the pre-contract legacy alias for USER_MESSAGE.
+    if msg_type == "message":
+        msg_type = EventType.USER_MESSAGE.value
+
+    # --- Generic bridge ---------------------------------------------------
+    try:
+        event_type = EventType(msg_type)
+    except ValueError:
+        logger.warning(f"Server: unknown message type '{msg_type}' from {connection_id[:8]}")
+        return
+
+    data = message.get("data")
+    if data is None:
+        # Back-compat: older clients put payload fields at the top level.
+        data = {k: v for k, v in message.items() if k not in {"type", "data", "request_id"}}
+    if not isinstance(data, dict):
+        logger.warning(f"Server: '{msg_type}' data must be an object, got {type(data).__name__}")
+        return
+
+    request_id = message.get("request_id")
+    if request_id is not None and not isinstance(request_id, str):
+        logger.warning(f"Server: '{msg_type}' request_id must be a string; ignoring")
+        request_id = None
+
+    if request_id is not None:
+        # Stash request_id into data too so handlers that predate the field
+        # on AetherEvent can still recover it.
+        data = {**data, "request_id": request_id}
+
+    event = AetherEvent(
+        type=event_type,
+        data=data,
+        source_module=_LOCAL_SOURCE,
+        request_id=request_id,
     )
+    await event_bus.publish(event)
 
 
-async def _on_wake_word(event: AetherEvent) -> None:
-    await broadcast({"type": "wake_word", "listening": True})
+# ---------------------------------------------------------------------------
+# Outbound: broadcast selected EventBus events to every connected client.
+# ---------------------------------------------------------------------------
 
 
-async def _on_proactive_message(event: AetherEvent) -> None:
-    """Broadcast proactive messages (daily interview, reminders) to all clients."""
-    await broadcast(
-        {
-            "type": "proactive",
-            "text": event.data.get("text", ""),
-            "category": event.data.get("category", "general"),
-            "timestamp": event.timestamp,
-        }
-    )
+async def _broadcast_event(event: AetherEvent) -> None:
+    """Serialize ``event`` in the frontend's expected shape and broadcast it."""
+    request_id = event.request_id
+    if request_id is None:
+        # Handlers that stuff request_id into data (pre-native-field path)
+        # still work — pick it up here.
+        raw = event.data.get("request_id") if isinstance(event.data, dict) else None
+        if isinstance(raw, str):
+            request_id = raw
+
+    payload: dict[str, Any] = {
+        "type": event.type.value if isinstance(event.type, EventType) else str(event.type),
+        "data": event.data if isinstance(event.data, dict) else {},
+        "timestamp": event.timestamp,
+    }
+    if request_id is not None:
+        payload["request_id"] = request_id
+    await broadcast(payload)
 
 
+# Reload YAML config on settings change. Kept from the previous server.
 async def _on_settings_changed(event: AetherEvent) -> None:
-    """Reload config when settings are changed from desktop."""
     from src.shared.config import reload_yaml_config
 
     try:
         reload_yaml_config()
         logger.info("Server: YAML config reloaded after settings change")
-    except Exception as e:
-        logger.error(f"Server: failed to reload config: {e}")
+    except Exception as exc:
+        logger.error(f"Server: failed to reload config: {exc!r}")
+    # Also broadcast so other clients hear the change.
+    await _broadcast_event(event)
 
 
-async def _on_approval_requested(event: AetherEvent) -> None:
-    """Broadcast approval requests to desktop so the user can approve/reject."""
-    await broadcast(
-        {
-            "type": "approval_request",
-            "approval_id": event.data.get("approval_id", ""),
-            "action": event.data.get("action", ""),
-            "description": event.data.get("description", ""),
-            "risk": event.data.get("risk", "confirm"),
-        }
-    )
+# ---------------------------------------------------------------------------
+# Startup.
+# ---------------------------------------------------------------------------
+
+_subscriptions_registered = False
 
 
-async def _on_transcript_ready(event: AetherEvent) -> None:
-    """Broadcast transcript to desktop for real-time display."""
-    await broadcast(
-        {
-            "type": "transcript",
-            "text": event.data.get("text", ""),
-            "confidence": event.data.get("confidence", 0),
-            "timestamp": event.timestamp,
-        }
-    )
+def _register_broadcast_subscriptions() -> None:
+    """Subscribe the broadcaster to every event the frontend cares about.
 
-
-async def _on_speaker_verified(event: AetherEvent) -> None:
-    """Broadcast speaker verification result to desktop."""
-    await broadcast(
-        {
-            "type": "speaker_verified",
-            "is_owner": event.data.get("is_owner", True),
-            "score": event.data.get("score", 0),
-            "timestamp": event.timestamp,
-        }
-    )
-
-
-async def _on_module_ready(event: AetherEvent) -> None:
-    if event.data.get("module") == "avatar":
-        await broadcast(
-            {
-                "type": "avatar_stream",
-                "url": event.data.get("stream_url", ""),
-                "available": event.data.get("available", False),
-            }
-        )
+    Idempotent — running twice leaves a single handler per event type.
+    """
+    global _subscriptions_registered
+    if _subscriptions_registered:
+        return
+    for event_type in _BROADCAST_EVENT_TYPES:
+        event_bus.subscribe(event_type, _broadcast_event)
+    event_bus.subscribe(EventType.SETTINGS_CHANGED, _on_settings_changed)
+    _subscriptions_registered = True
+    logger.debug(f"Server: registered {len(_BROADCAST_EVENT_TYPES) + 1} broadcast subscriptions")
 
 
 async def start_websocket_server() -> None:
     settings = get_settings()
     register_module("websocket_server", "starting")
-    event_bus.subscribe(EventType.RESPONSE_TEXT_READY, _on_response_ready)
-    event_bus.subscribe(EventType.WAKE_WORD_DETECTED, _on_wake_word)
-    event_bus.subscribe(EventType.TRANSCRIPT_READY, _on_transcript_ready)
-    event_bus.subscribe(EventType.SPEAKER_VERIFIED, _on_speaker_verified)
-    event_bus.subscribe(EventType.MODULE_READY, _on_module_ready)
-    event_bus.subscribe(EventType.PROACTIVE_MESSAGE, _on_proactive_message)
-    event_bus.subscribe(EventType.SETTINGS_CHANGED, _on_settings_changed)
-    event_bus.subscribe(EventType.APPROVAL_REQUESTED, _on_approval_requested)
+
+    _register_broadcast_subscriptions()
+
     port = settings.websocket_port
-    logger.info(f"Server: starting WebSocket server on port {port}")
     host = settings.server_host
+    logger.info(f"Server: starting WebSocket server on {host}:{port}")
     async with websockets.serve(_handle_client, host, port, max_size=MAX_MESSAGE_SIZE):
         update_module_status("websocket_server", "ready")
         logger.info(f"Server: WebSocket server listening on ws://{host}:{port}")

@@ -1,8 +1,9 @@
 """WebSocket connection authentication.
 
 Clients must present a valid token in the connection handshake.
-Token is generated on first run and stored in <AETHER_DATA_PATH>/ws_token.txt
-Never hardcoded. Rotates on explicit request only.
+Token is generated on first run and stored in <user data dir>/ws_token.txt
+(resolved via `src.shared.paths.get_data_dir`). Never hardcoded. Rotates on
+explicit request only.
 """
 
 import hashlib
@@ -12,17 +13,17 @@ from pathlib import Path
 
 from loguru import logger
 
-from src.shared.config import get_settings
+from src.shared.paths import get_data_dir
 
 _token_path: Path | None = None
 _token_lock = threading.Lock()
 
 
 def _get_token_path() -> Path:
-    """Lazily resolve token path — avoids calling get_settings() at import time."""
+    """Lazily resolve token path — avoids calling get_data_dir() at import time."""
     global _token_path
     if _token_path is None:
-        _token_path = Path(get_settings().aether_data_path) / "ws_token.txt"
+        _token_path = get_data_dir() / "ws_token.txt"
     return _token_path
 
 

@@ -1,17 +1,16 @@
 """Single-instance lock — prevents multiple Aether server processes.
 
-Uses a file lock at $AETHER_DATA_PATH/.aether_lock.
-Acquire on startup, release on shutdown.
+Uses a file lock at <user data dir>/.aether_lock (resolved via
+`src.shared.paths.get_data_dir`). Acquire on startup, release on shutdown.
 """
 
 import atexit
 import contextlib
 import os
-from pathlib import Path
 
 from loguru import logger
 
-from src.shared.config import get_settings
+from src.shared.paths import get_data_dir
 
 _lock_fd = None
 _lock_path: str | None = None
@@ -21,7 +20,7 @@ def acquire_instance_lock() -> bool:
     """Try to acquire the instance lock. Returns True on success, False if another instance holds it."""
     global _lock_fd, _lock_path
 
-    lock_dir = Path(get_settings().aether_data_path)
+    lock_dir = get_data_dir()
     lock_dir.mkdir(parents=True, exist_ok=True)
     _lock_path = str(lock_dir / ".aether_lock")
 

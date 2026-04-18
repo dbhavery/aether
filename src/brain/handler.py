@@ -86,13 +86,13 @@ async def on_user_message(event: AetherEvent) -> None:
     rag = await _get_rag_context(text)
     system_prompt = build_system_prompt(mode=mode, rag_context=rag)
 
-    messages: list[dict[str, str]] = []
+    messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
     messages.extend(history)
     messages.append({"role": "user", "content": text})
 
     assembled: list[str] = []
     try:
-        async for chunk in call_with_fallback(messages=messages, tier=tier, system=system_prompt):
+        async for chunk in call_with_fallback(messages=messages, tier=tier):
             if chunk.content:
                 assembled.append(chunk.content)
                 await event_bus.publish(

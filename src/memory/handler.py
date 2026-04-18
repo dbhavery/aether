@@ -121,16 +121,7 @@ async def on_response_ready(event: AetherEvent) -> None:
     await _process_facts("assistant", text, timestamp)
 
 
-async def on_proactive_message(event: AetherEvent) -> None:
-    """Store proactive messages (daily interview, reminders) in memory."""
-    text = event.data.get("text", "")
-    timestamp = event.timestamp
-    if text:
-        await _store_with_tiers("assistant", text, timestamp)
-
-
 def register_memory_handlers() -> None:
     event_bus.subscribe(EventType.USER_MESSAGE, on_user_message)
     event_bus.subscribe(EventType.RESPONSE_TEXT_READY, on_response_ready)
-    event_bus.subscribe(EventType.PROACTIVE_MESSAGE, on_proactive_message)
     logger.info("Memory: handlers registered")

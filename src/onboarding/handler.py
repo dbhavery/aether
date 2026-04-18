@@ -10,6 +10,7 @@ Event payload contract
 IN — ``WIZARD_STEP_SUBMIT.data``::
 
     {
+        "request_id": "wiz-abc-1",     # optional — echoed back if present
         "step": "2-avatar",            # WizardStep value
         "payload": { ... step-specific fields ... },
     }
@@ -17,8 +18,10 @@ IN — ``WIZARD_STEP_SUBMIT.data``::
 OUT — ``WIZARD_STEP_RESULT.data``::
 
     {
+        "request_id": "wiz-abc-1",     # only present if inbound had one
         "step": "2-avatar",
         "ok": true,
+        "success": true,               # alias for ok (frontend shape)
         "next_step": "3-personality",  # None on HANDOFF success
         "error": None,                 # set on failure; ok will be False
     }
@@ -55,9 +58,16 @@ from src.shared.types import AetherEvent, EventType
 _SOURCE_MODULE = "onboarding.handler"
 
 
+_handlers_registered = False
+
+
 def register_wizard_handlers() -> None:
     """Subscribe the wizard handler to the EventBus. Idempotent."""
+    global _handlers_registered
+    if _handlers_registered:
+        return
     event_bus.subscribe(EventType.WIZARD_STEP_SUBMIT, _handle_wizard_step_submit)
+    _handlers_registered = True
     logger.info("Onboarding wizard handlers registered")
 
 
@@ -65,13 +75,19 @@ async def _handle_wizard_step_submit(event: AetherEvent) -> None:
     """Entrypoint — dispatch by step, validate, persist, reply."""
     step_raw = event.data.get("step")
     payload = event.data.get("payload") or {}
+    request_id = _coerce_request_id(event)
     if not isinstance(payload, dict):
-        await _reply(step_raw, ok=False, error="Wizard payload must be an object.")
+        await _reply(step_raw, ok=False, error="Wizard payload must be an object.", request_id=request_id)
         return
 
     step = _coerce_step(step_raw)
     if step is None:
-        await _reply(step_raw, ok=False, error=f"Unknown wizard step '{step_raw}'.")
+        await _reply(
+            step_raw,
+            ok=False,
+            error=f"Unknown wizard step '{step_raw}'.",
+            request_id=request_id,
+        )
         return
 
     state = load_wizard_state() or WizardState()
@@ -80,11 +96,16 @@ async def _handle_wizard_step_submit(event: AetherEvent) -> None:
         ok, error = await _dispatch(step, payload, state)
     except Exception as exc:  # Defensive — no handler should raise, but don't crash the bus.
         logger.exception(f"Unhandled error in wizard step {step}: {exc!r}")
-        await _reply(step.value, ok=False, error="Internal error during validation.")
+        await _reply(
+            step.value,
+            ok=False,
+            error="Internal error during validation.",
+            request_id=request_id,
+        )
         return
 
     if not ok:
-        await _reply(step.value, ok=False, error=error)
+        await _reply(step.value, ok=False, error=error, request_id=request_id)
         return
 
     state.mark_step_complete(step)
@@ -96,9 +117,9 @@ async def _handle_wizard_step_submit(event: AetherEvent) -> None:
             await finalize_wizard(state)
         except FinalizeError as exc:
             logger.error(f"Finalization failed: {exc!r}")
-            await _reply(step.value, ok=False, error=str(exc))
+            await _reply(step.value, ok=False, error=str(exc), request_id=request_id)
             return
-        await _reply(step.value, ok=True, next_step=None)
+        await _reply(step.value, ok=True, next_step=None, request_id=request_id)
         await event_bus.publish(
             AetherEvent(
                 type=EventType.ONBOARDING_COMPLETE,
@@ -117,10 +138,20 @@ async def _handle_wizard_step_submit(event: AetherEvent) -> None:
         save_wizard_state(state)
     except RuntimeError as exc:
         logger.error(f"Failed to persist wizard state: {exc!r}")
-        await _reply(step.value, ok=False, error="Couldn't save wizard progress.")
+        await _reply(
+            step.value,
+            ok=False,
+            error="Couldn't save wizard progress.",
+            request_id=request_id,
+        )
         return
 
-    await _reply(step.value, ok=True, next_step=_as_value(next_step(step)))
+    await _reply(
+        step.value,
+        ok=True,
+        next_step=_as_value(next_step(step)),
+        request_id=request_id,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -139,14 +170,15 @@ async def _dispatch(
         return True, None
 
     if step is WizardStep.AVATAR:
-        avatar_id = payload.get("avatar_id", "")
+        # Canonical name per ONBOARDING-SPEC.md §2 is selected_avatar_id.
+        avatar_id = payload.get("selected_avatar_id") or payload.get("avatar_id", "")
         ok, error = validate_avatar(str(avatar_id))
         if ok:
             state.selected_avatar_id = str(avatar_id).strip().lower()
         return ok, error
 
     if step is WizardStep.PERSONALITY:
-        archetype = payload.get("archetype", "")
+        archetype = payload.get("selected_archetype") or payload.get("archetype", "")
         ok, error = validate_archetype(str(archetype))
         if ok:
             state.selected_archetype = str(archetype).strip()
@@ -160,9 +192,12 @@ async def _dispatch(
         return ok, error
 
     if step is WizardStep.LLM:
-        provider = str(payload.get("provider", ""))
+        # Canonical names per ONBOARDING-SPEC.md §5.
+        provider = str(payload.get("llm_provider") or payload.get("provider", ""))
         key = payload.get("key")
-        model_overrides = payload.get("model_overrides") or {}
+        model_overrides = (
+            payload.get("llm_model_overrides") or payload.get("model_overrides") or {}
+        )
         if not isinstance(model_overrides, dict):
             return False, "model_overrides must be an object."
         ok, error = await validate_llm_provider(
@@ -172,9 +207,8 @@ async def _dispatch(
             return ok, error
         provider_lc = provider.strip().lower()
         state.llm_provider = provider_lc
-        state.llm_tier_map = (
-            payload.get("tier_map") if isinstance(payload.get("tier_map"), dict) else None
-        )
+        tier_map = payload.get("llm_tier_map") or payload.get("tier_map")
+        state.llm_tier_map = tier_map if isinstance(tier_map, dict) else None
         state.llm_model_overrides = model_overrides or None
         # Per LLM-PROVIDERS.md §6 and ONBOARDING-SPEC.md §3, API keys go to
         # the OS keyring the moment a provider validates — never to disk in
@@ -189,8 +223,9 @@ async def _dispatch(
         return True, None
 
     if step is WizardStep.VOICE:
-        mode = str(payload.get("mode", ""))
-        settings = payload.get("settings") or {}
+        # Canonical names per ONBOARDING-SPEC.md §6.
+        mode = str(payload.get("voice_mode") or payload.get("mode", ""))
+        settings = payload.get("voice_settings") or payload.get("settings") or {}
         if not isinstance(settings, dict):
             return False, "settings must be an object."
         ok, error = await validate_voice_mode(mode, settings)
@@ -212,9 +247,19 @@ async def _dispatch(
         return True, None
 
     if step is WizardStep.TERMS:
-        accepted = bool(payload.get("accepted", False))
-        crash_reports = bool(payload.get("crash_reports", False))
-        usage_counters = bool(payload.get("usage_counters", False))
+        # Canonical names per ONBOARDING-SPEC.md §7. Frontend sends
+        # accepted_terms_at as an ISO timestamp (presence => accepted=True)
+        # and telemetry as a nested object.
+        telemetry_raw = payload.get("telemetry")
+        if isinstance(telemetry_raw, dict):
+            crash_reports = bool(telemetry_raw.get("crash_reports", False))
+            usage_counters = bool(telemetry_raw.get("usage_counters", False))
+        else:
+            crash_reports = bool(payload.get("crash_reports", False))
+            usage_counters = bool(payload.get("usage_counters", False))
+        accepted = bool(payload.get("accepted", False)) or bool(
+            payload.get("accepted_terms_at")
+        )
         ok, error = validate_terms_acceptance(accepted, crash_reports, usage_counters)
         if ok:
             state.accepted_terms_at = datetime.now().astimezone()
@@ -268,6 +313,17 @@ def _coerce_step(raw: Any) -> WizardStep | None:
         return None
 
 
+def _coerce_request_id(event: AetherEvent) -> str | None:
+    """Extract the caller's request_id from either the native field or ``data``."""
+    native = getattr(event, "request_id", None)
+    if isinstance(native, str) and native:
+        return native
+    raw = event.data.get("request_id") if isinstance(event.data, dict) else None
+    if isinstance(raw, str) and raw:
+        return raw
+    return None
+
+
 def _as_value(step: WizardStep | None) -> str | None:
     return step.value if step is not None else None
 
@@ -276,16 +332,32 @@ async def _reply(
     step: Any,
     *,
     ok: bool,
-    next_step: str | None = None,  # noqa: ARG001 — name matches spec
+    next_step: str | None = None,
     error: str | None = None,
+    request_id: str | None = None,
 ) -> None:
-    """Publish a ``WIZARD_STEP_RESULT`` back onto the bus."""
+    """Publish a ``WIZARD_STEP_RESULT`` back onto the bus.
+
+    When ``request_id`` is set, it is attached both as a field on the event
+    (for native correlation) and inside ``data`` (so JSON clients still see
+    it after broadcast). ``ok``/``success`` are both emitted so legacy
+    callers reading ``ok`` and frontend code reading ``success`` both work.
+    """
+    step_value = step.value if isinstance(step, WizardStep) else step
     data: dict[str, Any] = {
-        "step": step.value if isinstance(step, WizardStep) else step,
+        "step": step_value,
         "ok": ok,
+        "success": ok,
         "next_step": next_step,
         "error": error,
     }
+    if request_id is not None:
+        data["request_id"] = request_id
     await event_bus.publish(
-        AetherEvent(type=EventType.WIZARD_STEP_RESULT, data=data, source_module=_SOURCE_MODULE)
+        AetherEvent(
+            type=EventType.WIZARD_STEP_RESULT,
+            data=data,
+            source_module=_SOURCE_MODULE,
+            request_id=request_id,
+        )
     )

@@ -102,9 +102,9 @@ async def watchdog_loop(server_cmd: list[str] | None = None) -> None:
 
             # Redirect stderr to a log file (not DEVNULL) so crashes are visible.
             try:
-                from src.shared.config import get_settings
+                from src.shared.paths import get_logs_dir
 
-                stderr_log = Path(get_settings().aether_data_path) / "logs" / "server_stderr.log"
+                stderr_log = get_logs_dir() / "server_stderr.log"
             except Exception:
                 stderr_log = Path("./data/logs/server_stderr.log")
             stderr_log.parent.mkdir(parents=True, exist_ok=True)

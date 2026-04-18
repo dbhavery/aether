@@ -88,7 +88,7 @@ _OLLAMA_TIMEOUT_SECONDS = 3.0
 # tight timeout keeps the wizard responsive when a key is wrong or the
 # provider is flaky.
 _LLM_TEST_TIMEOUT_SECONDS = 10.0
-_LLM_TEST_MAX_TOKENS = 1
+_LLM_TEST_MAX_TOKENS = 16  # Some providers reject 1 as below their output budget.
 
 # Probe models used only for key-validation calls. Picked to be the cheapest
 # "always-available" model on each provider as of 2026-04.

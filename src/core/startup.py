@@ -86,11 +86,13 @@ async def startup() -> None:
     from src.brain.handler import register_brain_handlers
     from src.memory.handler import register_memory_handlers
     from src.onboarding.handler import register_wizard_handlers
+    from src.onboarding.probe_handler import register_probe_handlers
 
     register_memory_handlers()
     register_brain_handlers()
     register_wizard_handlers()
-    logger.info("startup: core handlers registered (memory, brain, onboarding)")
+    register_probe_handlers()
+    logger.info("startup: core handlers registered (memory, brain, onboarding, probes)")
 
     # Personas loader — scans bundled and user persona packs.
     try:

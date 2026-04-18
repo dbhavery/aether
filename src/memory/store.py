@@ -9,7 +9,6 @@ Supports:
 
 import hashlib
 import time
-from pathlib import Path
 
 import chromadb
 from chromadb.config import Settings as ChromaSettings
@@ -17,7 +16,7 @@ from loguru import logger
 from rank_bm25 import BM25Okapi
 
 from src.memory.embeddings import embed_text
-from src.shared.config import get_settings
+from src.shared.paths import get_chroma_dir
 
 _client: chromadb.ClientAPI | None = None
 _conversations_collection = None
@@ -27,9 +26,7 @@ _knowledge_collection = None
 def _get_client() -> chromadb.ClientAPI:
     global _client
     if _client is None:
-        settings = get_settings()
-        chroma_path = Path(settings.chroma_path)
-        chroma_path.mkdir(parents=True, exist_ok=True)
+        chroma_path = get_chroma_dir()
         _client = chromadb.PersistentClient(
             path=str(chroma_path),
             settings=ChromaSettings(anonymized_telemetry=False),

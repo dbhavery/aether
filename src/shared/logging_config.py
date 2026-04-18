@@ -5,15 +5,16 @@ from pathlib import Path
 
 from loguru import logger
 
+from src.shared.paths import get_logs_dir
+
 
 def _get_log_path() -> Path:
     """Resolve log directory from config. Lazy to avoid import-time issues."""
     try:
-        from src.shared.config import get_settings
-
-        return Path(get_settings().aether_data_path) / "logs"
+        return get_logs_dir()
     except Exception:
-        # Fallback if config isn't available yet — log next to the project root
+        # Fallback if paths aren't resolvable (e.g. missing platformdirs) —
+        # log next to the project root.
         return Path(__file__).resolve().parent.parent.parent / "logs"
 
 

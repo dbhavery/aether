@@ -1,14 +1,26 @@
 """Health check endpoint — reports status of all registered modules."""
 
+from __future__ import annotations
+
 import shutil
 import time
-from pathlib import Path
+from collections import defaultdict, deque
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from loguru import logger
+
+from src.core.auth import get_token_for_client
+from src.shared.config import get_config, is_onboarding_complete
+from src.shared.paths import get_data_dir
 
 _registered_modules: dict[str, dict] = {}
 _start_time = time.time()
+
+# --- /auth/token rate limit: 10 requests / minute / client IP, in-memory. ---
+_TOKEN_RATE_LIMIT_WINDOW_SECONDS = 60.0
+_TOKEN_RATE_LIMIT_MAX_REQUESTS = 10
+_token_request_history: dict[str, deque[float]] = defaultdict(deque)
 
 
 def register_module(name: str, status: str = "starting") -> None:
@@ -29,7 +41,7 @@ def get_module_statuses() -> dict:
 
 async def _check_dependencies() -> dict:
     """Check external dependencies and return their status."""
-    results = {}
+    results: dict[str, dict] = {}
 
     # Ollama
     try:
@@ -62,28 +74,49 @@ async def _check_dependencies() -> dict:
     except Exception:
         results["gpu"] = {"status": "unavailable"}
 
-    # I: drive
+    # Local storage — user data directory headroom.
     try:
-        i_drive = Path("./data/")
-        if i_drive.exists():
-            total, _used, free = shutil.disk_usage(str(i_drive))
-            results["storage_i"] = {
-                "status": "ok",
-                "free_gb": round(free / (1024**3), 1),
-            }
-        else:
-            results["storage_i"] = {"status": "unavailable"}
+        data_dir = get_data_dir()
+        _total, _used, free = shutil.disk_usage(str(data_dir))
+        results["storage"] = {
+            "status": "ok",
+            "data_dir": str(data_dir),
+            "free_gb": round(free / (1024**3), 1),
+        }
     except Exception as e:
-        results["storage_i"] = {"status": "error", "error": str(e)[:100]}
+        results["storage"] = {"status": "error", "error": str(e)[:100]}
 
     return results
+
+
+def _client_ip(request: Request) -> str:
+    """Return the best-effort client IP for rate-limit bucketing."""
+    if request.client is not None and request.client.host:
+        return request.client.host
+    return "unknown"
+
+
+def _check_token_rate_limit(ip: str) -> bool:
+    """Return True if the caller is within the rate limit, False otherwise.
+
+    Sliding-window counter — O(n) on window size, bounded by 10.
+    """
+    now = time.monotonic()
+    history = _token_request_history[ip]
+    cutoff = now - _TOKEN_RATE_LIMIT_WINDOW_SECONDS
+    while history and history[0] < cutoff:
+        history.popleft()
+    if len(history) >= _TOKEN_RATE_LIMIT_MAX_REQUESTS:
+        return False
+    history.append(now)
+    return True
 
 
 def create_health_app() -> FastAPI:
     app = FastAPI(title="Aether Health", version="1.0.0")
 
     @app.get("/health")
-    async def health():
+    async def health() -> dict:
         modules = get_module_statuses()
         all_ready = all(s == "ready" for s in modules.values())
         deps = await _check_dependencies()
@@ -91,16 +124,50 @@ def create_health_app() -> FastAPI:
         overall = "ok" if (all_ready and deps_ok) else "degraded"
         from src.core.metrics import get_metrics_summary
 
+        try:
+            config = get_config()
+            persona_active: str | None = config.persona.active or None
+        except Exception as exc:
+            logger.debug(f"Health: could not read persona from config: {exc!r}")
+            persona_active = None
+
+        try:
+            onboarding_done = is_onboarding_complete()
+        except Exception as exc:
+            logger.debug(f"Health: could not read onboarding state: {exc!r}")
+            onboarding_done = False
+
         return {
             "status": overall,
             "uptime_seconds": round(time.time() - _start_time, 1),
             "modules": modules,
             "dependencies": deps,
             "metrics": get_metrics_summary(),
+            "onboarding_complete": onboarding_done,
+            "persona_active": persona_active,
         }
 
     @app.get("/ping")
-    async def ping():
+    async def ping() -> dict:
         return {"pong": True}
+
+    @app.get("/auth/token")
+    async def auth_token(request: Request) -> JSONResponse:
+        ip = _client_ip(request)
+        if not _check_token_rate_limit(ip):
+            logger.warning(f"Health: /auth/token rate limit exceeded for {ip}")
+            return JSONResponse(
+                status_code=429,
+                content={"error": "rate_limit_exceeded"},
+            )
+        try:
+            token = get_token_for_client()
+        except Exception as exc:
+            logger.error(f"Health: /auth/token failed to produce a token: {exc!r}")
+            return JSONResponse(
+                status_code=500,
+                content={"error": "token_unavailable"},
+            )
+        return JSONResponse(status_code=200, content={"token": token})
 
     return app

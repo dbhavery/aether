@@ -37,21 +37,10 @@ from loguru import logger
 
 
 def _data_dir() -> Path:
-    """Return the user's Aether data directory.
+    """Return the user's Aether data directory (creating it if missing)."""
+    from src.shared.paths import get_data_dir
 
-    Tries the new ``src.shared.paths.get_data_dir`` first, falls back to the
-    legacy Settings-driven path. Creates the directory if it doesn't exist.
-    """
-    path: Path
-    try:
-        from src.shared.paths import get_data_dir  # type: ignore[attr-defined]
-
-        path = Path(get_data_dir())
-    except ImportError:
-        from src.shared.config import get_settings
-
-        path = Path(get_settings().aether_data_path)
-
+    path = get_data_dir()
     path.mkdir(parents=True, exist_ok=True)
     return path
 

@@ -149,6 +149,7 @@ async def finalize_wizard(state: WizardState) -> None:
     # best-effort pragma — if ``secrets._installation_uuid`` isn't cached
     # (tests may monkeypatch it), we ignore.
     _reset_installation_uuid_cache()
+    _reset_shared_config_cache()
 
     # 2. ChromaDB collection — best-effort. A missing collection can be
     # recreated on first use, so we log rather than roll back if this fails.
@@ -172,6 +173,26 @@ async def finalize_wizard(state: WizardState) -> None:
         f"persona={state.selected_avatar_id}, provider={state.llm_provider}, "
         f"voice={state.voice_mode}"
     )
+
+
+def _reset_shared_config_cache() -> None:
+    """Invalidate the cached AetherConfig + YAML dict so downstream readers pick
+    up the freshly-written config.yaml instead of returning the pre-wizard empty
+    default that was cached at startup.
+    """
+    try:
+        from src.shared import config as _config
+
+        _config._config_cache = None
+        _config._raw_cache = None
+        _config._raw_cache_path = None
+        if hasattr(_config, "_load_yaml_dict"):
+            cache_clear = getattr(_config._load_yaml_dict, "cache_clear", None)
+            if callable(cache_clear):
+                cache_clear()
+        logger.debug("Cleared shared config caches after finalization")
+    except Exception as exc:  # pragma: no cover — defensive
+        logger.debug(f"Could not clear shared config cache: {exc!r}")
 
 
 def _reset_installation_uuid_cache() -> None:
