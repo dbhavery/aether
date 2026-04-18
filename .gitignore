@@ -17,6 +17,12 @@ models/
 *.onnx
 *.bin
 *.safetensors
+# Persona pack audio is a REQUIRED ship asset (reference.wav + sample.wav
+# per PERSONA-SCHEMA.md §1). The persona-generator's landmark cache and
+# LivePortrait-rendered clips stay ignored via the separate paths below.
+!personas/*/voice/*.wav
+personas/*/avatar/clips/
+personas/*/avatar/landmarks.json
 
 # Data
 data/
