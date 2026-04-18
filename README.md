@@ -1,161 +1,131 @@
 # Aether
 
-A production AI voice assistant framework that handles the full pipeline from wake word to spoken response in under 450ms -- with multi-LLM routing that sends 70%+ of queries to free local models and reserves paid APIs for complex reasoning.
+**A local-first AI companion with voice, avatar, and persistent memory — runs on your machine, talks to the LLM of your choice.**
 
-[![CI](https://github.com/dbhavery/aether/actions/workflows/ci.yml/badge.svg)](https://github.com/dbhavery/aether/actions/workflows/ci.yml)
 [![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
-[![Modules](https://img.shields.io/badge/modules-12-blue.svg)](#module-overview)
-[![Tests](https://img.shields.io/badge/tests-520+-brightgreen.svg)](#tests)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Code style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 
-## Why I Built This
+> v1.0 public release. Status: pre-alpha on `dev` branch. Installer / packaged release coming.
 
-Cloud voice assistants send every word you say to external servers, lock you into a single LLM provider, and charge per request with no way to optimize cost. Local alternatives sacrifice quality -- they work offline but can't match the reasoning ability of frontier models.
+---
 
-I wanted both: a voice assistant that runs locally by default (privacy, zero cost for simple queries) but escalates to Claude or Gemini when the question actually needs it. And I wanted the full stack -- wake word, speech-to-text, LLM routing, text-to-speech, animated avatar, persistent memory -- in a modular architecture where each piece can be tested, swapped, or disabled independently.
+## What is Aether
 
-## What It Does
+Aether is a desktop AI companion you install on your own machine. Pick a character (one of 12 pre-built personas), pick how you want to talk to them (chat, voice, or animated video), pick which LLM you want powering the conversation (bring your own key, use a local model via Ollama, or use the free-tier guest mode). Your conversations stay on your machine — nothing leaves unless you configured a cloud provider yourself.
 
-- **449ms p50 end-to-end voice latency** from wake word detection through STT, LLM routing, and TTS synthesis to audible response
-- **5-tier LLM routing** selects the optimal model per query: simple greetings route to local Ollama (free, ~50ms), complex reasoning routes to Claude ($0.01-0.05 per query) -- balances cost vs. quality automatically
-- **92.5% wake word detection accuracy** using Picovoice Porcupine with speaker verification via SpeechBrain ECAPA-TDNN
-- **Real-time avatar animation** at 20-25 FPS on consumer GPU using LivePortrait, synced to speech output
-- **Persistent memory with hybrid search** combining BM25 keyword matching and dense vector retrieval via ChromaDB -- the assistant remembers context across sessions
-- **28 tools with extensible registry** including PC control, file operations, shell commands, and web search, all gated behind an approval system with audit logging
+Three interaction modes:
 
-## Architecture
+1. **Chat** — text conversation with streaming responses.
+2. **Voice** — push-to-talk microphone, local STT + TTS, transcript visible.
+3. **Video** — headshot avatar with lip-sync, idle animation, and per-persona voice.
 
-```
-                         +------------------+
-                         |    Desktop GUI   |  PySide6 native app
-                         |   (Module 07)    |  Text / Voice / Video views
-                         +--------+---------+
-                                  | WebSocket :8765
-                                  v
-+---------------+    +------------------------+    +----------------+
-|  Voice-In     |--->|     Core (Module 01)   |--->|  Voice-Out     |
-|  (Module 02)  |    |  EventBus + WS Server  |    |  (Module 03)   |
-|  Wake/VAD/STT |    |  Health :8767          |    |  TTS + Stream  |
-+---------------+    +----------+-------------+    +----------------+
-                                |
-              +-----------------+------------------+
-              |                 |                   |
-    +---------v------+  +------v--------+  +-------v--------+
-    | Brain           |  | Memory        |  | Tools           |
-    | (Module 04)     |  | (Module 08)   |  | (Module 05)     |
-    | 5-Tier LLM      |  | ChromaDB      |  | PC Control      |
-    | Router           |  | BM25 + Dense  |  | Approval Gate   |
-    | Intent Classify  |  | Fact Extract  |  | Audit Log       |
-    +-----------------+  +---------------+  +---------+-------+
-              |                                       |
-    +---------v------+  +---------------+  +----------v------+
-    | Agents          |  | Avatar        |  | Notifications   |
-    | (Module 11)     |  | (Module 06)   |  | (Module 12)     |
-    | Research/Write  |  | LivePortrait  |  | Cron + FCM      |
-    +-----------------+  | 20-25 FPS     |  +-----------------+
-                         +---------------+
-```
+Plus a **sandbox / settings** panel that lets you switch personas, change LLM providers, manage memory, and tune voice parameters at any time.
 
-All modules communicate exclusively through the **EventBus** -- a typed pub/sub backbone with backpressure support and per-event-type inflight limits. No module imports another module directly.
+## Why it exists
 
-## Key Technical Decisions
+Cloud assistants send every word to external servers, lock you into one model, and charge per request. Running a local assistant alone sacrifices reasoning quality. Aether lets you use both: local for privacy-sensitive or trivial queries, cloud frontier models when you actually need the horsepower — and you choose per-provider, per-tier, or let the router decide automatically.
 
-- **PySide6 over Electron for the desktop client.** Native performance with a ~50MB footprint vs. 200MB+ for Electron. Direct GPU access for avatar rendering without IPC overhead. PySide6 also provides Qt's mature widget system without bundling a browser engine.
+## Install
 
-- **5-tier LLM routing over single-model.** Local Ollama handles 70%+ of queries (greetings, simple lookups, intent classification) at zero API cost. Claude is reserved for complex reasoning. This architecture means the assistant is useful even when cloud APIs are down, and monthly API costs stay low despite heavy usage.
-
-- **ChromaDB over Pinecone for memory.** Local-first architecture -- no network latency for memory retrieval, no cloud dependency, no per-query billing. Memory search runs in single-digit milliseconds on local storage.
-
-- **EventBus architecture over direct module coupling.** Modules publish and subscribe to typed events. This means the voice pipeline can be tested without the brain module, the brain can be tested without the tools module, and any module can be hot-swapped or disabled without cascading failures.
-
-- **Whisper + Silero VAD over cloud STT.** Privacy-first -- no audio leaves the machine. Works fully offline. Silero VAD runs inference in ~1ms per audio frame, keeping CPU overhead negligible during continuous listening.
-
-## Module Overview
-
-| # | Module | Responsibility |
-|---|--------|---------------|
-| 01 | Core | WebSocket server, EventBus, config, health endpoint, startup orchestration |
-| 02 | Voice-In | Audio capture, wake word (Porcupine), VAD (Silero), STT, speaker verification |
-| 03 | Voice-Out | TTS synthesis (Chatterbox local / ElevenLabs cloud fallback), audio streaming |
-| 04 | Brain | 5-tier LLM routing, system prompt construction, conversation management, tool dispatch |
-| 05 | Tools | PC control, file ops, shell commands, approval gate, audit logging |
-| 06 | Avatar | LivePortrait face animation, MJPEG streaming, 20-25 FPS on RTX 3090 |
-| 07 | Desktop | PySide6 GUI -- text chat, voice call, and video call views |
-| 08 | Memory | ChromaDB hybrid search (BM25 + dense), fact extraction, pattern learning |
-| 09 | Media | Image understanding (vision LLM), face recognition (InsightFace) |
-| 10 | Android | Kotlin + Jetpack Compose client (spec) |
-| 11 | Agents | Research and writing specialist agents with task persistence |
-| 12 | Notifications | APScheduler cron jobs, Windows toast (winotify), FCM push to Android |
-
-## Results & Metrics
-
-| Metric | Value |
-|--------|-------|
-| End-to-end voice latency (p50) | 449ms (wake word to audible response) |
-| Wake word accuracy | 92.5% (Picovoice Porcupine) |
-| Avatar frame rate | 20-25 FPS (RTX 3090, LivePortrait) |
-| LLM routing tiers | 5 (Ollama / Claude / Claude Heavy / Gemini / Gemini Pro) |
-| Local query cost | $0.00 (Ollama handles 70%+ of queries) |
-| Cloud query cost | $0.01-0.05 per query (Claude, reserved for complex reasoning) |
-| Memory search | Hybrid BM25 + dense vector retrieval via ChromaDB |
-| Tool count | 28 registered tools with fuzzy matching |
-| Codebase | 20K+ lines of Python across 12 modules |
-| Test coverage | 520+ tests (unit + integration) |
-
-## Demo
-
-Desktop application -- not web-deployable. See [demo video](https://github.com/dbhavery/aether/wiki/demo) for a walkthrough of voice interaction, LLM routing, and avatar animation.
-
-## Quick Start
+> Pre-alpha — no installer yet. To run from source:
 
 ```bash
-# Clone and set up
 git clone https://github.com/dbhavery/aether.git
 cd aether
+git checkout dev
+
 python -m venv .venv
-source .venv/bin/activate  # Linux/Mac
-# .venv\Scripts\activate   # Windows
+.venv\Scripts\activate             # Windows
+# source .venv/bin/activate         # macOS/Linux
 
-# Install PyTorch with CUDA
+# GPU-dependent deps — installs PyTorch with CUDA
 pip install torch==2.7.0+cu128 torchaudio==2.7.0+cu128 \
-  --index-url https://download.pytorch.org/whl/cu128
+    --index-url https://download.pytorch.org/whl/cu128
 
-# Install dependencies
 pip install -r requirements.txt
-
-# Pull local models
-ollama pull nomic-embed-text
-ollama pull qwen2.5:7b
-
-# Configure (add your API keys)
-cp .env.example .env
-
-# Run
-python -m src.main              # Start server
-python -m src.desktop.app       # Start desktop client (separate terminal)
 ```
 
-## Lessons Learned
-
-1. **Voice pipeline buffering is the #1 reliability risk.** An STT buffer overflow caused a zombie process that stayed alive but unresponsive for 5 days -- CPU and memory looked normal, but no audio was being processed. I implemented a 4-layer defense: circuit breaker on the STT buffer, a pipeline health watchdog, EventBus backpressure with per-event inflight limits, and an external process supervisor that kills zombies after 3 failed health checks.
-
-2. **LLM routing heuristics need continuous tuning.** My initial keyword-based router was ~60% accurate at selecting the right model tier. Switching to a 3-stage classifier (instant regex match, keyword patterns, then LLM-based intent classification as fallback) improved routing accuracy to ~85%. The remaining 15% is genuinely ambiguous queries where multiple tiers would produce acceptable results.
-
-3. **Avatar rendering and voice processing compete for GPU memory.** LivePortrait and Whisper both want VRAM, and PyTorch's memory allocator does not release unused blocks promptly. I had to implement VRAM budgeting -- the shared module tracks allocations per component and forces garbage collection before handing VRAM to a different subsystem. Without this, OOM crashes occurred within 2-3 hours of continuous use.
-
-## Tests
+## Run
 
 ```bash
-# Run the full test suite
-python -m pytest tests/unit/ -v --tb=short
-
-# Run integration tests (requires running services)
-python -m pytest tests/integration/ -v --tb=short
+# Start the backend server
+python -m src.main
 ```
 
-520+ tests across 45 test files covering: EventBus pub/sub and backpressure, LLM routing tier selection and fallback chains, voice pipeline state machine transitions, memory store CRUD and hybrid search, tool approval gate and audit logging, agent task lifecycle, desktop GUI event handling.
+First run launches in onboarding mode. Once the frontend (Next.js, scaffolded in an upcoming commit) connects, the wizard walks you through:
+
+1. Pick an avatar (1 of 12 bundled personas).
+2. Pick a personality (independent of avatar).
+3. Name your assistant.
+4. Configure an LLM provider (Ollama / Anthropic / OpenAI / Google / Groq / OpenRouter / guest).
+5. Configure voice (local / ElevenLabs / off).
+6. Accept Terms & Privacy.
+
+After the wizard, your config lives at `<user_data_dir>/aether/config.yaml` and your secrets in the OS keyring. On Windows that's `%APPDATA%\aether\config.yaml`.
+
+## Requirements
+
+| Feature | Minimum | Recommended |
+|---------|---------|-------------|
+| Chat mode | Any machine with Python 3.13 | — |
+| Local LLM (Ollama) | 16 GB RAM | 32 GB RAM, 8 GB+ VRAM |
+| Cloud LLM (BYOK) | Internet + API key | — |
+| Voice (local STT+TTS) | NVIDIA GPU, 6 GB+ VRAM | 8+ GB VRAM |
+| Voice (cloud) | Internet + ElevenLabs key | — |
+| Avatar (video mode) | NVIDIA GPU, 8 GB+ VRAM | 12+ GB VRAM |
+| OS | Windows 10/11 (primary) | Windows 11 |
+
+macOS and Linux are code-ready but not packaged or tested in v1.0.
+
+## What's in v1.0
+
+- Three interaction modes (chat, voice, video).
+- 12 bundled personas (avatars + voices + personalities).
+- Bring-your-own-key LLM support via `litellm` (100+ providers).
+- Local LLM via Ollama.
+- Local voice (faster-whisper STT + Chatterbox Turbo TTS).
+- Persistent conversation memory with hybrid BM25 + dense-vector search via ChromaDB.
+- Per-persona memory isolation.
+- Onboarding wizard for first-run setup.
+- Settings panel for runtime changes.
+- Secrets stored in OS keyring, never plaintext.
+
+## What's NOT in v1.0
+
+Deferred to the ground-up v2 rebuild (see `docs/PRODUCT-PLAN.md` § 2):
+
+- Tool use / agent workflows.
+- Vision / image understanding.
+- Mobile client.
+- Full-body photorealistic avatar.
+- Real-time interruption / barge-in.
+- Hosted cloud tier.
+- macOS and Linux installers.
+
+## Documentation
+
+- file:///C:/Users/dbhav/Projects/aether/docs/PRODUCT-PLAN.md — roadmap, phases, decisions.
+- file:///C:/Users/dbhav/Projects/aether/docs/ARCHITECTURE-V2.md — system design, ports, events.
+- file:///C:/Users/dbhav/Projects/aether/docs/PERSONA-SCHEMA.md — persona pack format (write your own).
+- file:///C:/Users/dbhav/Projects/aether/docs/ONBOARDING-SPEC.md — wizard flow.
+- file:///C:/Users/dbhav/Projects/aether/docs/LLM-PROVIDERS.md — provider abstraction + key storage.
+- file:///C:/Users/dbhav/Projects/aether/docs/SYNC-ISABELLE.md — upstream-port rules (developer-only).
+
+## Contributing
+
+Not currently accepting external contributions — pre-alpha. If you find a bug, open an issue at https://github.com/dbhavery/aether/issues
 
 ## License
 
-[MIT](LICENSE)
+MIT — see [LICENSE](LICENSE).
+
+## Branches
+
+- `master` — stable showcase snapshot (unchanged).
+- `dev` — v1.0 productization.
+- `feature/*` — individual feature branches off `dev`.
+
+## Links
+
+- Issues: https://github.com/dbhavery/aether/issues
+- `dev` branch: https://github.com/dbhavery/aether/tree/dev
