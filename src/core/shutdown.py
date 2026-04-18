@@ -54,24 +54,7 @@ async def _shutdown_sequence() -> None:
     except Exception as e:
         logger.warning(f"Shutdown: avatar cleanup failed: {e}")
 
-    # 3. Stop schedulers
-    try:
-        from src.notifications.scheduler import stop_scheduler
-
-        stop_scheduler()
-        logger.info("Shutdown: notification scheduler stopped")
-    except Exception as e:
-        logger.warning(f"Shutdown: notification scheduler stop failed: {e}")
-
-    try:
-        from src.persona.proactive import get_proactive_scheduler
-
-        get_proactive_scheduler().stop()
-        logger.info("Shutdown: proactive scheduler stopped")
-    except Exception as e:
-        logger.warning(f"Shutdown: proactive scheduler stop failed: {e}")
-
-    # 4. Close ChromaDB client
+    # 3. Close ChromaDB client
     try:
         from src.memory.store import _client as chroma_client
 
@@ -81,7 +64,7 @@ async def _shutdown_sequence() -> None:
     except Exception as e:
         logger.warning(f"Shutdown: ChromaDB cleanup failed: {e}")
 
-    # 5. Close shared HTTP sessions
+    # 4. Close shared HTTP sessions
     try:
         from src.shared.http_client import close_shared_session
 
@@ -90,7 +73,7 @@ async def _shutdown_sequence() -> None:
     except Exception as e:
         logger.warning(f"Shutdown: HTTP session close failed: {e}")
 
-    # 6. Free GPU memory
+    # 5. Free GPU memory
     try:
         import torch
 

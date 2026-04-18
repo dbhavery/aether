@@ -13,8 +13,7 @@ from src.core.events import event_bus
 from src.core.health import register_module, update_module_status
 from src.core.rate_limiter import check_rate_limit, clear_bucket
 from src.shared.config import get_settings
-from src.shared.types import EventType, InteractionMode, AetherEvent
-from src.tools.approval_gate import resolve_approval
+from src.shared.types import AetherEvent, EventType, InteractionMode
 
 _connected_clients: set = set()
 
