@@ -1,0 +1,19 @@
+schema_version: 1
+
+reference_wav: "reference.wav"
+sample_wav: "sample.wav"
+
+# Chatterbox knobs — Luma runs slightly more expressive than Aurora /
+# Caelum to match her brighter, faster delivery, but not so high that
+# it becomes cartoonish. Playful, not theatrical.
+chatterbox:
+  exaggeration: 0.6
+  cfg_weight: 0.5
+  temperature: 0.85
+
+elevenlabs:
+  voice_id: ""
+  model_id: "eleven_flash_v2_5"
+  stability: 0.4
+  similarity_boost: 0.7
+  style: 0.35

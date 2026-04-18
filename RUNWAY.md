@@ -130,3 +130,50 @@ a0a1320 [TYPES] Add wizard events; remove obsolete module events
 - Wizard config write invalidates the shared config cache; if brain is still talking to the wrong provider after a finalize, check `src/onboarding/finalizer.py::_reset_shared_config_cache`.
 - `_LLM_TEST_MAX_TOKENS = 16` in `src/onboarding/validators.py` — do not drop to 1; newer OpenAI models refuse.
 - `.playwright-cli/` and `.superpowers/` are gitignored.
+
+---
+
+## Agent 3 complete — first three persona packs (branch `feature/personas-first-three`)
+
+Shipped three end-to-end persona packs (the remaining nine of the twelve in PERSONA-SCHEMA.md §7 can be produced in a future session with the same tooling). The wizard grid now has real art instead of letter-in-disc placeholders.
+
+### Packs delivered
+
+| id     | archetype              | disk size | portrait + 4 states | voice reference / sample |
+|--------|------------------------|-----------|---------------------|--------------------------|
+| aurora | warm_supportive        | 7.9 MB    | 1024x1024 each, OpenAI gpt-image-1.5 | 20s / 4s @ 24kHz mono, LibriVox 'Old Fashioned Roses' (CC0) |
+| caelum | analytical_precise     | 7.8 MB    | 1024x1024 each, OpenAI gpt-image-1.5 | 20s / 4s @ 24kHz mono, LibriVox 'Dover Beach' (CC0) |
+| luma   | playful_witty          | 7.5 MB    | 1024x1024 each, OpenAI gpt-image-1.5 | 20s / 4s @ 24kHz mono, LibriVox 'Jabberwocky' (CC0) |
+
+Total persona payload: ~23.2 MB on disk. All three pass `scripts/persona_generator/audit_pack.py --all` with 0 issues. The loader's acceptance-criterion check:
+
+```bash
+.venv/Scripts/python.exe -c "from src.personas import get_persona_manager; mgr = get_persona_manager(); print([p.manifest.id for p in mgr.list_all()])"
+# ['aurora', 'caelum', 'luma']
+```
+
+### Generator tooling (scripts/persona_generator/, ~104 KB)
+
+- `prompts.py` — per-persona PersonaPromptSpec dataclasses with locked slop-exclusion negatives.
+- `_backends.py` — image generation with fallback chain (fal → OpenAI gpt-image-1.5 → Gemini 3). Centralises PIL normalisation to exactly 1024x1024 RGB.
+- `generate_portrait.py` + `generate_states.py` — one-persona portrait and four-state pipeline; each writes its exact prompt+model into the pack's `avatar/README.md` for reproducible regeneration.
+- `source_voice.py` — downloads an MP3/WAV URL, trims via ffmpeg to schema-compliant 20s reference + 4s sample at 24kHz mono.
+- `preprocess_landmarks.py` — 68-point face landmark extraction with face_alignment → dlib → stub fallback.
+- `audit_pack.py` — thin CLI over `src.personas.audit` (exit 0 clean / 1 issues / 2 schema-validation-failure).
+- `README.md` — one-persona recipe + troubleshooting.
+
+Run `python scripts/persona_generator/README.md` for the full recipe. Remaining nine personas (milo, ivy, atlas, wren, rhea, kai, nova, onyx, sage) can be produced by adding specs to `prompts.py` and running the same pipeline.
+
+### Notable decisions / failures
+
+- **fal balance exhausted** at start of session (`User is locked. Reason: Exhausted balance`). Every portrait + state image went through OpenAI `gpt-image-1.5` via the Images API. Top up fal if a future session wants nano-banana-pro's output characteristics; the backend fallback chain in `_backends.py` already prefers fal.
+- **State images generated fresh, not inpainted** from the base portrait. Inpainting at 1024x1024 through the available APIs produced more identity drift than fresh full-portraits sharing a base prompt. The identity anchor at runtime is LivePortrait, which re-reads landmarks from `portrait.png` — state images are expression references for LivePortrait's library, not identity sources.
+- **Voice sources: LibriVox Short Poetry collections**. All LibriVox recordings are dedicated to the public domain worldwide (CC0-equivalent). Picked by poem character matching archetype — warm Riley for Aurora, reflective Arnold for Caelum, playful Carroll for Luma. If any voice sounds wrong on review, swap URL in the pack's metadata.yaml and re-run `source_voice.py` with `--force`.
+- **.gitignore patched** so `personas/*/voice/*.wav` is committable (the top-level `*.wav` rule was blocking the REQUIRED ship assets in PERSONA-SCHEMA.md §1). LivePortrait's `clips/` and `landmarks.json` stay ignored as before. This was a ship-blocker fix, not a preference change.
+- **System prompts hand-authored** per PERSONA-SCHEMA.md §6 step 8 lock. Each distinguishes voice-mode vs text-mode guidance and explicitly bans the "How can I help you today?" service-desk opener.
+
+### Out of scope for this session
+
+- Other nine persona packs (milo, ivy, atlas, wren, rhea, kai, nova, onyx, sage) — tooling is ready; just needs prompt specs + voice sources.
+- LivePortrait preprocessing of idle clips (`avatar/clips/*.mp4`). Those are machine-generated and will be produced on first load per PERSONA-SCHEMA.md §1.
+- QA conversations against each persona (PERSONA-SCHEMA.md §6 step 9). System prompt behaviour needs live-testing before the packs get bundled into an installer.

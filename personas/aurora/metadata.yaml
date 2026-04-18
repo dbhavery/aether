@@ -1,0 +1,58 @@
+schema_version: 1
+
+creator: "Don Havery"
+created: "2026-04-17"
+last_updated: "2026-04-17"
+
+# Provenance for every shipped asset. Every row must carry a source +
+# license the audit tool can verify. See PERSONA-SCHEMA.md §4 and §8.
+assets:
+  portrait:
+    source: "ai_generated"
+    generator: "OpenAI gpt-image-1.5 (via scripts/persona_generator/generate_portrait.py)"
+    prompt: >-
+      Warm-supportive persona portrait — woman early 30s, warm hazel-brown
+      eyes, wavy shoulder-length auburn hair, cream knit sweater, soft
+      golden-hour window light from the left, neutral warm-beige background.
+      Photorealistic 85mm editorial headshot, 1024x1024 square.
+    license: "custom_aether"
+
+  state_images:
+    source: "ai_generated"
+    generator: "OpenAI gpt-image-1.5 (via scripts/persona_generator/generate_states.py)"
+    prompt: >-
+      Four expression variants (idle / listening / thinking / speaking) of
+      the Aurora base portrait, each generated with a per-state expression
+      modifier layered on the shared base description. See
+      avatar/README.md for the exact prompt per file.
+    license: "custom_aether"
+
+  voice_reference:
+    source: "royalty_free"
+    attribution: "LibriVox Short Poetry Collection 009 — 'Old Fashioned Roses' by James Whitcomb Riley, read by LibriVox volunteer (reader initials 'ep')"
+    url: "https://ia800607.us.archive.org/23/items/short_poetry_009_librivox/old_fashioned_roses_riley_ep_64kb.mp3"
+    license: "CC0"
+    description: >-
+      20.0s clean speech excerpt starting 6.0s into the LibriVox source
+      MP3; resampled to 24 kHz mono 16-bit PCM WAV via ffmpeg with light
+      loudness normalisation. LibriVox recordings are public domain
+      worldwide (CC0-equivalent); full catalog attribution preserved
+      above for audit purposes.
+
+  voice_sample:
+    source: "royalty_free"
+    attribution: "LibriVox Short Poetry Collection 009 — 'Old Fashioned Roses' by James Whitcomb Riley (reader 'ep'), same source as voice_reference"
+    url: "https://ia800607.us.archive.org/23/items/short_poetry_009_librivox/old_fashioned_roses_riley_ep_64kb.mp3"
+    license: "CC0"
+    description: >-
+      4.0s wizard preview trimmed from the same LibriVox source as
+      voice_reference, starting 8.0s into the original; same resampling
+      pipeline.
+
+notes: |
+  Portrait and state images are AI-generated with no real-person likeness
+  reference. Voice reference + sample are sourced from a public-domain
+  LibriVox recording of a Riley poem; per LibriVox terms, recordings are
+  dedicated to the public domain worldwide. Derived cloned output from
+  Chatterbox is owned by Aether under the persona pack's custom_aether
+  license (bundled under the repo's MIT umbrella).
