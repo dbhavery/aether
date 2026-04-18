@@ -41,11 +41,12 @@ class TestVAD:
 
 class TestSTT:
     @pytest.mark.asyncio
-    async def test_transcribe_falls_back_gracefully(self):
-        """If ElevenLabs fails, Whisper fallback is attempted."""
+    async def test_transcribe_falls_back_gracefully_when_elevenlabs_opted_in(self):
+        """Whisper fails -> ElevenLabs is used, but only when user opted in."""
         with (
-            patch("src.voice.stt.transcribe_elevenlabs", new_callable=AsyncMock, return_value=None),
-            patch("src.voice.stt.transcribe_whisper", new_callable=AsyncMock, return_value="hello world"),
+            patch("src.voice.stt.transcribe_whisper", new_callable=AsyncMock, return_value=None),
+            patch("src.voice.stt.transcribe_elevenlabs", new_callable=AsyncMock, return_value="hello world"),
+            patch("src.voice.stt._elevenlabs_enabled", return_value=True),
         ):
             from src.voice.stt import transcribe
 
@@ -53,10 +54,24 @@ class TestSTT:
             assert result == "hello world"
 
     @pytest.mark.asyncio
+    async def test_transcribe_skips_elevenlabs_when_not_opted_in(self):
+        """Local-mode users never hit the cloud, even if whisper returns empty."""
+        with (
+            patch("src.voice.stt.transcribe_whisper", new_callable=AsyncMock, return_value=None),
+            patch("src.voice.stt.transcribe_elevenlabs", new_callable=AsyncMock, return_value="cloud hit"),
+            patch("src.voice.stt._elevenlabs_enabled", return_value=False),
+        ):
+            from src.voice.stt import transcribe
+
+            result = await transcribe(np.zeros(16000, dtype=np.float32))
+            assert result is None  # Never tried the cloud path.
+
+    @pytest.mark.asyncio
     async def test_transcribe_returns_none_if_both_fail(self):
         with (
-            patch("src.voice.stt.transcribe_elevenlabs", new_callable=AsyncMock, return_value=None),
             patch("src.voice.stt.transcribe_whisper", new_callable=AsyncMock, return_value=None),
+            patch("src.voice.stt.transcribe_elevenlabs", new_callable=AsyncMock, return_value=None),
+            patch("src.voice.stt._elevenlabs_enabled", return_value=True),
         ):
             from src.voice.stt import transcribe
 
@@ -146,33 +161,3 @@ class TestCircuitBreaker:
             _circuit_breaker._tripped = original_tripped
             _circuit_breaker._tripped_at = original_at
             _circuit_breaker._cooldown_seconds = original_cooldown
-
-
-class TestSpeakerVerify:
-    @pytest.mark.asyncio
-    async def test_fail_closed_when_no_enrollment(self):
-        """With a working backend but no enrollment, speaker is rejected (fail-closed)."""
-        with (
-            patch("src.voice.speaker_verify._get_owner_embedding", return_value=None),
-            patch("src.voice.speaker_verify._backend", "ecapa"),
-            patch("src.voice.speaker_verify._get_verifier", return_value=object()),
-        ):
-            from src.voice.speaker_verify import verify_speaker
-
-            is_owner, score = await verify_speaker(np.zeros(16000, dtype=np.float32))
-            assert is_owner is False
-            assert score == 0.0
-
-    @pytest.mark.asyncio
-    async def test_sole_user_bypass_when_no_backend(self):
-        """When no verification backend loads, bypass for sole-user mode."""
-        with (
-            patch("src.voice.speaker_verify._backend", "none"),
-            patch("src.voice.speaker_verify._get_verifier"),
-        ):
-            import src.voice.speaker_verify as sv
-
-            sv._backend = "none"  # Ensure bypass stays after _get_verifier call
-            is_owner, score = await sv.verify_speaker(np.zeros(16000, dtype=np.float32))
-            assert is_owner is True
-            assert score == 1.0

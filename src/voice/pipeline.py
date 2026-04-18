@@ -1,376 +1,270 @@
+"""Voice input pipeline — push-to-talk model.
+
+The frontend holds the trigger (spacebar). It publishes
+``USER_SPEECH_START`` when the user presses down and ``USER_SPEECH_END``
+when they release. This module listens for those events, captures the
+audio between them via ``sounddevice``, runs it through
+``src.voice.stt.transcribe``, and publishes ``TRANSCRIPT_READY`` plus
+``USER_MESSAGE`` so the brain handles voice identically to chat.
+
+Wake-word detection and speaker verification — both present in upstream
+Isabelle — are deliberately absent. Per docs/PRODUCT-PLAN.md §1 decision
+10, v1.0 replaces wake word with push-to-talk; per SYNC-ISABELLE.md §3.3,
+the old modules were removed.
+
+Threading:
+- ``sounddevice`` runs the audio callback on its own thread (PortAudio).
+- The event loop dispatches ``USER_SPEECH_START`` / ``USER_SPEECH_END``
+  handlers on the asyncio thread.
+- The callback only appends to a shared buffer when ``_listening`` is
+  True; both the flag and the buffer are guarded by ``_buffer_lock``.
 """
-Voice input pipeline — orchestrates wake word -> VAD -> STT -> speaker verify -> EventBus.
-This is the main entry point for all voice input.
-"""
+
+from __future__ import annotations
 
 import asyncio
 import threading
-import traceback
+from typing import Any
 
 import numpy as np
 from loguru import logger
 
 from src.core.events import event_bus
 from src.shared.config import get_yaml_config
-from src.shared.types import EventType, AetherEvent
-from src.voice.echo_cancel import get_echo_canceller
-from src.voice.silent_gate import get_silent_gate
-from src.voice.speaker_verify import initialize_enrollment, verify_speaker
-from src.voice.stt import get_circuit_breaker, transcribe
-from src.voice.vad import VADStream
-from src.voice.wake_context import evaluate_wake_context
-from src.voice.wake_word import WakeWordDetector
+from src.shared.types import AetherEvent, EventType
+from src.voice.stt import transcribe
+
+# Push-to-talk captures at 16 kHz mono — the rate faster-whisper prefers and
+# what every downstream module in the voice stack assumes. Making this
+# configurable would require re-sampling elsewhere; punt to v1.1.
+_SAMPLE_RATE = 16000
+_CHANNELS = 1
+
+# Hard cap on a single speech segment: long enough for normal monologue
+# but short enough that a stuck trigger can't exhaust memory. At 16 kHz
+# mono float32 this is ~7.7 MB.
+_MAX_SEGMENT_SECONDS = 120.0
+_MAX_SEGMENT_SAMPLES = int(_SAMPLE_RATE * _MAX_SEGMENT_SECONDS)
+
+
+def _resolve_input_device() -> Any:
+    """Map ``config.voice.device`` to the ``sounddevice`` ``device`` argument.
+
+    ``sounddevice`` accepts ``int`` (index), ``str`` (name substring), or
+    ``None`` (system default). The config key ships as ``"default"`` which
+    is not a literal device name; treat any value in
+    {"", "default", None} as "use system default".
+    """
+    raw = get_yaml_config().get("voice", {}).get("device")
+    if raw is None:
+        return None
+    value = str(raw).strip()
+    if not value or value.lower() == "default":
+        return None
+    return value
 
 
 class VoicePipeline:
-    # Health watchdog constants
-    _WATCHDOG_INTERVAL = 15.0  # seconds between health checks
-    _CB_TRIP_RESET_THRESHOLD = 3  # consecutive CB trips before full pipeline reset
-    _AUDIO_STARVATION_TIMEOUT = 300.0  # 5 minutes without audio callback → restart
+    """Push-to-talk voice capture driven by frontend events."""
 
-    def __init__(self):
-        config = get_yaml_config()
-        self._sample_rate = config["audio"]["sample_rate"]
-        self._chunk_size = config["audio"]["chunk_size"]
-        self._input_device = config["audio"]["input_device"]
+    def __init__(self) -> None:
+        self._input_device = _resolve_input_device()
+        self._buffer_lock = threading.Lock()
+        self._buffer: list[np.ndarray] = []
+        self._buffer_samples = 0
+        self._listening = False
         self._running = False
-        self._wake_word_available = False
-        # threading.Lock guards _listening_for_speech which is read/written from
-        # the PortAudio callback thread, the capture thread, and the asyncio thread.
-        self._state_lock = threading.Lock()
-        self._listening_for_speech = False
-        self._loop = None
-        self._wake_word = WakeWordDetector(on_detected=self._on_wake_word)
-        self._vad = VADStream(
-            on_speech_start=self._on_speech_start,
-            on_speech_end=self._on_speech_end,
-        )
-        # Barge-in config
-        voice_config = config.get("voice", {})
-        self._barge_in_enabled = voice_config.get("barge_in_enabled", True)
-        self._barge_in_delay_ms = voice_config.get("barge_in_delay_ms", 300)
-        self._barge_in_speech_ms: float = 0.0  # Accumulated speech during TTS
-        self._barge_in_triggered = threading.Event()  # Signal from callback to capture loop
-        # Thread reference — set in start(), joined in stop()
-        self._capture_thread: threading.Thread | None = None
-        # Health tracking
-        self._last_audio_callback_time: float = 0.0
-        self._last_successful_transcription: float = 0.0
-        self._consecutive_cb_trips: int = 0
-        self._watchdog_task: asyncio.Task | None = None
+        self._stream: Any = None
+        self._loop: asyncio.AbstractEventLoop | None = None
+        # Lazily imported so unit tests can stub sounddevice without
+        # importing the real driver.
+        self._sd: Any = None
 
-    def _on_wake_word(self):
-        with self._state_lock:
-            if self._listening_for_speech:
-                return  # Already listening — ignore duplicate wake word
-            self._listening_for_speech = True
-        logger.info("Pipeline: Wake word detected — listening for speech")
-        if self._loop:
-            asyncio.run_coroutine_threadsafe(
-                event_bus.publish(
-                    AetherEvent(
-                        type=EventType.WAKE_WORD_DETECTED,
-                        data={},
-                        source_module="voice_pipeline",
-                    )
-                ),
-                self._loop,
-            )
+    # -- lifecycle ------------------------------------------------------------
 
-    def _on_speech_start(self):
-        with self._state_lock:
-            listening = self._listening_for_speech
-        if listening:
-            logger.debug("Pipeline: Speech started")
-
-    def _on_speech_end(self, audio: np.ndarray):
-        with self._state_lock:
-            if not self._listening_for_speech:
-                return
-            self._listening_for_speech = False
-        if self._loop:
-            asyncio.run_coroutine_threadsafe(
-                self._process_speech_and_relisten(audio),
-                self._loop,
-            )
-
-    async def _process_speech_and_relisten(self, audio: np.ndarray):
-        """Process speech then re-enable listening (prevents overlapping speech processing)."""
-        await self._process_speech(audio)
-        # In always-listen mode (no wake word), re-enable listening AFTER processing
-        if not self._wake_word_available:
-            with self._state_lock:
-                self._listening_for_speech = True
-
-    async def _health_watchdog(self) -> None:
-        """Background task: monitors pipeline health every 15s.
-
-        Detects:
-        - Repeated circuit breaker trips → full pipeline reset
-        - Audio starvation (no callbacks for 5 min) → restart audio device
-        """
-        import time
-
-        logger.info("Pipeline: Health watchdog started")
-        while self._running:
-            await asyncio.sleep(self._WATCHDOG_INTERVAL)
-            if not self._running:
-                break
-
-            cb = get_circuit_breaker()
-            now = time.monotonic()
-
-            # Check circuit breaker state
-            if cb.is_tripped:
-                self._consecutive_cb_trips += 1
-                logger.warning(
-                    f"Pipeline/Watchdog: CB tripped ({self._consecutive_cb_trips}/{self._CB_TRIP_RESET_THRESHOLD})"
-                )
-                if self._consecutive_cb_trips >= self._CB_TRIP_RESET_THRESHOLD:
-                    logger.error("Pipeline/Watchdog: 3 consecutive CB trips — resetting pipeline")
-                    self._consecutive_cb_trips = 0
-                    cb.reset()
-                    # Reset the listening state
-                    with self._state_lock:
-                        self._listening_for_speech = False
-            else:
-                self._consecutive_cb_trips = 0
-
-            # Check audio starvation
-            if self._last_audio_callback_time > 0:
-                silence = now - self._last_audio_callback_time
-                if silence > self._AUDIO_STARVATION_TIMEOUT:
-                    logger.error(
-                        f"Pipeline/Watchdog: No audio callback for {silence:.0f}s — audio device may have disconnected"
-                    )
-                    from src.core.health import update_module_status
-
-                    update_module_status("voice_in", "degraded")
-
-            # Log health summary
-            logger.debug(
-                f"Pipeline/Watchdog: CB trips={cb.trip_count}, "
-                f"consecutive={self._consecutive_cb_trips}, "
-                f"tripped={cb.is_tripped}"
-            )
-
-    async def _process_speech(self, audio: np.ndarray):
-        import time as _time
-
-        logger.info(f"Pipeline: Processing speech ({len(audio) / self._sample_rate:.1f}s)")
-        try:
-            # Speaker verification
-            is_owner, score = await verify_speaker(audio, self._sample_rate)
-            if not is_owner:
-                logger.warning(f"Pipeline: Speaker verification failed (score={score:.3f}) — ignoring")
-                return
-
-            await event_bus.publish(
-                AetherEvent(
-                    type=EventType.SPEAKER_VERIFIED,
-                    data={"is_owner": is_owner, "score": score},
-                    source_module="voice_pipeline",
-                )
-            )
-
-            # Transcribe
-            text = await transcribe(audio, self._sample_rate)
-            if not text:
-                logger.warning("Pipeline: STT returned empty text")
-                return
-
-            # False wake-up filter: check if The user is talking TO Aether
-            if not evaluate_wake_context(text):
-                logger.info(f"Pipeline: Wake context rejected transcript — false wake-up: '{text[:60]}'")
-                return
-
-            # SilentGate: triple gate check — is this speech directed at Aether?
-            gate = get_silent_gate()
-            should_respond = await gate.should_respond(text, is_owner=is_owner)
-            if not should_respond:
-                logger.info(f"Pipeline: SilentGate blocked response for: '{text[:60]}'")
-                return
-
-            self._last_successful_transcription = _time.monotonic()
-            logger.info(f"Pipeline: Transcript ready: '{text}'")
-            await event_bus.publish(
-                AetherEvent(
-                    type=EventType.TRANSCRIPT_READY,
-                    data={"text": text, "confidence": 1.0},
-                    source_module="voice_pipeline",
-                )
-            )
-
-            # Also publish as USER_MESSAGE so Brain handles it
-            await event_bus.publish(
-                AetherEvent(
-                    type=EventType.USER_MESSAGE,
-                    data={"text": text, "mode": "voice"},
-                    source_module="voice_pipeline",
-                )
-            )
-
-        except Exception as e:
-            logger.error(f"Pipeline: speech processing error: {e}\n{traceback.format_exc()}")
-
-    async def start(self):
-        """Start the voice pipeline. Initializes wake word and begins audio capture."""
-        logger.info("Pipeline: Initializing voice pipeline...")
-        # Set loop BEFORE starting capture thread — callback needs it immediately
+    async def start(self) -> None:
+        """Open the audio device, subscribe to push-to-talk events, go live."""
         self._loop = asyncio.get_running_loop()
-
-        # Enroll the user's voice if not already enrolled
-        await initialize_enrollment()
-
-        # Initialize wake word
-        wake_word_available = self._wake_word.initialize()
-        self._wake_word_available = wake_word_available
-
-        # If wake word is not available, always listen for speech (no trigger needed)
-        if not wake_word_available:
-            with self._state_lock:
-                self._listening_for_speech = True
-            logger.info("Pipeline: Wake word unavailable — always-listen mode enabled")
-
-        # Update health status
-        from src.core.health import update_module_status
-
-        update_module_status("voice_in", "ready")
-
-        # Start audio capture in a thread
         self._running = True
-        self._capture_thread = threading.Thread(
-            target=self._audio_capture_loop,
-            args=(wake_word_available,),
-            daemon=True,
-        )
-        self._capture_thread.start()
 
-        # Start health watchdog
-        self._watchdog_task = asyncio.create_task(self._health_watchdog())
-
-        logger.info("Pipeline: Voice pipeline running. Say 'Aether' to activate.")
-
-    def _audio_capture_loop(self, use_wake_word: bool):
-        """Runs in a background thread — captures audio and feeds wake word + VAD."""
-        import time as _time
-
-        import sounddevice as sd
-
-        sample_rate = self._sample_rate
-        frame_length = self._wake_word.frame_length if use_wake_word else 512
-        chunk_duration_ms = (frame_length / sample_rate) * 1000
-
-        echo = get_echo_canceller()
-
-        def audio_callback(indata, frames, time_info, status):
-            if status:
-                logger.warning(f"Pipeline: Audio status: {status}")
-            self._last_audio_callback_time = _time.monotonic()
-            audio_chunk = indata[:, 0].copy()  # Mono
-
-            # Echo cancellation + barge-in
-            if echo.is_speaking:
-                if self._barge_in_enabled:
-                    # Barge-in detection: use RMS energy (not ML) to stay real-time safe.
-                    # Silero VAD has LSTM state and is too heavy for PortAudio callbacks.
-                    rms = float(np.sqrt(np.mean(audio_chunk**2)))
-                    if rms >= 0.03:  # Energy threshold for speech presence
-                        self._barge_in_speech_ms += chunk_duration_ms
-                        if self._barge_in_speech_ms >= self._barge_in_delay_ms:
-                            logger.info("Pipeline: Barge-in detected — signaling stop")
-                            self._barge_in_speech_ms = 0.0
-                            # Signal capture loop to stop TTS (never call sd.stop from callback)
-                            self._barge_in_triggered.set()
-                            echo.on_tts_stop()
-                            # Transition to listening for full speech
-                            with self._state_lock:
-                                self._listening_for_speech = True
-                            if self._loop:
-                                asyncio.run_coroutine_threadsafe(
-                                    event_bus.publish(
-                                        AetherEvent(
-                                            type=EventType.WAKE_WORD_DETECTED,
-                                            data={"source": "barge_in"},
-                                            source_module="voice_pipeline",
-                                        )
-                                    ),
-                                    self._loop,
-                                )
-                    else:
-                        self._barge_in_speech_ms = 0.0
-                return  # Either barge-in handled it, or echo gate suppresses
-            elif echo.should_gate_input:
-                # Ring-down period after TTS — suppress input
-                return
-
-            with self._state_lock:
-                listening = self._listening_for_speech
-
-            if use_wake_word and not listening:
-                # Feed to wake word detector
-                pcm = (audio_chunk * 32767).astype(np.int16).tolist()
-                # Porcupine needs exact frame_length
-                if len(pcm) == frame_length:
-                    self._wake_word.process_frame(pcm)
-            elif listening:
-                # Feed to VAD
-                self._vad.process_chunk(audio_chunk, chunk_duration_ms)
+        event_bus.subscribe(EventType.USER_SPEECH_START, self._on_speech_start)
+        event_bus.subscribe(EventType.USER_SPEECH_END, self._on_speech_end)
 
         try:
-            with sd.InputStream(
-                samplerate=sample_rate,
-                channels=1,
+            import sounddevice as sd  # type: ignore[import-not-found]
+
+            self._sd = sd
+            self._stream = sd.InputStream(
+                samplerate=_SAMPLE_RATE,
+                channels=_CHANNELS,
                 dtype="float32",
-                blocksize=frame_length,
                 device=self._input_device,
-                callback=audio_callback,
-            ):
-                logger.info(f"Pipeline: Audio capture started at {sample_rate}Hz")
-                while self._running:
-                    # Check for barge-in signal from callback thread
-                    if self._barge_in_triggered.is_set():
-                        self._barge_in_triggered.clear()
-                        sd.stop()
-                        logger.debug("Pipeline: TTS stopped via barge-in (from capture thread)")
-                    sd.sleep(100)
-        except Exception as e:
-            logger.error(
-                f"Pipeline: Audio capture loop DIED — voice input is no longer "
-                f"functional. Error: {e}\n{traceback.format_exc()}"
+                callback=self._audio_callback,
             )
+            self._stream.start()
+        except Exception:
+            logger.exception("voice_pipeline: failed to open audio input stream")
             self._running = False
-            # Update health to reflect that voice input is broken
-            try:
-                from src.core.health import update_module_status
+            self._report_status("error")
+            return
 
-                update_module_status("voice_in", "error")
-            except Exception:  # nosec B110
-                logger.debug("Pipeline: could not update health status during shutdown")
+        device_label = self._input_device if self._input_device is not None else "system-default"
+        logger.info(
+            f"voice_pipeline: push-to-talk ready "
+            f"(device={device_label}, sr={_SAMPLE_RATE}Hz)"
+        )
+        self._report_status("ready")
 
-    def stop(self):
+    def stop(self) -> None:
+        """Close the audio stream and detach from the event bus."""
         self._running = False
-        if self._watchdog_task and not self._watchdog_task.done():
-            self._watchdog_task.cancel()
-        if self._capture_thread and self._capture_thread.is_alive():
-            self._capture_thread.join(timeout=3.0)
-        self._wake_word.cleanup()
-        logger.info("Pipeline: Voice pipeline stopped")
+        with self._buffer_lock:
+            self._listening = False
+            self._buffer = []
+            self._buffer_samples = 0
+
+        event_bus.unsubscribe(EventType.USER_SPEECH_START, self._on_speech_start)
+        event_bus.unsubscribe(EventType.USER_SPEECH_END, self._on_speech_end)
+
+        stream = self._stream
+        self._stream = None
+        if stream is not None:
+            try:
+                stream.stop()
+            except Exception as exc:
+                logger.debug(f"voice_pipeline: stream.stop() raised {exc!r}")
+            try:
+                stream.close()
+            except Exception as exc:
+                logger.debug(f"voice_pipeline: stream.close() raised {exc!r}")
+
+        logger.info("voice_pipeline: stopped")
+
+    # -- audio callback (PortAudio thread) -----------------------------------
+
+    def _audio_callback(
+        self,
+        indata: np.ndarray,
+        frames: int,
+        time_info: Any,
+        status: Any,
+    ) -> None:
+        if status:
+            logger.warning(f"voice_pipeline: audio status: {status}")
+        with self._buffer_lock:
+            if not self._listening:
+                return
+            chunk = indata[:, 0].copy()
+            self._buffer.append(chunk)
+            self._buffer_samples += chunk.shape[0]
+            if self._buffer_samples > _MAX_SEGMENT_SAMPLES:
+                # Stuck trigger guard: drop the oldest chunks. Users get a
+                # truncated transcript rather than an OOM.
+                drop = self._buffer_samples - _MAX_SEGMENT_SAMPLES
+                while self._buffer and drop > 0:
+                    oldest = self._buffer[0]
+                    if oldest.shape[0] <= drop:
+                        drop -= oldest.shape[0]
+                        self._buffer_samples -= oldest.shape[0]
+                        self._buffer.pop(0)
+                    else:
+                        self._buffer[0] = oldest[drop:]
+                        self._buffer_samples -= drop
+                        drop = 0
+
+    # -- event handlers (asyncio thread) -------------------------------------
+
+    async def _on_speech_start(self, event: AetherEvent) -> None:
+        with self._buffer_lock:
+            if self._listening:
+                logger.debug("voice_pipeline: USER_SPEECH_START while already listening — resetting buffer")
+            self._buffer = []
+            self._buffer_samples = 0
+            self._listening = True
+        logger.debug("voice_pipeline: capture started")
+
+    async def _on_speech_end(self, event: AetherEvent) -> None:
+        with self._buffer_lock:
+            if not self._listening:
+                logger.debug("voice_pipeline: USER_SPEECH_END without active capture — ignored")
+                return
+            self._listening = False
+            chunks = self._buffer
+            total_samples = self._buffer_samples
+            self._buffer = []
+            self._buffer_samples = 0
+
+        if not chunks:
+            logger.debug("voice_pipeline: USER_SPEECH_END with empty buffer")
+            return
+
+        duration = total_samples / _SAMPLE_RATE
+        logger.info(f"voice_pipeline: captured {duration:.1f}s — transcribing")
+        audio = np.concatenate(chunks)
+
+        text = await transcribe(audio, _SAMPLE_RATE)
+        if not text:
+            logger.info("voice_pipeline: empty transcript — dropping")
+            return
+
+        await event_bus.publish(
+            AetherEvent(
+                type=EventType.TRANSCRIPT_READY,
+                data={"text": text, "confidence": 1.0},
+                source_module="voice_pipeline",
+            )
+        )
+        # Forward to the brain under the same contract chat uses so the LLM
+        # pipeline treats voice and text identically.
+        await event_bus.publish(
+            AetherEvent(
+                type=EventType.USER_MESSAGE,
+                data={"text": text, "mode": "voice"},
+                source_module="voice_pipeline",
+            )
+        )
+
+    # -- health reporting (optional; only during start/stop) ------------------
+
+    def _report_status(self, status: str) -> None:
+        try:
+            from src.core.health import update_module_status
+
+            update_module_status("voice", status)
+        except Exception as exc:
+            logger.debug(f"voice_pipeline: health update skipped ({exc!r})")
 
 
-_pipeline_instance: VoicePipeline | None = None
+# ---------------------------------------------------------------------------
+# Module-level singleton API. ``src.core.startup`` calls
+# ``start_voice_pipeline``; ``src.core.shutdown`` calls ``stop_voice_pipeline``.
+# ---------------------------------------------------------------------------
+
+_pipeline: VoicePipeline | None = None
+_pipeline_lock = threading.Lock()
 
 
 async def start_voice_pipeline() -> None:
-    global _pipeline_instance
-    # Stop any existing pipeline to prevent resource leak on restart
-    if _pipeline_instance is not None:
-        _pipeline_instance.stop()
-    _pipeline_instance = VoicePipeline()
-    await _pipeline_instance.start()
+    """Start (or restart) the global voice pipeline."""
+    global _pipeline
+    with _pipeline_lock:
+        existing = _pipeline
+        _pipeline = None
+    if existing is not None:
+        existing.stop()
+
+    instance = VoicePipeline()
+    await instance.start()
+
+    with _pipeline_lock:
+        _pipeline = instance
 
 
 def stop_voice_pipeline() -> None:
-    global _pipeline_instance
-    if _pipeline_instance:
-        _pipeline_instance.stop()
+    """Stop the global voice pipeline. No-op if it was never started."""
+    global _pipeline
+    with _pipeline_lock:
+        existing = _pipeline
+        _pipeline = None
+    if existing is not None:
+        existing.stop()

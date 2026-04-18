@@ -1,26 +1,48 @@
-"""Speech-to-text — ElevenLabs Scribe v2 Realtime (primary) + faster-whisper (fallback).
+"""Speech-to-text — faster-whisper local (primary) + optional ElevenLabs fallback.
 
-Includes CircuitBreaker to prevent STT buffer overflow zombies (v13 lesson).
+v1.0 defaults to local STT via faster-whisper. The model comes from
+``config.voice.stt_model``:
+
+- ``"faster-whisper-base.en"`` (default): tiny English-only, CPU-friendly.
+- ``"faster-whisper-distil-large-v3"``: GPU + 6 GB+ VRAM recommended.
+
+Unknown names pass through unchanged so advanced users can pick any model
+name recognized by the faster-whisper loader.
+
+ElevenLabs Scribe is attempted only when BOTH:
+
+  1. ``config.voice.mode == "elevenlabs"`` (user opted in during onboarding), and
+  2. An ``elevenlabs`` API key resolves via the OS keyring (or env-var fallback).
+
+A CircuitBreaker guards against STT zombies caused by an audio pipeline
+flooding with unprocessable frames: ten failures in 30 s triggers a 10 s
+cooldown during which ``transcribe`` short-circuits to ``None``.
 """
+
+from __future__ import annotations
 
 import asyncio
 import io
 import threading
 import time
+from typing import Any
 
 import numpy as np
 import soundfile as sf
 from loguru import logger
 
-from src.shared.config import get_settings
+
+# ---------------------------------------------------------------------------
+# Circuit breaker — retained from upstream; prevents zombie STT spins.
+# ---------------------------------------------------------------------------
 
 
 class CircuitBreaker:
-    """Trips after N failures within a time window. Auto-resets after cooldown.
+    """Trips after ``failure_threshold`` failures within ``window_seconds``.
 
-    Prevents the STT system from becoming a zombie when the audio pipeline
-    floods with unprocessable frames (v13 incident: 14,490 warnings, process
-    alive but unresponsive for 5 days).
+    Auto-resets after ``cooldown_seconds``. Thread-safe: the audio callback
+    thread and the asyncio event-loop both call ``is_tripped`` and the
+    ``record_*`` methods.
     """
 
     def __init__(
@@ -28,7 +50,7 @@ class CircuitBreaker:
         failure_threshold: int = 10,
         window_seconds: float = 30.0,
         cooldown_seconds: float = 10.0,
-    ):
+    ) -> None:
         self._failure_threshold = failure_threshold
         self._window_seconds = window_seconds
         self._cooldown_seconds = cooldown_seconds
@@ -40,37 +62,35 @@ class CircuitBreaker:
 
     @property
     def is_tripped(self) -> bool:
-        """Check if circuit breaker is currently tripped (with auto-reset)."""
         with self._lock:
             if self._tripped:
                 elapsed = time.monotonic() - self._tripped_at
                 if elapsed >= self._cooldown_seconds:
                     self._tripped = False
                     self._failure_times.clear()
-                    logger.info(f"CircuitBreaker: auto-reset after {self._cooldown_seconds}s cooldown")
+                    logger.info(
+                        f"CircuitBreaker: auto-reset after {self._cooldown_seconds}s cooldown"
+                    )
             return self._tripped
 
     @property
     def trip_count(self) -> int:
-        """Total number of times the circuit breaker has tripped."""
         return self._trip_count
 
     def record_failure(self) -> bool:
-        """Record a failure. Returns True if the circuit breaker just tripped."""
+        """Record a failure. Returns True if this call crossed the trip threshold."""
         with self._lock:
             now = time.monotonic()
-            # Prune old failures outside the window
             cutoff = now - self._window_seconds
             self._failure_times = [t for t in self._failure_times if t > cutoff]
             self._failure_times.append(now)
-
             if len(self._failure_times) >= self._failure_threshold:
                 self._tripped = True
                 self._tripped_at = now
                 self._trip_count += 1
                 self._failure_times.clear()
                 logger.warning(
-                    f"CircuitBreaker: TRIPPED (trip #{self._trip_count}) — "
+                    f"CircuitBreaker: TRIPPED (#{self._trip_count}) — "
                     f"{self._failure_threshold} failures in {self._window_seconds}s. "
                     f"Pausing for {self._cooldown_seconds}s."
                 )
@@ -78,160 +98,210 @@ class CircuitBreaker:
             return False
 
     def record_success(self) -> None:
-        """Record a success. Clears accumulated failures."""
         with self._lock:
             self._failure_times.clear()
 
     def reset(self) -> None:
-        """Manually reset the circuit breaker."""
         with self._lock:
             self._tripped = False
             self._failure_times.clear()
             logger.info("CircuitBreaker: manually reset")
 
 
-# Module-level circuit breaker — shared across all STT calls
 _circuit_breaker = CircuitBreaker(
-    failure_threshold=10,
-    window_seconds=30.0,
-    cooldown_seconds=10.0,
+    failure_threshold=10, window_seconds=30.0, cooldown_seconds=10.0
 )
 
 
 def get_circuit_breaker() -> CircuitBreaker:
-    """Get the module-level STT circuit breaker (for monitoring)."""
     return _circuit_breaker
 
 
-_elevenlabs_stt_client = None
-_elevenlabs_stt_lock = threading.Lock()
+# ---------------------------------------------------------------------------
+# faster-whisper (primary, local).
+# ---------------------------------------------------------------------------
 
-
-def _get_elevenlabs_stt_client():
-    """Return the module-level ElevenLabs client singleton for STT."""
-    global _elevenlabs_stt_client
-    if _elevenlabs_stt_client is None:
-        with _elevenlabs_stt_lock:
-            if _elevenlabs_stt_client is None:
-                from elevenlabs.client import ElevenLabs
-
-                settings = get_settings()
-                if not settings.elevenlabs_api_key:
-                    raise RuntimeError("ELEVENLABS_API_KEY not set")
-                _elevenlabs_stt_client = ElevenLabs(api_key=settings.elevenlabs_api_key)
-                logger.debug("STT: ElevenLabs client singleton created")
-    return _elevenlabs_stt_client
-
-
-async def transcribe_elevenlabs(audio: np.ndarray, sample_rate: int = 16000) -> str | None:
-    """Transcribe audio using ElevenLabs Scribe v2 Realtime. Returns text or None on failure."""
-    settings = get_settings()
-    if not settings.elevenlabs_api_key:
-        logger.warning("STT: ELEVENLABS_API_KEY not set — skipping ElevenLabs STT")
-        return None
-    try:
-        client = _get_elevenlabs_stt_client()
-
-        # Convert numpy array to WAV bytes
-        buf = io.BytesIO()
-        sf.write(buf, audio, sample_rate, format="WAV", subtype="PCM_16")
-        buf.seek(0)
-
-        response = await asyncio.to_thread(
-            client.speech_to_text.convert,
-            file=buf,
-            model_id="scribe_v2",
-            language_code="en",
-        )
-        text = response.text.strip()
-        logger.info(f"STT (ElevenLabs): '{text[:80]}'")
-        return text if text else None
-    except Exception as e:
-        logger.warning(f"STT: ElevenLabs failed ({e}), will fall back to Whisper")
-        return None
-
-
-_whisper_model = None
+_whisper_model: Any = None
 _whisper_lock = threading.Lock()
 
+_DEFAULT_MODEL_NAME = "base.en"
 
-def _get_whisper_model():
+
+def _resolve_whisper_model_name() -> str:
+    """Map ``config.voice.stt_model`` to a faster-whisper model name."""
+    try:
+        from src.shared.config import get_yaml_config
+
+        raw = str(get_yaml_config().get("voice", {}).get("stt_model", "") or "")
+    except Exception:
+        raw = ""
+    if not raw:
+        return _DEFAULT_MODEL_NAME
+    # Accept both "base.en" and "faster-whisper-base.en" forms.
+    stripped = raw.removeprefix("faster-whisper-")
+    return stripped or _DEFAULT_MODEL_NAME
+
+
+def _get_whisper_model() -> Any:
+    """Lazy-load the faster-whisper model. CUDA float16, falling back to CPU int8."""
     global _whisper_model
-    if _whisper_model is None:
-        with _whisper_lock:
-            if _whisper_model is None:
-                from faster_whisper import WhisperModel
+    if _whisper_model is not None:
+        return _whisper_model
+    with _whisper_lock:
+        if _whisper_model is not None:
+            return _whisper_model
 
-                logger.info("STT: Loading faster-whisper distil-large-v3 (CUDA)...")
-                try:
-                    _whisper_model = WhisperModel(
-                        "distil-large-v3",
-                        device="cuda",
-                        compute_type="float16",
-                    )
-                except Exception as e:
-                    logger.warning(f"STT: distil-large-v3 unavailable ({e}), trying base.en")
-                    _whisper_model = WhisperModel(
-                        "base.en",
-                        device="cuda",
-                        compute_type="float16",
-                    )
-                logger.info("STT: faster-whisper ready")
-    return _whisper_model
+        from faster_whisper import WhisperModel
+
+        model_name = _resolve_whisper_model_name()
+        try:
+            logger.info(f"STT: loading faster-whisper {model_name!r} on CUDA float16")
+            _whisper_model = WhisperModel(model_name, device="cuda", compute_type="float16")
+        except Exception as exc:
+            logger.warning(f"STT: CUDA load failed ({exc!r}); falling back to CPU int8")
+            _whisper_model = WhisperModel(model_name, device="cpu", compute_type="int8")
+        logger.info(f"STT: faster-whisper {model_name!r} ready")
+        return _whisper_model
 
 
 async def transcribe_whisper(audio: np.ndarray, sample_rate: int = 16000) -> str | None:
-    """Transcribe audio using faster-whisper. Local fallback — no API required."""
+    """Transcribe ``audio`` via faster-whisper. Returns the text or ``None`` on failure."""
     try:
-        # Load model in thread to avoid blocking event loop on first call (~5-10s)
         model = await asyncio.to_thread(_get_whisper_model)
 
-        def _transcribe_and_collect():
-            """Run transcription AND consume the generator in the worker thread.
-
-            faster-whisper returns a lazy generator — iterating it on the event
-            loop would block. Consume it here so all computation stays off-loop.
-            """
+        def _run() -> tuple[str, Any]:
             segments, info = model.transcribe(
                 audio.astype(np.float32),
                 language="en",
                 beam_size=5,
             )
+            # Consume the generator inside the worker thread — iterating it
+            # on the event loop would block.
             text = " ".join(seg.text for seg in segments).strip()
             return text, info
 
-        text, info = await asyncio.to_thread(_transcribe_and_collect)
-        logger.info(f"STT (Whisper): '{text[:80]}' (lang={info.language}, conf={info.language_probability:.2f})")
-        return text if text else None
-    except Exception as e:
-        logger.error(f"STT: Whisper failed: {e}")
+        text, info = await asyncio.to_thread(_run)
+        logger.info(
+            f"STT (whisper): {text[:80]!r} "
+            f"(lang={info.language}, conf={info.language_probability:.2f})"
+        )
+        return text or None
+    except Exception as exc:
+        logger.error(f"STT: whisper failed: {exc!r}")
         return None
 
 
+# ---------------------------------------------------------------------------
+# ElevenLabs (optional fallback when the user has chosen mode=elevenlabs).
+# ---------------------------------------------------------------------------
+
+_elevenlabs_client: Any = None
+_elevenlabs_client_lock = threading.Lock()
+
+
+def _voice_mode() -> str:
+    try:
+        from src.shared.config import get_yaml_config
+
+        return str(get_yaml_config().get("voice", {}).get("mode", "off") or "off")
+    except Exception:
+        return "off"
+
+
+def _elevenlabs_key() -> str | None:
+    try:
+        from src.shared.secrets import get_key
+
+        return get_key("elevenlabs")
+    except Exception as exc:
+        logger.debug(f"STT: keyring lookup for elevenlabs failed: {exc!r}")
+        return None
+
+
+def _elevenlabs_enabled() -> bool:
+    """Only call ElevenLabs when the user opted in via wizard and a key exists."""
+    return _voice_mode() == "elevenlabs" and bool(_elevenlabs_key())
+
+
+def _get_elevenlabs_client() -> Any:
+    global _elevenlabs_client
+    if _elevenlabs_client is not None:
+        return _elevenlabs_client
+    with _elevenlabs_client_lock:
+        if _elevenlabs_client is not None:
+            return _elevenlabs_client
+        from elevenlabs.client import ElevenLabs
+
+        key = _elevenlabs_key()
+        if not key:
+            raise RuntimeError("ElevenLabs key not available")
+        _elevenlabs_client = ElevenLabs(api_key=key)
+        return _elevenlabs_client
+
+
+async def transcribe_elevenlabs(audio: np.ndarray, sample_rate: int = 16000) -> str | None:
+    """Transcribe via ElevenLabs Scribe v2. Returns ``None`` unless opted in + reachable."""
+    if not _elevenlabs_enabled():
+        return None
+    try:
+        client = _get_elevenlabs_client()
+    except Exception as exc:
+        logger.warning(f"STT: ElevenLabs unavailable: {exc!r}")
+        return None
+
+    buf = io.BytesIO()
+    sf.write(buf, audio, sample_rate, format="WAV", subtype="PCM_16")
+    buf.seek(0)
+
+    def _run() -> str:
+        response = client.speech_to_text.convert(
+            file=buf,
+            model_id="scribe_v2",
+            language_code="en",
+        )
+        return (response.text or "").strip()
+
+    try:
+        text = await asyncio.to_thread(_run)
+    except Exception as exc:
+        logger.warning(f"STT: ElevenLabs failed: {exc!r}")
+        return None
+
+    logger.info(f"STT (elevenlabs): {text[:80]!r}")
+    return text or None
+
+
+# ---------------------------------------------------------------------------
+# Public entry point.
+# ---------------------------------------------------------------------------
+
+_LONG_BUFFER_WARN_S = 30.0
+_VERY_LONG_BUFFER_WARN_S = 45.0
+
+
 async def transcribe(audio: np.ndarray, sample_rate: int = 16000) -> str | None:
-    """Transcribe with ElevenLabs primary, Whisper fallback. Guarded by circuit breaker."""
+    """Transcribe audio. faster-whisper primary; ElevenLabs fallback if opted-in."""
     if _circuit_breaker.is_tripped:
         logger.debug("STT: circuit breaker tripped — dropping audio frame")
         return None
 
-    # Graduated buffer duration warnings
     duration = len(audio) / sample_rate
-    if duration > 45:
+    if duration > _VERY_LONG_BUFFER_WARN_S:
         logger.warning(f"STT: audio buffer extremely long ({duration:.1f}s) — possible overflow")
-    elif duration > 30:
+    elif duration > _LONG_BUFFER_WARN_S:
         logger.warning(f"STT: audio buffer long ({duration:.1f}s) — check audio pipeline")
 
-    text = await transcribe_elevenlabs(audio, sample_rate)
-    if text:
-        _circuit_breaker.record_success()
-        return text
-
-    logger.info("STT: Falling back to faster-whisper")
     text = await transcribe_whisper(audio, sample_rate)
     if text:
         _circuit_breaker.record_success()
         return text
 
-    # Both engines failed
+    if _elevenlabs_enabled():
+        logger.info("STT: whisper empty — falling back to ElevenLabs")
+        text = await transcribe_elevenlabs(audio, sample_rate)
+        if text:
+            _circuit_breaker.record_success()
+            return text
+
     _circuit_breaker.record_failure()
     return None

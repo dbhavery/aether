@@ -7,6 +7,128 @@
 
 ---
 
+## Agent 2 complete — Desktop shell + Voice pipeline (2026-04-17)
+
+**Branch:** `feature/desktop-shell-voice` (not yet merged — draft PR against `dev`).
+**Worktree:** `../aether-desktop-voice/` (created via `git worktree add`).
+
+### What ships
+
+1. **`desktop/` package** — pywebview shell.
+   - `desktop/main.py`: backend supervision (attach to :8765 if listening,
+     otherwise spawn `python -m src.main` and tear down on window close).
+     URL auto-selects the Next.js dev server if :3000 responds within 1 s
+     probe, otherwise loads the static export at `frontend/out/index.html`.
+     Window: 1280x860, min 1024x720, dark chrome `#0B0B0F`.
+   - `desktop/bridge.py`: JS ↔ Python bridge exposed as
+     `window.pywebview.api` — `open_file_dialog`, `get_keyring_token`
+     (proxied via backend `/auth/token`), `open_external` (refuses
+     non-web URLs), `get_app_info`.
+   - `desktop/launcher.ps1`: pythonw launcher so no console flashes.
+   - `desktop/README.md`: dev vs packaged mode, troubleshooting.
+
+2. **Voice pipeline rewrite** — push-to-talk, no wake word, no speaker verify.
+   - `src/voice/pipeline.py`: subscribes to `USER_SPEECH_START` /
+     `USER_SPEECH_END` from the frontend. Opens a permanent sounddevice
+     InputStream on start but only buffers between events. On END, runs
+     the buffer through `transcribe()` and publishes `TRANSCRIPT_READY`
+     plus `USER_MESSAGE` (mode=voice). 120 s hard cap on a single segment.
+   - `src/voice/stt.py`: faster-whisper primary (model via
+     `config.voice.stt_model`, default `base.en`, `distil-large-v3`
+     supported). ElevenLabs Scribe attempted only when user picked
+     `mode=elevenlabs` AND keyring has an `elevenlabs` key. CircuitBreaker
+     retained.
+   - `src/voice/tts.py`: Chatterbox primary with persona-aware voice
+     cloning — looks up active persona's `voice/reference.wav` via
+     `get_persona_manager().active_persona.reference_wav_path`, falls
+     back to Chatterbox default when the file is absent. ElevenLabs
+     primary only in `mode=elevenlabs`, with Chatterbox safety-net on
+     cloud failure.
+   - `src/voice/tts_handler.py`: on `RESPONSE_TEXT_READY` (non-interim,
+     voice/video modes only) synthesises, then concurrently plays the
+     clip AND emits 100 ms int16 PCM chunks as `RESPONSE_AUDIO_CHUNK`
+     events plus a final `RESPONSE_AUDIO_END` for future avatar lip-sync.
+   - **Deleted:** `src/voice/wake_word.py`, `speaker_verify.py`,
+     `wake_context.py`, plus `tests/unit/test_wake_context.py`. Grep
+     confirms no Python imports reference them. `requirements.txt`
+     already had `pvporcupine` and `speechbrain` removed.
+
+### What's tested
+
+- `pytest tests/unit/test_voice_in.py::TestSTT tests/unit/test_voice_in.py::TestCircuitBreaker`
+  → 9/9 pass. Covers faster-whisper/ElevenLabs fallback routing both when
+  the user opted in and when they didn't.
+- Voice pipeline smoke test (throwaway `AETHER_DATA_DIR`, voice.mode=local):
+  - `start_voice_pipeline()` subscribes to START/END events and opens
+    the sounddevice stream with default device.
+  - Publishing `USER_SPEECH_START` / `USER_SPEECH_END` drives capture +
+    `transcribe()` call (faster-whisper model load is lazy so the
+    pipeline boots clean even when `faster-whisper` isn't installed —
+    transcribe returns None cleanly).
+  - `stop_voice_pipeline()` unsubscribes both handlers, closes the stream.
+- TTS handler smoke test: `register_tts_handlers()` subscribes one
+  handler to `RESPONSE_TEXT_READY`; `_publish_audio_chunks(320ms, 16kHz)`
+  emits 4 `RESPONSE_AUDIO_CHUNK` events plus 1 `RESPONSE_AUDIO_END`.
+- Desktop shell: module imports clean, `DesktopBridge.get_app_info()`
+  returns platform + data_dir. Backend subprocess spawn + wait-for-listen
+  + teardown on shell exit verified via port-state observation.
+
+### Known-fragile paths
+
+- **Pywebview visual rendering** not screen-verified from this agent
+  (no screen capture available). Don should run
+  `.\desktop\launcher.ps1` to confirm the window renders and can
+  round-trip a message.
+- **Faster-whisper install** is still optional in the dev venv —
+  `pip install faster-whisper` is in requirements.txt but needs torch
+  (CUDA) installed separately per the top-of-file note. Voice pipeline
+  start succeeds either way; transcription is the lazy load that can
+  fail with a clean `ModuleNotFoundError`.
+- **Chatterbox install** similarly lazy; first synth will either load
+  the model or log a clean error. A machine without Chatterbox installed
+  but with ElevenLabs configured will route everything through the cloud.
+- **Audio device** comes from `config.voice.device`. `"default"` and
+  empty string both resolve to `None` (system default). Other values
+  are passed through to sounddevice (substring match of device name,
+  or int index).
+- **Frontend has not been rebuilt** in the worktree — the shell will
+  load `file://.../frontend/out/index.html` if you run packaged mode;
+  run `cd frontend && npm install --legacy-peer-deps && npm run build`
+  or use dev mode (`npm run dev` in one terminal, launcher in another).
+- **Backend instance lock** at `%LOCALAPPDATA%/aether/...` blocks two
+  backends running against the same data dir. The desktop shell already
+  handles this by attaching to an existing backend on :8765.
+
+### Commits this session (Agent 2)
+
+```
+[DESKTOP]  Add pywebview desktop shell
+[CLEANUP]  Delete wake-word + speaker-verify modules
+[VOICE]    Rewrite voice pipeline for v1.0 push-to-talk
+```
+
+### How to test Agent 2 deliverables
+
+```bash
+cd C:/Users/dbhav/Projects/aether-desktop-voice
+# .venv is a junction to the main repo's venv; pywebview + sounddevice
+# + soundfile are already installed there.
+
+# Unit tests
+.venv/Scripts/python.exe -m pytest tests/unit/test_voice_in.py::TestSTT tests/unit/test_voice_in.py::TestCircuitBreaker -q
+
+# Desktop shell (visual check)
+.\desktop\launcher.ps1
+# → native window titled "Aether", window closed → backend terminated.
+
+# Voice pipeline live test requires faster-whisper installed:
+.venv/Scripts/python.exe -m pip install faster-whisper
+# then boot the backend with voice.mode=local and publish
+# USER_SPEECH_START/END events from the frontend to observe TRANSCRIPT_READY.
+```
+
+---
+
 ## What's proven working
 
 1. **Backend boots** — `.venv/Scripts/python.exe -m src.main` starts health (:8767), WebSocket (:8765), persona loader, memory, brain, onboarding, probe handlers. No import errors, no stale-module references, no Don-specific path assumptions.
