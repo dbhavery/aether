@@ -62,6 +62,7 @@ export function createWsClient(opts: CreateWsClientOptions): WsClient {
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   let intentionallyClosed = false;
+  let lastPongAt = 0;
   const outbox: string[] = [];
 
   const subscribers = new Map<AnyEventType, Set<EventHandler>>();
@@ -191,11 +192,23 @@ export function createWsClient(opts: CreateWsClientOptions): WsClient {
         console.error("[ws] malformed JSON frame", err, msg.data);
         return;
       }
-      if (!isAetherEvent(parsed)) {
+      // Heartbeat acks: backend replies to {"type":"ping"} with the bare
+      // {"type":"pong"} (no data, no timestamp) — handle inline and skip the
+      // dispatcher so the strict event shape doesn't reject it as garbage.
+      if (
+        parsed &&
+        typeof parsed === "object" &&
+        (parsed as { type?: unknown }).type === "pong"
+      ) {
+        lastPongAt = Date.now();
+        return;
+      }
+      const event = coerceAetherEvent(parsed);
+      if (!event) {
         console.warn("[ws] frame did not match AetherEvent shape", parsed);
         return;
       }
-      dispatch(parsed);
+      dispatch(event);
     };
 
     next.onerror = (ev: Event) => {
@@ -291,10 +304,35 @@ export function createWsClient(opts: CreateWsClientOptions): WsClient {
   return { connect, disconnect, send, subscribe, onStatusChange, getStatus };
 }
 
-function isAetherEvent(value: unknown): value is AetherEvent {
-  if (value === null || typeof value !== "object") return false;
+/**
+ * Coerce a parsed inbound frame into an AetherEvent, defaulting `data` to
+ * `{}` when missing or non-object. The strict shape (data must be an object)
+ * was rejecting valid backend frames that omit `data` for trivial replies
+ * (e.g., the bare `{"type":"pong"}` heartbeat ack), spamming console.warn
+ * every 25s. Returning a default-shaped event keeps subscribers honest
+ * without losing the type.
+ */
+function coerceAetherEvent(value: unknown): AetherEvent | null {
+  if (value === null || typeof value !== "object") return null;
   const candidate = value as Record<string, unknown>;
-  return typeof candidate.type === "string" && typeof candidate.data === "object" && candidate.data !== null;
+  if (typeof candidate.type !== "string" || !candidate.type) return null;
+  const data =
+    candidate.data && typeof candidate.data === "object"
+      ? (candidate.data as Record<string, unknown>)
+      : {};
+  // request_id isn't on AetherEvent's TS type but the runtime carries it as
+  // a passthrough field on `data` when present (server.py copies it there
+  // during broadcast). Subscribers that need it read `event.data.request_id`.
+  return {
+    type: candidate.type as AnyEventType,
+    data,
+    timestamp:
+      typeof candidate.timestamp === "number"
+        ? candidate.timestamp
+        : Date.now() / 1000,
+    source_module:
+      typeof candidate.source_module === "string" ? candidate.source_module : "backend",
+  };
 }
 
 /* -----------------------------------------------------------------------
