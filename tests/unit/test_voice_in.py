@@ -1,48 +1,13 @@
 """Module 02 tests — verify Voice-In components."""
 
-from importlib.util import find_spec
 from unittest.mock import AsyncMock, patch
 
 import numpy as np
 import pytest
 
-# VAD imports torch (Silero VAD). On environments without torch (base dev
-# install without requirements-voice.txt) the VAD class is skipped.
-_HAS_TORCH = find_spec("torch") is not None
-
-
-@pytest.mark.skipif(not _HAS_TORCH, reason="torch not installed; VAD uses Silero VAD")
-class TestVAD:
-    def test_vad_stream_initializes(self):
-        from src.voice.vad import VADStream
-
-        vad = VADStream()
-        assert vad.threshold > 0
-        assert vad.sample_rate == 16000
-
-    def test_vad_callbacks_fire(self):
-        from src.voice.vad import VADStream
-
-        speech_started = []
-        speech_ended = []
-
-        vad = VADStream(
-            on_speech_start=lambda: speech_started.append(True),
-            on_speech_end=lambda audio: speech_ended.append(audio),
-        )
-        # Simulate speech above threshold (need enough chunks to exceed min_speech_ms=250ms)
-        with patch("src.voice.vad.is_speech", return_value=0.9):
-            speech_chunk = np.ones(512, dtype=np.float32) * 0.5
-            for _ in range(10):  # 10 * 32ms = 320ms > 250ms min_speech_ms
-                vad.process_chunk(speech_chunk, 32.0)
-            assert len(speech_started) == 1
-
-        # Simulate end of speech (silence)
-        with patch("src.voice.vad.is_speech", return_value=0.1):
-            silence_chunk = np.zeros(512, dtype=np.float32)
-            for _ in range(30):  # enough silence chunks to trigger speech_end
-                vad.process_chunk(silence_chunk, 32.0)
-            assert len(speech_ended) == 1
+# src/voice/vad.py is unused on the v1.0 push-to-talk path — TestVAD was
+# removed with the pipeline rewrite. If VAD comes back (continuous-capture
+# with auto-endpoint detection), re-add targeted tests at that time.
 
 
 class TestSTT:
