@@ -70,9 +70,9 @@ TIER_PRESETS: Final[Mapping[str, Mapping[Tier, str]]] = {
         Tier.HEAVY: "anthropic/claude-opus-4-7",
     },
     "openai": {
-        Tier.FAST: "openai/gpt-5-mini",
-        Tier.MAIN: "openai/gpt-5",
-        Tier.HEAVY: "openai/gpt-5-thinking",
+        Tier.FAST: "openai/gpt-4o-mini",
+        Tier.MAIN: "openai/gpt-4o",
+        Tier.HEAVY: "openai/o1",
     },
     "google": {
         Tier.FAST: "gemini/gemini-2.5-flash-lite",
