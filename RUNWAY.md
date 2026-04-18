@@ -1,141 +1,172 @@
 # RUNWAY.md — Session Handoff
 
-**Last session:** 2026-04-17 — P0 architecture freeze and planning docs.
-**Branch:** `dev` (new, off `master`@dc92ba3).
-**Unpushed state:** new docs + personas scaffold, not yet committed.
-**Next session owner:** continue P1 — backend port from upstream Isabelle.
+**Last session:** 2026-04-17 — P0 architecture freeze + P1 de-Isabelle pass.
+**Branch:** `dev` (pushed to origin).
+**Latest commit:** `2c2e5c6 [FIX] Resolve installation UUID race between wizard and secrets`.
+**Next session owner:** Finish P1 boot-smoke test and start P2 frontend scaffold.
 
 ---
 
 ## Where we are
 
-Aether is being productized from a showcase repo into a public v1.0 consumer product. The existing `master` branch holds a March-24 sanitized snapshot of Isabelle with a PySide6 UI (suitable for portfolio linking, kept untouched). All productization happens on `dev`.
+Aether is now publicly installable in principle. Private modules removed, Don-specific paths gone, config + secrets + personas + LLM routing all rewritten with public-install defaults. Onboarding wizard backend built. Everything MIT-licensed and ready for a frontend to drive it.
 
-**Binding decisions locked** in `docs/PRODUCT-PLAN.md`. Summary:
-- Evolve existing `aether` repo, don't fork.
-- MIT license retained.
-- Next.js + pywebview UI (replaces PySide6, which becomes `src/desktop_legacy/`).
-- LivePortrait-only avatar in v1.0.
-- litellm for LLM abstraction, BYOK wizard.
-- Push-to-talk (no wake word).
-- 10–12 personas as pack folders.
-- Windows-first installer.
+**Everything shipped this session is on `dev` at https://github.com/dbhavery/aether/tree/dev**
 
 ---
 
 ## What got done this session
 
-1. `dev` branch created off `master`.
-2. Six planning docs written under `docs/`:
-   - `PRODUCT-PLAN.md` — full roadmap, phases P0–P6, acceptance criteria.
-   - `ARCHITECTURE-V2.md` — process topology, directory layout, ports, events, config.
-   - `PERSONA-SCHEMA.md` — persona pack format, 12 canonical personas, generation pipeline.
-   - `ONBOARDING-SPEC.md` — 7-screen wizard state machine.
-   - `LLM-PROVIDERS.md` — litellm abstraction, tier mapping, key storage, guest mode.
-   - `SYNC-ISABELLE.md` — deterministic upstream port rules.
-3. Top-level `personas/` directory scaffolded with README and `_example` reference pack.
-4. Top-level `frontend/` directory scaffolded with README.
-5. Task list seeded and worked through.
+**P0 planning docs** (committed earlier in the session):
+- `docs/PRODUCT-PLAN.md` — binding decisions, phases, acceptance criteria.
+- `docs/ARCHITECTURE-V2.md` — process topology, ports, config schema.
+- `docs/PERSONA-SCHEMA.md` — persona pack format + 12 canonical personas.
+- `docs/ONBOARDING-SPEC.md` — 7-screen wizard state machine.
+- `docs/LLM-PROVIDERS.md` — litellm abstraction, tier mapping.
+- `docs/SYNC-ISABELLE.md` — upstream-port rules.
+- `personas/_example/` reference pack.
+- `frontend/README.md` placeholder.
 
-**What was NOT done:**
-- No code changes (planning-only session per Don's explicit direction).
-- No commits yet — next step after this doc lands.
-- No GitHub push — happens after commits.
+**P1 de-Isabelle pass** (later in the session, 10 commits):
 
----
+1. `702c327 [SCOPE-CUT]` — deleted `src/agents/`, `src/tools/`, `src/notifications/`, `src/media/`, `src/persona/`, `src/data_server/`, `src/shared/key_store.py`. Renamed `src/desktop/` → `src/desktop_legacy/`.
+2. `9653a63 [INFRA]` — added `src/shared/paths.py` (platformdirs), `src/shared/secrets.py` (OS keyring), `configs/default_config.yaml` (template). Rewrote `src/shared/config.py` with `AetherConfig` Pydantic model + `get_config()`/`save_config()`/`is_onboarding_complete()`. Legacy API retained.
+3. `a0a1320 [TYPES]` — added 5 wizard events (`WIZARD_STEP_SUBMIT`, etc.), removed 8 obsolete events (wake word, speaker verify, notifications, agents, approval, old persona).
+4. `d4efa27 [FEATURE]` — full onboarding wizard backend under `src/onboarding/` (state, validators, handler, finalizer).
+5. `d2fbd45 [FEATURE]` — persona pack loader under `src/personas/` (models, loader, manager, audit).
+6. `e692815 [FEATURE]` — litellm-based tier router + streaming client + fallback chain + cost tracking under `src/brain/` (llm_router.py, llm_client.py, fallback.py, cost.py).
+7. `c3c30f6 [REFACTOR]` — rewrote `src/brain/persona.py` (system-prompt builder pulls from active persona pack) and `src/brain/handler.py` (v1.0 streaming chat loop; no tools/agents/emotion tracking).
+8. `f503055 [REFACTOR]` — rewrote `src/core/startup.py` (v1.0 boot order with onboarding gate), trimmed `src/core/server.py` (no tools import), `src/core/shutdown.py` (no notifications/persona).
+9. `e289a05 [RELEASE]` — updated `requirements.txt` (removed wake-word/agent/notification deps; added platformdirs, keyring, litellm), rewrote `.env.example` (minimal keys; keyring is primary), rewrote `README.md` (public-product framing with install/run/modes/what's-not-in-v1.0).
+10. `2c2e5c6 [FIX]` — installation UUID race fix. `secrets._installation_uuid()` now resolves three-tier: config.yaml → wizard_state.yaml → mint. Keys written during wizard stay readable after finalize.
 
-## Immediate next actions for next session
+**Static verification** performed:
+- `grep` for imports of deleted modules in active src/: only hits are under `src/desktop_legacy/` (expected).
+- `ast.parse` across all non-legacy src .py files: clean.
 
-**P1 kickoff — port backend modules from upstream Isabelle:**
-
-1. **Build `scripts/sync_from_isabelle.py`** per rules in `docs/SYNC-ISABELLE.md`.
-   - Start with `--dry-run` to validate transformations.
-   - Target: one atomic commit per ported module.
-2. **Port order:**
-   1. `src/shared/` (paths, config, types, logging) — everything else depends on it.
-   2. `src/core/` (EventBus, WS server, health).
-   3. `src/memory/` (ChromaDB, per-persona isolation added).
-   4. `src/voice/` (stripped — no wake word, no speaker verify, push-to-talk events).
-   5. `src/avatar/` (LivePortrait only, drop Ditto/MuseTalk/FlashHead).
-   6. `src/brain/` (replace Don's custom router with litellm tier abstraction).
-3. **Rename `src/desktop/` → `src/desktop_legacy/`** and mark read-only.
-4. **Strip `src/tools/`, `src/agents/`, `src/notifications/`, `src/media/`, `src/data_server/`, `src/persona/`, `android/`** — delete, don't port.
-5. **Write `src/personas/loader.py`** — scans `personas/` dir, validates against schema, returns `PersonaManifest`.
-6. **Update `requirements.txt`** per SYNC-ISABELLE.md § 3.5.
-7. **Rename `isabelle_config.yaml` → `aether_config.yaml`.**
-8. **Boot test:** `python -m src.main` should start clean on a fresh checkout with no secrets configured (fails loud with clear messages, doesn't silently use Don's defaults).
-
-**P2 kickoff — frontend scaffold (can run in parallel with P1):**
-
-1. `cd frontend && npx create-next-app@latest .` (Next.js 15, TypeScript, App Router, Tailwind v4).
-2. Build WebSocket client in `lib/ws.ts` matching the backend :8765 contract.
-3. Three-mode shell under `app/(shell)/` — chat, sandbox, video.
-4. Wizard stub under `app/(onboarding)/` — 8 routes, no logic yet.
-5. pywebview bridge in `desktop/main.py` that launches a window pointing at `frontend/out/`.
+**Dynamic verification NOT performed:**
+- No `.venv` existed at `C:/Users/dbhav/Projects/aether/.venv/`. Nobody has actually booted `python -m src.main` yet against the new codebase.
+- First thing next session: create venv, `pip install -r requirements.txt`, run `python -m src.main`, watch for import errors or config-load errors.
 
 ---
 
-## Open questions for Don
+## Immediate next actions
 
-These don't block P1 but will need answers before P4 / P5:
+**1. Boot smoke test (5-10 minutes).**
+```
+cd C:/Users/dbhav/Projects/aether
+python -m venv .venv
+.venv/Scripts/activate
+pip install torch==2.7.0+cu128 torchaudio==2.7.0+cu128 --index-url https://download.pytorch.org/whl/cu128
+pip install -r requirements.txt
+python -c "from src.shared.config import get_config; print(get_config())"
+python -c "from src.personas import get_persona_manager; print(get_persona_manager().list_all())"
+python -m src.main
+```
+Fix any import errors or config-load errors as they surface. Expect: health server starts, persona manager loads (only `_example` until P4), WebSocket starts, no crashes. Voice + avatar stay in `pending_onboarding` state until wizard runs.
 
-1. **Who drafts TERMS.md and PRIVACY.md?** Recommend paying someone once for a template, then we adapt.
-2. **Portfolio embed approach:** iframe from `dbhavery.ai` or fully inline React component? Iframe is safer (sandbox); inline is prettier.
-3. **Aether Guest endpoint hosting:** Cloudflare Worker is cheap. OK to provision?
-4. **Telemetry:** any opinion on Sentry vs. PostHog vs. custom? I'd default to PostHog (self-hostable, product-analytics focused). Can defer.
-5. **macOS and Linux installers in v1.0 or later?** I scoped Windows-only. Confirm.
-6. **Persona generation assets:** where do the voice reference WAVs come from? Need a curated CC0 voice pool. Budget?
+**2. Clean up old brain files (15 minutes).**
+`src/brain/router.py` and `src/brain/clients.py` are no longer imported by the new handler, but weren't deleted to avoid breaking anything surprise-imported. Now that the new handler lands cleanly, grep for their usage. If nothing else imports them, `git rm` and commit.
+
+**3. Start P2 — frontend scaffold (1-2 hours).**
+```
+cd frontend
+npx create-next-app@latest . --ts --tailwind --app --no-eslint --import-alias "@/*"
+```
+Then build:
+- `lib/ws.ts` — typed WebSocket client matching backend :8765 contract.
+- Three mode routes under `app/(shell)/` — chat, sandbox, video.
+- Wizard route stubs under `app/(onboarding)/` — 8 pages with navigation but no logic yet.
+- `desktop/main.py` — pywebview shell that launches a window pointing at `frontend/out/index.html`.
+- Dark theme tokens (fresh; don't use old `don-design-system`).
+
+**4. Start P3 — wizard UI (2-3 hours after P2 shell exists).**
+Implement the 7 screens per `docs/ONBOARDING-SPEC.md`. Each screen is a route component that builds a `WizardStepSubmit` payload and sends via WebSocket. Reads results from `WizardStepResult` events. Persists local state via Zustand (frontend mirror of backend state).
+
+**5. Start P4 — persona pack generation (spread over multiple sessions).**
+Per `docs/PERSONA-SCHEMA.md` §6. Can run parallel to P2/P3. Each of the 12 personas takes 2-4 hours: portrait → states → clips → voice reference → system prompt → QA → metadata audit.
 
 ---
 
-## Decisions already locked (don't revisit without explicit reversal)
+## Known issues / follow-ups
 
-See `docs/PRODUCT-PLAN.md § 1 — Binding Decisions`. Key ones:
-
-- MIT license.
-- Next.js + pywebview.
-- LivePortrait only.
-- Push-to-talk (no wake word).
-- 10–12 personas as pack folders.
-- litellm for LLM abstraction.
-- Windows-first.
-- Free download, no billing in v1.0.
+- **venv not created.** User must set this up before the first real boot.
+- **`src/brain/clients.py` and `src/brain/router.py`** left in tree; likely safe to delete but confirm first with grep in the next session.
+- **`src/brain/content_guard.py`, `sanitizer.py`, `response_formatter.py`** were kept and are still imported by the new brain/handler.py. They may have Isabelle-ish content; worth an audit pass.
+- **`src/shared/vram_manager.py` and `api_registry.py` and `api_tests.py` and `validation.py` and `protocols.py`** — imported by deleted modules but not used by new code. Check if they're dead.
+- **`src/memory/store.py`** — still has `get_recent_turns()` and `search_memory()` but may assume a single-user schema. Should support per-persona collection isolation per `docs/ARCHITECTURE-V2.md` §4.6. Audit during boot smoke test.
+- **CI (`.github/workflows/ci.yml`)** — exists but not reviewed this session. May be running against deleted modules and turning red on `dev`. Check `gh run list --branch dev --limit 1` first thing next session.
+- **Aether Guest endpoint not implemented.** Wizard Screen 5 Card C references it; backend will 404 until we provision the Cloudflare Worker proxy. Guest mode blocked in validators for now (see `validators.py` comment).
+- **No tests** written for the new modules (onboarding, personas, llm_router, fallback, paths, secrets). Worth a P1.5 test-writing pass before P2 gets large.
 
 ---
 
-## Repo state reference
+## Locked decisions (do not revisit without explicit reversal)
 
-| Path | State |
-|------|-------|
-| `master` branch | Unchanged showcase snapshot (2026-03-24 state). |
-| `dev` branch | New. Contains all planning docs + personas scaffold from this session. |
-| `docs/PRODUCT-PLAN.md` | Source of truth for scope, decisions, phases. |
-| `docs/ARCHITECTURE-V2.md` | Source of truth for technical design. |
-| `docs/PERSONA-SCHEMA.md` | Source of truth for persona pack format. |
-| `docs/ONBOARDING-SPEC.md` | Source of truth for wizard UX. |
-| `docs/LLM-PROVIDERS.md` | Source of truth for LLM provider abstraction. |
-| `docs/SYNC-ISABELLE.md` | Source of truth for upstream port rules. |
-| `personas/_example/` | Reference persona pack, filtered from wizard. |
-| `frontend/README.md` | Placeholder; P2 builds the actual app. |
+1. Evolve existing `aether` repo, don't fork.
+2. License stays **MIT**.
+3. `master` = stable showcase; `dev` = productization.
+4. Legacy `src/desktop/` → `src/desktop_legacy/`, not deleted, not booted.
+5. Next.js + pywebview for the product UI.
+6. LivePortrait only for v1.0 avatar engine.
+7. Push-to-talk (no wake word) for v1.0.
+8. Per-persona ChromaDB isolation.
+9. OS keyring as primary key store; env-var fallback only.
+10. `litellm` as the sole LLM-provider interface.
+11. Windows-first installer.
+12. 10-12 bundled personas per `docs/PERSONA-SCHEMA.md` §7.
+
+---
+
+## Open questions for Don (none blocking P1 boot)
+
+Same as previous RUNWAY section — see the session-1 handoff. Summary:
+1. Who drafts `TERMS.md` and `PRIVACY.md`?
+2. Portfolio embed approach: iframe or inline React?
+3. Aether Guest endpoint hosting (Cloudflare Worker cost OK?).
+4. Telemetry tool choice (PostHog recommended).
+5. macOS/Linux v1.0 or defer?
+6. Voice reference WAV source budget.
 
 ---
 
 ## How to resume
 
-1. `cd C:/Users/dbhav/Projects/aether && git checkout dev`
+1. `cd C:/Users/dbhav/Projects/aether && git checkout dev && git pull`
 2. Read this file.
-3. Read `docs/PRODUCT-PLAN.md` if unfamiliar with the phase structure.
-4. Start on P1 per the "Immediate next actions" above.
-5. Commit after every meaningful change. Push `dev` after each commit.
-6. Update this RUNWAY.md at session end.
+3. Run the boot smoke test commands (item 1 in "Immediate next actions").
+4. Proceed to P2 frontend scaffold.
+5. Commit atomically per concern. Push after each commit.
+6. Update this RUNWAY.md before session end.
+
+---
+
+## Repository state reference
+
+| Path | State |
+|------|-------|
+| `master` | Unchanged March-24 showcase snapshot. |
+| `dev` | Active. 15 commits ahead of master as of this session. |
+| `docs/` | Full planning doc set (P0 from session 1). |
+| `src/shared/{paths,secrets,config}.py + configs/default_config.yaml` | New infra. |
+| `src/onboarding/` | Full wizard backend (no UI yet). |
+| `src/personas/` | Pack loader + manager + audit. |
+| `src/brain/{llm_router,llm_client,fallback,cost}.py` | New LLM abstraction. |
+| `src/brain/{persona,handler}.py` | Rewritten for v1.0 scope. |
+| `src/core/{startup,server,shutdown}.py` | Updated for v1.0 module set. |
+| `src/desktop_legacy/` | Renamed from src/desktop/. Not product surface. |
+| `personas/_example/` | Reference pack. Other 12 come in P4. |
+| `frontend/` | Placeholder README only. P2 scaffolds here. |
+| `requirements.txt`, `.env.example`, `README.md` | Public v1.0 versions. |
 
 ---
 
 ## Anti-drift reminders
 
-- **Do not touch `Isabelle_Kunstig/` files** — another agent is working there per memory `project_two_agent_coordination.md`.
-- **Do not commit secrets** — keys live in OS keyring, never in YAML or env files in git.
-- **Do not edit `src/desktop_legacy/`** after the rename — it's a historical artifact.
-- **Do not delete `master` branch** — it's linked from Don's portfolio.
-- **Do not change the license** from MIT without explicit Don approval.
-- **Do not hand-port Isabelle code** — always go through the sync script once it's built, even if it's only a few files.
+- **Do not modify `Isabelle_Kunstig/` files** — another agent active there per memory.
+- **Do not commit secrets** — keyring is primary, `.env` is dev-only fallback.
+- **Do not edit `src/desktop_legacy/`** — it's historical.
+- **Do not delete `master` branch** — linked from portfolio.
+- **Do not change the license** without explicit Don approval.
+- **Do not port from Isabelle without going through `docs/SYNC-ISABELLE.md` rules** (script to build later).
+- **Do not skip the boot smoke test before starting P2** — discovering broken imports mid-frontend-build wastes hours.
