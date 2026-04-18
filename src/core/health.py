@@ -7,12 +7,14 @@ import time
 from collections import defaultdict, deque
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
 from src.core.auth import get_token_for_client
 from src.shared.config import get_config, is_onboarding_complete
-from src.shared.paths import get_data_dir
+from src.shared.paths import get_bundled_personas_dir, get_data_dir
 
 _registered_modules: dict[str, dict] = {}
 _start_time = time.time()
@@ -114,6 +116,36 @@ def _check_token_rate_limit(ip: str) -> bool:
 
 def create_health_app() -> FastAPI:
     app = FastAPI(title="Aether Health", version="1.0.0")
+
+    # CORS — frontend runs on :3000 in dev (Next.js) or from file:// in pywebview
+    # packaged mode. Health + persona asset fetches are browser-initiated, so the
+    # response must carry Access-Control-Allow-Origin. Localhost-only; no public
+    # surface risk.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "http://localhost:3001",
+            "null",  # file:// origins send Origin: null
+        ],
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["*"],
+        allow_credentials=False,
+        max_age=600,
+    )
+
+    # Serve persona pack assets (portraits, state images, voice samples) so the
+    # frontend can load them with <img src="http://localhost:8767/personas/...">.
+    # Read-only, bundled-only — user-override personas under %APPDATA% stay
+    # local-file only until they're selected as active.
+    try:
+        personas_dir = get_bundled_personas_dir()
+        if personas_dir.exists():
+            app.mount("/personas", StaticFiles(directory=str(personas_dir)), name="personas")
+            logger.info(f"Health: mounted persona assets at /personas → {personas_dir}")
+    except Exception as exc:
+        logger.warning(f"Health: could not mount personas directory: {exc!r}")
 
     @app.get("/health")
     async def health() -> dict:

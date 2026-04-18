@@ -1,11 +1,16 @@
 /**
- * CSS-only persona portrait placeholder.
+ * Persona portrait — loads the real AI-generated portrait from the backend's
+ * static-mounted personas directory when it exists, falls back to a CSS
+ * radial-gradient + initial placeholder when the pack has no portrait yet
+ * (bundled personas without assets, user-created personas mid-generation).
  *
- * Real avatar art doesn't exist yet, but we need the wizard grid to still
- * feel lived-in. Each portrait takes its first letter and a per-persona hue
- * and renders a soft radial-gradient disc + initial. Keyed to persona id so
- * Aurora and Atlas don't look identical.
+ * Backend mounts /personas at the health port (:8767) via StaticFiles, so
+ * portrait URLs are absolute: http://localhost:8767/personas/<id>/avatar/portrait.png.
  */
+
+"use client";
+
+import { useState } from "react";
 
 export interface PersonaPortraitProps {
   id: string;
@@ -16,6 +21,9 @@ export interface PersonaPortraitProps {
   animated?: boolean;
 }
 
+const ASSETS_BASE =
+  process.env.NEXT_PUBLIC_AETHER_ASSETS_BASE ?? "http://localhost:8767/personas";
+
 export function PersonaPortrait({
   id,
   displayName,
@@ -24,10 +32,13 @@ export function PersonaPortrait({
   animated = false,
 }: PersonaPortraitProps) {
   const initial = displayName.charAt(0).toUpperCase();
+  const [imageFailed, setImageFailed] = useState(false);
+  const portraitUrl = `${ASSETS_BASE}/${id}/avatar/portrait.png`;
+
   return (
     <div
       role="img"
-      aria-label={`${displayName} portrait placeholder`}
+      aria-label={imageFailed ? `${displayName} portrait placeholder` : `${displayName} portrait`}
       className="relative rounded-full overflow-hidden flex items-center justify-center select-none"
       style={{
         width: size,
@@ -41,12 +52,28 @@ export function PersonaPortrait({
       }}
       data-persona-id={id}
     >
-      <span
-        className="font-medium text-fg-primary/90"
-        style={{ fontSize: size * 0.42, letterSpacing: "-0.04em" }}
-      >
-        {initial}
-      </span>
+      {!imageFailed && (
+        // Real AI-generated portrait — absolute URL lets both dev-server
+        // (:3000) and static export (file://) load from backend :8767.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={portraitUrl}
+          alt={`${displayName} portrait`}
+          width={size}
+          height={size}
+          className="absolute inset-0 w-full h-full object-cover"
+          draggable={false}
+          onError={() => setImageFailed(true)}
+        />
+      )}
+      {imageFailed && (
+        <span
+          className="font-medium text-fg-primary/90 relative z-10"
+          style={{ fontSize: size * 0.42, letterSpacing: "-0.04em" }}
+        >
+          {initial}
+        </span>
+      )}
       <span
         aria-hidden
         className="absolute inset-0 pointer-events-none"

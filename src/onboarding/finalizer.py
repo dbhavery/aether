@@ -161,6 +161,22 @@ async def finalize_wizard(state: WizardState) -> None:
             f"{state.selected_avatar_id!r}: {exc!r} — will retry on first use"
         )
 
+    # 2b. Hydrate the runtime persona manager so brain/persona.py picks up the
+    # active persona's system_prompt on the very first chat turn (without this,
+    # active_persona_id stays None and the brain falls through to the generic
+    # fallback prompt — the user's chosen persona never gets applied).
+    if state.selected_avatar_id:
+        try:
+            from src.personas import get_persona_manager
+
+            get_persona_manager().set_active(state.selected_avatar_id)
+            logger.info(f"Activated persona '{state.selected_avatar_id}' on persona manager")
+        except Exception as exc:
+            logger.warning(
+                f"Could not set active persona to {state.selected_avatar_id!r}: {exc!r} "
+                "— brain will use fallback prompt until next restart"
+            )
+
     # 3. Wizard state cleanup — also best-effort; a stale file is harmless
     # because the config's onboarding.complete flag supersedes it.
     try:
