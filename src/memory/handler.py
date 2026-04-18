@@ -9,6 +9,7 @@ from loguru import logger
 
 from src.core.events import event_bus
 from src.memory.categorizer import classify
+from src.memory.embeddings import EmbeddingsUnavailable
 from src.memory.fact_extractor import FactExtractor, run_batch_extraction
 from src.memory.store import store_conversation_turn, store_fact
 from src.memory.tier_manager import get_tier_manager
@@ -103,9 +104,13 @@ async def _run_batch_extraction_bg() -> None:
 async def on_user_message(event: AetherEvent) -> None:
     text = event.data.get("text", "")
     timestamp = event.timestamp
-    if text:
+    if not text:
+        return
+    try:
         await _store_with_tiers("user", text, timestamp)
         await _process_facts("user", text, timestamp)
+    except EmbeddingsUnavailable as exc:
+        logger.debug(f"Memory: skipping user-turn storage (embeddings unavailable): {exc}")
 
 
 async def on_response_ready(event: AetherEvent) -> None:
@@ -117,8 +122,11 @@ async def on_response_ready(event: AetherEvent) -> None:
     if any(phrase in text for phrase in _ERROR_PHRASES):
         logger.debug(f"Memory: skipping error response from storage: '{text[:60]}'")
         return
-    await _store_with_tiers("assistant", text, timestamp)
-    await _process_facts("assistant", text, timestamp)
+    try:
+        await _store_with_tiers("assistant", text, timestamp)
+        await _process_facts("assistant", text, timestamp)
+    except EmbeddingsUnavailable as exc:
+        logger.debug(f"Memory: skipping assistant-turn storage (embeddings unavailable): {exc}")
 
 
 def register_memory_handlers() -> None:
