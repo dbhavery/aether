@@ -1,0 +1,73 @@
+# Aether default configuration.
+#
+# This file is copied to <user_config_dir>/aether/config.yaml on first run
+# when no user config exists. The running app reads from that copy — edits
+# to THIS file have no effect on an already-installed instance.
+#
+# Secrets (API keys) NEVER live in this file. They are kept in the OS
+# keyring under service names "aether.<provider>". This file is safe to
+# share in screenshots, attach to bug reports, and commit to public repos.
+#
+# Any field not set below falls back to its Pydantic model default at load
+# time.
+
+aether:
+  version: 1
+  # user_installation_id is generated on first launch (uuid4) and written
+  # back to this file. Left blank here so the app generates a unique ID
+  # per install rather than reusing a template value.
+  user_installation_id: ""
+  telemetry:
+    enabled: false
+    crash_reports: false
+
+# Onboarding must complete before the main UI becomes usable. The wizard
+# flips `complete` to true and stamps `completed_at` when done.
+onboarding:
+  complete: false
+  current_step: "welcome"
+  completed_at: null
+
+# Active persona is selected by the onboarding wizard. Leaving it blank
+# here forces the wizard to run before any chat session can start.
+persona:
+  active: ""
+  display_name: ""
+
+# LLM tier mapping. The wizard sets `provider` and populates `tier_map`
+# based on the user's choice (see docs/LLM-PROVIDERS.md §3). Defaults
+# below are local-only so a fresh install with Ollama running "just works"
+# until the user picks a different provider.
+llm:
+  provider: "ollama"
+  tier_map:
+    fast: "ollama/qwen2.5:7b"
+    main: "ollama/qwen2.5:14b"
+    heavy: "ollama/qwen2.5:32b"
+
+# Voice mode: "local" uses bundled faster-whisper + Chatterbox Turbo;
+# "elevenlabs" routes TTS to ElevenLabs cloud (requires API key);
+# "off" disables voice entirely.
+voice:
+  mode: "local"
+  stt_model: "faster-whisper-base.en"
+  tts_model: "chatterbox-turbo"
+  device: "default"
+
+ui:
+  theme: "dark"
+  always_on_top: false
+  # Window geometry is persisted on close. Null values trigger
+  # platform-default positioning on first launch.
+  window_position: null
+  window_size: null
+
+memory:
+  enabled: true
+  max_history_turns: 200
+  retrieval_top_k: 5
+
+avatar:
+  engine: "liveportrait"
+  fps_target: 25
+  quality: "standard"
