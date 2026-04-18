@@ -50,15 +50,74 @@ def _env_var_name(provider: str) -> str:
 def _installation_uuid() -> str:
     """Return the per-install UUID used as the keyring username.
 
-    Imports locally to avoid a circular import with ``config``.
+    Resolution order (first match wins):
+
+    1. ``config.yaml``'s ``aether.user_installation_id`` — the steady state
+       after onboarding has finalized.
+    2. ``wizard_state.yaml``'s ``installation_id`` — used during onboarding,
+       before ``config.yaml`` exists. Pre-persisted at the start of the
+       wizard so every keyring write during the wizard uses the same UUID
+       that finalize will copy into ``config.yaml``.
+    3. Generate a fresh uuid4 and persist it to ``wizard_state.yaml`` so the
+       very first ``set_key`` call and every subsequent call agree on a
+       single UUID.
+
+    Imports are local to avoid circular-import issues with ``config`` and to
+    keep ``paths`` / ``onboarding.state`` out of this module's import graph
+    when they're not needed. The ``@lru_cache`` ensures the resolution runs
+    at most once per process; callers that cross the wizard→finalize
+    boundary (``finalizer.finalize_wizard``) must invoke
+    ``_installation_uuid.cache_clear()`` afterwards so the next read picks
+    up the now-written config value.
     """
+    # 1. config.yaml — post-onboarding steady state.
     try:
         from src.shared.config import get_config
 
-        return get_config().aether.user_installation_id
-    except Exception as exc:  # pragma: no cover - config errors handled elsewhere
-        logger.warning(f"Could not read installation UUID from config: {exc!r}; using 'default'")
-        return "default"
+        configured = get_config().aether.user_installation_id
+        if configured:
+            return configured
+    except Exception as exc:  # config absent or invalid during onboarding
+        logger.debug(f"Installation UUID not available from config: {exc!r}")
+
+    # 2. wizard_state.yaml — mid-onboarding, pre-finalize.
+    try:
+        from src.onboarding.state import load_wizard_state
+
+        state = load_wizard_state()
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning(f"Could not load wizard state for installation UUID: {exc!r}")
+        state = None
+
+    if state is not None and state.installation_id:
+        logger.debug("Installation UUID resolved from wizard_state.yaml")
+        return state.installation_id
+
+    # 3. No config, no wizard state — mint one and persist it to wizard_state
+    #    so subsequent reads (including from this same process after a
+    #    cache_clear) agree on the UUID.
+    import uuid
+
+    new_id = str(uuid.uuid4())
+    try:
+        from src.onboarding.state import WizardState, save_wizard_state
+
+        seed_state = state if state is not None else WizardState()
+        seed_state.installation_id = new_id
+        save_wizard_state(seed_state)
+        logger.info(
+            f"Generated new installation UUID and persisted to wizard_state.yaml: {new_id}"
+        )
+    except Exception as exc:
+        # Persistence failed — still return the generated UUID so this process
+        # is internally consistent. The next process will mint a different
+        # one, but that's better than crashing on first-run with no keyring
+        # backend writes to reach.
+        logger.warning(
+            f"Could not persist generated installation UUID to wizard_state.yaml: "
+            f"{exc!r}; using UUID in-memory only"
+        )
+    return new_id
 
 
 def _keyring_available() -> bool:

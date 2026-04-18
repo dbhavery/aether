@@ -15,6 +15,7 @@ as soon as Screen 5 validates and are never serialised into state.
 from __future__ import annotations
 
 import os
+import uuid
 from datetime import datetime
 from enum import StrEnum
 from io import StringIO
@@ -87,6 +88,12 @@ class WizardState(BaseModel):
     # Timing
     started_at: datetime = Field(default_factory=lambda: datetime.now().astimezone())
     last_updated_at: datetime = Field(default_factory=lambda: datetime.now().astimezone())
+
+    # Per-install UUID — populated at the first ``save_wizard_state`` call so
+    # keyring writes during the wizard and keyring reads after finalize agree
+    # on a single username. Finalize copies this into
+    # ``config.yaml``'s ``aether.user_installation_id``.
+    installation_id: str | None = None
 
     # Progress
     current_step: WizardStep = WizardStep.WELCOME
@@ -177,7 +184,16 @@ def save_wizard_state(state: WizardState) -> None:
 
     Writes to ``<path>.tmp`` and then ``os.replace`` onto the final path so an
     interrupted write cannot corrupt an existing state file.
+
+    If ``state.installation_id`` is unset, generates a uuid4 and stamps it
+    before the write so every subsequent save sees the same value. This is
+    the canonical point where the wizard-scoped UUID is materialised — the
+    secrets module reads it back to keep keyring writes/reads consistent
+    across the wizard→finalize boundary.
     """
+    if state.installation_id is None:
+        state.installation_id = str(uuid.uuid4())
+        logger.debug(f"Assigned wizard installation_id={state.installation_id}")
     state.last_updated_at = datetime.now().astimezone()
     path = get_wizard_state_path()
     tmp_path = path.with_suffix(path.suffix + ".tmp")

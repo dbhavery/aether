@@ -119,7 +119,21 @@ async def finalize_wizard(state: WizardState) -> None:
     """
     _ensure_complete(state)
 
-    installation_id = str(uuid.uuid4())
+    # Prefer the UUID the wizard has been using all along — keys were written
+    # to the keyring under THIS username during screens 5/6, so reusing it is
+    # what makes post-finalize reads succeed. Only mint a fresh one if the
+    # wizard somehow reached HANDOFF without stamping one (shouldn't happen
+    # because ``save_wizard_state`` populates it on first write, but keep a
+    # defensive fallback rather than crashing here).
+    if state.installation_id:
+        installation_id = state.installation_id
+    else:
+        installation_id = str(uuid.uuid4())
+        logger.warning(
+            "WizardState reached finalize with no installation_id; "
+            f"generating fallback {installation_id}. Any API keys written "
+            "during the wizard may be stranded under a different username."
+        )
     config_dict = _build_config_dict(state, installation_id)
 
     # 1. Config file — atomic temp+rename. Keys were written on validation,
