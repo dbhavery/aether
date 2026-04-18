@@ -7,6 +7,42 @@
 
 ---
 
+## Agent 1 complete — frontend UX + text polish
+
+**Branch:** `feature/frontend-ux-complete` (pushed; draft PR against `dev` open).
+**Scope:** the six deliverables from Don's brief — owned `frontend/**`, `src/brain/sanitizer.py`, and one StepHandoff fix that needed `src/onboarding/handler.py` shape verification (read-only — no changes there).
+
+### What changed (commit-by-commit)
+
+1. `cd68e1b [FIX] brain: sanitizer preserves multi-sentence responses past banned phrases` — substring matching in `_SENTENCE_BANS` was truncating "Hello! How can I assist you today?" to "Hello!". Switched Pass 1 to exact-match-after-normalize so a sentence is stripped only when its substantive content equals a banned phrase verbatim. Standalone openers ("Absolutely!", "Of course.", "Great question!") and bare service offers ("How can I assist?") are still removed; longer responses round-trip intact. Added `tests/unit/test_brain_sanitizer.py` with 11 cases covering the regression, true-opener stripping, and empty/whitespace edges.
+2. `78877e4 [FIX] frontend: home page probes /health and redirects instead of hanging` — `app/page.tsx` now runs its own `GET http://localhost:8767/health` with a 2 s `AbortController` timeout and `router.replace`s to `/chat/` or `/onboarding/1-welcome/` based on `onboarding_complete`. Probe failures default to onboarding so a fresh install with no backend reachable still reaches the wizard within the timeout.
+3. `191c370 [FIX] frontend: wizard Step 5 LLM Continue ships key inline, no Test gate` — BYOK Continue used to refuse unless Test Key had returned `ok` AND the submit payload omitted `key` entirely (so even the gate-lifted submit would have been rejected by the backend). Decoupled Continue from Test Key (Test Key remains as an optional pre-flight affordance), validated non-empty key on Continue, and added `key?: string` to `LlmStepPayload` so the field is typed end-to-end. Backend validates via litellm and writes to keyring atomically — same code path as Test Key, just inlined into the submit.
+4. `025543e [FIX] frontend: wizard StepHandoff submits HANDOFF and redirects to /chat` — the handoff screen subscribed to `ONBOARDING_COMPLETE` but never submitted the HANDOFF step, so `finalize_wizard` never ran and the user was trapped on `/onboarding/8-handoff/` forever. Wired `submitStep(WizardStepId.HANDOFF, {})` on mount, redirect on the submit reply (not the broadcast — broadcasts can be lost across the WS reconnect cycle, see caveats), and kept the broadcast subscriber as a secondary trigger. Added `HandoffStepPayload = Record<string, never>` to the discriminated union; this surfaced a pre-existing inference error in `StepVoice` that I fixed by adding the optional `elevenlabs_configured` flag to `VoiceSettings`.
+5. `1d15800 [FIX] frontend: WS validator no longer rejects bare {type:"pong"} acks` — the strict `isAetherEvent` check required `data` to be an object, which dropped the backend's heartbeat ack `{"type":"pong"}` and triggered a `console.warn` every 25 s. Replaced with a coercer that defaults `data` to `{}` and `timestamp` / `source_module` to safe fallbacks; recognized `pong` inline before dispatch and stamped `lastPongAt`. The 30 s reconnect cycle persists after this change — see caveats.
+6. `5986e56 [UI] welcome + chat empty state + sandbox persona polish` — Welcome subtitle tightened to "Private. Yours. Pick who you want to talk to."; chat empty state subtitle now "Local-first, yours alone. Type when ready." (was "They're running on your machine. Speak freely." — voice-implying); Sandbox → Persona tab gets per-persona `hue` swatches matching the wizard's visual language, active card flexes swatch + name + tagline, footnote rephrased from a docs pointer to actionable guidance.
+
+### What was tested
+
+- `pytest tests/unit/test_brain_sanitizer.py` → 11/11 pass (regression + true-opener + edge).
+- `npm run typecheck` → clean for every file I touched. One pre-existing motion-typing error in `frontend/components/wizard/WizardStepShell.tsx:31` remains (`className` not on `motion.section`'s typed props with the shipped framer-motion version) — not a regression and didn't block dev.
+- `playwright-cli` end-to-end walk against fresh `%LOCALAPPDATA%\aether\aether\` state (deleted `config.yaml` + `wizard_state.yaml`):
+  - `/` → redirected to `/onboarding/1-welcome/` within 2 s ✓
+  - Walked Welcome → Avatar (Aurora) → Personality (Warm & supportive) → Name (default "Aurora") → LLM (BYOK OpenAI, key from `OPENAI_API_KEY` env, **clicked Continue without clicking Test Key**) → Voice (Text only) → Terms (agree) → Finish → handoff → landed in `/chat/` ✓
+  - Sent "Say hello in one sentence." → assistant streamed "Hello! It's great to connect with you." back as a full multi-sentence response (sanitizer no longer truncating at the first `!`) ✓
+  - Backend `/health` after the run: `onboarding_complete: True`, `persona_active: aurora` ✓
+  - Full transcript embedded in the PR description.
+
+### Caveats for the merger
+
+1. **WS reconnect cycle still fires every ~30 s.** Backend log shows clean closes on a 30 s cadence regardless of UI activity, with no app-level message preceding them. Direct Python WS clients (with `websockets` library pings enabled) survive past 90 s against the same backend, which points the cause at the browser side of the connection. My pong-validation fix removed the `console.warn` spam but not the underlying close. I time-boxed the investigation — escalate with Chrome devtools open during the 30 s closure to see whether the close frame originates client-side (and which code dispatches it) or server-side (likely websockets `ping_timeout`). The user-facing impact is small today: each reconnect is sub-second and the heartbeat keeps state coherent, but it WILL race with one-shot broadcasts (e.g., `ONBOARDING_COMPLETE`) — that's why the StepHandoff fix relies on the submit reply rather than the broadcast.
+2. **Frontend `LlmProvider.GUEST` serializes to `"guest"` but the backend expects `"aether_guest"`.** Validators.py line 191 hardcodes the canonical id. Out of scope for this session (the OpenAI BYOK path is the test target and works); fixing it is a one-line frontend rename or a backend alias.
+3. **`StepVoice` ElevenLabs path is still typed loosely.** I added `elevenlabs_configured?: boolean` to `VoiceSettings` to clear the inference error my discriminated union widening introduced; the wizard sends the marker but backend treats voice settings as opaque pass-through. If Agent 2's voice work tightens this contract, revisit.
+4. **Pre-existing `WizardStepShell` motion-typing error is still there.** Not a regression. Either the framer-motion version needs to bump or the `<motion.section>` should be replaced with a typed wrapper. Out of scope for my deliverables.
+5. **No new `EventType` values added.** Per integration contract — kept `WIZARD_STEP_SUBMIT` / `WIZARD_STEP_RESULT` / `ONBOARDING_COMPLETE` / `PERSONA_CHANGED` / `PROVIDER_CHANGED` as the only events I rely on.
+6. **Files touched are limited to my whitelist:** `frontend/**`, `src/brain/sanitizer.py`, `tests/unit/test_brain_sanitizer.py`, `RUNWAY.md` (per the handoff instructions). `src/brain/handler.py`, `src/brain/response_formatter.py`, `src/onboarding/handler.py` were read-only inspection.
+
+---
+
 ## What's proven working
 
 1. **Backend boots** — `.venv/Scripts/python.exe -m src.main` starts health (:8767), WebSocket (:8765), persona loader, memory, brain, onboarding, probe handlers. No import errors, no stale-module references, no Don-specific path assumptions.
