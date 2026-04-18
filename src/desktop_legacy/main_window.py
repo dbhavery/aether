@@ -19,13 +19,13 @@ from src.desktop.chat_view import ChatView
 from src.desktop.settings_panel import SettingsPanel
 from src.desktop.task_panel import TaskPanel
 from src.desktop.theme import (
+    ASSISTANT_COLOR,
     COLOR_ERROR,
     COLOR_SUCCESS,
     EDGE_BRIGHT,
     EDGE_FAINT,
     GLOBAL_QSS,
     GRAD_BAR,
-    ASSISTANT_COLOR,
     TEXT_FAINT,
     TEXT_MUTED,
     TEXT_PRIMARY,

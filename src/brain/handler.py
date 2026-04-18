@@ -22,7 +22,6 @@ from src.brain.sanitizer import sanitize_response
 from src.core.events import event_bus
 from src.shared.types import AetherEvent, EventType, InteractionMode
 
-
 # Max conversation turns to include in LLM context window.
 CONTEXT_TURNS = 20
 

@@ -140,21 +140,20 @@ async def _handle_ollama_probe(event: AetherEvent) -> None:
 
     try:
         timeout = aiohttp.ClientTimeout(total=_OLLAMA_PROBE_TIMEOUT_SECONDS)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(tags_url) as resp:
-                if resp.status != 200:
-                    await _publish(
-                        EventType.OLLAMA_PROBE_RESULT,
-                        {
-                            "available": False,
-                            "models": [],
-                            "error": f"Ollama returned HTTP {resp.status}.",
-                        },
-                        request_id,
-                    )
-                    return
-                payload = await resp.json()
-    except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+        async with aiohttp.ClientSession(timeout=timeout) as session, session.get(tags_url) as resp:
+            if resp.status != 200:
+                await _publish(
+                    EventType.OLLAMA_PROBE_RESULT,
+                    {
+                        "available": False,
+                        "models": [],
+                        "error": f"Ollama returned HTTP {resp.status}.",
+                    },
+                    request_id,
+                )
+                return
+            payload = await resp.json()
+    except (TimeoutError, aiohttp.ClientError) as exc:
         logger.warning(f"Ollama probe failed: {exc!r}")
         await _publish(
             EventType.OLLAMA_PROBE_RESULT,
@@ -213,7 +212,7 @@ def _collect_voice_hardware_snapshot() -> dict[str, Any]:
     vram_gb: float | None = None
 
     try:
-        import torch  # noqa: PLC0415 — optional dep
+        import torch
     except ImportError:
         logger.debug("voice hardware probe: torch not installed")
         torch = None  # type: ignore[assignment]
@@ -305,8 +304,8 @@ async def _handle_voice_preview(event: AetherEvent) -> None:
 def _play_sample_wav(path: str) -> None:
     """Play ``path`` through the default output device. Best-effort, logs on failure."""
     try:
-        import sounddevice  # noqa: PLC0415 — optional dep
-        import soundfile  # noqa: PLC0415 — sounddevice needs raw samples
+        import sounddevice
+        import soundfile
     except ImportError:
         logger.info("voice preview: sounddevice/soundfile not installed — no-op")
         return

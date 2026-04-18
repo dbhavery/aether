@@ -2,11 +2,11 @@
 
 from src.desktop.theme import (
     ACCENT,
+    ASSISTANT_COLOR,
     BG,
     BG_VOID,
     BORDER,
     CARDS,
-    USER_COLOR,
     EDGE_BRIGHT,
     EDGE_DARK,
     EDGE_FAINT,
@@ -15,7 +15,6 @@ from src.desktop.theme import (
     EDGE_SHADOW,
     EDGE_SUBTLE,
     INPUTS,
-    ASSISTANT_COLOR,
     R_SM,
     R_XL,
     TEXT_FAINT,
@@ -23,6 +22,7 @@ from src.desktop.theme import (
     TEXT_MUTED,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
+    USER_COLOR,
     card_qss,
     input_qss,
     mode_button_qss,

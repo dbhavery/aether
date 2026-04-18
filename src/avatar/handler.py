@@ -6,7 +6,7 @@ from loguru import logger
 
 from src.avatar.client import get_avatar_client
 from src.core.events import event_bus
-from src.shared.types import EventType, AetherEvent
+from src.shared.types import AetherEvent, EventType
 
 # Track the auto-reset task so we can cancel if a new response arrives
 _speaking_reset_task: asyncio.Task | None = None

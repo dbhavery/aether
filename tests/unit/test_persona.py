@@ -149,7 +149,7 @@ class TestCorrectionHandler:
         import time
 
         from src.persona.memory_corrections import handle_memory_correction
-        from src.shared.types import EventType, AetherEvent
+        from src.shared.types import AetherEvent, EventType
 
         mock_event = AetherEvent(
             type=EventType.MEMORY_CORRECTION,
@@ -181,7 +181,7 @@ class TestCorrectionHandler:
         import time
 
         from src.persona.memory_corrections import handle_memory_correction
-        from src.shared.types import EventType, AetherEvent
+        from src.shared.types import AetherEvent, EventType
 
         mock_event = AetherEvent(
             type=EventType.MEMORY_CORRECTION,

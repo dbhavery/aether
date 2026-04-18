@@ -472,7 +472,7 @@ class SettingsPanel(QDialog):
 
     def _get_git_hash(self) -> str:
         try:
-            result = subprocess.run(  # noqa: S603  # nosec B603 B607  # trusted git command
+            result = subprocess.run(  # nosec B603 B607  # trusted git command
                 ["git", "rev-parse", "--short", "HEAD"],  # noqa: S607
                 capture_output=True,
                 text=True,

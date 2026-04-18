@@ -12,7 +12,7 @@ from src.memory.categorizer import classify
 from src.memory.fact_extractor import FactExtractor, run_batch_extraction
 from src.memory.store import store_conversation_turn, store_fact
 from src.memory.tier_manager import get_tier_manager
-from src.shared.types import EventType, AetherEvent
+from src.shared.types import AetherEvent, EventType
 
 # Phrases that indicate error/system messages — don't pollute long-term memory
 _ERROR_PHRASES = frozenset(

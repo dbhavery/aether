@@ -65,7 +65,7 @@ class TestHandler:
     @pytest.mark.asyncio
     async def test_handler_calls_windows_notify(self):
         from src.notifications.handler import on_notification_request
-        from src.shared.types import EventType, AetherEvent
+        from src.shared.types import AetherEvent, EventType
 
         mock_detector = MagicMock()
         mock_detector.should_notify.return_value = True
@@ -85,7 +85,7 @@ class TestHandler:
     @pytest.mark.asyncio
     async def test_handler_skips_empty_message(self):
         from src.notifications.handler import on_notification_request
-        from src.shared.types import EventType, AetherEvent
+        from src.shared.types import AetherEvent, EventType
 
         with patch("src.notifications.handler.show_notification", new_callable=AsyncMock) as mock_show:
             event = AetherEvent(

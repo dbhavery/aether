@@ -5,7 +5,7 @@ import asyncio
 import pytest
 
 from src.core.events import EventBus
-from src.shared.types import EventType, AetherEvent
+from src.shared.types import AetherEvent, EventType
 
 
 class TestEventBus:

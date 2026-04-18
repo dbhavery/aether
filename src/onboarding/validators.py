@@ -209,15 +209,14 @@ async def _probe_ollama(model_overrides: dict[str, str] | None) -> _ValidationRe
     tags_url = f"{OLLAMA_DEFAULT_URL}/api/tags"
     try:
         timeout = aiohttp.ClientTimeout(total=_OLLAMA_TIMEOUT_SECONDS)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(tags_url) as resp:
-                if resp.status != 200:
-                    return False, (
-                        f"Ollama returned HTTP {resp.status}. "
-                        "Make sure Ollama is running."
-                    )
-                payload = await resp.json()
-    except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+        async with aiohttp.ClientSession(timeout=timeout) as session, session.get(tags_url) as resp:
+            if resp.status != 200:
+                return False, (
+                    f"Ollama returned HTTP {resp.status}. "
+                    "Make sure Ollama is running."
+                )
+            payload = await resp.json()
+    except (TimeoutError, aiohttp.ClientError) as exc:
         logger.warning(f"Ollama probe failed: {exc!r}")
         return False, (
             "Ollama isn't reachable at localhost:11434. "
@@ -255,7 +254,7 @@ async def _probe_litellm(provider: str, model: str, key: str) -> _ValidationResu
             ),
             timeout=_LLM_TEST_TIMEOUT_SECONDS,
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return False, "Provider didn't respond within 10 seconds. Try again."
     except Exception as exc:  # litellm raises provider-specific subclasses
         return False, _translate_litellm_error(exc)
@@ -329,7 +328,7 @@ def _probe_local_voice() -> _ValidationResult:
     # Torch is optional at import time — a machine without a GPU may not have
     # it installed, and a clean failure path must not crash the wizard.
     try:
-        import torch  # noqa: PLC0415 — lazy import keeps the wizard import cheap
+        import torch
     except ImportError:
         logger.info("torch not installed — local voice will run on CPU")
         return True, None
@@ -363,14 +362,13 @@ async def _probe_elevenlabs(key: str) -> _ValidationResult:
     headers = {"xi-api-key": key, "Accept": "application/json"}
     try:
         timeout = aiohttp.ClientTimeout(total=_LLM_TEST_TIMEOUT_SECONDS)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(url, headers=headers) as resp:
-                if resp.status == 200:
-                    return True, None
-                if resp.status in (401, 403):
-                    return False, "That ElevenLabs API key was rejected."
-                return False, f"ElevenLabs returned HTTP {resp.status}."
-    except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+        async with aiohttp.ClientSession(timeout=timeout) as session, session.get(url, headers=headers) as resp:
+            if resp.status == 200:
+                return True, None
+            if resp.status in (401, 403):
+                return False, "That ElevenLabs API key was rejected."
+            return False, f"ElevenLabs returned HTTP {resp.status}."
+    except (TimeoutError, aiohttp.ClientError) as exc:
         logger.warning(f"ElevenLabs probe failed: {exc!r}")
         return False, "Couldn't reach ElevenLabs. Check your network and try again."
 

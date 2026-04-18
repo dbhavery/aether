@@ -26,7 +26,6 @@ from src.core.server import start_websocket_server
 from src.shared.config import get_settings, get_yaml_config, is_onboarding_complete
 from src.shared.logging_config import setup_logging
 
-
 # Keep references to background tasks so they aren't garbage-collected.
 _background_tasks: list[asyncio.Task[None]] = []
 

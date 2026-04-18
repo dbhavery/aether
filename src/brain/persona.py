@@ -15,7 +15,6 @@ from loguru import logger
 from src.brain.content_guard import get_injection_guard_system_prompt
 from src.shared.types import InteractionMode
 
-
 _MODE_HINTS: dict[InteractionMode, str] = {
     InteractionMode.TEXT: (
         "The user is typing. Text mode — full formatting allowed "

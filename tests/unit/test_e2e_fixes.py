@@ -163,7 +163,7 @@ class TestMemoryFiltering:
     @pytest.mark.asyncio
     async def test_error_response_not_stored(self):
         from src.memory.handler import on_response_ready
-        from src.shared.types import EventType, AetherEvent
+        from src.shared.types import AetherEvent, EventType
 
         event = AetherEvent(
             type=EventType.RESPONSE_TEXT_READY,
@@ -176,7 +176,7 @@ class TestMemoryFiltering:
     @pytest.mark.asyncio
     async def test_normal_response_stored(self):
         from src.memory.handler import on_response_ready
-        from src.shared.types import EventType, AetherEvent
+        from src.shared.types import AetherEvent, EventType
 
         event = AetherEvent(
             type=EventType.RESPONSE_TEXT_READY,

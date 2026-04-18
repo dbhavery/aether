@@ -10,8 +10,8 @@ from PySide6.QtGui import QFont, QPixmap
 from PySide6.QtWidgets import QLabel, QScrollArea, QVBoxLayout, QWidget
 
 from src.desktop.theme import (
+    ASSISTANT_COLOR,
     BG_VOID,
-    USER_COLOR,
     EDGE_BRIGHT,
     EDGE_DARK,
     EDGE_FAINT,
@@ -19,11 +19,11 @@ from src.desktop.theme import (
     EDGE_SUBTLE,
     GRAD_RAISED,
     GRAD_RECESSED,
-    ASSISTANT_COLOR,
     R_MD,
     R_XL,
     TEXT_MUTED,
     TEXT_PRIMARY,
+    USER_COLOR,
 )
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent

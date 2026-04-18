@@ -41,12 +41,23 @@ ignore = [
     "S101",   # assert used (OK in tests)
     "T201",   # print found (we use print in scripts)
     "B008",   # function call in default arg (FastAPI Depends)
+    # Style preferences — the codebase favours explicit forms over these refactors:
+    "TC001",  # move app import into TYPE_CHECKING block
+    "TC003",  # move stdlib import into TYPE_CHECKING block
+    "SIM101", # merge isinstance calls
+    "SIM102", # combine nested ifs
+    "SIM105", # use contextlib.suppress instead of try/except/pass
+    "SIM108", # use ternary
+    "RUF002", # ambiguous unicode in docstrings (en-dash is intentional)
+    "RUF006", # asyncio.create_task ref not stored (fire-and-forget by design)
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101", "S106", "S110", "T201"]
 "scripts/**/*.py" = ["T201"]
 "src/avatar/server.py" = ["S404", "S603"]  # subprocess used for launching known avatar scripts
+"src/core/server.py" = ["S110"]  # best-effort rate-limit-error send; client may have disconnected
+"src/desktop_legacy/**" = ["S104"]  # legacy PySide6 module not on the v1.0 path
 
 [tool.ruff.lint.isort]
 known-first-party = ["src", "desktop"]

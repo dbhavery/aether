@@ -10,7 +10,7 @@ from collections.abc import Awaitable, Callable
 
 from loguru import logger
 
-from src.shared.types import EventType, AetherEvent
+from src.shared.types import AetherEvent, EventType
 
 HandlerType = Callable[[AetherEvent], Awaitable[None]]
 

@@ -17,17 +17,17 @@ from PySide6.QtWidgets import (
 )
 
 from src.desktop.theme import (
+    ASSISTANT_COLOR,
     BG_VOID,
-    USER_COLOR,
     EDGE_BRIGHT,
     EDGE_FAINT,
     GRAD_BAR,
     GRAD_RAISED,
-    ASSISTANT_COLOR,
     R_XL,
     TEXT_FAINT,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
+    USER_COLOR,
     input_qss,
     send_button_qss,
 )

@@ -215,7 +215,7 @@ class TestTTSHandlerAvatarSync:
             ),
             patch("src.avatar.client.get_avatar_client", return_value=mock_client),
         ):
-            from src.shared.types import EventType, AetherEvent
+            from src.shared.types import AetherEvent, EventType
             from src.voice.tts_handler import on_response_text_ready
 
             event = AetherEvent(
@@ -254,7 +254,7 @@ class TestTTSHandlerAvatarSync:
             ),
             patch("src.avatar.client.get_avatar_client", return_value=mock_client),
         ):
-            from src.shared.types import EventType, AetherEvent
+            from src.shared.types import AetherEvent, EventType
             from src.voice.tts_handler import on_response_text_ready
 
             event = AetherEvent(

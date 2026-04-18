@@ -31,7 +31,6 @@ import numpy as np
 import soundfile as sf
 from loguru import logger
 
-
 # ---------------------------------------------------------------------------
 # Circuit breaker — retained from upstream; prevents zombie STT spins.
 # ---------------------------------------------------------------------------
