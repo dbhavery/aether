@@ -38,19 +38,19 @@ export function Checkbox({
         disabled ? "opacity-60 cursor-not-allowed" : "",
       ].join(" ")}
     >
-      <span className="relative flex items-center mt-0.5">
+      <span className="relative flex items-center mt-0.5 w-4 h-4">
         <input
           id={inputId}
           type="checkbox"
           checked={checked}
           onChange={handle}
           disabled={disabled}
-          className="peer sr-only"
+          className="peer absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-10"
         />
         <span
           aria-hidden
           className={[
-            "w-4 h-4 rounded-[4px] border transition-colors duration-150 flex items-center justify-center",
+            "pointer-events-none w-4 h-4 rounded-[4px] border transition-colors duration-150 flex items-center justify-center",
             checked
               ? "bg-accent border-accent"
               : "bg-bg-1 border-border-strong peer-focus-visible:ring-2 peer-focus-visible:ring-accent-ring",
