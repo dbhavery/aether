@@ -41,11 +41,12 @@ class TestVAD:
 
 class TestSTT:
     @pytest.mark.asyncio
-    async def test_transcribe_falls_back_gracefully(self):
-        """If local Whisper fails, ElevenLabs (when configured) is attempted."""
+    async def test_transcribe_falls_back_gracefully_when_elevenlabs_opted_in(self):
+        """Whisper fails -> ElevenLabs is used, but only when user opted in."""
         with (
             patch("src.voice.stt.transcribe_whisper", new_callable=AsyncMock, return_value=None),
             patch("src.voice.stt.transcribe_elevenlabs", new_callable=AsyncMock, return_value="hello world"),
+            patch("src.voice.stt._elevenlabs_enabled", return_value=True),
         ):
             from src.voice.stt import transcribe
 
@@ -53,10 +54,24 @@ class TestSTT:
             assert result == "hello world"
 
     @pytest.mark.asyncio
+    async def test_transcribe_skips_elevenlabs_when_not_opted_in(self):
+        """Local-mode users never hit the cloud, even if whisper returns empty."""
+        with (
+            patch("src.voice.stt.transcribe_whisper", new_callable=AsyncMock, return_value=None),
+            patch("src.voice.stt.transcribe_elevenlabs", new_callable=AsyncMock, return_value="cloud hit"),
+            patch("src.voice.stt._elevenlabs_enabled", return_value=False),
+        ):
+            from src.voice.stt import transcribe
+
+            result = await transcribe(np.zeros(16000, dtype=np.float32))
+            assert result is None  # Never tried the cloud path.
+
+    @pytest.mark.asyncio
     async def test_transcribe_returns_none_if_both_fail(self):
         with (
             patch("src.voice.stt.transcribe_whisper", new_callable=AsyncMock, return_value=None),
             patch("src.voice.stt.transcribe_elevenlabs", new_callable=AsyncMock, return_value=None),
+            patch("src.voice.stt._elevenlabs_enabled", return_value=True),
         ):
             from src.voice.stt import transcribe
 
