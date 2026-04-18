@@ -171,6 +171,13 @@ export interface LlmTierMap {
 export interface VoiceSettings {
   elevenlabs_voice_id?: string;
   device?: string;
+  /**
+   * Marker the wizard sets when the ElevenLabs API key has been written to
+   * the OS keyring during BYOK setup. The backend keeps it on the wizard
+   * state but never reads its value — presence in `voice_settings` is the
+   * sole signal a key was provided.
+   */
+  elevenlabs_configured?: boolean;
 }
 
 export interface TelemetryPrefs {

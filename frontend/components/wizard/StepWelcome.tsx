@@ -30,7 +30,7 @@ export function StepWelcome() {
     <WizardStepShell
       step={WizardStepId.WELCOME}
       title="Meet your AI companion."
-      subtitle="Aether runs on your computer. Private. Yours. Choose who you want to talk to."
+      subtitle="Private. Yours. Pick who you want to talk to."
       footer={
         <div className="flex-1 flex justify-end">
           <Button size="lg" onClick={handleStart} isLoading={busy}>

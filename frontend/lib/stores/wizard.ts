@@ -50,6 +50,13 @@ export interface LlmStepPayload {
   llm_provider: LlmProvider;
   llm_tier_map: LlmTierMap;
   llm_model_overrides?: Record<string, string>;
+  /**
+   * BYOK API key. Sent to backend on submit so it can validate via litellm
+   * and forward to the OS keyring. Never stored in the wizard store and
+   * never persisted to disk on the frontend — gone from memory the moment
+   * `submitStep` resolves.
+   */
+  key?: string;
 }
 export interface VoiceStepPayload {
   voice_mode: VoiceMode;
@@ -59,6 +66,12 @@ export interface TermsStepPayload {
   accepted_terms_at: string;
   telemetry: TelemetryPrefs;
 }
+/**
+ * Handoff carries no user input. The backend re-validates that all prior
+ * steps completed, then calls `finalize_wizard` and broadcasts
+ * ONBOARDING_COMPLETE. Frontend just needs to fire the submit on mount.
+ */
+export type HandoffStepPayload = Record<string, never>;
 
 export type WizardStepPayload =
   | WelcomeStepPayload
@@ -67,7 +80,8 @@ export type WizardStepPayload =
   | NameStepPayload
   | LlmStepPayload
   | VoiceStepPayload
-  | TermsStepPayload;
+  | TermsStepPayload
+  | HandoffStepPayload;
 
 export interface WizardStepResult {
   success: boolean;

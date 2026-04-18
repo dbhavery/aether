@@ -93,14 +93,29 @@ _LINE_BANS = [
     re.compile(r"^\s*(?:what can i do for you|how can i help)\s*[?!.]?\s*$", re.IGNORECASE),
 ]
 
-# Compiled sentence ban patterns for speed
-_SENTENCE_BAN_PATTERNS = [re.compile(re.escape(phrase), re.IGNORECASE) for phrase in _SENTENCE_BANS]
+# Set of banned phrases for exact-match lookup (after sentence normalization).
+# Substring matching was too aggressive: "How can I assist you today?" would be
+# stripped because it contained the banned fragment "how can i assist", even
+# though the full sentence is a perfectly normal response. We now strip a
+# sentence only when its substantive content equals a banned phrase verbatim
+# (case-insensitive, with surrounding whitespace and trailing punctuation
+# removed). Tone shaping for longer responses belongs in the system prompt.
+_SENTENCE_BAN_SET: frozenset[str] = frozenset(_SENTENCE_BANS)
+_TRAILING_SENTENCE_PUNCT = "?!.,;:"
+
+
+def _normalize_sentence(sentence: str) -> str:
+    """Lowercase, trim whitespace, strip trailing punctuation."""
+    return sentence.lower().strip().rstrip(_TRAILING_SENTENCE_PUNCT).strip()
 
 
 def sanitize_response(text: str) -> str:
     """Remove banned phrases from LLM response.
 
-    Pass 1: Sentence-level — remove any sentence containing a banned phrase.
+    Pass 1: Sentence-level — remove a sentence only if its substantive content
+            (lowercased, trimmed, trailing punctuation removed) equals a banned
+            phrase verbatim. This preserves multi-sentence responses where a
+            banned fragment merely appears as part of a longer sentence.
     Pass 2: Line-level — remove entire lines matching line ban patterns.
     Pass 3: Clean up artifacts (double spaces, orphan punctuation, blank lines).
     """
@@ -119,20 +134,10 @@ def sanitize_response(text: str) -> str:
         sentences = re.split(r"(?<=[.!?])\s+", line)
         kept_sentences = []
         for sentence in sentences:
-            sentence_lower = sentence.lower().strip()
-            # Check if any banned phrase appears in this sentence
-            is_banned = False
-            for pattern in _SENTENCE_BAN_PATTERNS:
-                if pattern.search(sentence_lower):
-                    is_banned = True
-                    break
-
-            # Also check for standalone "Absolutely!" / "Of course!" / "Certainly!" at start
-            if sentence_lower.rstrip("!.") in ("absolutely", "of course", "certainly", "sure thing"):
-                is_banned = True
-
-            if not is_banned:
-                kept_sentences.append(sentence)
+            normalized = _normalize_sentence(sentence)
+            if normalized and normalized in _SENTENCE_BAN_SET:
+                continue
+            kept_sentences.append(sentence)
 
         cleaned_lines.append(" ".join(kept_sentences))
 

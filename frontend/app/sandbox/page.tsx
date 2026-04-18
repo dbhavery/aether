@@ -78,14 +78,20 @@ function PersonaTab() {
   };
   const current = activeId ? findPersona(activeId) : undefined;
   return (
-    <Section title="Persona packs" subtitle="Switch between bundled personas. Custom packs can be created later.">
-      <div className="mb-6 p-4 rounded-[var(--radius-md)] bg-bg-2 border border-border-subtle">
-        <div className="text-[11px] uppercase tracking-[0.14em] text-fg-muted">Active</div>
-        <div className="mt-1 text-[15px] font-medium">
-          {current?.displayName ?? "None selected"}
-        </div>
-        <div className="text-[12px] text-fg-muted mt-1">
-          {current?.tagline ?? "Pick one below to start talking."}
+    <Section
+      title="Persona packs"
+      subtitle={`Switch between bundled personas. ${PERSONAS.length} loaded.`}
+    >
+      <div className="mb-6 p-4 rounded-[var(--radius-md)] bg-bg-2 border border-border-subtle flex items-center gap-4">
+        <PersonaSwatch hue={current?.hue ?? 0} initial={current?.displayName?.[0] ?? "—"} size={40} />
+        <div className="min-w-0">
+          <div className="text-[11px] uppercase tracking-[0.14em] text-fg-muted">Active</div>
+          <div className="mt-1 text-[15px] font-medium truncate">
+            {current?.displayName ?? "None selected"}
+          </div>
+          <div className="text-[12px] text-fg-muted mt-1 truncate">
+            {current?.tagline ?? "Pick one below to start talking."}
+          </div>
         </div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -95,23 +101,42 @@ function PersonaTab() {
             type="button"
             onClick={() => switchPersona(p.id)}
             className={[
-              "text-left p-3 rounded-md border transition-colors duration-150",
+              "text-left p-3 rounded-md border transition-colors duration-150 flex items-start gap-3",
               activeId === p.id
                 ? "border-accent bg-accent/5 text-fg-primary"
                 : "border-border-subtle hover:border-border-strong bg-bg-2 text-fg-secondary",
             ].join(" ")}
           >
-            <div className="text-[13px] font-medium">{p.displayName}</div>
-            <div className="text-[11px] text-fg-muted mt-0.5">{p.tagline}</div>
+            <PersonaSwatch hue={p.hue} initial={p.displayName[0] ?? "?"} size={28} />
+            <div className="min-w-0">
+              <div className="text-[13px] font-medium">{p.displayName}</div>
+              <div className="text-[11px] text-fg-muted mt-0.5">{p.tagline}</div>
+            </div>
           </button>
         ))}
       </div>
       <p className="text-[12px] text-fg-muted mt-6">
-        Create new personas in{" "}
-        <code className="text-fg-secondary">docs/PERSONA-SCHEMA.md</code>. User packs live under{" "}
-        <code className="text-fg-secondary">%APPDATA%/aether/personas/</code>.
+        Drop a custom pack into <code className="text-fg-secondary">%APPDATA%/aether/personas/</code> and it'll show up here on next launch.
       </p>
     </Section>
+  );
+}
+
+function PersonaSwatch({ hue, initial, size }: { hue: number; initial: string; size: number }) {
+  return (
+    <div
+      aria-hidden
+      className="rounded-full flex items-center justify-center shrink-0 text-fg-primary font-medium"
+      style={{
+        width: size,
+        height: size,
+        fontSize: Math.round(size * 0.42),
+        background: `radial-gradient(60% 60% at 30% 30%, hsl(${hue} 65% 60%) 0%, hsl(${hue} 55% 30%) 70%)`,
+        boxShadow: "var(--shadow-raised)",
+      }}
+    >
+      {initial.toUpperCase()}
+    </div>
   );
 }
 
