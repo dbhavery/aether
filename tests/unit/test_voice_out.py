@@ -8,23 +8,6 @@ import pytest
 
 class TestTTS:
     @pytest.mark.asyncio
-    async def test_synthesize_falls_back_to_elevenlabs(self):
-        with (
-            patch("src.voice.tts.synthesize_chatterbox", new_callable=AsyncMock, return_value=None),
-            patch(
-                "src.voice.tts.synthesize_elevenlabs",
-                new_callable=AsyncMock,
-                return_value=(np.zeros(24000, dtype=np.float32), 24000),
-            ),
-        ):
-            from src.voice.tts import synthesize
-
-            result = await synthesize("Hello User")
-            assert result is not None
-            _audio, sr = result
-            assert sr == 24000
-
-    @pytest.mark.asyncio
     async def test_empty_text_returns_none(self):
         from src.voice.tts import synthesize
 

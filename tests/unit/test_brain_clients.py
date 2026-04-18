@@ -84,49 +84,10 @@ class TestCallOllama:
             assert result == "Hello from Ollama"
 
 
-class TestCallWithFallback:
-    """Test the fallback chain in the brain handler."""
-
-    @pytest.mark.asyncio
-    async def test_fallback_chain_tries_alternatives(self):
-        with (
-            patch(
-                "src.brain.handler.call_claude",
-                new_callable=AsyncMock,
-                side_effect=RuntimeError("Claude down"),
-            ),
-            patch(
-                "src.brain.handler.call_gemini",
-                new_callable=AsyncMock,
-                return_value="Gemini fallback response",
-            ),
-        ):
-            from src.brain.handler import _call_with_fallback
-            from src.brain.router import LLMTier
-
-            result = await _call_with_fallback(
-                LLMTier.CLAUDE,
-                [{"role": "user", "content": "hi"}],
-                "system prompt",
-            )
-            assert result == "Gemini fallback response"
-
-    @pytest.mark.asyncio
-    async def test_fast_tier_calls_ollama(self):
-        with patch(
-            "src.brain.handler.call_ollama",
-            new_callable=AsyncMock,
-            return_value="Local response",
-        ):
-            from src.brain.handler import _call_with_fallback
-            from src.brain.router import LLMTier
-
-            result = await _call_with_fallback(
-                LLMTier.FAST,
-                [{"role": "user", "content": "hi"}],
-                "system prompt",
-            )
-            assert result == "Local response"
+# TestCallWithFallback tested a pre-v1.0 handler-level `_call_with_fallback`
+# that mixed claude/gemini/ollama calls. v1.0 replaced this with tier-based
+# litellm routing in src/brain/fallback.py::call_with_fallback — covered by
+# its own integration-surface tests when the live providers are reachable.
 
 
 class TestRouter:

@@ -49,28 +49,12 @@ class TestRouter:
 
 
 class TestPersona:
-    def test_system_prompt_contains_core_identity(self):
-        prompt = build_system_prompt(InteractionMode.TEXT)
-        assert "Aether" in prompt
-        assert "the developer" in prompt
-
-    def test_system_prompt_has_all_sections(self):
-        prompt = build_system_prompt(InteractionMode.TEXT)
-        assert "CORE TRAITS" in prompt
-        assert "COMMUNICATION STYLE" in prompt
-        assert "KNOWLEDGE & BOUNDARIES" in prompt
-        assert "BEHAVIORAL RULES" in prompt
-        assert "TOOL USE" in prompt
-        assert "CONTEXT INTEGRATION" in prompt
-
-    def test_system_prompt_has_silent_protocol(self):
-        prompt = build_system_prompt(InteractionMode.TEXT)
-        assert "[SILENT] PROTOCOL" in prompt
-        assert "stay silent" in prompt.lower()
-
-    def test_system_prompt_has_trust_contract(self):
-        prompt = build_system_prompt(InteractionMode.TEXT)
-        assert "TRUST CONTRACT" in prompt
+    """Current v1.0 persona prompt is built from the active pack's system_prompt;
+    when no pack is active (the case in these unit tests) a terse fallback is
+    returned. The pre-v1.0 CORE-TRAITS/COMMUNICATION-STYLE/SILENT-PROTOCOL/
+    flirtiness block no longer exists — those tests were deleted with the
+    v13→v1.0 scope-cut. New persona-prompt behaviour is covered by the per-
+    pack fixtures in tests/unit/test_personas.py."""
 
     def test_voice_mode_hint_differs_from_text(self):
         text_prompt = build_system_prompt(InteractionMode.TEXT)
@@ -86,13 +70,3 @@ class TestPersona:
         context = [{"content": "The user prefers dark mode", "metadata": {}, "relevance": 0.9}]
         prompt = build_system_prompt(InteractionMode.TEXT, rag_context=context)
         assert "The user prefers dark mode" in prompt
-
-    def test_flirtiness_in_prompt(self):
-        prompt = build_system_prompt(InteractionMode.TEXT)
-        assert "flirtiness=" in prompt
-
-    def test_banned_phrases_in_prompt(self):
-        prompt = build_system_prompt(InteractionMode.TEXT)
-        # Banned phrases are listed in the COMMUNICATION STYLE section
-        assert "service-questions" in prompt.lower()
-        assert "never offer help unprompted" in prompt.lower()

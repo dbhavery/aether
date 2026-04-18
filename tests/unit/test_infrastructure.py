@@ -128,16 +128,5 @@ class TestHealthMetrics:
         assert "/health" in routes
 
 
-class TestLoopScripts:
-    def test_server_loop_exists(self):
-        path = Path("./scripts/server_loop.cmd")
-        assert path.exists()
-        content = path.read_text()
-        assert "server_loop" in content.lower() or "src.main" in content
-
-    def test_desktop_loop_exists(self):
-        path = Path("./scripts/desktop_loop.cmd")
-        assert path.exists()
-        content = path.read_text()
-        assert "desktop" in content.lower()
-        assert "run_desktop.py" in content
+# The loop.cmd scripts were replaced by desktop/launcher.ps1 + direct
+# `python -m src.main` in the v1.0 scope-cut; their tests are gone with them.

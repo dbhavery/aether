@@ -1,11 +1,17 @@
 """Module 02 tests — verify Voice-In components."""
 
+from importlib.util import find_spec
 from unittest.mock import AsyncMock, patch
 
 import numpy as np
 import pytest
 
+# VAD imports torch (Silero VAD). On environments without torch (base dev
+# install without requirements-voice.txt) the VAD class is skipped.
+_HAS_TORCH = find_spec("torch") is not None
 
+
+@pytest.mark.skipif(not _HAS_TORCH, reason="torch not installed; VAD uses Silero VAD")
 class TestVAD:
     def test_vad_stream_initializes(self):
         from src.voice.vad import VADStream

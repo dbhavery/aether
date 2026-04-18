@@ -103,6 +103,8 @@ class TestConfig:
         from src.shared.config import get_yaml_config
 
         config = get_yaml_config()
-        assert "server" in config
+        # v1.0 top-level keys per configs/default_config.yaml:
+        # aether, onboarding, persona, llm, voice, ui, memory, avatar
+        assert "aether" in config
         assert "llm" in config
         assert "memory" in config
