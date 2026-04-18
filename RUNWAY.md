@@ -1,9 +1,36 @@
 # RUNWAY.md — Session Handoff
 
-**Last session:** 2026-04-17 — full E2E integration pass.
-**Branch:** `dev` (pushed to origin).
-**Latest commit:** `e02a194 [FRONTEND] Scaffold Next.js 15 UI with wizard, chat, sandbox, video modes` (preceded by `ecc88ab [INTEGRATION] Wire backend for frontend E2E + fix path/contract bugs`).
-**Status:** Backend boots clean. Wizard + chat E2E work via direct WS client. UI renders screens 1–5 in browser. Screens 5→6 advance hangs in the browser — fixable, documented below. Minor sanitizer issue truncating responses.
+**Last session:** 2026-04-17 — three-agent parallel work combined into `dev`.
+**Branch:** `dev` (pushed to origin @ `05ac5ba`).
+**Latest commits (combine session):**
+- `05ac5ba [MERGE] Agent 1: wizard fixes (Step 5 advance, routing gate, sanitizer, WS pong, polish)`
+- `3238149 [MERGE] Agent 2: pywebview desktop shell + push-to-talk voice pipeline rewrite`
+- `30b8eb3 [MERGE] Agent 3: persona packs (aurora/caelum/luma) + generator tooling`
+
+**Status:** All three feature branches merged cleanly into `dev`. Only conflict was the expected three-way RUNWAY.md contention (resolved by keeping all handoff sections). Import chain green post-merge, `['aurora','caelum','luma']` load via `get_persona_manager()`, `pytest tests/unit/test_brain_sanitizer.py tests/unit/test_voice_in.py` → 20/22 pass (the 2 TestVAD failures are env — torch not installed; voice defaults to `mode:off`). Backend `src.main` could not be boot-smoke-tested because an existing Aether instance is holding the `%LOCALAPPDATA%/aether/...` instance lock — kill the stale pythonw to run a fresh backend.
+
+## Three-agent combine — what's in `dev` now
+
+1. **Persona packs (Agent 3):** `personas/{aurora,caelum,luma}/` — 1024×1024 portraits + 4 states each, 20s CC0 reference.wav + 4s sample.wav per pack, hand-authored system prompts. `scripts/persona_generator/` provides the tooling recipe for the remaining nine packs. `.gitignore` patched to un-ignore `personas/*/voice/*.wav`. PR #4 (draft).
+2. **Desktop shell + voice rewrite (Agent 2):** `desktop/{main,bridge,launcher.ps1}.py` — pywebview supervisor that attaches-or-spawns the backend on :8765 and loads the Next.js dev server or static export. `src/voice/pipeline.py` rewritten for push-to-talk (no wake word, no speaker verify). `src/voice/tts.py` now resolves the active persona's `voice/reference.wav` for Chatterbox cloning. `wake_word.py`, `speaker_verify.py`, `wake_context.py` deleted. Draft PR.
+3. **Wizard fixes + sanitizer (Agent 1):** Step 5 Continue ships the key inline without the Test-Key gate; StepHandoff now actually submits `HANDOFF` and redirects to `/chat`; home page probes `/health` directly instead of hanging; sanitizer keeps multi-sentence replies past banned openers (full E2E proven by Agent 1's Playwright transcript). 11 new sanitizer unit tests. PR #5 (draft).
+
+## Known issues carried forward (not merge regressions)
+
+1. **WS reconnect cycle still fires every ~30s** — Agent 1 eliminated the `console.warn` spam but the underlying browser-side close persists. Needs Chrome devtools to root-cause.
+2. **`LlmProvider.GUEST` ↔ `aether_guest` id mismatch** — one-line fix on either side, out of scope for combine.
+3. **Pre-existing `WizardStepShell` framer-motion typing error** — not a regression; the framer-motion version needs to bump or the `<motion.section>` wrapper needs replacing.
+4. **CI red on `dev`** — pre-existing `requirements.txt` numpy / chatterbox-tts conflict. Neither Agent 2 nor Agent 1 were allowed to touch `requirements.txt` by the combine brief.
+5. **fal.ai balance exhausted** — all Agent 3 portraits went through OpenAI `gpt-image-1.5`; top up at https://fal.ai/dashboard/billing before generating the remaining nine packs.
+6. **Instance lock held by stale Aether** — a pythonw.exe is sitting on the `%LOCALAPPDATA%/aether/...` exclusive lock, blocking `python -m src.main`. Kill it before next boot.
+
+## Immediate next actions
+
+1. Kill the stale Aether instance and run a full live regression (`python -m src.main` + `cd frontend && npm run dev` + walk the wizard in a browser with a fresh `%LOCALAPPDATA%\aether\aether\` state) to confirm the combine is end-to-end healthy.
+2. Merge/close the three draft PRs (#4, #5, plus the Agent 2 PR) if GitHub state still shows them as drafts — they're already in `dev` so these are cleanup.
+3. Chase the WS 30s reconnect root cause with devtools open.
+4. Top up fal.ai balance → generate the remaining nine canonical personas (`milo, ivy, atlas, wren, rhea, kai, nova, onyx, sage`) via `scripts/persona_generator/`.
+5. Fix the `requirements.txt` numpy/chatterbox-tts conflict so CI goes green.
 
 ---
 
