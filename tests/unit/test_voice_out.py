@@ -1,6 +1,6 @@
 """Module 03 tests — verify Voice-Out TTS pipeline."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import numpy as np
 import pytest

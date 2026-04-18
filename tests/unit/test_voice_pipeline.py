@@ -5,10 +5,7 @@ Tests verify:
 - TTS handler sends audio chunks to the avatar client for lip sync.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import numpy as np
-import pytest
+from unittest.mock import patch
 
 
 class TestEchoCanceller:

@@ -1,6 +1,5 @@
 """Tests for Batch 15 — infrastructure polish (instance lock, metrics, loop scripts)."""
 
-from pathlib import Path
 
 from src.core.metrics import Metrics, get_metrics, get_metrics_summary
 
