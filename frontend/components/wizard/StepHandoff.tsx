@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getWsClient } from "@/lib/ws";
 import { EventType, WizardStepId } from "@/lib/types";
@@ -25,8 +25,11 @@ const TASKS: readonly { id: string; label: string }[] = [
 export function StepHandoff() {
   const router = useRouter();
   const resetWizard = useWizardStore((s) => s.resetAll);
+  const submitStep = useWizardStore((s) => s.submitStep);
   const setOnboardingComplete = useSessionStore((s) => s.setOnboardingComplete);
   const [doneIdx, setDoneIdx] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const submittedRef = useRef(false);
 
   useEffect(() => {
     if (doneIdx >= TASKS.length) return;
@@ -46,12 +49,46 @@ export function StepHandoff() {
     return unsub;
   }, [resetWizard, router, setOnboardingComplete]);
 
+  // Fire the HANDOFF submit exactly once on mount. The backend re-validates
+  // every prior step, calls finalize_wizard (writes config.yaml + sets
+  // onboarding_complete=true), then sends WIZARD_STEP_RESULT and broadcasts
+  // ONBOARDING_COMPLETE in that order. We redirect on the submit reply
+  // because subscribing to ONBOARDING_COMPLETE alone is racy: the WS may
+  // bounce between the reply and the broadcast and lose the one-shot event.
+  // The ONBOARDING_COMPLETE subscriber above stays as a secondary trigger.
+  // The HMR-safe ref guard keeps Strict Mode's double-invoke from sending
+  // two submits.
+  useEffect(() => {
+    if (submittedRef.current) return;
+    submittedRef.current = true;
+    void (async () => {
+      const result = await submitStep(WizardStepId.HANDOFF, {});
+      if (result.success) {
+        setOnboardingComplete(true);
+        resetWizard();
+        router.replace("/chat/");
+      } else {
+        setError(result.error ?? "Could not finalize setup. Try again.");
+        // Allow a retry by resetting the guard.
+        submittedRef.current = false;
+      }
+    })();
+  }, [submitStep, setOnboardingComplete, resetWizard, router]);
+
   return (
     <WizardStepShell
       step={WizardStepId.HANDOFF}
       title="Setting things up."
       subtitle="One moment. We'll drop you into the chat as soon as everything's ready."
     >
+      {error && (
+        <div
+          role="alert"
+          className="mb-4 px-4 py-2 rounded-md border border-error/50 bg-error/10 text-error text-[12px]"
+        >
+          {error}
+        </div>
+      )}
       <ol className="space-y-3 max-w-md">
         {TASKS.map((task, idx) => {
           const complete = idx < doneIdx;
