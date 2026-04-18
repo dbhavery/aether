@@ -89,7 +89,7 @@ TIER_PRESETS: Final[Mapping[str, Mapping[Tier, str]]] = {
         Tier.MAIN: "openrouter/anthropic/claude-sonnet-4-6",
         Tier.HEAVY: "openrouter/anthropic/claude-opus-4-7",
     },
-    "guest": {
+    "aether_guest": {
         Tier.FAST: "groq/llama-3.3-70b-versatile",
         Tier.MAIN: "groq/llama-3.3-70b-versatile",
         Tier.HEAVY: "groq/llama-3.3-70b-versatile",

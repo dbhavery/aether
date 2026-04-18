@@ -147,7 +147,7 @@ export const LlmProvider = {
   GOOGLE: "google",
   GROQ: "groq",
   OPENROUTER: "openrouter",
-  GUEST: "guest",
+  GUEST: "aether_guest",
 } as const;
 
 export type LlmProvider = (typeof LlmProvider)[keyof typeof LlmProvider];

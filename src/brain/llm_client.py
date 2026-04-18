@@ -154,7 +154,7 @@ def _fetch_key(provider: str) -> str | None:
     proxied locally) or when the user has not set one yet — the caller decides
     whether that should raise :class:`AuthError`.
     """
-    if provider in ("ollama", "guest", "aether_guest"):
+    if provider in ("ollama", "aether_guest"):
         return None
 
     try:
@@ -291,7 +291,7 @@ async def complete(
     env_var = _PROVIDER_ENV_KEY.get(provider)
     if env_var and key:
         os.environ[env_var] = key
-    elif env_var and not key and provider not in ("ollama", "guest", "aether_guest"):
+    elif env_var and not key and provider not in ("ollama", "aether_guest"):
         # No key and the provider needs one. Fail fast with AuthError so the
         # fallback cascade can skip retrying this tier.
         raise AuthError(
