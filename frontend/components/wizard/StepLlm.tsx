@@ -179,13 +179,14 @@ export function StepLlm() {
       setError("Ollama isn't reachable. Install it or pick a different option.");
       return;
     }
-    if (selected === "byok" && keyTestState !== "ok") {
-      setError("Test your API key before continuing.");
+    if (selected === "byok" && !apiKey.trim()) {
+      setError("Enter an API key for the selected provider.");
       return;
     }
 
     let provider: LlmProvider;
     let tierMap: LlmTierMap;
+    let key: string | undefined;
     if (selected === "local") {
       provider = LlmProvider.OLLAMA;
       tierMap = {
@@ -198,6 +199,7 @@ export function StepLlm() {
       const fallback = DEFAULT_TIERS[LlmProvider.ANTHROPIC];
       if (!fallback) throw new Error("Missing default tier map for fallback");
       tierMap = DEFAULT_TIERS[byokProvider] ?? fallback;
+      key = apiKey.trim();
     } else {
       provider = LlmProvider.GUEST;
       const fallback = DEFAULT_TIERS[LlmProvider.ANTHROPIC];
@@ -210,6 +212,7 @@ export function StepLlm() {
       const result = await submitStep(WizardStepId.LLM, {
         llm_provider: provider,
         llm_tier_map: tierMap,
+        ...(key ? { key } : {}),
       });
       if (result.success) router.push("/onboarding/6-voice/");
       else if (result.error) setError(result.error);
