@@ -1,0 +1,54 @@
+# Aether CODEOWNERS
+# ------------------
+# Every folder has an owning agent/role. PRs touching a path require the owner's
+# review. Wave 1 baseline — coordinator-owned by default; layer agents take over
+# their packages as they come online.
+#
+# Source: planning/planning/monorepo_plan_draft.md §4.1
+
+# Default owner for everything not matched below.
+*                               @dbhavery
+
+# Planning corpus — coordinator-only writes to doctrine.
+/planning/                      @dbhavery
+/planning/01_product_doctrine.md @dbhavery
+
+# Root manifests and governance.
+/Cargo.toml                     @dbhavery
+/rust-toolchain.toml            @dbhavery
+/package.json                   @dbhavery
+/pnpm-workspace.yaml            @dbhavery
+/tsconfig.base.json             @dbhavery
+/CLAUDE.md                      @dbhavery
+/.github/CODEOWNERS             @dbhavery
+
+# Shared infra packages (Wave 1 scaffolds).
+/packages/event-bus/            @dbhavery
+/packages/types/                @dbhavery
+/packages/storage/              @dbhavery
+/packages/ui-kit/               @dbhavery
+/packages/media-engine/         @dbhavery
+/packages/telemetry/            @dbhavery
+
+# Layer packages.
+# L5 policy scaffold (Wave 2, 2026-04-19). Coordinator-owned until an L5 agent
+# is assigned; changes here require extra scrutiny because L5 is the
+# non-bypassable authorization gate.
+/packages/l5-policy/            @dbhavery
+/packages/l5-policy-ts/         @dbhavery
+# Boundary and governance tooling.
+/tools/                         @dbhavery
+
+# Apps.
+/apps/                          @dbhavery
+
+# Research / archive.
+/research/                      @dbhavery
+
+# Legacy v1.0 tree — frozen, no new work unless X2/X4 wave.
+/src/                           @dbhavery
+/desktop/                       @dbhavery
+/frontend/                      @dbhavery
+/configs/                       @dbhavery
+/tests/                         @dbhavery
+/scripts/                       @dbhavery

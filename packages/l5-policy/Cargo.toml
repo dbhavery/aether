@@ -1,0 +1,25 @@
+[package]
+name = "aether-l5-policy"
+version = "0.0.1"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Aether L5 — policy / authorization engine. Wave 2 scaffold: types, traits, and command surface. No evaluator logic, no persistence."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+
+aether-event-bus = { path = "../event-bus" }
+aether-storage   = { path = "../storage" }
+aether-telemetry = { path = "../telemetry" }
+
+[dev-dependencies]
+serde_json = { workspace = true }

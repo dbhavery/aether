@@ -1,0 +1,10 @@
+# pnpm workspace declaration. Rust crates are excluded (managed by Cargo workspace).
+packages:
+  - "packages/types"
+  - "packages/ui-kit"
+  - "packages/l5-policy-ts"
+  # Future TS-surface packages (layer facades) and apps get added here as scaffolded.
+  # - "packages/l6-persona-ts"
+  # - "apps/desktop"
+  # - "apps/docs-site"
+  # TS tooling (e.g. ts-bindings-gen) may join when it becomes a real pnpm project.

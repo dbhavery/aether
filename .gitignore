@@ -64,3 +64,28 @@ docs/superpowers/
 # Assets (large/binary)
 assets/
 .playwright-cli/
+
+# === Monorepo workspace artifacts (Wave 1, 2026-04-19) ===
+# Rust / Cargo
+target/
+**/target/
+Cargo.lock.bak
+
+# pnpm / Node
+node_modules/
+.pnpm-store/
+.pnpm-debug.log*
+.turbo/
+
+# TypeScript build output
+**/dist/
+**/build/
+*.tsbuildinfo
+
+# Editor / tooling local state
+.vscode/
+!.vscode/extensions.json
+.idea/workspace.xml
+
+# Local env overlays specific to monorepo agents
+.aether-local/

@@ -1,0 +1,21 @@
+[package]
+name = "aether-storage"
+version = "0.0.1"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Aether local storage substrate — SQLite schema, migrations, audit chain primitives (Wave 1 scaffold)."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+thiserror = { workspace = true }
+serde = { workspace = true }
+tracing = { workspace = true }
+
+# TODO(wave-2): add `rusqlite` (bundled feature) or `sqlx` once the driver
+# choice is locked in OPEN_QUESTIONS.md. Kept out of Wave 1 scaffold to avoid
+# pulling native build deps before the decision lands.

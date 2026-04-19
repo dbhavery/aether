@@ -1,0 +1,43 @@
+# cargo-deny config — Wave 1 placeholder.
+# Tightens in Wave 2+ once layer crates (l1-timing, l2-memory, ...) exist.
+#
+# Usage (once real):
+#   cargo deny --config tools/lint-layer-boundaries/deny.toml check bans
+
+[graph]
+# Limit to our workspace; do not traverse build-only deps.
+all-features = false
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+
+# Wave 2 — L5 boundary rules.
+#
+# L5 is a dependency, not a dependent. Layer crates may depend on
+# `aether-l5-policy` (that is how the non-bypassable gate works), but
+# `aether-l5-policy` must NOT depend on any sibling layer crate.
+#
+# Once the sibling layer crates (l1-timing, l2-memory, l3-presence, l4-router,
+# l6-persona, l7-*) exist, uncomment the `wrappers = [...]` list below so
+# `cargo deny check bans` rejects any accidental reverse edge.
+#
+# deny = [
+#   { name = "aether-l1-timing",    wrappers = ["aether-l5-policy"] },
+#   { name = "aether-l2-memory",    wrappers = ["aether-l5-policy"] },
+#   { name = "aether-l3-presence",  wrappers = ["aether-l5-policy"] },
+#   { name = "aether-l4-router",    wrappers = ["aether-l5-policy"] },
+#   { name = "aether-l6-persona",   wrappers = ["aether-l5-policy"] },
+# ]
+#
+# Additional rule (enforced by tools/lint-policy-bypass, not cargo-deny):
+# every crate that performs a side effect (fs / net / process / shell) must
+# route through a `Decision::Allow` branch held via `Arc<dyn PolicyEngine>`.
+
+[licenses]
+allow = ["Apache-2.0", "MIT", "BSD-3-Clause", "ISC", "Unicode-DFS-2016"]
+confidence-threshold = 0.8
+
+[sources]
+unknown-registry = "warn"
+unknown-git = "warn"

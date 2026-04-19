@@ -1,0 +1,17 @@
+[package]
+name = "aether-telemetry"
+version = "0.0.1"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Aether telemetry — local-only OpenTelemetry wrapper (Wave 1 placeholder)."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+tracing = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }

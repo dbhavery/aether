@@ -1,0 +1,21 @@
+{
+  "name": "@aether/ui-kit",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Aether shared UI primitives — dark neumorphic monochrome. Wave 1 scaffold: tokens placeholder only, no components yet.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./tokens": "./src/tokens.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4"
+  }
+}
