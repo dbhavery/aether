@@ -6,6 +6,12 @@ members = [
     "packages/media-engine",
     "packages/telemetry",
     "packages/l5-policy",
+    "packages/l1-interaction",
+    "packages/l2-memory",
+    "packages/l3-presence",
+    "packages/l4-router",
+    "packages/l6-persona",
+    "packages/l7-trust",
 ]
 
 # Wave 1 baseline workspace. Layer crates (l1-timing .. l7-*) and apps/desktop/src-tauri

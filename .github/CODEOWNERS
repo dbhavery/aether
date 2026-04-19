@@ -36,6 +36,14 @@
 # non-bypassable authorization gate.
 /packages/l5-policy/            @dbhavery
 /packages/l5-policy-ts/         @dbhavery
+# Wave 4 (2026-04-19) — engine stubs coordinator-owned until agents assigned.
+/packages/l1-interaction/       @dbhavery
+/packages/l2-memory/            @dbhavery
+/packages/l3-presence/          @dbhavery
+/packages/l4-router/            @dbhavery
+/packages/l6-persona/           @dbhavery
+/packages/l7-trust/             @dbhavery
+
 # Boundary and governance tooling.
 /tools/                         @dbhavery
 
