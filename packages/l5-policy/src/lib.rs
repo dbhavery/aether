@@ -35,15 +35,19 @@
 
 pub mod approval;
 pub mod audit;
+pub mod audit_store;
 pub mod byok;
 pub mod capability;
 pub mod common;
 pub mod decision;
+pub mod engine;
 pub mod events;
 pub mod grants;
 pub mod ipc;
+pub mod ledger;
 pub mod policy_engine;
 pub mod posture;
+pub mod sink;
 pub mod storage_hooks;
 
 pub use approval::{ApprovalResponse, ApprovalTicket, ApprovalTicketId, UserChoice};
@@ -78,3 +82,9 @@ pub use posture::{
     DegradedMode, PolicyPostureSummary, PostureTrigger, PrivacyPosture, WarnLevel,
 };
 pub use storage_hooks::{AuditStore, CostCounterStore, GrantStore};
+
+// --- Wave 3 live surfaces ---
+pub use audit_store::InMemoryAuditStore;
+pub use engine::{CapabilityPolicy, DefaultPolicyEngine, EngineConfig};
+pub use ledger::InMemoryGrantLedger;
+pub use sink::{InMemorySink, L5EventSink, NullSink};

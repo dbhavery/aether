@@ -24,6 +24,10 @@
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod migrations;
+
+pub use migrations::{expected_head_id, Migration, MIGRATIONS};
+
 use std::path::PathBuf;
 
 /// Set of DB handles Aether opens at startup.
