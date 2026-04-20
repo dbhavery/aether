@@ -77,6 +77,8 @@ impl<R: ModelRouter> TurnRouter for ModelRouterAdapter<R> {
             tier: tier_label(self.tier).to_string(),
             provider: self.provider_label.clone(),
             response_text: response,
+            latency_ms: None,
+            tokens: None,
         })
     }
 }

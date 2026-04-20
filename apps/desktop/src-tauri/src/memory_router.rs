@@ -6,6 +6,8 @@
 use std::sync::Arc;
 
 use aether_l1_interaction::{L1Error, RouteOutcome, TurnId, TurnRequest, TurnResult, TurnRouter};
+#[cfg(feature = "ollama-provider")]
+use aether_l1_interaction::TokenUsage;
 use aether_l2_memory::{
     render_transcript, MemoryRole, RecentMemoryWindow, SessionMemoryStore, TurnMemoryRecord,
 };
@@ -179,14 +181,24 @@ impl TurnRouter for RoleTaggedOllamaRouter {
             .recent(&self.session_id)
             .map_err(|e| L1Error::Router(format!("memory recall failed: {e}")))?;
         let messages = Self::build_messages(&window, &self.system_prompt, prompt);
-        let response = self
+        let completion = self
             .provider
-            .chat_with_messages(&messages)
+            .chat_with_messages_detailed(&messages)
             .map_err(|e| L1Error::Router(format!("{e}")))?;
+        // Only surface a TokenUsage when both sides of the count are
+        // present. Mixed-presence (one side reported, the other missing)
+        // would be harder for the UI to render truthfully than simply
+        // omitting the meta.
+        let tokens = match (completion.prompt_tokens, completion.completion_tokens) {
+            (Some(prompt), Some(completion)) => Some(TokenUsage { prompt, completion }),
+            _ => None,
+        };
         Ok(RouteOutcome {
             tier: self.tier_label.clone(),
             provider: self.provider_label.clone(),
-            response_text: response,
+            response_text: completion.text,
+            latency_ms: None, // TurnEngine::handle_turn stamps this.
+            tokens,
         })
     }
 }

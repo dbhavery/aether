@@ -50,6 +50,18 @@ pub struct TranscriptMessage {
 pub struct MessageMeta {
     pub tier: Option<String>,
     pub provider: Option<String>,
+    /// Wall-clock ms measured by [`TurnEngine::handle_turn`] around the
+    /// router dispatch call.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latency_ms: Option<u64>,
+    /// Prompt-side tokens (system + history + user) reported by the
+    /// provider. `None` for the reflex stub and for provider responses
+    /// that omit the counts.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prompt_tokens: Option<u32>,
+    /// Completion-side tokens the model produced.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completion_tokens: Option<u32>,
 }
 
 /// Outcome of a submitted turn. The UI branches on `kind`.
@@ -414,6 +426,9 @@ fn finalize_turn(
                 meta: Some(MessageMeta {
                     tier: Some(r.tier.clone()),
                     provider: Some(r.provider.clone()),
+                    latency_ms: r.latency_ms,
+                    prompt_tokens: r.tokens.map(|t| t.prompt),
+                    completion_tokens: r.tokens.map(|t| t.completion),
                 }),
             }),
         ),

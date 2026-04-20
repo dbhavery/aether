@@ -17,6 +17,11 @@ export interface CompanionBanner {
 export interface MessageMeta {
   tier: string | null;
   provider: string | null;
+  // Optional because the Rust side `#[serde(skip_serializing_if = "Option::is_none")]`
+  // drops these fields when absent; treat missing as "not reported".
+  latency_ms?: number;
+  prompt_tokens?: number;
+  completion_tokens?: number;
 }
 
 export interface TranscriptMessage {

@@ -169,6 +169,8 @@ mod tests {
                 tier: "reflex".to_string(),
                 provider: "test".to_string(),
                 response_text: "ok".to_string(),
+                latency_ms: None,
+                tokens: None,
             })
         }
     }
@@ -322,6 +324,8 @@ mod tests {
                 tier: "reflex".into(),
                 provider: "test".into(),
                 response_text: "answer".into(),
+                latency_ms: None,
+                tokens: None,
             }),
             block: None,
             state_trace: vec![],

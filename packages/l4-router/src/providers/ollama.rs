@@ -187,6 +187,13 @@ struct ChatResponse {
     message: OwnedChatMessage,
     #[serde(default)]
     done: bool,
+    /// Tokens the model produced (completion side). Optional — older
+    /// Ollama versions and some models omit it.
+    #[serde(default)]
+    eval_count: Option<u32>,
+    /// Tokens on the prompt side (system + history + user). Optional.
+    #[serde(default)]
+    prompt_eval_count: Option<u32>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -194,6 +201,21 @@ struct OwnedChatMessage {
     #[allow(dead_code)]
     role: String,
     content: String,
+}
+
+/// Completion returned by [`OllamaProvider::chat_with_messages_detailed`].
+/// Carries the assistant text plus optional token counts parsed from the
+/// `/api/chat` response body. Either count can be `None` when the daemon
+/// didn't report it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChatCompletion {
+    /// Assistant text (same string [`OllamaProvider::chat_with_messages`]
+    /// returns today).
+    pub text: String,
+    /// Prompt-side token count if the daemon reported `prompt_eval_count`.
+    pub prompt_tokens: Option<u32>,
+    /// Completion-side token count if the daemon reported `eval_count`.
+    pub completion_tokens: Option<u32>,
 }
 
 /// Build the JSON payload the provider sends to `/api/chat` for a single
@@ -242,6 +264,14 @@ pub fn build_chat_payload_messages(model: &str, messages: &[ChatMessage]) -> ser
 /// Parse the JSON body returned by `/api/chat` (non-streaming) into the
 /// assistant content string. Exposed for unit tests.
 pub fn parse_chat_response(json: &serde_json::Value) -> Result<String, L4Error> {
+    parse_chat_response_detailed(json).map(|c| c.text)
+}
+
+/// Parse the JSON body returned by `/api/chat` (non-streaming) into a
+/// [`ChatCompletion`] that preserves the token counts Ollama reports
+/// (`eval_count`, `prompt_eval_count`). Either field may be `None` if the
+/// daemon omitted it. Exposed for unit tests.
+pub fn parse_chat_response_detailed(json: &serde_json::Value) -> Result<ChatCompletion, L4Error> {
     let resp: ChatResponse =
         serde_json::from_value(json.clone()).map_err(|e| L4Error::ProviderBadResponse {
             detail: format!("ollama: invalid response: {e}"),
@@ -250,7 +280,11 @@ pub fn parse_chat_response(json: &serde_json::Value) -> Result<String, L4Error> 
         // Non-fatal — some daemon versions omit `done` on terminal chunk.
         // We still take the content we got.
     }
-    Ok(resp.message.content)
+    Ok(ChatCompletion {
+        text: resp.message.content,
+        prompt_tokens: resp.prompt_eval_count,
+        completion_tokens: resp.eval_count,
+    })
 }
 
 /// Classify a `ureq::Error` into the right typed `L4Error` variant so the
@@ -354,6 +388,16 @@ impl OllamaProvider {
     /// the message array for its chat template, which is a better fit
     /// for instruction-tuned models than one concatenated prompt string.
     pub fn chat_with_messages(&self, messages: &[ChatMessage]) -> Result<String, L4Error> {
+        self.chat_with_messages_detailed(messages).map(|c| c.text)
+    }
+
+    /// Role-tagged variant that preserves token counts. See
+    /// [`OllamaProvider::chat_with_messages`] for the back-compat path that
+    /// drops the counts.
+    pub fn chat_with_messages_detailed(
+        &self,
+        messages: &[ChatMessage],
+    ) -> Result<ChatCompletion, L4Error> {
         let url = format!("{}/api/chat", self.config.base_url.trim_end_matches('/'));
         let payload = build_chat_payload_messages(&self.config.model, messages);
         let resp = self
@@ -366,7 +410,7 @@ impl OllamaProvider {
             resp.into_json().map_err(|e| L4Error::ProviderBadResponse {
                 detail: format!("ollama body: {e}"),
             })?;
-        parse_chat_response(&json)
+        parse_chat_response_detailed(&json)
     }
 }
 
@@ -530,6 +574,52 @@ mod tests {
     fn parse_chat_response_errors_on_malformed_body() {
         let raw = serde_json::json!({ "not": "what we expected" });
         assert!(parse_chat_response(&raw).is_err());
+    }
+
+    #[test]
+    fn parse_chat_response_detailed_extracts_token_counts() {
+        let raw = serde_json::json!({
+            "model": "llama3",
+            "message": { "role": "assistant", "content": "hi" },
+            "done": true,
+            "prompt_eval_count": 12,
+            "eval_count": 34,
+        });
+        let c = parse_chat_response_detailed(&raw).unwrap();
+        assert_eq!(c.text, "hi");
+        assert_eq!(c.prompt_tokens, Some(12));
+        assert_eq!(c.completion_tokens, Some(34));
+    }
+
+    #[test]
+    fn parse_chat_response_detailed_tolerates_missing_token_counts() {
+        let raw = serde_json::json!({
+            "model": "llama3",
+            "message": { "role": "assistant", "content": "hi" },
+            "done": true,
+        });
+        let c = parse_chat_response_detailed(&raw).unwrap();
+        assert_eq!(c.prompt_tokens, None);
+        assert_eq!(c.completion_tokens, None);
+    }
+
+    #[test]
+    fn chat_with_messages_detailed_captures_counts_from_mock() {
+        let response = r#"{"model":"llama3","message":{"role":"assistant","content":"ok"},"done":true,"prompt_eval_count":7,"eval_count":3}"#.to_string();
+        let (base_url, handle) = spawn_mock_ollama(response);
+
+        let provider = OllamaProvider::new(OllamaConfig {
+            base_url,
+            model: "llama3".into(),
+            timeout_ms: 3_000,
+        });
+        let completion = provider
+            .chat_with_messages_detailed(&[ChatMessage::user("hi")])
+            .expect("chat_with_messages_detailed ok");
+        assert_eq!(completion.text, "ok");
+        assert_eq!(completion.prompt_tokens, Some(7));
+        assert_eq!(completion.completion_tokens, Some(3));
+        let _ = handle.join();
     }
 
     // --- Mock-HTTP integration tests ------------------------------------

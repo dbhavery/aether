@@ -26,6 +26,7 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
 
@@ -61,6 +62,18 @@ pub struct TurnRequest {
     pub emitted_at: MonotonicTimestamp,
 }
 
+/// Token usage reported by the router, when the underlying provider
+/// surfaces counts. Routers whose backends don't expose usage (the echo
+/// stub, for instance) leave this as `None` on the enclosing
+/// [`RouteOutcome`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TokenUsage {
+    /// Tokens charged to the prompt side of the turn (system + history + user).
+    pub prompt: u32,
+    /// Tokens the model produced on the completion side.
+    pub completion: u32,
+}
+
 /// What the router reported after a successful dispatch. Strings are used here
 /// so L1 need not import L4 types (layer-boundary rule §1.4 of the repo
 /// CLAUDE.md); the stub or real router is free to project its own richer
@@ -73,6 +86,17 @@ pub struct RouteOutcome {
     pub provider: String,
     /// Final text response surfaced to the caller.
     pub response_text: String,
+    /// Wall-clock milliseconds for the router dispatch leg of the turn.
+    /// Measured by [`TurnEngine::handle_turn`] around the router call so
+    /// every router (reflex stub, Ollama, future adapters) gets a
+    /// consistent number without having to self-time. `None` only when
+    /// the outcome is synthesised outside of [`TurnEngine::handle_turn`]
+    /// (e.g. a post-approval denial reconstruction).
+    #[serde(default)]
+    pub latency_ms: Option<u64>,
+    /// Token counts reported by the provider, if any.
+    #[serde(default)]
+    pub tokens: Option<TokenUsage>,
 }
 
 /// Why a turn ended without reaching the router.
@@ -175,9 +199,15 @@ impl TurnEngine {
         match &decision {
             Decision::Allow { .. } => {
                 trace.push(TurnState::RouterDispatched);
-                let outcome = self
+                let started = Instant::now();
+                let mut outcome = self
                     .router
                     .dispatch(&turn_id, &request.utterance, &decision)?;
+                // Always stamp the engine-measured latency. If a router
+                // populated its own value we deliberately overwrite so the
+                // number is consistently "handle_turn round-trip" across
+                // adapters.
+                outcome.latency_ms = Some(started.elapsed().as_millis() as u64);
                 trace.push(TurnState::Completed);
                 Ok(TurnResult {
                     turn_id,
@@ -268,6 +298,8 @@ impl TurnRouter for EchoStubRouter {
             tier: String::from("reflex"),
             provider: String::from("stub-echo"),
             response_text: format!("echo: {prompt}"),
+            latency_ms: None,
+            tokens: None,
         })
     }
 }

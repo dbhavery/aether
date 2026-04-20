@@ -52,6 +52,14 @@ fn allow_path_reaches_router_and_completes() {
     let route = result.route.expect("route outcome on allow path");
     assert_eq!(route.provider, "stub-echo");
     assert_eq!(route.response_text, "echo: hello aether");
+    // Engine-measured latency is always stamped on the Allow path, even
+    // when the underlying router reports no latency of its own.
+    assert!(
+        route.latency_ms.is_some(),
+        "latency_ms should be stamped by TurnEngine::handle_turn"
+    );
+    // Reflex stub does no inference, so no token counts should surface.
+    assert!(route.tokens.is_none());
     assert!(result.block.is_none());
     assert_eq!(
         result.state_trace,

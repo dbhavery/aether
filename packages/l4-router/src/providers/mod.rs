@@ -9,4 +9,6 @@
 pub mod ollama;
 
 #[cfg(feature = "ollama-provider")]
-pub use ollama::{ChatMessage, MessageRole, OllamaConfig, OllamaConfigError, OllamaProvider};
+pub use ollama::{
+    ChatCompletion, ChatMessage, MessageRole, OllamaConfig, OllamaConfigError, OllamaProvider,
+};
