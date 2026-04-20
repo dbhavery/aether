@@ -3,6 +3,7 @@
 
 mod adapter;
 mod commands;
+mod media_permissions;
 mod memory_router;
 mod provider;
 mod state;
@@ -43,6 +44,9 @@ fn main() {
             commands::forget_older_than_days,
             commands::telemetry_recent,
             commands::telemetry_clear,
+            commands::get_media_permissions,
+            commands::set_media_permission,
+            commands::analyze_frame,
         ])
         .run(tauri::generate_context!())
         .expect("error while running aether-desktop");
@@ -75,7 +79,11 @@ fn build_app_state(app: &tauri::AppHandle) -> Result<AppState, Box<dyn std::erro
                     "initialising AppState with durable session memory at {}",
                     db_path.display()
                 );
-                return AppState::new_with_db_path(db_path).map_err(Into::into);
+                let mut state = AppState::new_with_db_path(db_path)?;
+                let perms_path = media_permissions::permissions_path_for(&dir);
+                tracing::info!("media permissions file at {}", perms_path.display());
+                state.attach_media_permissions_file(perms_path);
+                return Ok(state);
             }
             Err(e) => {
                 tracing::warn!(

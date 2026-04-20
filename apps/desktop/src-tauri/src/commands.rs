@@ -17,6 +17,7 @@ use aether_l7_trust::{
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
 
+use crate::media_permissions::{CaptureGate, MediaKind, MediaPermissions, PermissionState};
 #[cfg(feature = "ollama-provider")]
 use crate::memory_router::PROVIDER_ERROR_PREFIX;
 use crate::memory_router::{assistant_record, user_record};
@@ -757,6 +758,310 @@ pub fn telemetry_recent(limit: Option<usize>, state: State<'_, AppState>) -> Vec
 #[tauri::command]
 pub fn telemetry_clear(state: State<'_, AppState>) {
     state.clear_telemetry();
+}
+
+// ---------------------------------------------------------------------
+// Media permissions surface (P1).
+// ---------------------------------------------------------------------
+
+/// Snapshot of the current local-only media permission posture.
+/// Returned to the Settings UI so it can render tri-state controls.
+#[tauri::command]
+pub fn get_media_permissions(state: State<'_, AppState>) -> MediaPermissions {
+    state.media_permissions()
+}
+
+/// Update one device's permission and persist the new state when a
+/// disk-backed file is wired. Wire format mirrors the JSON file:
+/// `kind ∈ {"camera","screen"}`, `state ∈ {"allow","ask","deny"}`.
+/// Unknown values are rejected so UI bugs surface instead of silently
+/// flipping to the wrong posture.
+#[tauri::command]
+pub fn set_media_permission(
+    kind: String,
+    state_value: String,
+    state: State<'_, AppState>,
+) -> Result<MediaPermissions, String> {
+    let parsed_kind =
+        MediaKind::from_wire(&kind).ok_or_else(|| format!("unknown media kind: {kind}"))?;
+    let parsed_state = PermissionState::from_wire(&state_value)
+        .ok_or_else(|| format!("unknown permission state: {state_value}"))?;
+    state.set_media_permission(parsed_kind, parsed_state)
+}
+
+// ---------------------------------------------------------------------
+// Single-frame analysis surface (P3).
+// ---------------------------------------------------------------------
+
+/// Request shape for a single-frame analysis turn. The frame is
+/// supplied as a data URL (`data:image/...;base64,...`) so the Tauri
+/// boundary stays string-only — keeps the JSON IPC predictable and
+/// avoids dragging a binary serialization format into the protocol.
+///
+/// `note` is an optional human cue ("what's on the receipt?", "is
+/// there anyone in the room?"); when omitted the engine uses a
+/// neutral default prompt. `kind` selects which media-permission
+/// gate must be open ("camera" or "screen") so the same path can
+/// later serve screen-capture frames.
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct AnalyzeFrameRequest {
+    pub kind: String,
+    pub frame_data_url: String,
+    pub note: Option<String>,
+}
+
+/// Outcome of a frame-analysis turn. Mirrors `TurnOutcomePayload`
+/// closely so the UI can re-use the same rendering helpers; the
+/// `kind` discriminator distinguishes a successfully analysed frame
+/// (`"analyzed"`) from a permission block or other refusal.
+#[derive(Debug, Clone, Serialize)]
+pub struct FrameAnalysisOutcome {
+    pub turn_id: String,
+    pub kind: String,
+    pub message: Option<TranscriptMessage>,
+    pub error_note: Option<String>,
+}
+
+/// Default cue when the UI does not pass a `note`. Kept short and
+/// neutral so personas stay in charge of voice.
+const DEFAULT_FRAME_PROMPT: &str =
+    "Describe what you see in this frame in a short, helpful sentence.";
+
+/// Single-frame analysis path (P3 v0). This is the foundation hook
+/// for video-assistant work — it does NOT stream, does NOT loop, and
+/// does NOT acquire the camera itself. The shell is expected to
+/// supply a captured frame; this command:
+///
+///   1. enforces the media permission gate (Deny short-circuits with
+///      a friendly message, Ask returns a hint that the UI should
+///      route through the existing approval flow first),
+///   2. records the request as a user-role memory entry tagged with
+///      `[frame analysis]` so transcript review is coherent,
+///   3. invokes the active turn engine with the user's note (or the
+///      default prompt) so the model call goes through L5 / L6 like
+///      any other turn — frame analysis is not a side channel,
+///   4. tags telemetry with `kind="frame_analyzed"` so the Trust
+///      drawer's History tab can show the user how often Aether
+///      looked at media.
+///
+/// We deliberately do NOT push the raw frame bytes through the
+/// router on this slice — the local provider stack is text-only
+/// today, and the foundation is meant to land the wiring before the
+/// vision provider arrives. Once a vision-capable provider is wired
+/// the same command can pass `frame_data_url` straight to it.
+#[tauri::command]
+pub fn analyze_frame(
+    request: AnalyzeFrameRequest,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<FrameAnalysisOutcome, String> {
+    let kind = MediaKind::from_wire(&request.kind)
+        .ok_or_else(|| format!("unknown media kind: {}", request.kind))?;
+    let gate = state.evaluate_media_permission(kind);
+
+    match gate {
+        CaptureGate::Deny => {
+            let ts_ms = state.next_ts();
+            let id = format!("frame-deny-{ts_ms}");
+            let copy = match kind {
+                MediaKind::Camera => "Camera analysis is disabled in your settings. Enable it under Settings → Media to use this feature.",
+                MediaKind::Screen => "Screen analysis is disabled in your settings. Enable it under Settings → Media to use this feature.",
+            }.to_string();
+            let _ = state.memory.append(TurnMemoryRecord {
+                session_id: SESSION_ID.to_string(),
+                sequence: 0,
+                role: MemoryRole::System,
+                content: copy.clone(),
+                timestamp_ms: ts_ms,
+            });
+            return Ok(FrameAnalysisOutcome {
+                turn_id: id.clone(),
+                kind: "permission_denied".into(),
+                message: Some(TranscriptMessage {
+                    id,
+                    role: "system".into(),
+                    content: copy,
+                    sequence: 0,
+                    timestamp_ms: ts_ms,
+                    meta: None,
+                }),
+                error_note: None,
+            });
+        }
+        CaptureGate::PromptUser => {
+            // The shell-side approval modal owns the prompt UX; the
+            // frontend should call set_media_permission to "allow" or
+            // "deny" before retrying. Surface a short, actionable note.
+            let ts_ms = state.next_ts();
+            let id = format!("frame-ask-{ts_ms}");
+            let copy = match kind {
+                MediaKind::Camera => "Camera permission is set to Ask. Approve camera analysis in Settings before retrying.",
+                MediaKind::Screen => "Screen permission is set to Ask. Approve screen analysis in Settings before retrying.",
+            }.to_string();
+            return Ok(FrameAnalysisOutcome {
+                turn_id: id.clone(),
+                kind: "permission_ask".into(),
+                message: Some(TranscriptMessage {
+                    id,
+                    role: "system".into(),
+                    content: copy,
+                    sequence: 0,
+                    timestamp_ms: ts_ms,
+                    meta: None,
+                }),
+                error_note: None,
+            });
+        }
+        CaptureGate::Proceed => {}
+    }
+
+    // Sanity-check the frame data URL early so a malformed payload
+    // doesn't reach the model layer. We accept the standard data-URL
+    // shape and don't validate the base64 body — provider adapters
+    // get the strict check when they actually decode.
+    if !request.frame_data_url.starts_with("data:image/") {
+        return Err("frame_data_url must be a data:image/... URL".into());
+    }
+
+    transition_presence(
+        &app,
+        &state.presence,
+        PresenceState::Thinking,
+        state.next_ts(),
+        Some(format!("analyzing {} frame", kind.wire_label())),
+    );
+
+    let cue = request
+        .note
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or(DEFAULT_FRAME_PROMPT)
+        .to_string();
+    let utterance = format!("[frame analysis · {}] {}", kind.wire_label(), cue);
+
+    let ts = state.next_ts();
+    let req = {
+        let a = state.active.read().expect("active read lock");
+        TurnRequest {
+            session_id: SessionId(SESSION_ID.into()),
+            persona: PersonaId(a.compiled.persona_id.0.clone()),
+            task_id: None,
+            utterance: utterance.clone(),
+            // FilesRead is the closest existing capability — this is a
+            // read-only observation that does not touch the filesystem
+            // or network. A dedicated `MediaAnalyze` capability is a
+            // natural follow-up once the policy schema is opened.
+            capability: Capability::FilesRead,
+            resource: ResourceScope::None,
+            emitted_at: MonotonicTimestamp(ts),
+        }
+    };
+
+    let result = {
+        let a = state.active.read().expect("active read lock");
+        a.engine
+            .handle_turn(req.clone())
+            .map_err(|e| format!("frame turn engine: {e}"))?
+    };
+
+    let ts_ms = state.next_ts();
+    let _ = state.memory.append(TurnMemoryRecord {
+        session_id: SESSION_ID.to_string(),
+        sequence: 0,
+        role: MemoryRole::User,
+        content: utterance,
+        timestamp_ms: ts_ms,
+    });
+
+    let (kind_label, message) = match (&result.route, &result.block) {
+        (Some(r), _) => {
+            let assistant_ts = state.next_ts();
+            let _ = state.memory.append(TurnMemoryRecord {
+                session_id: SESSION_ID.to_string(),
+                sequence: 0,
+                role: MemoryRole::Assistant,
+                content: r.response_text.clone(),
+                timestamp_ms: assistant_ts,
+            });
+            (
+                "frame_analyzed".to_string(),
+                Some(TranscriptMessage {
+                    id: format!("{}-frame", result.turn_id.0),
+                    role: "assistant".into(),
+                    content: r.response_text.clone(),
+                    sequence: 0,
+                    timestamp_ms: assistant_ts,
+                    meta: Some(MessageMeta {
+                        tier: Some(r.tier.clone()),
+                        provider: Some(r.provider.clone()),
+                        latency_ms: r.latency_ms,
+                        prompt_tokens: r.tokens.map(|t| t.prompt),
+                        completion_tokens: r.tokens.map(|t| t.completion),
+                    }),
+                }),
+            )
+        }
+        (None, Some(_)) => (
+            "frame_blocked".to_string(),
+            Some(TranscriptMessage {
+                id: format!("{}-frame-blocked", result.turn_id.0),
+                role: "system".into(),
+                content: "Frame analysis was blocked by policy.".into(),
+                sequence: 0,
+                timestamp_ms: ts_ms,
+                meta: None,
+            }),
+        ),
+        _ => (
+            "frame_analyzed".to_string(),
+            Some(TranscriptMessage {
+                id: format!("{}-frame-empty", result.turn_id.0),
+                role: "system".into(),
+                content: "(no response)".into(),
+                sequence: 0,
+                timestamp_ms: ts_ms,
+                meta: None,
+            }),
+        ),
+    };
+
+    let persona_id = {
+        let a = state.active.read().expect("active read lock");
+        a.compiled.persona_id.0.clone()
+    };
+    state.record_telemetry(TelemetryEntry {
+        turn_id: result.turn_id.0.clone(),
+        timestamp_ms: ts_ms,
+        kind: kind_label.clone(),
+        persona_id,
+        provider: result.route.as_ref().map(|r| r.provider.clone()),
+        tier: result.route.as_ref().map(|r| r.tier.clone()),
+        latency_ms: result.route.as_ref().and_then(|r| r.latency_ms),
+        prompt_tokens: result
+            .route
+            .as_ref()
+            .and_then(|r| r.tokens.map(|t| t.prompt)),
+        completion_tokens: result
+            .route
+            .as_ref()
+            .and_then(|r| r.tokens.map(|t| t.completion)),
+    });
+
+    transition_presence(
+        &app,
+        &state.presence,
+        PresenceState::Quiet,
+        state.next_ts(),
+        None,
+    );
+
+    Ok(FrameAnalysisOutcome {
+        turn_id: result.turn_id.0.clone(),
+        kind: kind_label,
+        message,
+        error_note: None,
+    })
 }
 
 /// Parse the leading verb of a user utterance into a

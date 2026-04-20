@@ -29,6 +29,7 @@ use aether_l6_persona::{load_pack_dir, CompiledPersona, DefaultPersonaCompiler, 
 use serde::Serialize;
 
 use crate::adapter::{ModelRouterAdapter, ReflexModelRouter};
+use crate::media_permissions::{self, CaptureGate, MediaKind, MediaPermissions, PermissionState};
 use crate::memory_router::MemoryAwareRouter;
 use crate::provider::ProviderMode;
 
@@ -93,6 +94,15 @@ pub struct AppState {
     /// drawer's History tab. Bounded to `TELEMETRY_BUFFER_CAPACITY`
     /// entries — this is a UX convenience, not a durable record.
     telemetry: Mutex<VecDeque<TelemetryEntry>>,
+    /// Local-only media permission posture (camera + screen). Loaded
+    /// from disk at boot when a `permissions_path` is configured;
+    /// writes are persisted atomically via `persist_media_permissions`.
+    media_permissions: RwLock<MediaPermissions>,
+    /// Disk-backed location for `media_permissions`. `None` when the
+    /// shell is running without a writable data dir (tests, sandboxes)
+    /// — the in-memory copy still works, but changes do not survive
+    /// restarts.
+    media_permissions_path: Option<PathBuf>,
 }
 
 /// How many telemetry entries the shell retains for the History tab.
@@ -227,7 +237,58 @@ impl AppState {
             #[cfg(feature = "sqlite-backend")]
             durable_store: None,
             telemetry: Mutex::new(VecDeque::with_capacity(TELEMETRY_BUFFER_CAPACITY)),
+            media_permissions: RwLock::new(MediaPermissions::defaults()),
+            media_permissions_path: None,
         })
+    }
+
+    /// Wire a disk-backed media-permissions file into this state. Loads
+    /// the current contents (or falls back to defaults if the file is
+    /// missing/malformed) and remembers the path so subsequent writes
+    /// persist atomically.
+    pub fn attach_media_permissions_file(&mut self, path: PathBuf) {
+        let loaded = media_permissions::load_or_default(&path);
+        *self.media_permissions.write().expect("perm write lock") = loaded;
+        self.media_permissions_path = Some(path);
+    }
+
+    /// Snapshot the current media permissions. Cheap clone; safe to
+    /// hand to a Tauri command response.
+    pub fn media_permissions(&self) -> MediaPermissions {
+        *self.media_permissions.read().expect("perm read lock")
+    }
+
+    /// Update one device's permission and persist the new state to
+    /// disk if a path is wired. Returns the resulting full snapshot
+    /// so the caller can echo it back to the UI in one round trip.
+    ///
+    /// Persistence failures are surfaced as `Err` so the UI can show
+    /// the user the change did not stick — silent partial success
+    /// would let a denied permission look like it stuck across a
+    /// restart when it actually did not.
+    pub fn set_media_permission(
+        &self,
+        kind: MediaKind,
+        state: PermissionState,
+    ) -> Result<MediaPermissions, String> {
+        let snapshot = {
+            let mut w = self.media_permissions.write().expect("perm write lock");
+            w.set(kind, state);
+            *w
+        };
+        if let Some(path) = &self.media_permissions_path {
+            media_permissions::save(path, &snapshot)
+                .map_err(|e| format!("persist media permissions: {e}"))?;
+        }
+        Ok(snapshot)
+    }
+
+    /// Pre-capture gate. Future camera/screen capture sites must call
+    /// this before touching the device — it never starts capture
+    /// itself. See [`media_permissions::CaptureGate`] for the action
+    /// the caller should take.
+    pub fn evaluate_media_permission(&self, kind: MediaKind) -> CaptureGate {
+        self.media_permissions().evaluate(kind)
     }
 
     /// Record a telemetry entry. Evicts the oldest entry if the buffer
@@ -1004,6 +1065,81 @@ humor: "playful"
         state.apply_preset(Some(AutonomyPreset::Observer)).unwrap();
         state.switch_persona("ember").unwrap();
         assert_eq!(state.current_preset(), Some(AutonomyPreset::Observer));
+    }
+
+    /// AppState boots with both media permissions in `Ask` and reports
+    /// `PromptUser` from the capture gate — the safe default.
+    #[test]
+    fn media_permissions_default_to_ask_after_boot() {
+        let state = AppState::new().unwrap();
+        let perms = state.media_permissions();
+        assert_eq!(perms.camera, PermissionState::Ask);
+        assert_eq!(perms.screen, PermissionState::Ask);
+        assert_eq!(
+            state.evaluate_media_permission(MediaKind::Camera),
+            CaptureGate::PromptUser
+        );
+        assert_eq!(
+            state.evaluate_media_permission(MediaKind::Screen),
+            CaptureGate::PromptUser
+        );
+    }
+
+    /// `set_media_permission` updates the in-memory snapshot and shifts
+    /// the capture gate accordingly. Without an attached file it is a
+    /// pure in-process change — exercised here so the no-file path
+    /// keeps working in tests / sandboxes.
+    #[test]
+    fn set_media_permission_updates_snapshot_and_gate() {
+        let state = AppState::new().unwrap();
+        let snap = state
+            .set_media_permission(MediaKind::Camera, PermissionState::Allow)
+            .expect("set");
+        assert_eq!(snap.camera, PermissionState::Allow);
+        assert_eq!(
+            state.evaluate_media_permission(MediaKind::Camera),
+            CaptureGate::Proceed
+        );
+        // Screen untouched.
+        assert_eq!(
+            state.evaluate_media_permission(MediaKind::Screen),
+            CaptureGate::PromptUser
+        );
+
+        let snap = state
+            .set_media_permission(MediaKind::Screen, PermissionState::Deny)
+            .expect("set");
+        assert_eq!(snap.screen, PermissionState::Deny);
+        assert_eq!(
+            state.evaluate_media_permission(MediaKind::Screen),
+            CaptureGate::Deny
+        );
+    }
+
+    /// With a permissions file attached, writes round-trip through disk
+    /// — a fresh AppState pointing at the same file recovers the
+    /// previously-saved posture instead of resetting to defaults.
+    #[test]
+    fn media_permissions_file_round_trips_across_appstates() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let perms_path = tmp.path().join("media_permissions.json");
+
+        {
+            let mut state = AppState::new().unwrap();
+            state.attach_media_permissions_file(perms_path.clone());
+            state
+                .set_media_permission(MediaKind::Camera, PermissionState::Allow)
+                .unwrap();
+            state
+                .set_media_permission(MediaKind::Screen, PermissionState::Deny)
+                .unwrap();
+        }
+
+        let mut state2 = AppState::new().unwrap();
+        state2.attach_media_permissions_file(perms_path);
+        let perms = state2.media_permissions();
+        assert_eq!(perms.camera, PermissionState::Allow);
+        assert_eq!(perms.screen, PermissionState::Deny);
     }
 
     /// If we point the durable constructor at an un-writable path, it
