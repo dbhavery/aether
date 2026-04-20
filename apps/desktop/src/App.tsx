@@ -4,6 +4,7 @@ import {
   clearSession as apiClearSession,
   companionBanner,
   listPersonas,
+  memoryRecent,
   onPresence,
   presenceCurrent,
   resolveApproval,
@@ -254,7 +255,16 @@ export function App() {
         const b = await apiSwitchPersona(id);
         setBanner(b);
         writeStoredPersonaId(id);
-        setMessages([]);
+        // Fetch the new session's memory so the persona-switch banner
+        // (recorded server-side by switch_persona) is the first message
+        // the user sees. Falls back to an empty transcript on error so
+        // the UI never shows stale content from the previous persona.
+        try {
+          const recent = await memoryRecent();
+          setMessages(recent);
+        } catch {
+          setMessages([]);
+        }
         setPendingApproval(null);
         setSessionNonce((n) => n + 1);
         setMemoryRefreshKey((k) => k + 1);

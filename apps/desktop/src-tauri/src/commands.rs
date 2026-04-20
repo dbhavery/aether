@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use aether_l1_interaction::{BlockReason, TurnRequest, TurnResult, TurnState};
-use aether_l2_memory::MemoryRole;
+use aether_l2_memory::{MemoryRole, TurnMemoryRecord};
 use aether_l3_presence::{PresenceController, PresenceState};
 use aether_l5_policy::{
     AuditFilter, AutonomyPreset, Capability, Decision, DecisionKind, MonotonicTimestamp, PersonaId,
@@ -119,7 +119,34 @@ pub fn switch_persona(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<CompanionBanner, String> {
+    // Capture the outgoing persona name before the swap so the banner
+    // can reference *both* sides of the transition.
+    let previous_name = {
+        let a = state.active.read().expect("active read lock");
+        a.persona_display_name.clone()
+    };
     state.switch_persona(&id)?;
+
+    // Record a system-role memory entry so the UI's transcript shows
+    // an explicit "Session reset because you switched to X" line
+    // instead of the session silently emptying. This runs after the
+    // session clear so the banner is the first message the new
+    // persona's conversation carries.
+    let (new_name, ts) = {
+        let a = state.active.read().expect("active read lock");
+        (a.persona_display_name.clone(), state.next_ts())
+    };
+    let banner_text = persona_switch_banner_text(&previous_name, &new_name);
+    if let Err(e) = state.memory.append(TurnMemoryRecord {
+        session_id: SESSION_ID.to_string(),
+        sequence: 0,
+        role: MemoryRole::System,
+        content: banner_text,
+        timestamp_ms: ts,
+    }) {
+        tracing::warn!("failed to append persona-switch banner to memory: {e}");
+    }
+
     transition_presence(
         &app,
         &state.presence,
@@ -128,6 +155,18 @@ pub fn switch_persona(
         None,
     );
     Ok(companion_banner(state))
+}
+
+/// Human-readable banner line inserted into the transcript when the
+/// user switches persona. Format is "Session reset because you
+/// switched to <new>. Previous context with <old> cleared." — the
+/// previous name is included so the line is self-contained even if
+/// the user looks at it weeks later. Kept as a free function so tests
+/// can lock the copy.
+pub(crate) fn persona_switch_banner_text(previous: &str, new: &str) -> String {
+    format!(
+        "Session reset because you switched to {new}. Previous context with {previous} cleared."
+    )
 }
 
 /// Apply (or clear with `null`) the onboarding autonomy preset. Accepts
@@ -767,5 +806,68 @@ mod tests {
         let (cap, scope) = parse_command("delete");
         assert!(matches!(cap, Capability::FilesDelete));
         assert!(matches!(scope, ResourceScope::None));
+    }
+
+    #[test]
+    fn persona_switch_banner_references_both_names() {
+        let b = persona_switch_banner_text("Aurora", "Sable");
+        assert!(b.contains("Aurora"), "banner should name outgoing persona");
+        assert!(b.contains("Sable"), "banner should name incoming persona");
+        assert!(b.to_lowercase().contains("reset"));
+        assert!(b.to_lowercase().contains("cleared"));
+    }
+
+    /// Switching persona should wipe session memory (existing contract)
+    /// AND leave exactly one system-role banner message so the user
+    /// sees the transition instead of an empty transcript.
+    #[test]
+    fn switch_persona_records_system_banner_in_memory() {
+        use crate::state::AppState;
+
+        let state = AppState::new().expect("AppState::new");
+        // Seed memory with a couple of turns to prove clear-and-banner
+        // leaves the banner as the only record afterwards.
+        state
+            .memory
+            .append(TurnMemoryRecord {
+                session_id: SESSION_ID.to_string(),
+                sequence: 0,
+                role: MemoryRole::User,
+                content: "first turn".into(),
+                timestamp_ms: 10,
+            })
+            .unwrap();
+
+        // Simulate the command body directly to avoid Tauri State plumbing.
+        let previous_name = {
+            let a = state.active.read().unwrap();
+            a.persona_display_name.clone()
+        };
+        state.switch_persona("sable").unwrap();
+        let (new_name, ts) = {
+            let a = state.active.read().unwrap();
+            (a.persona_display_name.clone(), state.next_ts())
+        };
+        let text = persona_switch_banner_text(&previous_name, &new_name);
+        state
+            .memory
+            .append(TurnMemoryRecord {
+                session_id: SESSION_ID.to_string(),
+                sequence: 0,
+                role: MemoryRole::System,
+                content: text.clone(),
+                timestamp_ms: ts,
+            })
+            .unwrap();
+
+        let window = state.memory.recent(SESSION_ID).unwrap();
+        assert_eq!(
+            window.records.len(),
+            1,
+            "persona switch should leave exactly the banner behind",
+        );
+        assert_eq!(window.records[0].role, MemoryRole::System);
+        assert_eq!(window.records[0].content, text);
+        assert!(window.records[0].content.contains("Sable"));
     }
 }
