@@ -12,8 +12,13 @@
 #![warn(missing_docs)]
 #![allow(dead_code)]
 
+pub mod controller;
 pub mod engine;
 pub mod error;
 
+pub use controller::{
+    render_presence, InMemoryPresenceController, PresenceController, PresenceSnapshot,
+    PresenceState, TRANSITION_LOG_CAP,
+};
 pub use engine::{BehaviorClass, BehaviorFrame, PresenceEngine, PresenceTier, RenderingSurface};
 pub use error::L3Error;
