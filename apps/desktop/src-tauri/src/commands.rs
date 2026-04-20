@@ -747,10 +747,7 @@ fn finalize_turn(
 /// Return the newest-first telemetry entries for the Trust drawer
 /// History tab. `limit` is clamped to the internal buffer capacity.
 #[tauri::command]
-pub fn telemetry_recent(
-    limit: Option<usize>,
-    state: State<'_, AppState>,
-) -> Vec<TelemetryEntry> {
+pub fn telemetry_recent(limit: Option<usize>, state: State<'_, AppState>) -> Vec<TelemetryEntry> {
     let cap = crate::state::TELEMETRY_BUFFER_CAPACITY;
     let n = limit.unwrap_or(cap).min(cap);
     state.telemetry_recent(n)

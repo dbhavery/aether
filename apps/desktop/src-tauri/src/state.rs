@@ -25,7 +25,7 @@ use aether_l5_policy::{
     policy_engine::PolicyEngine, AuditStore, AutonomyPreset, DefaultPolicyEngine, EngineConfig,
     InMemoryAuditStore, InMemoryGrantLedger, InMemorySink, PersonaId,
 };
-use aether_l6_persona::{CompiledPersona, DefaultPersonaCompiler, PersonaProfile};
+use aether_l6_persona::{load_pack_dir, CompiledPersona, DefaultPersonaCompiler, PersonaProfile};
 use serde::Serialize;
 
 use crate::adapter::{ModelRouterAdapter, ReflexModelRouter};
@@ -211,7 +211,7 @@ impl AppState {
     }
 
     fn build(memory: Arc<dyn SessionMemoryStore>, backend: MemoryBackend) -> Result<Self, String> {
-        let catalog = default_catalog();
+        let catalog = merge_yaml_personas(default_catalog());
         let presence: Arc<dyn PresenceController> = Arc::new(InMemoryPresenceController::new());
         let active = build_active(&pick_default(&catalog), memory.clone(), None)?;
 
@@ -437,10 +437,66 @@ fn build_active(
     })
 }
 
+/// Resolve the persona-pack directory the shell should scan for YAML
+/// persona files. Order:
+///
+/// 1. `AETHER_PERSONAS_DIR` environment variable (absolute path).
+/// 2. The OS-native app data dir + `/personas/` (see
+///    `build_app_state` in main.rs; when the AppState is constructed
+///    outside Tauri, e.g. tests, this falls back to `None`).
+///
+/// Returning `None` means "no pack dir configured" — the loader
+/// treats that as "empty pack set" so boot never fails on absence.
+fn persona_pack_dir() -> Option<std::path::PathBuf> {
+    if let Ok(custom) = std::env::var("AETHER_PERSONAS_DIR") {
+        if !custom.trim().is_empty() {
+            return Some(std::path::PathBuf::from(custom));
+        }
+    }
+    None
+}
+
+/// Enrich the built-in catalog with persona profiles loaded from YAML
+/// pack files. YAML personas are **additive-only** — a file declaring
+/// an id already present in the built-in catalog is skipped with a
+/// tracing WARN. This keeps the first-launch shell predictable even
+/// when an experimental YAML file is dropped in.
+fn merge_yaml_personas(mut catalog: Vec<PersonaProfile>) -> Vec<PersonaProfile> {
+    let Some(dir) = persona_pack_dir() else {
+        return catalog;
+    };
+    match load_pack_dir(&dir) {
+        Ok(extras) => {
+            for profile in extras {
+                if catalog.iter().any(|p| p.persona_id == profile.persona_id) {
+                    tracing::warn!(
+                        "persona pack id {:?} collides with a built-in persona; YAML entry skipped",
+                        profile.persona_id.0
+                    );
+                    continue;
+                }
+                tracing::info!(
+                    "loaded persona pack {:?} from {}",
+                    profile.persona_id.0,
+                    dir.display()
+                );
+                catalog.push(profile);
+            }
+        }
+        Err(e) => {
+            tracing::warn!(
+                "persona pack dir {} failed to load: {e}; continuing with built-ins only",
+                dir.display()
+            );
+        }
+    }
+    catalog
+}
+
 /// Hard-coded persona catalog. Three voices to start: Aurora (warm /
 /// balanced), Sable (neutral / bold), and Ember (formal / cautious).
-/// Real persona packs will load from `personas/*.yaml` later (per
-/// planning/17_persona_pack_schema.md).
+/// YAML-defined personas are merged on top by `merge_yaml_personas`
+/// per `planning/17_persona_pack_schema.md`.
 fn default_catalog() -> Vec<PersonaProfile> {
     use aether_l6_persona::{Humor, Stance, Tone, Verbosity};
 
@@ -769,6 +825,77 @@ mod tests {
         );
     }
 
+    /// When `AETHER_PERSONAS_DIR` points at a directory containing a
+    /// YAML persona pack, `AppState::new()` should surface that persona
+    /// alongside the built-ins.
+    ///
+    /// This test sets a process-wide env var, so it's intentionally
+    /// serialised via a file-scoped mutex to avoid clobbering other
+    /// tests that might read the same var in parallel. (Rust's test
+    /// runner runs tests in-process but threaded.)
+    #[test]
+    fn yaml_persona_pack_merges_into_catalog() {
+        use std::sync::Mutex;
+        static ENV_LOCK: Mutex<()> = Mutex::new(());
+        let _g = ENV_LOCK.lock().unwrap();
+
+        let tmp = tempfile::TempDir::new().unwrap();
+        let yaml = r#"
+id: "solstice"
+version: 1
+name: "Solstice"
+description: "A steady hand loaded from YAML."
+tone: "warm"
+verbosity: "balanced"
+stance: "balanced"
+humor: "dry"
+"#;
+        std::fs::write(tmp.path().join("solstice.yaml"), yaml).unwrap();
+
+        std::env::set_var("AETHER_PERSONAS_DIR", tmp.path());
+        let state = AppState::new().expect("AppState::new");
+        std::env::remove_var("AETHER_PERSONAS_DIR");
+
+        let ids: Vec<String> = state.catalog_entries().into_iter().map(|e| e.id).collect();
+        assert!(ids.contains(&"aurora".to_string()));
+        assert!(
+            ids.contains(&"solstice".to_string()),
+            "YAML persona should appear in catalog; saw {ids:?}"
+        );
+    }
+
+    #[test]
+    fn yaml_persona_id_collision_with_builtin_is_skipped() {
+        use std::sync::Mutex;
+        static ENV_LOCK: Mutex<()> = Mutex::new(());
+        let _g = ENV_LOCK.lock().unwrap();
+
+        let tmp = tempfile::TempDir::new().unwrap();
+        // Try to override `aurora` from YAML — must be rejected.
+        let yaml = r#"
+id: "aurora"
+version: 99
+name: "Rogue Aurora"
+description: "Should not replace the built-in."
+tone: "formal"
+verbosity: "terse"
+stance: "bold"
+humor: "playful"
+"#;
+        std::fs::write(tmp.path().join("rogue.yaml"), yaml).unwrap();
+
+        std::env::set_var("AETHER_PERSONAS_DIR", tmp.path());
+        let state = AppState::new().expect("AppState::new");
+        std::env::remove_var("AETHER_PERSONAS_DIR");
+
+        let entries = state.catalog_entries();
+        let aurora = entries.iter().find(|e| e.id == "aurora").unwrap();
+        assert_eq!(
+            aurora.name, "Aurora",
+            "built-in persona must not be replaced by a colliding YAML id",
+        );
+    }
+
     #[test]
     fn telemetry_clear_empties_buffer() {
         let state = AppState::new().unwrap();
@@ -802,7 +929,12 @@ mod tests {
         let store = state.durable_store().expect("durable_store available");
 
         // Seed four rows with controlled timestamps.
-        for (content, ts) in [("old-1", 1_000), ("old-2", 2_000), ("new-1", 9_000), ("new-2", 10_000)] {
+        for (content, ts) in [
+            ("old-1", 1_000),
+            ("old-2", 2_000),
+            ("new-1", 9_000),
+            ("new-2", 10_000),
+        ] {
             state
                 .memory
                 .append(TurnMemoryRecord {

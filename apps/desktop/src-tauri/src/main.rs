@@ -60,6 +60,16 @@ fn build_app_state(app: &tauri::AppHandle) -> Result<AppState, Box<dyn std::erro
     {
         match app.path().app_data_dir() {
             Ok(dir) => {
+                // Wire the persona-pack loader to look in
+                // `<app_data>/personas/`. Only seed the env var if the
+                // caller hasn't already set one — that way dev /
+                // CI / power users can still override with their own
+                // directory.
+                if std::env::var_os("AETHER_PERSONAS_DIR").is_none() {
+                    let personas = dir.join("personas");
+                    std::env::set_var("AETHER_PERSONAS_DIR", &personas);
+                    tracing::info!("persona pack dir set to {}", personas.display());
+                }
                 let db_path = dir.join("aether.db");
                 tracing::info!(
                     "initialising AppState with durable session memory at {}",

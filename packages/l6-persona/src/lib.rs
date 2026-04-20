@@ -16,6 +16,7 @@
 pub mod compiler;
 pub mod default_compiler;
 pub mod error;
+pub mod pack_loader;
 pub mod profile;
 
 pub use compiler::{
@@ -25,4 +26,5 @@ pub use compiler::{
 };
 pub use default_compiler::DefaultPersonaCompiler;
 pub use error::L6Error;
+pub use pack_loader::{load_pack_dir, load_pack_file, PackLoadError, PersonaPackFile};
 pub use profile::{Humor, PersonaProfile, Stance, Tone, Verbosity};
