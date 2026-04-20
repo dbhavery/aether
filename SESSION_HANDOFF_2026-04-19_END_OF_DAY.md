@@ -236,18 +236,29 @@ decision.
 
 ---
 
-## Appendix A — exact commit list ahead of yesterday's origin/dev
+## Appendix A — exact commit list pushed in this session
+
+`origin/dev` moved from `679e66c` (v1.0 distribution-playbook commit) to
+`bdfdfd4` (this session's docs-session commit). The 7 commits pushed:
 
 ```
-*(to be filled in after the final reports-commit lands — see §5 of
-FINAL_PUBLICATION_CHECKPOINT for the pre-push list)*
+bdfdfd4 docs(session): final publication checkpoint + end-of-day handoff
+0e12ca5 chore(ci,fmt): rewire CI onto Rust+pnpm, apply cargo fmt, normalize pkg licenses
+8c538ba feat(storage): [WAVE3_5] add rusqlite substrate and validate workspace
+d98dba7 docs(oss): complete launch pack and contributor surface
+46c3545 feat(engines): [WAVE4] scaffold L1/L2/L3/L4/L6/L7 engine crates + vision doctrine
+2822563 feat(l5): [WAVE3] ship first policy logic slice
+80c5c10 chore(repo): bootstrap Aether monorepo (Waves 0–2)
 ```
 
 ## Appendix B — `git push origin dev` output
 
 ```
-*(to be filled in immediately after push — see §push-status below)*
+To https://github.com/dbhavery/aether.git
+   679e66c..bdfdfd4  dev -> dev
 ```
+
+Working tree clean after push. Local `dev` and `origin/dev` are in sync.
 
 ## Appendix C — test / check commands that must stay green
 
