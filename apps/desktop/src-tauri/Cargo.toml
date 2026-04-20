@@ -30,7 +30,7 @@ tracing = "0.1"
 # CLAUDE.md §1.4 regulates packages/l*-* siblings; apps/* are allowed to
 # compose multiple engine layers.
 aether-l1-interaction = { path = "../../../packages/l1-interaction" }
-aether-l2-memory      = { path = "../../../packages/l2-memory" }
+aether-l2-memory      = { path = "../../../packages/l2-memory", features = ["sqlite-backend"] }
 aether-l3-presence    = { path = "../../../packages/l3-presence" }
 aether-l4-router      = { path = "../../../packages/l4-router" }
 aether-l5-policy      = { path = "../../../packages/l5-policy" }
@@ -40,9 +40,17 @@ aether-l7-trust       = { path = "../../../packages/l7-trust" }
 [features]
 # By default Tauri's `custom-protocol` feature is enabled only in release
 # builds (see tauri-build). We leave it alone.
-default = []
+default = ["sqlite-backend"]
 # Enable the Ollama provider for real local model routing.
 ollama-provider = ["aether-l4-router/ollama-provider"]
+# Route the session memory store through the on-disk SQLite backend so
+# conversation history survives restarts. Default-on; disabling falls
+# back to the transient in-memory store (useful for CI sandboxes that
+# cannot touch the filesystem).
+sqlite-backend = []
+
+[dev-dependencies]
+tempfile = "3"
 
 [[bin]]
 name = "aether-desktop"

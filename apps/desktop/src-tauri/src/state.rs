@@ -12,11 +12,14 @@
 //! command site to take a write lock.
 
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 
 use aether_l1_interaction::{TurnEngine, TurnRequest, TurnResult, TurnRouter};
 use aether_l2_memory::{InMemorySessionMemoryStore, SessionMemoryStore};
+#[cfg(feature = "sqlite-backend")]
+use aether_l2_memory::DurableSessionStore;
 use aether_l3_presence::{InMemoryPresenceController, PresenceController};
 use aether_l5_policy::{
     policy_engine::PolicyEngine, AuditStore, DefaultPolicyEngine, EngineConfig, InMemoryAuditStore,
@@ -73,6 +76,22 @@ pub struct AppState {
     pub active: RwLock<ActiveEngine>,
     ts: AtomicU64,
     pending: Mutex<HashMap<String, PendingTurn>>,
+    #[allow(dead_code)] // Read via `memory_backend()` accessor and in tests.
+    memory_backend: MemoryBackend,
+}
+
+/// Which backend is behind `AppState::memory`. Used for diagnostics and
+/// the optional dev-only debug surface — the engine never branches on it.
+#[derive(Debug, Clone)]
+#[allow(dead_code)] // Variants consumed via pattern-match in tests / logging.
+pub enum MemoryBackend {
+    /// Transient in-memory store; history is lost on restart.
+    InMemory,
+    /// SQLite-backed durable store at the given path.
+    Durable {
+        /// Absolute path to the SQLite file on disk.
+        path: PathBuf,
+    },
 }
 
 /// An Ask turn that is waiting on a UI approval. Holds enough state to
@@ -83,10 +102,57 @@ pub struct PendingTurn {
 }
 
 impl AppState {
+    /// In-memory constructor used by unit tests and any environment
+    /// without a writable data directory. Mirrors the historical
+    /// pre-durable-memory behaviour.
     pub fn new() -> Result<Self, String> {
+        Self::build(
+            Arc::new(InMemorySessionMemoryStore::new_default()) as Arc<dyn SessionMemoryStore>,
+            MemoryBackend::InMemory,
+        )
+    }
+
+    /// Construct the app state with an explicit persistence path for the
+    /// durable session memory store. Falls back to the in-memory store
+    /// (with a tracing::warn) if the path cannot be opened or migrations
+    /// fail — the shell must still boot so the user sees a usable UI.
+    #[cfg(feature = "sqlite-backend")]
+    pub fn new_with_db_path(path: impl AsRef<Path>) -> Result<Self, String> {
+        let path_ref = path.as_ref();
+        if let Some(parent) = path_ref.parent() {
+            if let Err(e) = std::fs::create_dir_all(parent) {
+                tracing::warn!(
+                    "could not create app data dir {}: {e}; using in-memory session store",
+                    parent.display()
+                );
+                return Self::new();
+            }
+        }
+        match DurableSessionStore::open(path_ref) {
+            Ok(durable) => {
+                tracing::info!("durable session memory opened at {}", path_ref.display());
+                Self::build(
+                    durable.store.clone(),
+                    MemoryBackend::Durable {
+                        path: path_ref.to_path_buf(),
+                    },
+                )
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "durable session memory open failed at {}: {e}; using in-memory fallback",
+                    path_ref.display()
+                );
+                Self::new()
+            }
+        }
+    }
+
+    fn build(
+        memory: Arc<dyn SessionMemoryStore>,
+        backend: MemoryBackend,
+    ) -> Result<Self, String> {
         let catalog = default_catalog();
-        let memory: Arc<dyn SessionMemoryStore> =
-            Arc::new(InMemorySessionMemoryStore::new_default());
         let presence: Arc<dyn PresenceController> = Arc::new(InMemoryPresenceController::new());
         let active = build_active(&pick_default(&catalog), memory.clone())?;
 
@@ -97,7 +163,14 @@ impl AppState {
             active: RwLock::new(active),
             ts: AtomicU64::new(1_000),
             pending: Mutex::new(HashMap::new()),
+            memory_backend: backend,
         })
+    }
+
+    /// Identify which backend is providing session memory. Exposed for
+    /// diagnostics and logging, not for routing decisions.
+    pub fn memory_backend(&self) -> &MemoryBackend {
+        &self.memory_backend
     }
 
     /// Monotonic millisecond counter for stamp fields. Not a wall clock;
@@ -474,5 +547,67 @@ mod tests {
             a.engine.handle_turn(follow_up).unwrap()
         };
         assert_eq!(follow.final_state, TurnState::Completed);
+    }
+
+    /// End-to-end durable round-trip: build an AppState over a temp
+    /// SQLite file, drive turns into memory, drop the AppState, reopen
+    /// a new AppState over the same file, and verify the prior turns
+    /// come back. This is the integration guarantee P1 exists to give.
+    #[cfg(feature = "sqlite-backend")]
+    #[test]
+    fn durable_memory_survives_appstate_reopen() {
+        use aether_l2_memory::{MemoryRole, TurnMemoryRecord};
+        use tempfile::TempDir;
+
+        let tmp = TempDir::new().expect("tempdir");
+        let db_path = tmp.path().join("subdir").join("aether.db");
+
+        {
+            let state = AppState::new_with_db_path(&db_path).expect("first AppState");
+            assert!(matches!(state.memory_backend(), MemoryBackend::Durable { .. }));
+            state
+                .memory
+                .append(TurnMemoryRecord {
+                    session_id: SESSION_ID.to_string(),
+                    sequence: 0,
+                    role: MemoryRole::User,
+                    content: "hello across restarts".to_string(),
+                    timestamp_ms: 100,
+                })
+                .unwrap();
+            state
+                .memory
+                .append(TurnMemoryRecord {
+                    session_id: SESSION_ID.to_string(),
+                    sequence: 0,
+                    role: MemoryRole::Assistant,
+                    content: "remembered".to_string(),
+                    timestamp_ms: 200,
+                })
+                .unwrap();
+        }
+
+        let state2 = AppState::new_with_db_path(&db_path).expect("second AppState");
+        let w = state2.memory.recent(SESSION_ID).unwrap();
+        assert_eq!(w.records.len(), 2);
+        assert_eq!(w.records[0].content, "hello across restarts");
+        assert_eq!(w.records[1].content, "remembered");
+        assert!(matches!(state2.memory_backend(), MemoryBackend::Durable { .. }));
+    }
+
+    /// If we point the durable constructor at an un-writable path, it
+    /// must fall back to the in-memory store instead of panicking the
+    /// shell during boot.
+    #[cfg(feature = "sqlite-backend")]
+    #[test]
+    fn durable_open_failure_falls_back_to_in_memory() {
+        // Path whose parent is a *file*, not a directory — create_dir_all
+        // will fail, so we exercise the fallback branch.
+        let tmp = tempfile::NamedTempFile::new().expect("tempfile");
+        let not_a_dir = tmp.path().to_path_buf();
+        let bogus = not_a_dir.join("nested").join("aether.db");
+
+        let state = AppState::new_with_db_path(&bogus).expect("fallback AppState");
+        assert!(matches!(state.memory_backend(), MemoryBackend::InMemory));
     }
 }
