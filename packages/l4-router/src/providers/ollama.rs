@@ -100,18 +100,76 @@ pub enum OllamaConfigError {
     EmptyModel,
 }
 
+/// Role tag for a `/api/chat` message. Mirrors Ollama's JSON enum.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MessageRole {
+    /// Persona / instruction-level context the model should treat as
+    /// background rules, not a prior turn.
+    System,
+    /// User-authored turn content.
+    User,
+    /// Prior assistant-authored reply.
+    Assistant,
+}
+
+impl MessageRole {
+    /// Ollama wire-format role name.
+    pub fn wire(self) -> &'static str {
+        match self {
+            MessageRole::System => "system",
+            MessageRole::User => "user",
+            MessageRole::Assistant => "assistant",
+        }
+    }
+}
+
+/// A single role-tagged message for [`OllamaProvider::chat_with_messages`].
+/// Owned so callers can build a `Vec<ChatMessage>` without lifetime gymnastics.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChatMessage {
+    /// Speaker role.
+    pub role: MessageRole,
+    /// Message content.
+    pub content: String,
+}
+
+impl ChatMessage {
+    /// User-role convenience constructor.
+    pub fn user(content: impl Into<String>) -> Self {
+        Self {
+            role: MessageRole::User,
+            content: content.into(),
+        }
+    }
+    /// Assistant-role convenience constructor.
+    pub fn assistant(content: impl Into<String>) -> Self {
+        Self {
+            role: MessageRole::Assistant,
+            content: content.into(),
+        }
+    }
+    /// System-role convenience constructor.
+    pub fn system(content: impl Into<String>) -> Self {
+        Self {
+            role: MessageRole::System,
+            content: content.into(),
+        }
+    }
+}
+
 /// Wire shape for `/api/chat` request body. Kept internal; callers pass
 /// plain strings / messages through the public methods.
 #[derive(Debug, Clone, Serialize)]
 struct ChatRequest<'a> {
     model: &'a str,
-    messages: Vec<ChatMessage<'a>>,
+    messages: Vec<ChatMessageWire<'a>>,
     stream: bool,
     options: ChatOptions,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-struct ChatMessage<'a> {
+struct ChatMessageWire<'a> {
     role: &'a str,
     content: &'a str,
 }
@@ -138,19 +196,41 @@ struct OwnedChatMessage {
     content: String,
 }
 
-/// Build the JSON payload the provider sends to `/api/chat`. Pure; exposed
-/// for unit tests and for callers that want to inspect the wire shape.
+/// Build the JSON payload the provider sends to `/api/chat` for a single
+/// user prompt. Pure; exposed for unit tests and for callers that want to
+/// inspect the wire shape.
+///
+/// Back-compat path: callers that still concat a rendered transcript into
+/// one prompt string (via the shell's `MemoryAwareRouter`) land here.
+/// Role-tagged callers should use [`build_chat_payload_messages`].
 pub fn build_chat_payload(model: &str, prompt: &str) -> serde_json::Value {
-    // The `MemoryAwareRouter` wrapper already renders recent conversation
-    // into the incoming prompt string, so we just pass it as a single
-    // `user` message here. When streaming / richer message shaping lands,
-    // this helper grows to split history into `role`-tagged messages.
     let body = ChatRequest {
         model,
-        messages: vec![ChatMessage {
+        messages: vec![ChatMessageWire {
             role: "user",
             content: prompt,
         }],
+        stream: false,
+        options: ChatOptions {
+            num_predict: Some(512),
+        },
+    };
+    serde_json::to_value(&body).expect("ChatRequest always serializes")
+}
+
+/// Build the JSON payload the provider sends to `/api/chat` from an
+/// already-split message history. Pure; exposed for unit tests.
+pub fn build_chat_payload_messages(model: &str, messages: &[ChatMessage]) -> serde_json::Value {
+    let wire: Vec<ChatMessageWire<'_>> = messages
+        .iter()
+        .map(|m| ChatMessageWire {
+            role: m.role.wire(),
+            content: m.content.as_str(),
+        })
+        .collect();
+    let body = ChatRequest {
+        model,
+        messages: wire,
         stream: false,
         options: ChatOptions {
             num_predict: Some(512),
@@ -262,9 +342,20 @@ impl OllamaProvider {
     }
 
     /// Send a single prompt to `/api/chat` and return the assistant text.
+    /// Back-compat single-prompt path; delegates to
+    /// [`OllamaProvider::chat_with_messages`] with one `user` message.
     pub fn chat(&self, prompt: &str) -> Result<String, L4Error> {
+        self.chat_with_messages(&[ChatMessage::user(prompt.to_string())])
+    }
+
+    /// Send a role-tagged message history to `/api/chat` and return the
+    /// assistant text. Preferred over [`OllamaProvider::chat`] when the
+    /// caller has a real transcript — Ollama's `/api/chat` endpoint uses
+    /// the message array for its chat template, which is a better fit
+    /// for instruction-tuned models than one concatenated prompt string.
+    pub fn chat_with_messages(&self, messages: &[ChatMessage]) -> Result<String, L4Error> {
         let url = format!("{}/api/chat", self.config.base_url.trim_end_matches('/'));
-        let payload = build_chat_payload(&self.config.model, prompt);
+        let payload = build_chat_payload_messages(&self.config.model, messages);
         let resp = self
             .agent
             .post(&url)
@@ -560,6 +651,87 @@ mod tests {
             return None;
         }
         (0..=hay.len() - needle.len()).find(|&i| &hay[i..i + needle.len()] == needle)
+    }
+
+    #[test]
+    fn build_chat_payload_messages_preserves_role_order() {
+        let msgs = vec![
+            ChatMessage::system("You are Aurora."),
+            ChatMessage::user("hello"),
+            ChatMessage::assistant("hi there"),
+            ChatMessage::user("how are you"),
+        ];
+        let v = build_chat_payload_messages("llama3", &msgs);
+        let arr = v["messages"].as_array().expect("messages array");
+        assert_eq!(arr.len(), 4);
+        assert_eq!(arr[0]["role"], "system");
+        assert_eq!(arr[0]["content"], "You are Aurora.");
+        assert_eq!(arr[1]["role"], "user");
+        assert_eq!(arr[1]["content"], "hello");
+        assert_eq!(arr[2]["role"], "assistant");
+        assert_eq!(arr[2]["content"], "hi there");
+        assert_eq!(arr[3]["role"], "user");
+        assert_eq!(arr[3]["content"], "how are you");
+        assert_eq!(v["model"], "llama3");
+        assert_eq!(v["stream"], false);
+    }
+
+    #[test]
+    fn chat_delegates_to_chat_with_messages_single_user() {
+        // Proves the back-compat path still hits the wire as one `user`
+        // message, not as something the old payload helper emitted.
+        let response =
+            r#"{"model":"llama3","message":{"role":"assistant","content":"ok"},"done":true}"#
+                .to_string();
+        let (base_url, handle) = spawn_mock_ollama(response);
+
+        let provider = OllamaProvider::new(OllamaConfig {
+            base_url,
+            model: "llama3".into(),
+            timeout_ms: 3_000,
+        });
+        let reply = provider.chat("hi").expect("chat ok");
+        assert_eq!(reply, "ok");
+
+        let req = handle.join().expect("mock join");
+        let sent: serde_json::Value = serde_json::from_str(&req.body).expect("JSON");
+        let arr = sent["messages"].as_array().unwrap();
+        assert_eq!(arr.len(), 1);
+        assert_eq!(arr[0]["role"], "user");
+        assert_eq!(arr[0]["content"], "hi");
+    }
+
+    #[test]
+    fn chat_with_messages_round_trips_system_user_assistant_user() {
+        let response = r#"{"model":"llama3","message":{"role":"assistant","content":"fine thanks"},"done":true}"#
+            .to_string();
+        let (base_url, handle) = spawn_mock_ollama(response);
+
+        let provider = OllamaProvider::new(OllamaConfig {
+            base_url,
+            model: "llama3".into(),
+            timeout_ms: 3_000,
+        });
+        let msgs = vec![
+            ChatMessage::system("You are Aurora."),
+            ChatMessage::user("hello"),
+            ChatMessage::assistant("hi there"),
+            ChatMessage::user("how are you"),
+        ];
+        let reply = provider
+            .chat_with_messages(&msgs)
+            .expect("chat_with_messages ok");
+        assert_eq!(reply, "fine thanks");
+
+        let req = handle.join().expect("mock join");
+        assert_eq!(req.method, "POST");
+        assert_eq!(req.path, "/api/chat");
+        let sent: serde_json::Value = serde_json::from_str(&req.body).expect("JSON");
+        let arr = sent["messages"].as_array().unwrap();
+        assert_eq!(arr.len(), 4);
+        assert_eq!(arr[0]["role"], "system");
+        assert_eq!(arr[3]["role"], "user");
+        assert_eq!(arr[3]["content"], "how are you");
     }
 
     #[test]

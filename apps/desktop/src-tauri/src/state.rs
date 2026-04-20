@@ -155,12 +155,22 @@ fn build_router_stack(
                 Ok(cfg) => {
                     let provider = OllamaProvider::new(cfg.clone());
                     if provider.healthcheck().is_ok() {
+                        // Use the role-tagged path: instruction-tuned
+                        // models respond better to their own chat
+                        // template than to a pre-rendered transcript.
                         let tier =
                             crate::provider::tier_from_rules(&compiled.routing.preferred_tier);
-                        let adapter = ModelRouterAdapter::new(provider, "ollama", tier);
-                        let router: Arc<dyn TurnRouter> =
-                            Arc::new(MemoryAwareRouter::new(adapter, memory, SESSION_ID));
+                        let tier_label = crate::provider::tier_label(tier).to_string();
                         let label = format!("Ollama · {} · {}", cfg.model, cfg.base_url);
+                        let router: Arc<dyn TurnRouter> =
+                            Arc::new(crate::memory_router::RoleTaggedOllamaRouter::new(
+                                provider,
+                                memory,
+                                SESSION_ID,
+                                compiled.prompts.system.clone(),
+                                tier_label,
+                                "ollama".to_string(),
+                            ));
                         return (router, ProviderMode::Ollama, label);
                     }
                 }
@@ -170,7 +180,6 @@ fn build_router_stack(
             }
         }
     }
-    let _ = compiled; // silence "unused variable" on default build path
     let tier = crate::provider::tier_from_rules(&compiled.routing.preferred_tier);
     let adapter = ModelRouterAdapter::new(ReflexModelRouter::new(), "reflex-stub", tier);
     let router: Arc<dyn TurnRouter> = Arc::new(MemoryAwareRouter::new(adapter, memory, SESSION_ID));

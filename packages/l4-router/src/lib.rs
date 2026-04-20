@@ -22,4 +22,4 @@ pub use router::{
 };
 
 #[cfg(feature = "ollama-provider")]
-pub use providers::{OllamaConfig, OllamaConfigError, OllamaProvider};
+pub use providers::{ChatMessage, MessageRole, OllamaConfig, OllamaConfigError, OllamaProvider};

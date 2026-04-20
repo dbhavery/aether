@@ -85,6 +85,112 @@ pub fn assistant_record(session_id: &str, result: &TurnResult, ts_ms: u64) -> Tu
     }
 }
 
+/// Role-tagged Ollama router (feature-gated).
+///
+/// Implements [`TurnRouter`] directly on top of [`OllamaProvider`], so the
+/// shell can send Ollama the real role-tagged message history instead of
+/// a single concatenated prompt string. Preferred over wrapping
+/// [`ModelRouterAdapter`] + [`MemoryAwareRouter`] when the provider
+/// supports `/api/chat`'s messages array, because instruction-tuned
+/// models respond better to their own chat template than to a
+/// pre-rendered transcript.
+///
+/// On each dispatch:
+///   1. Pull the recent memory window for the session.
+///   2. Emit a `system` message with the persona's system prompt (if
+///      non-empty).
+///   3. Emit one message per recorded turn, mapped 1:1 from
+///      [`MemoryRole`] to [`aether_l4_router::MessageRole`].
+///   4. Append the incoming utterance as the final `user` message.
+///   5. Call [`OllamaProvider::chat_with_messages`] and wrap the reply in
+///      a [`RouteOutcome`] carrying the configured tier label and
+///      provider display string.
+#[cfg(feature = "ollama-provider")]
+pub struct RoleTaggedOllamaRouter {
+    provider: aether_l4_router::OllamaProvider,
+    store: Arc<dyn SessionMemoryStore>,
+    session_id: String,
+    system_prompt: String,
+    tier_label: String,
+    provider_label: String,
+}
+
+#[cfg(feature = "ollama-provider")]
+impl RoleTaggedOllamaRouter {
+    pub fn new(
+        provider: aether_l4_router::OllamaProvider,
+        store: Arc<dyn SessionMemoryStore>,
+        session_id: impl Into<String>,
+        system_prompt: impl Into<String>,
+        tier_label: impl Into<String>,
+        provider_label: impl Into<String>,
+    ) -> Self {
+        Self {
+            provider,
+            store,
+            session_id: session_id.into(),
+            system_prompt: system_prompt.into(),
+            tier_label: tier_label.into(),
+            provider_label: provider_label.into(),
+        }
+    }
+
+    /// Build the role-tagged message array the provider will send.
+    /// Exposed for tests.
+    pub fn build_messages(
+        window: &aether_l2_memory::RecentMemoryWindow,
+        system_prompt: &str,
+        utterance: &str,
+    ) -> Vec<aether_l4_router::ChatMessage> {
+        use aether_l4_router::{ChatMessage, MessageRole};
+        let mut msgs: Vec<ChatMessage> = Vec::with_capacity(window.records.len() + 2);
+        if !system_prompt.trim().is_empty() {
+            msgs.push(ChatMessage::system(system_prompt.to_string()));
+        }
+        for r in &window.records {
+            let role = match r.role {
+                MemoryRole::User => MessageRole::User,
+                MemoryRole::Assistant => MessageRole::Assistant,
+                MemoryRole::System => MessageRole::System,
+            };
+            msgs.push(ChatMessage {
+                role,
+                content: r.content.clone(),
+            });
+        }
+        msgs.push(ChatMessage {
+            role: MessageRole::User,
+            content: utterance.to_string(),
+        });
+        msgs
+    }
+}
+
+#[cfg(feature = "ollama-provider")]
+impl TurnRouter for RoleTaggedOllamaRouter {
+    fn dispatch(
+        &self,
+        _turn_id: &TurnId,
+        prompt: &str,
+        _decision: &Decision,
+    ) -> Result<RouteOutcome, L1Error> {
+        let window = self
+            .store
+            .recent(&self.session_id)
+            .map_err(|e| L1Error::Router(format!("memory recall failed: {e}")))?;
+        let messages = Self::build_messages(&window, &self.system_prompt, prompt);
+        let response = self
+            .provider
+            .chat_with_messages(&messages)
+            .map_err(|e| L1Error::Router(format!("{e}")))?;
+        Ok(RouteOutcome {
+            tier: self.tier_label.clone(),
+            provider: self.provider_label.clone(),
+            response_text: response,
+        })
+    }
+}
+
 fn summarise_turn_for_memory(result: &TurnResult) -> (MemoryRole, String) {
     if let Some(route) = &result.route {
         return (MemoryRole::Assistant, route.response_text.clone());
@@ -105,4 +211,71 @@ fn summarise_turn_for_memory(result: &TurnResult) -> (MemoryRole, String) {
         None => format!("turn ended in state {:?}", result.final_state),
     };
     (MemoryRole::System, note)
+}
+
+#[cfg(all(test, feature = "ollama-provider"))]
+mod tests {
+    use super::*;
+    use aether_l2_memory::{RecentMemoryWindow, TurnMemoryRecord};
+    use aether_l4_router::MessageRole;
+
+    fn rec(role: MemoryRole, content: &str, seq: u64) -> TurnMemoryRecord {
+        TurnMemoryRecord {
+            session_id: "s".into(),
+            sequence: seq,
+            role,
+            content: content.into(),
+            timestamp_ms: 1_000 + seq,
+        }
+    }
+
+    #[test]
+    fn build_messages_emits_system_then_history_then_current_user() {
+        let window = RecentMemoryWindow {
+            session_id: "s".into(),
+            records: vec![
+                rec(MemoryRole::User, "hello", 1),
+                rec(MemoryRole::Assistant, "hi there", 2),
+            ],
+        };
+        let msgs =
+            RoleTaggedOllamaRouter::build_messages(&window, "You are Aurora.", "how are you");
+        assert_eq!(msgs.len(), 4);
+        assert_eq!(msgs[0].role, MessageRole::System);
+        assert_eq!(msgs[0].content, "You are Aurora.");
+        assert_eq!(msgs[1].role, MessageRole::User);
+        assert_eq!(msgs[1].content, "hello");
+        assert_eq!(msgs[2].role, MessageRole::Assistant);
+        assert_eq!(msgs[2].content, "hi there");
+        assert_eq!(msgs[3].role, MessageRole::User);
+        assert_eq!(msgs[3].content, "how are you");
+    }
+
+    #[test]
+    fn build_messages_skips_system_entry_when_prompt_is_blank() {
+        let window = RecentMemoryWindow {
+            session_id: "s".into(),
+            records: vec![],
+        };
+        let msgs = RoleTaggedOllamaRouter::build_messages(&window, "   ", "hi");
+        assert_eq!(msgs.len(), 1);
+        assert_eq!(msgs[0].role, MessageRole::User);
+        assert_eq!(msgs[0].content, "hi");
+    }
+
+    #[test]
+    fn build_messages_maps_system_role_records_through() {
+        // Block / denial summaries are stored as MemoryRole::System —
+        // ensure those pass through as `system` to the provider rather
+        // than being swallowed.
+        let window = RecentMemoryWindow {
+            session_id: "s".into(),
+            records: vec![rec(MemoryRole::System, "policy denied that request", 1)],
+        };
+        let msgs = RoleTaggedOllamaRouter::build_messages(&window, "", "retry");
+        assert_eq!(msgs.len(), 2);
+        assert_eq!(msgs[0].role, MessageRole::System);
+        assert_eq!(msgs[0].content, "policy denied that request");
+        assert_eq!(msgs[1].role, MessageRole::User);
+    }
 }

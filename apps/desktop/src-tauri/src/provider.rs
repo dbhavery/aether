@@ -33,3 +33,18 @@ pub fn tier_from_rules(preferred: &str) -> RouterTier {
         _ => RouterTier::Reflex,
     }
 }
+
+/// Stable label for a [`RouterTier`]. Used in [`RouteOutcome::tier`]
+/// strings surfaced to the UI. Kept in sync with the reflex-stub adapter.
+#[cfg_attr(not(feature = "ollama-provider"), allow(dead_code))]
+pub fn tier_label(t: RouterTier) -> &'static str {
+    match t {
+        RouterTier::Reflex => "reflex",
+        RouterTier::LocalTiny => "local-tiny",
+        RouterTier::LocalSmall => "local-small",
+        RouterTier::LocalFull => "local-full",
+        RouterTier::RemoteStandard => "remote-standard",
+        RouterTier::RemotePremium => "remote-premium",
+        RouterTier::RemoteDeepResearch => "remote-deep-research",
+    }
+}
