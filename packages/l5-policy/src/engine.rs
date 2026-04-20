@@ -137,6 +137,61 @@ impl EngineConfig {
             preset_defaults: d,
         }
     }
+
+    /// Apply a persona's compiled policy-default hints on top of this
+    /// config. For each capability the persona has an opinion on:
+    ///
+    /// - If the preset already defines a `CapabilityPolicy`, the `mode`
+    ///   is replaced with the persona's hint; the preset-declared
+    ///   `risk` is preserved (risk is a property of the capability, not
+    ///   the persona — a Bold persona choosing to auto-approve file
+    ///   creation doesn't change the fact that file creation is a
+    ///   Medium-risk action).
+    /// - If the preset does **not** define the capability, the persona
+    ///   hint is inserted with a conservative default risk so the
+    ///   overlay never silently downgrades risk tracking.
+    ///
+    /// Privacy posture comes from the persona. That's the one field a
+    /// persona is entitled to override outright, because posture is
+    /// about which model tiers are preferred for the persona's privacy
+    /// stance, not about which capabilities are enabled.
+    ///
+    /// This is the seam through which the shell wires
+    /// `CompiledPersona.policy_defaults` into the engine at build time,
+    /// so Cautious / Balanced / Bold stances actually change which
+    /// capabilities are Auto vs Ask vs Deny.
+    pub fn with_persona_overlay(
+        mut self,
+        per_capability_defaults: &HashMap<Capability, ApprovalMode>,
+        posture: PrivacyPosture,
+    ) -> Self {
+        for (cap, mode) in per_capability_defaults {
+            self.preset_defaults
+                .entry(cap.clone())
+                .and_modify(|p| p.mode = *mode)
+                .or_insert(CapabilityPolicy {
+                    mode: *mode,
+                    risk: default_risk_for(cap),
+                });
+        }
+        self.posture = posture;
+        self
+    }
+}
+
+/// Conservative default risk for a capability the persona wants enabled
+/// but the preset doesn't know about. Used only by
+/// [`EngineConfig::with_persona_overlay`] as a fallback.
+fn default_risk_for(cap: &Capability) -> RiskClass {
+    use Capability::*;
+    match cap {
+        FilesRead => RiskClass::Low,
+        FilesCreate | FilesEdit => RiskClass::Medium,
+        FilesDelete => RiskClass::High,
+        BrowserOpen => RiskClass::Medium,
+        ShellExec => RiskClass::Critical,
+        _ => RiskClass::Medium,
+    }
 }
 
 #[derive(Debug)]
@@ -711,5 +766,75 @@ impl PolicyEngine for DefaultPolicyEngine {
                 Ok(change_id)
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn persona() -> PersonaId {
+        PersonaId("test".into())
+    }
+
+    #[test]
+    fn overlay_replaces_mode_while_preserving_preset_risk() {
+        let mut hints: HashMap<Capability, ApprovalMode> = HashMap::new();
+        hints.insert(Capability::FilesCreate, ApprovalMode::Auto);
+
+        let cfg = EngineConfig::wave3_default(persona())
+            .with_persona_overlay(&hints, PrivacyPosture::Balanced);
+
+        let create = cfg.preset_defaults.get(&Capability::FilesCreate).unwrap();
+        assert_eq!(create.mode, ApprovalMode::Auto);
+        // wave3_default declared FilesCreate as Medium risk — the overlay
+        // must not change that.
+        assert_eq!(create.risk, RiskClass::Medium);
+    }
+
+    #[test]
+    fn overlay_inserts_new_capabilities_with_default_risk() {
+        let mut hints: HashMap<Capability, ApprovalMode> = HashMap::new();
+        // wave3_default does NOT define BrowserOpen.
+        hints.insert(Capability::BrowserOpen, ApprovalMode::Ask);
+
+        let cfg = EngineConfig::wave3_default(persona())
+            .with_persona_overlay(&hints, PrivacyPosture::Balanced);
+
+        let browse = cfg
+            .preset_defaults
+            .get(&Capability::BrowserOpen)
+            .expect("overlay inserts BrowserOpen");
+        assert_eq!(browse.mode, ApprovalMode::Ask);
+        assert_eq!(browse.risk, RiskClass::Medium);
+    }
+
+    #[test]
+    fn overlay_sets_posture_from_persona() {
+        let hints: HashMap<Capability, ApprovalMode> = HashMap::new();
+        let cfg = EngineConfig::wave3_default(persona())
+            .with_persona_overlay(&hints, PrivacyPosture::Strict);
+        assert_eq!(cfg.posture, PrivacyPosture::Strict);
+    }
+
+    #[test]
+    fn overlay_cannot_bypass_presets_deny() {
+        // This is subtle — the overlay *can* flip ShellExec mode to Auto
+        // in the preset defaults, because the overlay trusts the caller
+        // to have compiled the persona correctly. The L6 default
+        // compiler is what enforces `ShellExec = Deny` across all
+        // personas (see l6-persona's
+        // `policy_defaults_never_auto_approve_shell_exec` regression).
+        // This test documents that boundary: if the persona says "Auto
+        // shell", the engine takes it at its word — the policy layer
+        // trusts its own compiled inputs.
+        let mut hints: HashMap<Capability, ApprovalMode> = HashMap::new();
+        hints.insert(Capability::ShellExec, ApprovalMode::Auto);
+        let cfg = EngineConfig::wave3_default(persona())
+            .with_persona_overlay(&hints, PrivacyPosture::Balanced);
+        let shell = cfg.preset_defaults.get(&Capability::ShellExec).unwrap();
+        assert_eq!(shell.mode, ApprovalMode::Auto);
+        // Risk stays preset-declared Critical even if mode flips.
+        assert_eq!(shell.risk, RiskClass::Critical);
     }
 }

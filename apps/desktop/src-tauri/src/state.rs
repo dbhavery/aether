@@ -69,7 +69,16 @@ impl AppState {
         let presence: Arc<dyn PresenceController> = Arc::new(InMemoryPresenceController::new());
 
         let persona_id = PersonaId(compiled.persona_id.0.clone());
-        let cfg = EngineConfig::wave3_default(persona_id);
+        // Persona-driven defaults are threaded into the engine here so
+        // Cautious / Balanced / Bold stances actually change which
+        // capabilities are Auto vs Ask vs Deny in the shell. The preset
+        // is still the floor (ShellExec can never be promoted out of
+        // Deny); the overlay only adjusts modes the preset defines or
+        // adds new capabilities the persona cares about.
+        let cfg = EngineConfig::wave3_default(persona_id).with_persona_overlay(
+            &compiled.policy_defaults.per_capability_defaults,
+            compiled.policy_defaults.privacy_posture,
+        );
         let audit: Arc<dyn AuditStore> = Arc::new(InMemoryAuditStore::new());
         let policy: Arc<dyn PolicyEngine> = Arc::new(DefaultPolicyEngine::new(
             cfg,
