@@ -21,6 +21,7 @@
 pub mod engine;
 pub mod error;
 pub mod events;
+pub mod turn;
 
 pub use engine::{
     InteractionEngine, ModelRouterClient, PresenceClient, ReflexClass, ReflexClassifier, Stt,
@@ -28,3 +29,6 @@ pub use engine::{
 };
 pub use error::L1Error;
 pub use events::{InteractionEvent, InteractionEventKind};
+pub use turn::{
+    BlockReason, EchoStubRouter, RouteOutcome, TurnEngine, TurnRequest, TurnResult, TurnRouter,
+};

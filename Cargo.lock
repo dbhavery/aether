@@ -19,6 +19,7 @@ version = "0.0.1"
 dependencies = [
  "aether-l5-policy",
  "serde",
+ "tempfile",
  "thiserror",
  "tracing",
 ]
