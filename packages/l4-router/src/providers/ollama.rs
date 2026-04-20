@@ -162,13 +162,64 @@ pub fn build_chat_payload(model: &str, prompt: &str) -> serde_json::Value {
 /// Parse the JSON body returned by `/api/chat` (non-streaming) into the
 /// assistant content string. Exposed for unit tests.
 pub fn parse_chat_response(json: &serde_json::Value) -> Result<String, L4Error> {
-    let resp: ChatResponse = serde_json::from_value(json.clone())
-        .map_err(|e| L4Error::Provider(format!("ollama: invalid response: {e}")))?;
+    let resp: ChatResponse =
+        serde_json::from_value(json.clone()).map_err(|e| L4Error::ProviderBadResponse {
+            detail: format!("ollama: invalid response: {e}"),
+        })?;
     if !resp.done {
         // Non-fatal — some daemon versions omit `done` on terminal chunk.
         // We still take the content we got.
     }
     Ok(resp.message.content)
+}
+
+/// Classify a `ureq::Error` into the right typed `L4Error` variant so the
+/// UI can show actionable language ("Ollama isn't running — start it with
+/// `ollama serve`", "That model isn't installed", etc.) instead of a raw
+/// transport string.
+///
+/// `model` is the model id the caller asked for — used only when the
+/// classification lands on `ProviderModelNotFound`.
+fn classify_ureq_error(err: ureq::Error, model: &str) -> L4Error {
+    match err {
+        ureq::Error::Status(status, resp) => {
+            let body = resp.into_string().unwrap_or_default();
+            let body_lc = body.to_ascii_lowercase();
+            // Ollama's /api/chat returns 404 with a body like
+            // `{"error":"model 'foo' not found, try pulling it first"}`.
+            // Detect that shape rather than relying on the raw status.
+            if status == 404 && (body_lc.contains("model") || body_lc.contains("not found")) {
+                L4Error::ProviderModelNotFound {
+                    model: model.to_string(),
+                    detail: body,
+                }
+            } else {
+                L4Error::ProviderUnknown {
+                    detail: format!("HTTP {status}: {body}"),
+                }
+            }
+        }
+        ureq::Error::Transport(t) => {
+            use ureq::ErrorKind;
+            let msg = t.to_string();
+            match t.kind() {
+                ErrorKind::ConnectionFailed => L4Error::ProviderNotRunning { detail: msg },
+                ErrorKind::Dns => L4Error::ProviderNotRunning { detail: msg },
+                ErrorKind::Io => {
+                    // ureq wraps timeouts under Io; the inner io::Error
+                    // message is the only signal we have without
+                    // reaching into nightly `.source()` typing.
+                    let lc = msg.to_ascii_lowercase();
+                    if lc.contains("timed out") || lc.contains("timeout") {
+                        L4Error::ProviderTimeout { detail: msg }
+                    } else {
+                        L4Error::ProviderUnknown { detail: msg }
+                    }
+                }
+                _ => L4Error::ProviderUnknown { detail: msg },
+            }
+        }
+    }
 }
 
 /// Blocking Ollama provider.
@@ -198,14 +249,15 @@ impl OllamaProvider {
         &self.config.base_url
     }
 
-    /// Probe `/api/tags`. Returns `Ok(())` on HTTP 200 reachable, a typed
-    /// `L4Error::Provider` otherwise. Cheap and network-light.
+    /// Probe `/api/tags`. Returns `Ok(())` on HTTP 200 reachable; transport
+    /// errors are classified into typed `L4Error` variants so the UI can
+    /// tell "not running" from "timed out" from "unknown failure".
     pub fn healthcheck(&self) -> Result<(), L4Error> {
         let url = format!("{}/api/tags", self.config.base_url.trim_end_matches('/'));
         self.agent
             .get(&url)
             .call()
-            .map_err(|e| L4Error::Provider(format!("ollama healthcheck: {e}")))?;
+            .map_err(|e| classify_ureq_error(e, &self.config.model))?;
         Ok(())
     }
 
@@ -218,10 +270,11 @@ impl OllamaProvider {
             .post(&url)
             .set("content-type", "application/json")
             .send_json(payload)
-            .map_err(|e| L4Error::Provider(format!("ollama chat: {e}")))?;
-        let json: serde_json::Value = resp
-            .into_json()
-            .map_err(|e| L4Error::Provider(format!("ollama body: {e}")))?;
+            .map_err(|e| classify_ureq_error(e, &self.config.model))?;
+        let json: serde_json::Value =
+            resp.into_json().map_err(|e| L4Error::ProviderBadResponse {
+                detail: format!("ollama body: {e}"),
+            })?;
         parse_chat_response(&json)
     }
 }
@@ -557,12 +610,156 @@ mod tests {
             .expect_err("malformed body should fail");
         let _ = handle.join();
         match err {
-            L4Error::Provider(msg) => assert!(
-                msg.contains("invalid response") || msg.contains("missing field"),
-                "unexpected error message: {msg}"
+            L4Error::ProviderBadResponse { detail } => assert!(
+                detail.contains("invalid response") || detail.contains("missing field"),
+                "unexpected error detail: {detail}"
             ),
-            other => panic!("expected Provider error, got {other:?}"),
+            other => panic!("expected ProviderBadResponse, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn chat_classifies_connection_refused_as_not_running() {
+        // Bind, capture the addr, then drop the listener so the port is
+        // vacant. The provider will see connection-refused (Windows:
+        // WSAECONNREFUSED, Linux: ECONNREFUSED).
+        let port = {
+            let l = TcpListener::bind("127.0.0.1:0").expect("bind for port grab");
+            l.local_addr().expect("addr").port()
+        };
+        let base_url = format!("http://127.0.0.1:{}", port);
+
+        let provider = OllamaProvider::new(OllamaConfig {
+            base_url,
+            model: "llama3".into(),
+            timeout_ms: 2_000,
+        });
+        let err = provider
+            .chat("ping")
+            .expect_err("connection should be refused");
+        match err {
+            L4Error::ProviderNotRunning { .. } => {}
+            other => panic!("expected ProviderNotRunning, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn chat_classifies_404_model_not_found() {
+        let response = r#"{"error":"model 'llama9' not found, try pulling it first"}"#.to_string();
+        let (base_url, handle) = spawn_mock_ollama_with_status(404, "application/json", response);
+
+        let provider = OllamaProvider::new(OllamaConfig {
+            base_url,
+            model: "llama9".into(),
+            timeout_ms: 2_000,
+        });
+        let err = provider.chat("ping").expect_err("404 should fail");
+        let _ = handle.join();
+        match err {
+            L4Error::ProviderModelNotFound { model, detail } => {
+                assert_eq!(model, "llama9");
+                assert!(detail.contains("not found"));
+            }
+            other => panic!("expected ProviderModelNotFound, got {other:?}"),
+        }
+    }
+
+    /// Variant of `spawn_mock_ollama` that lets the caller pick the status
+    /// line and content type. Still single-shot.
+    fn spawn_mock_ollama_with_status(
+        status: u16,
+        content_type: &str,
+        response_body: String,
+    ) -> (String, thread::JoinHandle<CapturedRequest>) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind 127.0.0.1:0 for mock ollama");
+        let addr = listener.local_addr().expect("listener local_addr");
+        let base_url = format!("http://{}", addr);
+        let content_type = content_type.to_string();
+
+        let handle = thread::spawn(move || {
+            let (mut stream, _peer) = listener.accept().expect("mock accept");
+            stream
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .expect("read timeout");
+            stream
+                .set_write_timeout(Some(Duration::from_secs(2)))
+                .expect("write timeout");
+
+            let mut buf = Vec::with_capacity(1024);
+            let mut tmp = [0u8; 512];
+            let header_end: usize;
+            loop {
+                let n = stream.read(&mut tmp).expect("mock read");
+                if n == 0 {
+                    panic!("mock peer closed before headers complete");
+                }
+                buf.extend_from_slice(&tmp[..n]);
+                if let Some(idx) = find_subslice(&buf, b"\r\n\r\n") {
+                    header_end = idx + 4;
+                    break;
+                }
+            }
+            let header_bytes = &buf[..header_end - 4];
+            let header_text = std::str::from_utf8(header_bytes).expect("mock headers utf8");
+            let mut lines = header_text.split("\r\n");
+            let request_line = lines.next().unwrap_or("");
+            let mut parts = request_line.splitn(3, ' ');
+            let method = parts.next().unwrap_or("").to_string();
+            let path = parts.next().unwrap_or("").to_string();
+
+            let mut headers: Vec<(String, String)> = Vec::new();
+            let mut content_length: usize = 0;
+            for line in lines {
+                if let Some((k, v)) = line.split_once(':') {
+                    let k = k.trim().to_string();
+                    let v = v.trim().to_string();
+                    if k.eq_ignore_ascii_case("content-length") {
+                        content_length = v.parse::<usize>().unwrap_or(0);
+                    }
+                    headers.push((k, v));
+                }
+            }
+
+            let mut body = buf[header_end..].to_vec();
+            while body.len() < content_length {
+                let n = stream.read(&mut tmp).expect("mock body read");
+                if n == 0 {
+                    break;
+                }
+                body.extend_from_slice(&tmp[..n]);
+            }
+            body.truncate(content_length);
+            let body_str = String::from_utf8(body).expect("mock body utf8");
+
+            let reason = match status {
+                200 => "OK",
+                404 => "Not Found",
+                500 => "Internal Server Error",
+                _ => "Status",
+            };
+            let response = format!(
+                "HTTP/1.1 {status} {reason}\r\n\
+                 Content-Type: {content_type}\r\n\
+                 Content-Length: {}\r\n\
+                 Connection: close\r\n\
+                 \r\n{}",
+                response_body.len(),
+                response_body
+            );
+            stream
+                .write_all(response.as_bytes())
+                .expect("mock write response");
+            stream.flush().ok();
+
+            CapturedRequest {
+                method,
+                path,
+                headers,
+                body: body_str,
+            }
+        });
+
+        (base_url, handle)
     }
 
     #[test]
