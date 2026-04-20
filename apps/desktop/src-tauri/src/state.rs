@@ -233,9 +233,10 @@ fn build_active(
     })
 }
 
-/// Hard-coded persona catalog. Two voices to start: Aurora (warm /
-/// balanced) and Sable (neutral / bold). A cautious option is a good
-/// next add.
+/// Hard-coded persona catalog. Three voices to start: Aurora (warm /
+/// balanced), Sable (neutral / bold), and Ember (formal / cautious).
+/// Real persona packs will load from `personas/*.yaml` later (per
+/// planning/17_persona_pack_schema.md).
 fn default_catalog() -> Vec<PersonaProfile> {
     use aether_l6_persona::{Humor, Stance, Tone, Verbosity};
 
@@ -257,7 +258,16 @@ fn default_catalog() -> Vec<PersonaProfile> {
     sable.stance = Stance::Bold;
     sable.humor = Humor::Dry;
 
-    vec![aurora, sable]
+    let mut ember = PersonaProfile::simple("ember", "Ember");
+    ember.description = String::from(
+        "Careful and deliberate. Asks before acting, prefers the safer path, declines risky tools.",
+    );
+    ember.tone = Tone::Formal;
+    ember.verbosity = Verbosity::Balanced;
+    ember.stance = Stance::Cautious;
+    ember.humor = Humor::Dry;
+
+    vec![aurora, sable, ember]
 }
 
 fn build_router_stack(
@@ -302,4 +312,25 @@ fn build_router_stack(
         ProviderMode::ReflexStub,
         "Reflex stub (no model)".to_string(),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use aether_l6_persona::Stance;
+
+    #[test]
+    fn default_catalog_contains_expected_persona_ids() {
+        let cat = default_catalog();
+        let ids: Vec<&str> = cat.iter().map(|p| p.persona_id.0.as_str()).collect();
+        assert_eq!(ids, vec!["aurora", "sable", "ember"]);
+    }
+
+    #[test]
+    fn ember_is_the_cautious_persona() {
+        let cat = default_catalog();
+        let ember = cat.iter().find(|p| p.persona_id.0 == "ember").unwrap();
+        assert_eq!(ember.stance, Stance::Cautious);
+        assert_eq!(ember.name, "Ember");
+    }
 }

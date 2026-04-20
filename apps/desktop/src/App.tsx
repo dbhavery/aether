@@ -29,6 +29,26 @@ import { PresetPicker } from "./components/PresetPicker";
 import { Transcript } from "./components/Transcript";
 import { TrustDrawer } from "./components/TrustDrawer";
 
+const PERSONA_STORAGE_KEY = "aether.persona.last";
+
+function readStoredPersonaId(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(PERSONA_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredPersonaId(id: string) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(PERSONA_STORAGE_KEY, id);
+  } catch {
+    // non-fatal
+  }
+}
+
 export function App() {
   const [banner, setBanner] = useState<CompanionBanner | null>(null);
   const [bootError, setBootError] = useState<string | null>(null);
@@ -57,7 +77,31 @@ export function App() {
     let unlisten: (() => void) | null = null;
     (async () => {
       try {
-        const b = await companionBanner();
+        let b = await companionBanner();
+        if (!alive) return;
+        // Restore the last-picked persona. AETHER_PERSONA env var takes
+        // precedence on the backend (handled by state.rs::pick_default
+        // at process start); this branch only runs if the user explicitly
+        // chose something on a prior launch and we've booted into a
+        // different default.
+        const storedPersona = readStoredPersonaId();
+        if (
+          storedPersona &&
+          storedPersona !== b.persona_id &&
+          // Only restore if the persona still exists in the current
+          // catalog — avoids "unknown persona" errors after a catalog
+          // edit or downgrade.
+          true
+        ) {
+          try {
+            const cat = await listPersonas();
+            if (cat.some((p) => p.id === storedPersona)) {
+              b = await apiSwitchPersona(storedPersona);
+            }
+          } catch {
+            // Non-fatal — fall through with the default banner.
+          }
+        }
         if (!alive) return;
         setBanner(b);
         const p = await presenceCurrent();
@@ -190,6 +234,7 @@ export function App() {
       try {
         const b = await apiSwitchPersona(id);
         setBanner(b);
+        writeStoredPersonaId(id);
         setMessages([]);
         setPendingApproval(null);
         setSessionNonce((n) => n + 1);
