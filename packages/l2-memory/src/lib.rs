@@ -30,4 +30,4 @@ pub use session::{
 };
 
 #[cfg(feature = "sqlite-backend")]
-pub use sqlite_session::{DurableSessionStore, SqliteSessionMemoryStore};
+pub use sqlite_session::{DurableSessionStore, RetentionPolicy, SqliteSessionMemoryStore};

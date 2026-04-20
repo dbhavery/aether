@@ -18,7 +18,7 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use aether_l1_interaction::{TurnEngine, TurnRequest, TurnResult, TurnRouter};
 #[cfg(feature = "sqlite-backend")]
-use aether_l2_memory::DurableSessionStore;
+use aether_l2_memory::{DurableSessionStore, SqliteSessionMemoryStore};
 use aether_l2_memory::{InMemorySessionMemoryStore, SessionMemoryStore};
 use aether_l3_presence::{InMemoryPresenceController, PresenceController};
 use aether_l5_policy::{
@@ -83,6 +83,12 @@ pub struct AppState {
     /// baseline Assistant behaviour is used — equivalent to the user
     /// having never picked, or explicitly deferring.
     preset: RwLock<Option<AutonomyPreset>>,
+    /// Concrete typed handle to the SQLite-backed memory store, when
+    /// the shell booted with the durable backend. Used for retention
+    /// maintenance (explicit "Forget older than N days" surface)
+    /// without downcasting the trait-object `memory`.
+    #[cfg(feature = "sqlite-backend")]
+    durable_store: Option<Arc<SqliteSessionMemoryStore>>,
 }
 
 /// Which backend is behind `AppState::memory`. Used for diagnostics and
@@ -136,12 +142,15 @@ impl AppState {
         match DurableSessionStore::open(path_ref) {
             Ok(durable) => {
                 tracing::info!("durable session memory opened at {}", path_ref.display());
-                Self::build(
+                let concrete = durable.concrete();
+                let mut state = Self::build(
                     durable.store.clone(),
                     MemoryBackend::Durable {
                         path: path_ref.to_path_buf(),
                     },
-                )
+                )?;
+                state.durable_store = concrete;
+                Ok(state)
             }
             Err(e) => {
                 tracing::warn!(
@@ -151,6 +160,14 @@ impl AppState {
                 Self::new()
             }
         }
+    }
+
+    /// Concrete durable-store handle for retention maintenance. `None`
+    /// when the shell booted against the in-memory backend (tests or
+    /// sandboxes that lack a writable data dir).
+    #[cfg(feature = "sqlite-backend")]
+    pub fn durable_store(&self) -> Option<Arc<SqliteSessionMemoryStore>> {
+        self.durable_store.clone()
     }
 
     fn build(memory: Arc<dyn SessionMemoryStore>, backend: MemoryBackend) -> Result<Self, String> {
@@ -167,6 +184,8 @@ impl AppState {
             pending: Mutex::new(HashMap::new()),
             memory_backend: backend,
             preset: RwLock::new(None),
+            #[cfg(feature = "sqlite-backend")]
+            durable_store: None,
         })
     }
 
@@ -636,6 +655,42 @@ mod tests {
             state2.memory_backend(),
             MemoryBackend::Durable { .. }
         ));
+    }
+
+    /// Booting against a real DB file populates the `durable_store`
+    /// handle, and `prune_older_than` on that handle removes exactly
+    /// the rows whose timestamps fall below the cutoff.
+    #[cfg(feature = "sqlite-backend")]
+    #[test]
+    fn durable_store_prune_older_than_removes_only_old_rows() {
+        use aether_l2_memory::{MemoryRole, TurnMemoryRecord};
+        use tempfile::TempDir;
+
+        let tmp = TempDir::new().unwrap();
+        let state = AppState::new_with_db_path(tmp.path().join("aether.db")).unwrap();
+        let store = state.durable_store().expect("durable_store available");
+
+        // Seed four rows with controlled timestamps.
+        for (content, ts) in [("old-1", 1_000), ("old-2", 2_000), ("new-1", 9_000), ("new-2", 10_000)] {
+            state
+                .memory
+                .append(TurnMemoryRecord {
+                    session_id: SESSION_ID.to_string(),
+                    sequence: 0,
+                    role: MemoryRole::User,
+                    content: content.into(),
+                    timestamp_ms: ts,
+                })
+                .unwrap();
+        }
+
+        // Cutoff = 5_000 → removes the two `old-*` rows.
+        let removed = store.prune_older_than(SESSION_ID, 5_000).unwrap();
+        assert_eq!(removed, 2);
+
+        let w = state.memory.recent(SESSION_ID).unwrap();
+        let texts: Vec<&str> = w.records.iter().map(|r| r.content.as_str()).collect();
+        assert_eq!(texts, vec!["new-1", "new-2"]);
     }
 
     /// Applying the Observer preset must force write capabilities to

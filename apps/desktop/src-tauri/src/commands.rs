@@ -198,6 +198,57 @@ pub fn current_autonomy_preset(state: State<'_, AppState>) -> Option<String> {
     state.current_preset().map(|p| p.wire_name().to_string())
 }
 
+/// Report of a retention-style "forget older than N days" run.
+#[derive(Debug, Clone, Serialize)]
+pub struct ForgetOlderReport {
+    /// Rows actually removed from the conversation log.
+    pub removed: u64,
+    /// `true` if the command ran against a durable backend, `false`
+    /// if the shell is currently on the in-memory store (no-op).
+    pub applied: bool,
+}
+
+/// Explicit "forget everything older than `days` days" action for the
+/// durable session memory store. Computes the wall-clock cutoff on the
+/// backend so the UI cannot race the clock. Operates on the current
+/// session only — cross-session forgetting would require a separate
+/// "clear all history" path with a stronger confirmation.
+///
+/// Returns a structured report so the UI can show "Removed N entries"
+/// affirmation. When the shell is running on the in-memory backend
+/// (e.g. in a sandbox without a writable data dir), the command is a
+/// no-op and `applied` is `false`.
+#[tauri::command]
+pub fn forget_older_than_days(
+    days: u32,
+    state: State<'_, AppState>,
+) -> Result<ForgetOlderReport, String> {
+    if days == 0 {
+        return Err("days must be >= 1".into());
+    }
+    #[cfg(feature = "sqlite-backend")]
+    {
+        if let Some(store) = state.durable_store() {
+            let now_ms = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as u64)
+                .unwrap_or(0);
+            let cutoff = now_ms.saturating_sub((days as u64) * 86_400 * 1_000);
+            let removed = store
+                .prune_older_than(SESSION_ID, cutoff)
+                .map_err(|e| format!("prune: {e}"))?;
+            return Ok(ForgetOlderReport {
+                removed: removed as u64,
+                applied: true,
+            });
+        }
+    }
+    Ok(ForgetOlderReport {
+        removed: 0,
+        applied: false,
+    })
+}
+
 fn detail_label(rate: f32) -> String {
     if rate > 1.02 {
         "terse"

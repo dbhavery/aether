@@ -7,7 +7,8 @@
 #![cfg(feature = "sqlite-backend")]
 
 use aether_l2_memory::{
-    DurableSessionStore, MemoryRole, RecentMemoryConfig, SessionMemoryStore, TurnMemoryRecord,
+    DurableSessionStore, MemoryRole, RecentMemoryConfig, RetentionPolicy, SessionMemoryStore,
+    TurnMemoryRecord,
 };
 use tempfile::TempDir;
 
@@ -154,4 +155,228 @@ fn unknown_session_returns_empty_window_not_error() {
     let w = db.store.recent("never-used").unwrap();
     assert!(w.is_empty());
     assert_eq!(w.session_id, "never-used");
+}
+
+// --- P4: retention policy ---
+
+#[test]
+fn row_cap_retention_evicts_oldest_on_write() {
+    let tmp = TempDir::new().unwrap();
+    let retention = RetentionPolicy {
+        max_rows_per_session: Some(3),
+        max_age_ms: None,
+    };
+    let db = DurableSessionStore::open_with_retention(
+        tmp.path().join("aether.db"),
+        RecentMemoryConfig::default_narrow(),
+        retention,
+    )
+    .expect("open with retention");
+    let store = db.store.clone();
+
+    for i in 0..7 {
+        store
+            .append(rec(
+                "s1",
+                MemoryRole::User,
+                &format!("msg-{i}"),
+                (i + 1) as u64,
+            ))
+            .unwrap();
+    }
+
+    // On-disk count bounded to retention cap.
+    let conn = db.conn.lock().unwrap();
+    let on_disk: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM conversation_log WHERE session_id = 's1'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(on_disk, 3, "retention must cap rows on disk");
+
+    // The surviving rows must be the three newest (highest sequences).
+    let sequences: Vec<i64> = conn
+        .prepare(
+            "SELECT sequence FROM conversation_log WHERE session_id = 's1' \
+             ORDER BY sequence ASC",
+        )
+        .unwrap()
+        .query_map([], |r| r.get::<_, i64>(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(sequences, vec![5, 6, 7]);
+}
+
+#[test]
+fn row_cap_retention_is_per_session_not_global() {
+    let tmp = TempDir::new().unwrap();
+    let retention = RetentionPolicy {
+        max_rows_per_session: Some(2),
+        max_age_ms: None,
+    };
+    let db = DurableSessionStore::open_with_retention(
+        tmp.path().join("aether.db"),
+        RecentMemoryConfig::default_narrow(),
+        retention,
+    )
+    .unwrap();
+    let store = db.store.clone();
+
+    for i in 0..4 {
+        store
+            .append(rec("a", MemoryRole::User, &format!("a{i}"), i as u64 + 1))
+            .unwrap();
+    }
+    for i in 0..4 {
+        store
+            .append(rec("b", MemoryRole::User, &format!("b{i}"), i as u64 + 100))
+            .unwrap();
+    }
+
+    // Each session capped independently.
+    let conn = db.conn.lock().unwrap();
+    let a_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM conversation_log WHERE session_id = 'a'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    let b_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM conversation_log WHERE session_id = 'b'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(a_count, 2);
+    assert_eq!(b_count, 2);
+}
+
+#[test]
+fn age_based_prune_session_drops_only_old_rows() {
+    let tmp = TempDir::new().unwrap();
+    let retention = RetentionPolicy {
+        max_rows_per_session: None,
+        max_age_ms: Some(1_000),
+    };
+    let db = DurableSessionStore::open_with_retention(
+        tmp.path().join("aether.db"),
+        RecentMemoryConfig {
+            max_turns: 100,
+            max_chars: 10_000,
+        },
+        retention,
+    )
+    .unwrap();
+    let store = db.store.clone();
+    let concrete = db.concrete().expect("concrete store available");
+
+    // Four rows. "old" rows have ts 0, 100 — well below the cutoff.
+    // "new" rows have ts 10_000, 20_000 — above the cutoff so they
+    // must survive. max_age_ms = 1_000, now = 10_500 → cutoff = 9_500.
+    store
+        .append(rec("s1", MemoryRole::User, "old-a", 0))
+        .unwrap();
+    store
+        .append(rec("s1", MemoryRole::User, "old-b", 100))
+        .unwrap();
+    store
+        .append(rec("s1", MemoryRole::User, "new-a", 10_000))
+        .unwrap();
+    store
+        .append(rec("s1", MemoryRole::User, "new-b", 20_000))
+        .unwrap();
+
+    let removed = concrete.prune_session("s1", 10_500).unwrap();
+    assert_eq!(removed, 2, "prune should remove both old rows");
+
+    let w = store.recent("s1").unwrap();
+    assert_eq!(w.records.len(), 2);
+    assert_eq!(w.records[0].content, "new-a");
+    assert_eq!(w.records[1].content, "new-b");
+}
+
+#[test]
+fn age_based_prune_all_applies_across_sessions() {
+    let tmp = TempDir::new().unwrap();
+    let retention = RetentionPolicy {
+        max_rows_per_session: None,
+        max_age_ms: Some(1_000),
+    };
+    let db = DurableSessionStore::open_with_retention(
+        tmp.path().join("aether.db"),
+        RecentMemoryConfig::default_narrow(),
+        retention,
+    )
+    .unwrap();
+    let store = db.store.clone();
+    let concrete = db.concrete().unwrap();
+
+    // now = 20_500, max_age_ms = 1_000 → cutoff = 19_500.
+    // "old" rows at 0 / 500 are below cutoff, "new" rows at 20_000 /
+    // 20_100 are above.
+    store
+        .append(rec("a", MemoryRole::User, "a-old", 0))
+        .unwrap();
+    store
+        .append(rec("a", MemoryRole::User, "a-new", 20_000))
+        .unwrap();
+    store
+        .append(rec("b", MemoryRole::User, "b-old", 500))
+        .unwrap();
+    store
+        .append(rec("b", MemoryRole::User, "b-new", 20_100))
+        .unwrap();
+
+    let removed = concrete.prune_all(20_500).unwrap();
+    assert_eq!(removed, 2, "two old rows across two sessions");
+    assert_eq!(store.recent("a").unwrap().records.len(), 1);
+    assert_eq!(store.recent("b").unwrap().records.len(), 1);
+}
+
+#[test]
+fn prune_is_noop_when_age_dial_unset() {
+    let tmp = TempDir::new().unwrap();
+    let db = DurableSessionStore::open_with_retention(
+        tmp.path().join("aether.db"),
+        RecentMemoryConfig::default_narrow(),
+        RetentionPolicy::default_bounded(), // max_age_ms = None
+    )
+    .unwrap();
+    let concrete = db.concrete().unwrap();
+    db.store
+        .append(rec("s1", MemoryRole::User, "x", 1))
+        .unwrap();
+    assert_eq!(concrete.prune_session("s1", 10_000_000).unwrap(), 0);
+    assert_eq!(concrete.prune_all(10_000_000).unwrap(), 0);
+    assert_eq!(db.store.recent("s1").unwrap().records.len(), 1);
+}
+
+#[test]
+fn unbounded_retention_leaves_all_rows_on_disk() {
+    let tmp = TempDir::new().unwrap();
+    let db = DurableSessionStore::open_with_retention(
+        tmp.path().join("aether.db"),
+        RecentMemoryConfig::default_narrow(),
+        RetentionPolicy::unbounded(),
+    )
+    .unwrap();
+    for i in 0..20 {
+        db.store
+            .append(rec("s1", MemoryRole::User, &format!("m{i}"), i as u64))
+            .unwrap();
+    }
+    let conn = db.conn.lock().unwrap();
+    let n: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM conversation_log WHERE session_id = 's1'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(n, 20);
 }
