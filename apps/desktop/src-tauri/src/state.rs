@@ -317,7 +317,12 @@ fn build_router_stack(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use aether_l1_interaction::TurnState;
+    use aether_l5_policy::{
+        Capability, Decision, MonotonicTimestamp, PersonaId, ResourceScope, SessionId,
+    };
     use aether_l6_persona::Stance;
+    use aether_l7_trust::{build_approval_response, ApprovalResolution};
 
     #[test]
     fn default_catalog_contains_expected_persona_ids() {
@@ -332,5 +337,142 @@ mod tests {
         let ember = cat.iter().find(|p| p.persona_id.0 == "ember").unwrap();
         assert_eq!(ember.stance, Stance::Cautious);
         assert_eq!(ember.name, "Ember");
+    }
+
+    /// End-to-end cycle covering the same path `submit_turn` →
+    /// `resolve_approval` drives in commands.rs:
+    ///
+    ///   1. build a TurnRequest for an Ask-tier capability (FilesEdit),
+    ///   2. handle_turn → Ask decision → record PendingTurn,
+    ///   3. respond_approval(Approve) on L5,
+    ///   4. replay the stored request → Allow → route populated.
+    ///
+    /// The Tauri command wrappers around this logic are thin; the
+    /// substance is this engine cycle.
+    #[test]
+    fn ask_approve_cycle_reaches_router_on_replay() {
+        let state = AppState::new().expect("AppState::new");
+        let req = TurnRequest {
+            session_id: SessionId(SESSION_ID.into()),
+            persona: PersonaId("aurora".into()),
+            task_id: None,
+            utterance: "edit /tmp/x".into(),
+            capability: Capability::FilesEdit,
+            resource: ResourceScope::Path("/tmp/x".into()),
+            emitted_at: MonotonicTimestamp(state.next_ts()),
+        };
+
+        // Step 1 — first handle_turn: should Ask.
+        let ask_result = {
+            let a = state.active.read().unwrap();
+            a.engine.handle_turn(req.clone()).unwrap()
+        };
+        assert_eq!(ask_result.final_state, TurnState::AwaitingPolicyApproval);
+        let ticket = match &ask_result.policy_decision {
+            Decision::Ask { ticket, .. } => ticket.clone(),
+            other => panic!("expected Ask, got {other:?}"),
+        };
+        state.record_pending(
+            ticket.ticket_id.0.clone(),
+            PendingTurn {
+                request: req.clone(),
+                ask_result: ask_result.clone(),
+            },
+        );
+
+        // Step 2 — user approves. Respond via L7 helper so we build the
+        // same ApprovalResponse shape commands.rs builds.
+        let response = build_approval_response(
+            &ticket,
+            ApprovalResolution::Approve,
+            MonotonicTimestamp(state.next_ts()),
+        );
+        {
+            let a = state.active.read().unwrap();
+            a.policy.respond_approval(response).unwrap();
+        }
+
+        // Step 3 — pending retrieval should consume the entry.
+        let pending = state
+            .take_pending(&ticket.ticket_id.0)
+            .expect("pending ticket");
+        assert!(state.take_pending(&ticket.ticket_id.0).is_none());
+
+        // Step 4 — replay. Should now Allow and carry a RouteOutcome.
+        let final_result = {
+            let a = state.active.read().unwrap();
+            a.engine.handle_turn(pending.request).unwrap()
+        };
+        assert_eq!(final_result.final_state, TurnState::Completed);
+        assert!(matches!(
+            final_result.policy_decision,
+            Decision::Allow { .. }
+        ));
+        let route = final_result.route.expect("route after approval");
+        assert!(!route.response_text.is_empty());
+        assert!(
+            route.latency_ms.is_some(),
+            "TurnEngine::handle_turn should stamp latency on replay too",
+        );
+    }
+
+    /// Complementary path: a rejection should leave the engine able to
+    /// safely continue accepting new turns (no lingering pending state).
+    #[test]
+    fn ask_reject_clears_pending_and_engine_remains_usable() {
+        let state = AppState::new().expect("AppState::new");
+        let req = TurnRequest {
+            session_id: SessionId(SESSION_ID.into()),
+            persona: PersonaId("aurora".into()),
+            task_id: None,
+            utterance: "edit /tmp/y".into(),
+            capability: Capability::FilesEdit,
+            resource: ResourceScope::Path("/tmp/y".into()),
+            emitted_at: MonotonicTimestamp(state.next_ts()),
+        };
+        let ask = {
+            let a = state.active.read().unwrap();
+            a.engine.handle_turn(req.clone()).unwrap()
+        };
+        let ticket = match &ask.policy_decision {
+            Decision::Ask { ticket, .. } => ticket.clone(),
+            other => panic!("expected Ask, got {other:?}"),
+        };
+        state.record_pending(
+            ticket.ticket_id.0.clone(),
+            PendingTurn {
+                request: req,
+                ask_result: ask,
+            },
+        );
+
+        // Reject via the same helper flow commands.rs uses.
+        let response = build_approval_response(
+            &ticket,
+            ApprovalResolution::Reject,
+            MonotonicTimestamp(state.next_ts()),
+        );
+        {
+            let a = state.active.read().unwrap();
+            a.policy.respond_approval(response).unwrap();
+        }
+        assert!(state.take_pending(&ticket.ticket_id.0).is_some());
+        assert!(state.take_pending(&ticket.ticket_id.0).is_none());
+
+        // Engine should still service a fresh Allow-tier turn afterwards.
+        let follow_up = TurnRequest {
+            session_id: SessionId(SESSION_ID.into()),
+            persona: PersonaId("aurora".into()),
+            task_id: None,
+            utterance: "read /tmp/z".into(),
+            capability: Capability::FilesRead,
+            resource: ResourceScope::Path("/tmp/z".into()),
+            emitted_at: MonotonicTimestamp(state.next_ts()),
+        };
+        let follow = {
+            let a = state.active.read().unwrap();
+            a.engine.handle_turn(follow_up).unwrap()
+        };
+        assert_eq!(follow.final_state, TurnState::Completed);
     }
 }
