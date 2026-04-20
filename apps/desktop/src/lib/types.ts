@@ -95,3 +95,38 @@ export interface PersonaCatalogEntry {
   stance: string;
   tone: string;
 }
+
+// --- Media permissions (P1) -----------------------------------------------
+
+/** Tri-state per-device permission. Mirrors the Rust enum's wire format. */
+export type MediaPermissionState = "allow" | "ask" | "deny";
+
+/** Which device a permission targets. */
+export type MediaKind = "camera" | "screen";
+
+/**
+ * Local-only permission posture for camera + screen capture. This is
+ * the single point of truth the Settings UI renders and the future
+ * capture/inference paths consult before touching the device.
+ */
+export interface MediaPermissions {
+  camera: MediaPermissionState;
+  screen: MediaPermissionState;
+}
+
+// --- Single-frame analysis (P3) -------------------------------------------
+
+/** Outcome kinds the `analyze_frame` command can return. */
+export type FrameAnalysisKind =
+  | "frame_analyzed"
+  | "frame_blocked"
+  | "permission_denied"
+  | "permission_ask";
+
+/** Result envelope from `analyze_frame`. Mirrors the Rust struct. */
+export interface FrameAnalysisOutcome {
+  turn_id: string;
+  kind: FrameAnalysisKind;
+  message: TranscriptMessage | null;
+  error_note: string | null;
+}

@@ -22,12 +22,14 @@ import type {
 } from "./lib/types";
 
 import { ApprovalModal } from "./components/ApprovalModal";
+import { CameraPanel } from "./components/CameraPanel";
 import { Disclosure } from "./components/Disclosure";
 import { Header } from "./components/Header";
 import { InputBar } from "./components/InputBar";
 import { MemoryDrawer } from "./components/MemoryDrawer";
 import { PersonaCard } from "./components/PersonaCard";
 import { PresetPicker, readStoredPreset } from "./components/PresetPicker";
+import { SettingsDrawer } from "./components/SettingsDrawer";
 import { Transcript } from "./components/Transcript";
 import { TrustDrawer } from "./components/TrustDrawer";
 
@@ -63,7 +65,9 @@ export function App() {
   const [pendingApproval, setPendingApproval] =
     useState<ApprovalPayload | null>(null);
   const [busy, setBusy] = useState(false);
-  const [drawer, setDrawer] = useState<"none" | "memory" | "trust">("none");
+  const [drawer, setDrawer] = useState<
+    "none" | "memory" | "trust" | "settings" | "camera"
+  >("none");
   const [memoryRefreshKey, setMemoryRefreshKey] = useState(0);
   const [forceDisclosure, setForceDisclosure] = useState(false);
   // Bumps whenever the Disclosure modal closes so the PresetPicker can
@@ -336,6 +340,8 @@ export function App() {
         personas={personas}
         onOpenMemory={() => setDrawer("memory")}
         onOpenTrust={() => setDrawer("trust")}
+        onOpenSettings={() => setDrawer("settings")}
+        onOpenCamera={() => setDrawer("camera")}
         onReopenDisclosure={() => setForceDisclosure(true)}
         onClearSession={handleClearSession}
         onSwitchPersona={handleSwitchPersona}
@@ -360,6 +366,18 @@ export function App() {
         open={drawer === "trust"}
         refreshKey={memoryRefreshKey}
         onClose={() => setDrawer("none")}
+      />
+      <SettingsDrawer
+        open={drawer === "settings"}
+        onClose={() => setDrawer("none")}
+      />
+      <CameraPanel
+        open={drawer === "camera"}
+        onClose={() => setDrawer("none")}
+        onFrameAnalyzed={(msg) => {
+          setMessages((prev) => [...prev, msg]);
+          setMemoryRefreshKey((k) => k + 1);
+        }}
       />
       {pendingApproval && (
         <ApprovalModal

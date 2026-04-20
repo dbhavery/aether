@@ -12,6 +12,8 @@ interface Props {
   personas: PersonaCatalogEntry[];
   onOpenMemory: () => void;
   onOpenTrust: () => void;
+  onOpenSettings: () => void;
+  onOpenCamera: () => void;
   onReopenDisclosure: () => void;
   onClearSession: () => void;
   onSwitchPersona: (id: string) => void;
@@ -23,6 +25,8 @@ export function Header({
   personas,
   onOpenMemory,
   onOpenTrust,
+  onOpenSettings,
+  onOpenCamera,
   onReopenDisclosure,
   onClearSession,
   onSwitchPersona,
@@ -79,6 +83,22 @@ export function Header({
           title="Review every decision Aether has made"
         >
           Trust
+        </button>
+        <button
+          type="button"
+          onClick={onOpenCamera}
+          className="rounded-md border border-transparent px-2.5 py-1 text-[11.5px] text-aether-muted transition-colors hover:border-aether-border hover:text-aether-text"
+          title="Camera capture (preview + single-frame analysis)"
+        >
+          Camera
+        </button>
+        <button
+          type="button"
+          onClick={onOpenSettings}
+          className="rounded-md border border-transparent px-2.5 py-1 text-[11.5px] text-aether-muted transition-colors hover:border-aether-border hover:text-aether-text"
+          title="Local settings (media permissions, etc.)"
+        >
+          Settings
         </button>
         <button
           type="button"

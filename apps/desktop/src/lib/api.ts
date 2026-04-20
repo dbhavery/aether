@@ -7,6 +7,10 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import type {
   CompanionBanner,
+  FrameAnalysisOutcome,
+  MediaKind,
+  MediaPermissions,
+  MediaPermissionState,
   PersonaCatalogEntry,
   PresencePayload,
   TranscriptMessage,
@@ -105,4 +109,40 @@ export async function forgetOlderThanDays(
   days: number,
 ): Promise<ForgetOlderReport> {
   return invoke<ForgetOlderReport>("forget_older_than_days", { days });
+}
+
+// --- Media permissions (P1) -----------------------------------------------
+
+export async function getMediaPermissions(): Promise<MediaPermissions> {
+  return invoke<MediaPermissions>("get_media_permissions");
+}
+
+/**
+ * Update one device's permission. The Rust command parameter is named
+ * `state_value` because `state` collides with the Tauri `State<T>`
+ * extractor — the IPC layer maps camelCase TS keys onto snake_case
+ * Rust params, hence `stateValue`.
+ */
+export async function setMediaPermission(
+  kind: MediaKind,
+  stateValue: MediaPermissionState,
+): Promise<MediaPermissions> {
+  return invoke<MediaPermissions>("set_media_permission", {
+    kind,
+    stateValue,
+  });
+}
+
+// --- Single-frame analysis (P3) -------------------------------------------
+
+export interface AnalyzeFrameRequest {
+  kind: MediaKind;
+  frame_data_url: string;
+  note?: string | null;
+}
+
+export async function analyzeFrame(
+  req: AnalyzeFrameRequest,
+): Promise<FrameAnalysisOutcome> {
+  return invoke<FrameAnalysisOutcome>("analyze_frame", { request: req });
 }
