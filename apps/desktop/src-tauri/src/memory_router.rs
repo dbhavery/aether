@@ -184,7 +184,7 @@ impl TurnRouter for RoleTaggedOllamaRouter {
         let completion = self
             .provider
             .chat_with_messages_detailed(&messages)
-            .map_err(|e| L1Error::Router(format!("{e}")))?;
+            .map_err(|e| L1Error::Router(friendly_provider_error(&e)))?;
         // Only surface a TokenUsage when both sides of the count are
         // present. Mixed-presence (one side reported, the other missing)
         // would be harder for the UI to render truthfully than simply
@@ -201,6 +201,53 @@ impl TurnRouter for RoleTaggedOllamaRouter {
             tokens,
         })
     }
+}
+
+/// Prefix attached to provider-error strings as they pass through
+/// [`L1Error::Router`]. The shell's `submit_turn` command detects this
+/// prefix and promotes the error into a transcript system message
+/// (`kind = "provider_error"`) instead of surfacing it as a Tauri
+/// command failure. Keep the prefix stable — `commands.rs` depends on
+/// its exact spelling.
+#[cfg(feature = "ollama-provider")]
+pub const PROVIDER_ERROR_PREFIX: &str = "PROVIDER_ERROR: ";
+
+/// Map a typed [`aether_l4_router::L4Error`] into a user-facing sentence.
+/// Called on every provider failure inside
+/// [`RoleTaggedOllamaRouter::dispatch`]; the result is prefixed with
+/// [`PROVIDER_ERROR_PREFIX`] and routed through the existing
+/// [`L1Error::Router`] channel so we don't need to widen
+/// `aether_l1_interaction::L1Error` to carry typed provider errors yet.
+///
+/// Guidance per variant:
+/// - `ProviderNotRunning` — point the user at `ollama serve`.
+/// - `ProviderTimeout` — suggest a lighter model or a longer timeout.
+/// - `ProviderModelNotFound` — name the model, suggest `ollama pull`.
+/// - `ProviderBadResponse` — degraded provider; suggest retry.
+/// - `ProviderUnknown` / catch-all — surface the detail verbatim so we
+///   can diagnose later without losing information.
+#[cfg(feature = "ollama-provider")]
+pub fn friendly_provider_error(err: &aether_l4_router::L4Error) -> String {
+    use aether_l4_router::L4Error;
+    let body = match err {
+        L4Error::ProviderNotRunning { .. } => String::from(
+            "Aether can't reach the local model daemon. Start it with `ollama serve` and try again.",
+        ),
+        L4Error::ProviderTimeout { .. } => String::from(
+            "The local model took too long to respond. Try a smaller model, or raise AETHER_OLLAMA_TIMEOUT_MS.",
+        ),
+        L4Error::ProviderModelNotFound { model, .. } => format!(
+            "Model `{model}` isn't installed. Pull it with `ollama pull {model}` and try again.",
+        ),
+        L4Error::ProviderBadResponse { detail } => format!(
+            "The model returned something Aether couldn't parse. Retry, and if it persists the model may be degraded. ({detail})",
+        ),
+        L4Error::ProviderUnknown { detail } => format!(
+            "The provider failed with an unrecognised error. ({detail})",
+        ),
+        other => format!("Provider error: {other}"),
+    };
+    format!("{PROVIDER_ERROR_PREFIX}{body}")
 }
 
 fn summarise_turn_for_memory(result: &TurnResult) -> (MemoryRole, String) {
@@ -273,6 +320,35 @@ mod tests {
         assert_eq!(msgs.len(), 1);
         assert_eq!(msgs[0].role, MessageRole::User);
         assert_eq!(msgs[0].content, "hi");
+    }
+
+    #[test]
+    fn friendly_provider_error_covers_known_variants() {
+        use aether_l4_router::L4Error;
+        let not_running = friendly_provider_error(&L4Error::ProviderNotRunning {
+            detail: "conn refused".into(),
+        });
+        assert!(not_running.starts_with(PROVIDER_ERROR_PREFIX));
+        assert!(not_running.contains("ollama serve"));
+
+        let timeout = friendly_provider_error(&L4Error::ProviderTimeout {
+            detail: "read timeout".into(),
+        });
+        assert!(timeout.contains("took too long"));
+        assert!(timeout.contains("AETHER_OLLAMA_TIMEOUT_MS"));
+
+        let not_found = friendly_provider_error(&L4Error::ProviderModelNotFound {
+            model: "phi3".into(),
+            detail: "not found".into(),
+        });
+        assert!(not_found.contains("`phi3`"));
+        assert!(not_found.contains("ollama pull phi3"));
+
+        let bad = friendly_provider_error(&L4Error::ProviderBadResponse {
+            detail: "junk".into(),
+        });
+        assert!(bad.contains("couldn't parse"));
+        assert!(bad.contains("junk"));
     }
 
     #[test]

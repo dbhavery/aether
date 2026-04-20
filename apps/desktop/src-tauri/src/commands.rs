@@ -17,6 +17,8 @@ use aether_l7_trust::{
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
 
+#[cfg(feature = "ollama-provider")]
+use crate::memory_router::PROVIDER_ERROR_PREFIX;
 use crate::memory_router::{assistant_record, user_record};
 use crate::state::{AppState, PendingTurn, SESSION_ID};
 
@@ -182,9 +184,21 @@ pub fn submit_turn(
 
     let first = {
         let a = state.active.read().expect("active read lock");
-        a.engine
-            .handle_turn(request.clone())
-            .map_err(|e| format!("engine error: {e}"))?
+        match a.engine.handle_turn(request.clone()) {
+            Ok(r) => r,
+            Err(e) => {
+                // Provider-side failures (Ollama daemon down, model not
+                // installed, etc.) are surfaced as a transcript system
+                // message so the UI can show actionable language instead
+                // of a raw Tauri error. See memory_router.rs for the
+                // mapping from typed L4Error → friendly copy.
+                if let Some(msg) = extract_provider_error(&e.to_string()) {
+                    drop(a);
+                    return Ok(provider_error_payload(&app, &state, &request, msg));
+                }
+                return Err(format!("engine error: {e}"));
+            }
+        }
     };
 
     if let Decision::Ask { ticket, .. } = &first.policy_decision {
@@ -391,6 +405,81 @@ fn role_label(r: MemoryRole) -> &'static str {
         MemoryRole::User => "user",
         MemoryRole::Assistant => "assistant",
         MemoryRole::System => "system",
+    }
+}
+
+/// Detect the provider-error marker inside the engine's `Display`
+/// output. `L1Error::Router(inner)` renders as `"router: {inner}"`;
+/// when `inner` starts with
+/// [`crate::memory_router::PROVIDER_ERROR_PREFIX`] we strip both layers
+/// and return the user-facing body. Returns `None` when the error is
+/// not a provider error so the caller keeps the current fail-fast path.
+fn extract_provider_error(msg: &str) -> Option<String> {
+    #[cfg(feature = "ollama-provider")]
+    {
+        // `L1Error::Router` renders as `"router client: {payload}"`.
+        // Strip the outer label if present; fall back to raw so we're
+        // robust to future L1Error formatting tweaks or callers that
+        // already passed us the inner payload.
+        let stripped = msg.strip_prefix("router client: ").unwrap_or(msg);
+        if let Some(body) = stripped.strip_prefix(PROVIDER_ERROR_PREFIX) {
+            return Some(body.to_string());
+        }
+    }
+    #[cfg(not(feature = "ollama-provider"))]
+    {
+        let _ = msg;
+    }
+    None
+}
+
+/// Synthesise a transcript payload when a provider fails before the
+/// policy engine even sees the turn. The user's utterance is still
+/// recorded so the transcript reads coherently; the assistant side is
+/// a system-role note with the actionable copy.
+fn provider_error_payload(
+    app: &AppHandle,
+    state: &State<'_, AppState>,
+    request: &TurnRequest,
+    friendly: String,
+) -> TurnOutcomePayload {
+    transition_presence(
+        app,
+        &state.presence,
+        PresenceState::Responding,
+        state.next_ts(),
+        None,
+    );
+    let ts_ms = state.next_ts();
+    let _ = state.memory.append(user_record(SESSION_ID, request));
+    let _ = state.memory.append(aether_l2_memory::TurnMemoryRecord {
+        session_id: SESSION_ID.to_string(),
+        sequence: 0,
+        role: MemoryRole::System,
+        content: friendly.clone(),
+        timestamp_ms: ts_ms,
+    });
+    let id = format!("provider-err-{ts_ms}");
+    transition_presence(
+        app,
+        &state.presence,
+        PresenceState::Quiet,
+        state.next_ts(),
+        None,
+    );
+    TurnOutcomePayload {
+        turn_id: id.clone(),
+        kind: "provider_error".into(),
+        message: Some(TranscriptMessage {
+            id,
+            role: "system".into(),
+            content: friendly,
+            sequence: 0,
+            timestamp_ms: ts_ms,
+            meta: None,
+        }),
+        approval: None,
+        error_note: None,
     }
 }
 
@@ -622,6 +711,28 @@ mod tests {
             parse_command("Write /tmp/foo").0,
             Capability::FilesCreate
         ));
+    }
+
+    #[cfg(feature = "ollama-provider")]
+    #[test]
+    fn extract_provider_error_matches_prefixed_router_message() {
+        let wrapped = format!(
+            "router client: {}Aether can't reach the local model daemon.",
+            PROVIDER_ERROR_PREFIX
+        );
+        assert_eq!(
+            extract_provider_error(&wrapped).as_deref(),
+            Some("Aether can't reach the local model daemon."),
+        );
+    }
+
+    #[cfg(feature = "ollama-provider")]
+    #[test]
+    fn extract_provider_error_none_for_unrelated_message() {
+        assert!(
+            extract_provider_error("router client: memory recall failed: oh no").is_none()
+        );
+        assert!(extract_provider_error("policy: denied").is_none());
     }
 
     #[test]

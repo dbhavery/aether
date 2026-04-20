@@ -46,7 +46,8 @@ export type TurnOutcomeKind =
   | "awaiting_approval"
   | "denied"
   | "needs_upgrade"
-  | "draft_only";
+  | "draft_only"
+  | "provider_error";
 
 export interface TurnOutcome {
   turn_id: string;
