@@ -25,6 +25,7 @@ import { Header } from "./components/Header";
 import { InputBar } from "./components/InputBar";
 import { MemoryDrawer } from "./components/MemoryDrawer";
 import { PersonaCard } from "./components/PersonaCard";
+import { PresetPicker } from "./components/PresetPicker";
 import { Transcript } from "./components/Transcript";
 import { TrustDrawer } from "./components/TrustDrawer";
 
@@ -43,6 +44,10 @@ export function App() {
   const [drawer, setDrawer] = useState<"none" | "memory" | "trust">("none");
   const [memoryRefreshKey, setMemoryRefreshKey] = useState(0);
   const [forceDisclosure, setForceDisclosure] = useState(false);
+  // Bumps whenever the Disclosure modal closes so the PresetPicker can
+  // re-evaluate its open state (it only auto-shows once Disclosure is
+  // acknowledged, and this lets them sequence within one session).
+  const [disclosureCloseNonce, setDisclosureCloseNonce] = useState(0);
   const [sessionNonce, setSessionNonce] = useState(0);
   const [personas, setPersonas] = useState<PersonaCatalogEntry[]>([]);
 
@@ -245,8 +250,12 @@ export function App() {
     <div className="flex h-full flex-col">
       <Disclosure
         forceOpen={forceDisclosure}
-        onClose={() => setForceDisclosure(false)}
+        onClose={() => {
+          setForceDisclosure(false);
+          setDisclosureCloseNonce((n) => n + 1);
+        }}
       />
+      <PresetPicker key={`preset-${disclosureCloseNonce}`} />
       <Header
         banner={banner}
         presence={presence}
