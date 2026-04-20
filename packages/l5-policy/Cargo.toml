@@ -21,5 +21,15 @@ aether-event-bus = { path = "../event-bus" }
 aether-storage   = { path = "../storage" }
 aether-telemetry = { path = "../telemetry" }
 
+[features]
+default = []
+# Wave 4.5 — SQLite-backed GrantLedger + AuditStore. When enabled, the
+# `sqlite_backends` module compiles and exposes `SqliteGrantLedger`,
+# `SqliteAuditStore`, and the `DurableBackends` convenience builder. The
+# driver itself lives in `aether-storage` (already a dep); this feature
+# only gates the additional L5 code path.
+sqlite-backend = []
+
 [dev-dependencies]
 serde_json = { workspace = true }
+tempfile = { workspace = true }

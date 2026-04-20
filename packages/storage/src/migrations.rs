@@ -20,8 +20,16 @@ pub const MIGRATION_0001_INIT: Migration = Migration {
     sql: include_str!("../migrations/0001_init.sql"),
 };
 
+/// Wave 4.5 — audit-chain groundwork + `payload` columns enabling the
+/// `SqliteGrantLedger` / `SqliteAuditStore` backends to store full Rust
+/// structs as JSON alongside the granular query columns from 0001.
+pub const MIGRATION_0002_AUDIT_CHAIN: Migration = Migration {
+    id: "0002_audit_chain",
+    sql: include_str!("../migrations/0002_audit_chain.sql"),
+};
+
 /// Ordered, append-only migration set. New migrations push to the tail.
-pub const MIGRATIONS: &[Migration] = &[MIGRATION_0001_INIT];
+pub const MIGRATIONS: &[Migration] = &[MIGRATION_0001_INIT, MIGRATION_0002_AUDIT_CHAIN];
 
 /// Return the expected schema-version id after applying every known migration.
 pub fn expected_head_id() -> &'static str {
@@ -57,6 +65,6 @@ mod tests {
 
     #[test]
     fn head_id_matches_last_entry() {
-        assert_eq!(expected_head_id(), "0001_init");
+        assert_eq!(expected_head_id(), "0002_audit_chain");
     }
 }

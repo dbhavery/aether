@@ -48,6 +48,8 @@ pub mod ledger;
 pub mod policy_engine;
 pub mod posture;
 pub mod sink;
+#[cfg(feature = "sqlite-backend")]
+pub mod sqlite_backends;
 pub mod storage_hooks;
 
 pub use approval::{ApprovalResponse, ApprovalTicket, ApprovalTicketId, UserChoice};
@@ -84,3 +86,7 @@ pub use audit_store::InMemoryAuditStore;
 pub use engine::{CapabilityPolicy, DefaultPolicyEngine, EngineConfig};
 pub use ledger::InMemoryGrantLedger;
 pub use sink::{InMemorySink, L5EventSink, NullSink};
+
+// --- Wave 4.5 live surfaces (feature-gated) ---
+#[cfg(feature = "sqlite-backend")]
+pub use sqlite_backends::{DurableBackends, SqliteAuditStore, SqliteGrantLedger};

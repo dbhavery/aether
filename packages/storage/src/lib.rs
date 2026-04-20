@@ -30,6 +30,13 @@ pub mod migrations;
 pub use db::{open_with_migrations, OpenError, OpenOutcome};
 pub use migrations::{expected_head_id, Migration, MIGRATIONS};
 
+// Re-export the rusqlite driver so downstream crates (notably
+// `aether-l5-policy`'s `SqliteGrantLedger` / `SqliteAuditStore`) can use
+// `Connection` + friends without adding a direct `rusqlite` dep. This is
+// the supported integration point; do not add `rusqlite` directly to
+// engine crates.
+pub use rusqlite;
+
 use std::path::PathBuf;
 
 /// Set of DB handles Aether opens at startup.
@@ -78,16 +85,18 @@ pub enum StorageError {
 }
 
 // Wave 3.5 landed the substrate: `rusqlite` is wired, `open_with_migrations`
-// applies `migrations/0001_init.sql` at startup, integration test in
-// `tests/migration_runs.rs` proves the tables exist after first open.
+// applies both `0001_init.sql` and `0002_audit_chain.sql` at startup. See
+// `tests/migration_runs.rs` for coverage.
 //
-// Deferred to a later wave:
-// - `Store` trait with SQLite-backed `GrantStore` / `AuditStore` impls that
-//   L5 can swap its in-memory backends for.
-// - `migrations/0002_audit_chain.sql` — hash-chain + HMAC triggers per
-//   schema pack §3b/§3c.
-// - Audit-chain helper that computes `H(prev_hash || row_hash)` on insert
-//   and exposes a verification pass.
+// Wave 4.5 consumes the substrate: `aether-l5-policy` exposes
+// `SqliteGrantLedger` + `SqliteAuditStore` behind the `sqlite-backend`
+// cargo feature and uses the re-exported `rusqlite::Connection` above.
+//
+// Still deferred for later waves:
+// - Full hash-chain + HMAC trigger set (draft placeholder table exists via
+//   0002 but the trigger pipeline is future work).
+// - A `Store` trait abstracting driver choice (rusqlite vs sqlx) if one
+//   becomes useful.
 
 #[cfg(test)]
 mod tests {

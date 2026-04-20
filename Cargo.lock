@@ -63,6 +63,7 @@ dependencies = [
  "aether-telemetry",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror",
  "tracing",
 ]

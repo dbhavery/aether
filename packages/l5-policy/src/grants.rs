@@ -79,8 +79,16 @@ pub struct GrantFilter {
 /// In-memory ledger surface. Persistence lives in `aether-storage`.
 ///
 /// Wave 2 declares this trait but implements nothing. Wave 3 lands the
-/// in-memory + SQLite implementations. See `planning/plans/implementation_prep/sqlite_schema_pack.md` §3 (grant_ledger table).
+/// in-memory implementation. Wave 4.5 extends the trait with bulk
+/// mutation helpers — given as default impls so any ledger implementing
+/// the core four methods automatically inherits them, and specialized
+/// backends may override for efficiency.
+///
+/// See `planning/plans/implementation_prep/sqlite_schema_pack.md` §3
+/// (grant_ledger table).
 pub trait GrantLedger: Send + Sync {
+    // --- core four (required) ---------------------------------------------
+
     /// Snapshot matching grants.
     fn snapshot(&self, filter: &GrantFilter) -> Vec<Grant>;
     /// Attempt to issue a grant — returns `None` if the ledger is in a
@@ -96,6 +104,68 @@ pub trait GrantLedger: Send + Sync {
         resource: &ResourceScope,
         persona: &PersonaId,
     ) -> Option<GrantId>;
+
+    // --- bulk mutation helpers (default impls via core four) --------------
+
+    /// Count of currently-active (non-revoked, non-expired) grants.
+    fn active_count(&self) -> u64 {
+        self.snapshot(&GrantFilter {
+            active_only: true,
+            ..Default::default()
+        })
+        .len() as u64
+    }
+
+    /// Expire every TTL-bearing active grant whose `expires_at <= now`.
+    /// Returns the ids that flipped to revoked this call.
+    ///
+    /// The default implementation snapshots all active grants, compares each
+    /// one's `expires_at` to `now`, and revokes those that have elapsed with
+    /// `RevokeReason::TtlExpired`. Specialized backends may override to push
+    /// the comparison into the storage layer.
+    fn expire_ttl(&self, now: crate::common::MonotonicTimestamp) -> Vec<GrantId> {
+        let active = self.snapshot(&GrantFilter {
+            active_only: true,
+            ..Default::default()
+        });
+        let mut expired = Vec::new();
+        for g in active {
+            if let Some(exp) = g.expires_at {
+                if exp.0 <= now.0 {
+                    self.revoke(&g.grant_id, crate::events::RevokeReason::TtlExpired);
+                    expired.push(g.grant_id);
+                }
+            }
+        }
+        expired
+    }
+
+    /// Revoke every currently-active grant with `reason`. Returns count revoked.
+    fn revoke_all(&self, reason: crate::events::RevokeReason) -> u32 {
+        let active = self.snapshot(&GrantFilter {
+            active_only: true,
+            ..Default::default()
+        });
+        let n = active.len() as u32;
+        for g in active {
+            self.revoke(&g.grant_id, reason.clone());
+        }
+        n
+    }
+
+    /// Revoke every active grant matching `persona` with `reason`. Returns count revoked.
+    fn revoke_persona(&self, persona: &PersonaId, reason: crate::events::RevokeReason) -> u32 {
+        let active = self.snapshot(&GrantFilter {
+            active_only: true,
+            persona_id: Some(persona.clone()),
+            ..Default::default()
+        });
+        let n = active.len() as u32;
+        for g in active {
+            self.revoke(&g.grant_id, reason.clone());
+        }
+        n
+    }
 }
 
 /// L6 → L5 overlay delivered on `persona_swap_commit`.

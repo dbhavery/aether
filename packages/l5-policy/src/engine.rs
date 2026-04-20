@@ -34,7 +34,6 @@ use std::sync::{Arc, Mutex};
 
 use crate::approval::{ApprovalResponse, ApprovalTicket, ApprovalTicketId, UserChoice};
 use crate::audit::{AuditId, AuditRecordEvent, KeyId};
-use crate::audit_store::InMemoryAuditStore;
 use crate::capability::{Capability, CapabilityFilter, CapabilityInfo, CapabilityPath, RiskClass};
 use crate::common::{
     ActorRef, ChangeId, MonotonicTimestamp, PersonaId, PresetId, TaskId, WallTimestamp,
@@ -45,7 +44,6 @@ use crate::events::{
     GrantIssuedEvent, L5Event, PolicyDecisionEvent, PolicyPostureChangedEvent, RevokeReason,
 };
 use crate::grants::{ApprovalMode, Grant, GrantDuration, GrantFilter, GrantLedger};
-use crate::ledger::InMemoryGrantLedger;
 use crate::policy_engine::{
     ActionRequest, EmergencyReceipt, EventFilter, EventStream, PolicyEngine, PolicyEngineError,
 };
@@ -159,10 +157,12 @@ struct PendingTicket {
     risk: RiskClass,
 }
 
-/// Concrete `PolicyEngine` backed by in-memory primitives.
+/// Concrete `PolicyEngine`. Ledger + audit backends are trait objects so
+/// callers can plug in either the in-memory backends (default) or the
+/// SQLite-backed ones gated behind the `sqlite-backend` feature.
 pub struct DefaultPolicyEngine {
-    ledger: Arc<InMemoryGrantLedger>,
-    audit: Arc<InMemoryAuditStore>,
+    ledger: Arc<dyn GrantLedger>,
+    audit: Arc<dyn AuditStore>,
     sink: Arc<dyn L5EventSink>,
     inner: Mutex<EngineInner>,
     seq: AtomicU64,
@@ -174,10 +174,14 @@ pub struct DefaultPolicyEngine {
 
 impl DefaultPolicyEngine {
     /// Build an engine from its config + injected backends.
+    ///
+    /// Pass `Arc::new(InMemoryGrantLedger::new()) as Arc<dyn GrantLedger>`
+    /// for the default in-memory mode, or `Arc::new(SqliteGrantLedger::...)`
+    /// when the `sqlite-backend` feature is enabled.
     pub fn new(
         cfg: EngineConfig,
-        ledger: Arc<InMemoryGrantLedger>,
-        audit: Arc<InMemoryAuditStore>,
+        ledger: Arc<dyn GrantLedger>,
+        audit: Arc<dyn AuditStore>,
         sink: Arc<dyn L5EventSink>,
     ) -> Self {
         Self {
@@ -244,13 +248,13 @@ impl DefaultPolicyEngine {
             }));
     }
 
-    /// Direct access to the ledger (test + integration use).
-    pub fn ledger(&self) -> &Arc<InMemoryGrantLedger> {
+    /// Direct access to the ledger as a trait object.
+    pub fn ledger(&self) -> &Arc<dyn GrantLedger> {
         &self.ledger
     }
 
-    /// Direct access to the audit store.
-    pub fn audit(&self) -> &Arc<InMemoryAuditStore> {
+    /// Direct access to the audit store as a trait object.
+    pub fn audit(&self) -> &Arc<dyn AuditStore> {
         &self.audit
     }
 

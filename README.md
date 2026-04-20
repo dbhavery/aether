@@ -91,11 +91,16 @@ L5 — POLICY ENGINE
 [##########] 100%  Wave 3.5 — SQLite storage substrate
                    (rusqlite bundled, open_with_migrations() runs the
                     drafted DDL, 3 integration tests incl. append-only
-                    trigger + warm-open idempotency.
-                    L5 backends still in-memory — flipping L5 onto the
-                    substrate is future work.)
-[..........]   0%  Wave 4.x — hash-chain + HMAC + BYOK cost-cap +
-                   SqliteGrantLedger / SqliteAuditStore
+                    trigger + warm-open idempotency.)
+[##########] 100%  Wave 4.5 — SqliteGrantLedger + SqliteAuditStore
+                   behind `sqlite-backend` cargo feature + migration
+                   0002_audit_chain.sql (payload columns, key_id,
+                   chain-head singleton). Default build remains
+                   in-memory; durable mode is opt-in. 5 integration
+                   tests cover grant/audit survival across restart
+                   + append-only enforcement.
+[..........]   0%  Future — hash-chain + HMAC row sealing +
+                   BYOK cost-cap
 
 OTHER ENGINES — STUB SHELLS (Wave 4)
 [##########] 100%  L1/L2/L3/L4/L6/L7 traits + core enums + smoke tests
@@ -114,11 +119,14 @@ PRODUCT INTEGRATION
 - `cargo check --workspace` is **green** on stable Rust (toolchain pinned in
   `rust-toolchain.toml`).
 - `cargo test --workspace` is **green** — every crate's tests pass. Highlights:
-  - `aether-l5-policy`: 18 tests (10 integration slice + 8 type/IPC/sink).
+  - `aether-l5-policy`: 18 tests by default; +5 SQLite integration tests
+    with `--features sqlite-backend` (grant survives restart, revoke
+    persists, audit rows survive + time-window filter, append-only
+    trigger enforcement, engine-accepts-trait-objects smoke).
   - `aether-storage`: 8 tests, including 3 integration tests that open a
-    real SQLite file, run the drafted migration, assert every expected
-    table exists, assert the append-only trigger rejects `DELETE`, and
-    assert a warm reopen is idempotent.
+    real SQLite file, run both migrations (`0001_init`, `0002_audit_chain`),
+    assert every expected table exists, assert the append-only trigger
+    rejects `DELETE`, and assert a warm reopen is idempotent.
   - Six engine stub crates (L1–L7 minus L5): smoke tests only.
 
 ### What does not run yet
@@ -127,12 +135,16 @@ PRODUCT INTEGRATION
   repository yet.
 - No LLM, STT, TTS, or avatar pipeline is wired up. The engine stubs declare
   the right traits and enums; none of the I/O is hooked up.
-- **L5 still uses in-memory persistence.** The storage substrate
-  (`rusqlite` + `open_with_migrations()`) exists and runs, but L5's
-  `GrantLedger` and `AuditStore` have not yet been swapped onto SQLite-backed
-  implementations. That swap is an explicit future wave (see
-  [ROADMAP.md](ROADMAP.md) § "L5 durable persistence"). Today, L5 state is
-  lost on process exit.
+- **L5 persistence is opt-in.** The default build uses in-memory
+  `InMemoryGrantLedger` + `InMemoryAuditStore` — fast, process-local,
+  lost on exit. Enabling the `sqlite-backend` cargo feature on
+  `aether-l5-policy` unlocks `SqliteGrantLedger`, `SqliteAuditStore`,
+  and a `DurableBackends::open(path)` convenience builder that wires
+  both onto a single SQLite file. See
+  [`WAVE4_5_EXECUTION_REPORT_2026-04-19.md`](WAVE4_5_EXECUTION_REPORT_2026-04-19.md)
+  for limitations (hash-chain + HMAC row sealing still future).
+- No LLM, STT, TTS, or avatar pipeline. Nothing remote is reachable from
+  the preview; runtime bound to the local process.
 
 ### What is in `src/`, `desktop/`, `frontend/`
 
@@ -209,14 +221,36 @@ pnpm install
 pnpm -r --if-present typecheck
 
 # Rust workspace (requires rustup)
-cargo check --workspace          # green as of Wave 3.5 (2026-04-19)
-cargo test --workspace           # green: storage substrate + L5 slice + stubs
-cargo test -p aether-l5-policy   # 18 tests on the first L5 logic slice
-cargo test -p aether-storage     # 8 tests incl. 3 SQLite integration tests
+cargo check --workspace                                  # green
+cargo test --workspace                                    # green default build
+cargo test -p aether-l5-policy                            # 18 in-memory tests
+cargo test -p aether-l5-policy --features sqlite-backend  # +5 SQLite tests
+cargo test -p aether-storage                              # 8 storage tests
 ```
 
 If any of these fail on a clean clone, please open a Bug report — the wave
 reports assume they all pass on stable Rust.
+
+### Opting into durable L5
+
+The default build uses in-memory policy backends. To use SQLite-backed
+grants + audit, enable the `sqlite-backend` feature on `aether-l5-policy`:
+
+```rust
+use aether_l5_policy::{DefaultPolicyEngine, DurableBackends, EngineConfig, InMemorySink};
+use std::sync::Arc;
+
+let backends = DurableBackends::open("./aether.db")?;
+let engine = DefaultPolicyEngine::new(
+    EngineConfig::wave3_default(persona_id),
+    backends.ledger.clone(),
+    backends.audit.clone(),
+    Arc::new(InMemorySink::new()),
+);
+```
+
+Known limitations of the Wave 4.5 SQLite mode are listed in
+[`WAVE4_5_EXECUTION_REPORT_2026-04-19.md`](WAVE4_5_EXECUTION_REPORT_2026-04-19.md).
 
 ### Where to start reading
 

@@ -60,31 +60,46 @@ The roadmap reflects how the architecture was staged, not marketing priorities:
   now runs a real linter over `cargo metadata`; the CI `layer-boundaries`
   job rejects any forbidden `packages/*/Cargo.toml` edge. No current
   violations. Report: `WAVE4_1_EXECUTION_REPORT_2026-04-19.md`.
+- **Wave 4.5 — L5 durable persistence (opt-in).** `SqliteGrantLedger`
+  + `SqliteAuditStore` implementing the existing `GrantLedger` /
+  `AuditStore` traits behind a new `sqlite-backend` cargo feature on
+  `aether-l5-policy`; `DurableBackends::open(path)` convenience builder;
+  migration `0002_audit_chain.sql` (payload columns, `key_id`,
+  `privileged_profile`, `policy_audit_chain_head` singleton).
+  `DefaultPolicyEngine` refactored to accept `Arc<dyn GrantLedger>` +
+  `Arc<dyn AuditStore>` so either backend plugs in. Default build stays
+  in-memory. 5 SQLite integration tests (grant + revoke + audit survival
+  across restart, append-only trigger enforcement, engine smoke). Report:
+  `WAVE4_5_EXECUTION_REPORT_2026-04-19.md`.
 
 ---
 
 ## Next — in priority order
 
-### 1. L5 durable persistence (the real Wave 3.5 follow-up)
-
-- Introduce a `SqliteGrantLedger` + `SqliteAuditStore` behind the existing
-  ledger / audit traits.
-- Flip L5 to durable backends behind a feature flag first, then as default.
-- Add migration `0002_audit_chain.sql` for hash-chain + HMAC support.
-
-### 2. First engine first-logic slice
+### 1. First engine first-logic slice
 
 - Candidate A: **L1 turn FSM** — unlocks the first end-to-end demo path.
 - Candidate B: **L4 provider adapter + L5 gate wire-through** — unlocks a real
   remote call going through the policy engine.
 - Pick one; produce a `WAVE*_EXECUTION_REPORT_*.md` alongside.
 
-### 3. Community demo slice
+### 2. Community demo slice
 
 - Smallest runnable surface: one `apps/` binary that exercises the policy
   engine, the storage substrate, and one engine slice.
 - Intentionally not a full desktop app. Its purpose is to make the
   architecture legible to a contributor in under fifteen minutes.
+
+### 3. Hash-chain + HMAC audit sealing
+
+- Extend `SqliteAuditStore::append` to compute `prev_hash = SHA256(prev_canonical)`
+  and seal each row with an HMAC using a per-install key from the OS
+  keyring.
+- Populate `policy_audit_chain_head` on every append; verify on boot.
+- Flip `verify_chain()` from the Wave 4.5 `Ok(())` stub to a real walk of
+  the chain.
+- Wire `AuditWriteError::MissingKey` handling into the posture transitions
+  (`AuditBroken` → deny-all).
 
 ### 4. Public-release polish
 
