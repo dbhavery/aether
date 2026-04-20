@@ -237,15 +237,19 @@ reports assume they all pass on stable Rust.
 See [ROADMAP.md](ROADMAP.md) for the full list. The next three meaningful
 moves, in priority order:
 
-1. **Wave 4.1** — activate the `[bans]` block in
-   `tools/lint-layer-boundaries/deny.toml`. All six sibling engine crates now
-   exist, so the no-cross-layer-import rule can be enforced mechanically.
-2. **L5 durable persistence** (the real follow-up to Wave 3.5) — introduce
-   `SqliteGrantLedger` + `SqliteAuditStore` behind the existing ledger /
-   audit traits, flip L5 onto them behind a feature flag first, then as
-   default. Add migration `0002_audit_chain.sql` for hash-chain + HMAC.
-3. **An L1 or L4 first-logic slice** — either unblocks a visible end-to-end
+1. **L5 durable persistence** — introduce `SqliteGrantLedger` +
+   `SqliteAuditStore` behind the existing ledger / audit traits, flip
+   L5 onto them behind a feature flag first, then as default. Add
+   migration `0002_audit_chain.sql` for hash-chain + HMAC. This is the
+   real follow-up to Wave 3.5.
+2. **An L1 or L4 first-logic slice** — either unblocks a visible end-to-end
    demo path: L1 turn FSM, or L4 provider adapter + policy gate.
+3. **Community demo slice** — smallest runnable surface that exercises
+   L5, the storage substrate, and one engine slice.
+
+Wave 4.1 (layer-boundary enforcement) landed 2026-04-19 — see
+[`tools/lint-layer-boundaries/`](tools/lint-layer-boundaries/) and
+`WAVE4_1_EXECUTION_REPORT_2026-04-19.md`.
 
 ---
 

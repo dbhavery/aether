@@ -54,6 +54,28 @@ jobs:
         run: cargo test --workspace --all-targets
 
   # ---------------------------------------------------------------------------
+  # Layer-boundary lint — Wave 4.1. Rejects forbidden intra-workspace edges
+  # per planning/00_VISION_AND_GUARDRAILS.md §4.1 and CLAUDE.md §1.4.
+  # ---------------------------------------------------------------------------
+  layer-boundaries:
+    name: Layer boundaries (cross-crate dep lint)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install stable Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run layer-boundary linter
+        run: python tools/lint-layer-boundaries/check.py
+
+  # ---------------------------------------------------------------------------
   # TypeScript workspace — pnpm + typecheck. No runtime TS yet, so no test job.
   # ---------------------------------------------------------------------------
   typescript:

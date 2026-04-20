@@ -47,52 +47,46 @@ The roadmap reflects how the architecture was staged, not marketing priorities:
   integration test proves it. L5 persistence still in-memory — this wave
   delivers the substrate only. Report:
   `WAVE3_5_EXECUTION_REPORT_2026-04-19.md`.
+- **Final pre-publication hardening + push.** CI rewired onto Rust +
+  pnpm + governance jobs, licence metadata normalised, `cargo fmt --all`
+  applied, `dev` pushed to `origin/dev`. Reports:
+  `FINAL_PUBLICATION_CHECKPOINT_2026-04-19.md`,
+  `SESSION_HANDOFF_2026-04-19_END_OF_DAY.md`.
+- **First OSS preview tag.** `v0.1.0-oss-preview.0` created locally on
+  the pushed HEAD; release notes at
+  `RELEASE_NOTES_OSS_PREVIEW_2026-04-19.md`. Tag push deferred to a
+  future session.
+- **Wave 4.1 — Layer-boundary enforcement.** `tools/lint-layer-boundaries/`
+  now runs a real linter over `cargo metadata`; the CI `layer-boundaries`
+  job rejects any forbidden `packages/*/Cargo.toml` edge. No current
+  violations. Report: `WAVE4_1_EXECUTION_REPORT_2026-04-19.md`.
 
 ---
 
 ## Next — in priority order
 
-### 1. Final pre-publication hardening + push + handoff (imminent)
-
-- Push the stabilization commits to `origin/dev`.
-- Cut a preview tag (for example `v0.1.0-preview-rebuild`) against the current
-  HEAD so contributors have a reference point.
-- Clean up CI: retune `.github/workflows/ci.yml` off the legacy Python tree and
-  onto the Rust + pnpm workspace.
-- Decide whether to publish the repo publicly or keep it in private-preview
-  until the first engine first-logic slice lands.
-
-### 2. Wave 4.1 — Layer-boundary enforcement
-
-- Activate the `[bans]` block in `tools/lint-layer-boundaries/deny.toml` now
-  that all six sibling engine crates exist.
-- Switch policy-bypass and private-asset-leak lints from scaffold mode to
-  blocking in CI.
-- Regenerate `packages/l5-policy-ts` via `tools/ts-bindings-gen/` so the TS
-  mirror stops being hand-written.
-
-### 3. L5 durable persistence (the real Wave 3.5 follow-up)
+### 1. L5 durable persistence (the real Wave 3.5 follow-up)
 
 - Introduce a `SqliteGrantLedger` + `SqliteAuditStore` behind the existing
   ledger / audit traits.
 - Flip L5 to durable backends behind a feature flag first, then as default.
 - Add migration `0002_audit_chain.sql` for hash-chain + HMAC support.
 
-### 4. First engine first-logic slice
+### 2. First engine first-logic slice
 
 - Candidate A: **L1 turn FSM** — unlocks the first end-to-end demo path.
 - Candidate B: **L4 provider adapter + L5 gate wire-through** — unlocks a real
   remote call going through the policy engine.
 - Pick one; produce a `WAVE*_EXECUTION_REPORT_*.md` alongside.
 
-### 5. Community demo slice
+### 3. Community demo slice
 
 - Smallest runnable surface: one `apps/` binary that exercises the policy
   engine, the storage substrate, and one engine slice.
 - Intentionally not a full desktop app. Its purpose is to make the
   architecture legible to a contributor in under fifteen minutes.
 
-### 6. Public-release polish
+### 4. Public-release polish
 
 - Expand docs/ with per-layer deep dives beyond `REPO_TOUR.md`.
 - Replace any remaining "Aether Pro" or "Isabelle" references in the public
