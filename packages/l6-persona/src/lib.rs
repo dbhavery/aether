@@ -14,11 +14,15 @@
 #![allow(dead_code)]
 
 pub mod compiler;
+pub mod default_compiler;
 pub mod error;
+pub mod profile;
 
 pub use compiler::{
     CompiledBehaviorMap, CompiledMemoryHints, CompiledPersona, CompiledPrompts,
     CompiledRoutingRules, CompiledToolAllowList, CompiledVoiceConfig, PersonaCompiler, PersonaId,
     PersonaPack, SwapState,
 };
+pub use default_compiler::DefaultPersonaCompiler;
 pub use error::L6Error;
+pub use profile::{Humor, PersonaProfile, Stance, Tone, Verbosity};
