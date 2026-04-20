@@ -21,7 +21,7 @@ members = [
 [workspace.package]
 edition = "2021"
 rust-version = "1.78"
-license = "Apache-2.0"
+license = "MIT"
 repository = "https://github.com/dbhavery/aether"
 authors = ["Aether contributors"]
 
@@ -32,6 +32,9 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tracing = "0.1"
+# Wave 3.5 — storage substrate. `bundled` vendors SQLite so no system lib needed.
+rusqlite = { version = "0.31", features = ["bundled"] }
+tempfile = "3"
 
 [profile.release]
 opt-level = 3

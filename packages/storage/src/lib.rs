@@ -24,8 +24,10 @@
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod db;
 pub mod migrations;
 
+pub use db::{open_with_migrations, OpenError, OpenOutcome};
 pub use migrations::{expected_head_id, Migration, MIGRATIONS};
 
 use std::path::PathBuf;
@@ -75,12 +77,17 @@ pub enum StorageError {
     NotImplemented,
 }
 
-// TODO(wave-2): `Store` trait (open, migrate, transaction, prepared) with a
-// `rusqlite` or `sqlx` implementation behind a feature flag.
-// TODO(wave-2): `migrations/` directory with versioned SQL files (`0001_init.sql`,
-// `0002_audit_chain.sql`, ...) matching schema pack §3.
-// TODO(wave-2): audit-chain helper that computes `H(prev_hash || row_hash)` on
-// insert and exposes a verification pass.
+// Wave 3.5 landed the substrate: `rusqlite` is wired, `open_with_migrations`
+// applies `migrations/0001_init.sql` at startup, integration test in
+// `tests/migration_runs.rs` proves the tables exist after first open.
+//
+// Deferred to a later wave:
+// - `Store` trait with SQLite-backed `GrantStore` / `AuditStore` impls that
+//   L5 can swap its in-memory backends for.
+// - `migrations/0002_audit_chain.sql` — hash-chain + HMAC triggers per
+//   schema pack §3b/§3c.
+// - Audit-chain helper that computes `H(prev_hash || row_hash)` on insert
+//   and exposes a verification pass.
 
 #[cfg(test)]
 mod tests {
