@@ -65,8 +65,13 @@ export function InputBar({ disabled, placeholder, onSubmit }: Props) {
           Send
         </button>
       </div>
-      <div className="mx-auto mt-1.5 max-w-2xl text-right text-[10.5px] font-mono text-aether-dim">
-        Enter to send · Shift+Enter newline · Ctrl+K focus
+      <div className="mx-auto mt-1.5 flex max-w-2xl items-center justify-between gap-3 text-[10.5px] font-mono text-aether-dim">
+        <span className="truncate">
+          Try <span className="text-aether-text">read /tmp/x</span>,{" "}
+          <span className="text-aether-text">write /tmp/x</span>, or{" "}
+          <span className="text-aether-text">shell ls</span> to exercise policy.
+        </span>
+        <span className="shrink-0">Enter send · Shift+Enter newline · Ctrl+K focus</span>
       </div>
     </div>
   );

@@ -125,13 +125,14 @@ pub fn submit_turn(
         None,
     );
     let ts = state.next_ts();
+    let (capability, resource) = parse_command(&text);
     let request = TurnRequest {
         session_id: SessionId(SESSION_ID.into()),
         persona: PersonaId(state.compiled.persona_id.0.clone()),
         task_id: None,
         utterance: text.clone(),
-        capability: Capability::FilesRead,
-        resource: ResourceScope::None,
+        capability,
+        resource,
         emitted_at: MonotonicTimestamp(ts),
     };
     transition_presence(
@@ -447,6 +448,48 @@ fn finalize_turn(
     }
 }
 
+/// Parse the leading verb of a user utterance into a
+/// (capability, resource) pair so approvals are reachable from the UI.
+///
+/// Mirrors `apps/l1-cli/src/main.rs::parse_command` — the CLI is the
+/// canonical demo surface, and the desktop shell intentionally speaks
+/// the same verb vocabulary so Don can exercise the same Ask/Deny/
+/// NeedsUpgrade paths from either entry point. Keeping the two in sync
+/// is a small cost next to having a single mental model for "what does
+/// this verb trigger?".
+///
+/// Verbs (case-insensitive):
+///   read <path>    → FilesRead      (Auto — allowed)
+///   write <path>   → FilesCreate    (Ask)
+///   edit <path>    → FilesEdit      (Ask)
+///   delete <path>  → FilesDelete    (Ask)
+///   shell <cmd>    → ShellExec      (Deny)
+///   browse <url>   → BrowserOpen    (NeedsUpgrade)
+///   anything else  → FilesRead with ResourceScope::None (allowed).
+fn parse_command(line: &str) -> (Capability, ResourceScope) {
+    let mut parts = line.splitn(2, char::is_whitespace);
+    let verb = parts.next().unwrap_or("").to_ascii_lowercase();
+    let arg = parts.next().unwrap_or("").trim();
+
+    match verb.as_str() {
+        "read" => (Capability::FilesRead, path_scope_or_none(arg)),
+        "write" => (Capability::FilesCreate, path_scope_or_none(arg)),
+        "edit" => (Capability::FilesEdit, path_scope_or_none(arg)),
+        "delete" => (Capability::FilesDelete, path_scope_or_none(arg)),
+        "shell" => (Capability::ShellExec, path_scope_or_none(arg)),
+        "browse" => (Capability::BrowserOpen, path_scope_or_none(arg)),
+        _ => (Capability::FilesRead, ResourceScope::None),
+    }
+}
+
+fn path_scope_or_none(arg: &str) -> ResourceScope {
+    if arg.is_empty() {
+        ResourceScope::None
+    } else {
+        ResourceScope::Path(arg.to_string())
+    }
+}
+
 fn transition_presence(
     app: &AppHandle,
     presence: &Arc<dyn PresenceController>,
@@ -461,5 +504,83 @@ fn transition_presence(
             updated_at_ms: snap.updated_at_ms,
         };
         let _ = app.emit("presence:update", payload);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn plain_chat_is_files_read_none() {
+        let (cap, scope) = parse_command("hello there");
+        assert!(matches!(cap, Capability::FilesRead));
+        assert!(matches!(scope, ResourceScope::None));
+    }
+
+    #[test]
+    fn read_verb_routes_to_files_read_with_path() {
+        let (cap, scope) = parse_command("read /tmp/x");
+        assert!(matches!(cap, Capability::FilesRead));
+        match scope {
+            ResourceScope::Path(p) => assert_eq!(p, "/tmp/x"),
+            _ => panic!("expected path scope"),
+        }
+    }
+
+    #[test]
+    fn write_verb_routes_to_files_create() {
+        assert!(matches!(
+            parse_command("write /tmp/foo").0,
+            Capability::FilesCreate
+        ));
+    }
+
+    #[test]
+    fn edit_verb_routes_to_files_edit() {
+        assert!(matches!(
+            parse_command("edit /tmp/foo").0,
+            Capability::FilesEdit
+        ));
+    }
+
+    #[test]
+    fn delete_verb_routes_to_files_delete() {
+        assert!(matches!(
+            parse_command("delete /tmp/foo").0,
+            Capability::FilesDelete
+        ));
+    }
+
+    #[test]
+    fn shell_verb_routes_to_shell_exec() {
+        assert!(matches!(parse_command("shell ls").0, Capability::ShellExec));
+    }
+
+    #[test]
+    fn browse_verb_routes_to_browser_open() {
+        assert!(matches!(
+            parse_command("browse https://example.com").0,
+            Capability::BrowserOpen
+        ));
+    }
+
+    #[test]
+    fn verb_is_case_insensitive() {
+        assert!(matches!(
+            parse_command("DELETE /tmp/foo").0,
+            Capability::FilesDelete
+        ));
+        assert!(matches!(
+            parse_command("Write /tmp/foo").0,
+            Capability::FilesCreate
+        ));
+    }
+
+    #[test]
+    fn verb_without_arg_yields_none_scope() {
+        let (cap, scope) = parse_command("delete");
+        assert!(matches!(cap, Capability::FilesDelete));
+        assert!(matches!(scope, ResourceScope::None));
     }
 }
