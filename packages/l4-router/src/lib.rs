@@ -13,9 +13,13 @@
 #![allow(dead_code)]
 
 pub mod error;
+pub mod providers;
 pub mod router;
 
 pub use error::L4Error;
 pub use router::{
     ModelRouter, ProviderAdapter, ProviderId, RouterTier, ToolCall, ToolError, ToolResult,
 };
+
+#[cfg(feature = "ollama-provider")]
+pub use providers::{OllamaConfig, OllamaConfigError, OllamaProvider};
