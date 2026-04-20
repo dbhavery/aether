@@ -18,28 +18,38 @@
 //! how L1 / L5 / L4 interlock without editing the code.
 
 mod adapter;
+mod persona;
 
 use std::io::{self, BufRead, Write};
 use std::sync::Arc;
 
 use aether_l1_interaction::{BlockReason, TurnEngine, TurnRequest, TurnResult, TurnRouter};
-use aether_l4_router::RouterTier;
 use aether_l5_policy::{
     policy_engine::PolicyEngine, Capability, Decision, DefaultPolicyEngine, EngineConfig,
     InMemoryAuditStore, InMemoryGrantLedger, InMemorySink, MonotonicTimestamp, PersonaId,
     ResourceScope, SessionId,
 };
+use aether_l6_persona::CompiledPersona;
 
 use adapter::{ModelRouterAdapter, ReflexModelRouter};
+use persona::{compile_demo_persona, output_detail_from_persona, tier_from_rules, OutputDetail};
 
 const PROVIDER_LABEL: &str = "reflex-stub";
-const PERSONA: &str = "aurora";
 const SESSION: &str = "demo-session";
 
 fn main() {
-    let engine = build_engine();
+    let compiled = match compile_demo_persona() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("failed to compile demo persona: {e}");
+            std::process::exit(1);
+        }
+    };
+    let detail = output_detail_from_persona(&compiled);
 
-    print_banner();
+    let engine = build_engine(&compiled);
+
+    print_banner(&compiled, detail);
 
     let stdin = io::stdin();
     let mut stdout = io::stdout();
@@ -73,7 +83,7 @@ fn main() {
         let (capability, resource) = parse_command(trimmed);
         let request = TurnRequest {
             session_id: SessionId(SESSION.to_string()),
-            persona: PersonaId(PERSONA.to_string()),
+            persona: persona_id_from(&compiled),
             task_id: None,
             utterance: trimmed.to_string(),
             capability,
@@ -83,14 +93,18 @@ fn main() {
         ts += 1;
 
         match engine.handle_turn(request) {
-            Ok(result) => print_turn_result(&result),
+            Ok(result) => print_turn_result(&result, detail),
             Err(err) => eprintln!("[error] {err}"),
         }
     }
 }
 
-fn build_engine() -> TurnEngine {
-    let persona = PersonaId(PERSONA.to_string());
+fn persona_id_from(compiled: &CompiledPersona) -> PersonaId {
+    PersonaId(compiled.persona_id.0.clone())
+}
+
+fn build_engine(compiled: &CompiledPersona) -> TurnEngine {
+    let persona = persona_id_from(compiled);
     let cfg = EngineConfig::wave3_default(persona);
     let policy: Arc<dyn PolicyEngine> = Arc::new(DefaultPolicyEngine::new(
         cfg,
@@ -100,7 +114,11 @@ fn build_engine() -> TurnEngine {
     ));
 
     let model_router = ReflexModelRouter::new();
-    let adapter = ModelRouterAdapter::new(model_router, PROVIDER_LABEL, RouterTier::Reflex);
+    // Persona-derived tier: the compiled CompiledRoutingRules.preferred_tier
+    // drives the adapter's tier choice. Cautious personas sit at local-*,
+    // Bold personas at remote-*.
+    let tier = tier_from_rules(&compiled.routing.preferred_tier);
+    let adapter = ModelRouterAdapter::new(model_router, PROVIDER_LABEL, tier);
     let router: Arc<dyn TurnRouter> = Arc::new(adapter);
 
     TurnEngine::new(policy, router)
@@ -144,8 +162,20 @@ fn path_scope_or_none(arg: &str) -> ResourceScope {
     }
 }
 
-fn print_banner() {
+fn print_banner(compiled: &CompiledPersona, detail: OutputDetail) {
     println!("Aether L1 demo — community preview.");
+    println!(
+        "persona     : {} (v{}, preferred tier {})",
+        compiled.persona_id.0, compiled.version, compiled.routing.preferred_tier,
+    );
+    println!("output mode : {detail:?}");
+    if !matches!(detail, OutputDetail::Terse) {
+        println!();
+        println!("--- system prompt (from L6) ---");
+        println!("{}", compiled.prompts.system);
+        println!("-------------------------------");
+    }
+    println!();
     println!(
         "Type a message, or try: 'read /tmp/x', 'delete /tmp/x', 'shell ls', 'browse https://…'."
     );
@@ -153,21 +183,51 @@ fn print_banner() {
     println!();
 }
 
-fn print_turn_result(result: &TurnResult) {
-    println!("  turn-id      : {}", result.turn_id.0);
-    println!("  final-state  : {:?}", result.final_state);
-    println!("  state-trace  : {}", format_trace(&result.state_trace));
-    println!(
-        "  policy       : {}",
-        format_decision(&result.policy_decision)
-    );
-
-    if let Some(r) = &result.route {
-        println!("  route        : tier={} provider={}", r.tier, r.provider);
-        println!("  response     : {}", r.response_text);
-    }
-    if let Some(b) = &result.block {
-        println!("  blocked      : {}", format_block(b));
+fn print_turn_result(result: &TurnResult, detail: OutputDetail) {
+    match detail {
+        OutputDetail::Terse => {
+            let route_summary = match (&result.route, &result.block) {
+                (Some(r), _) => format!("→ {}", r.response_text),
+                (_, Some(b)) => format!("blocked: {}", format_block(b)),
+                _ => String::from("(no route, no block)"),
+            };
+            println!(
+                "  {} [{:?}] {route_summary}",
+                result.turn_id.0, result.final_state
+            );
+        }
+        OutputDetail::Balanced => {
+            println!("  turn-id      : {}", result.turn_id.0);
+            println!("  final-state  : {:?}", result.final_state);
+            println!("  state-trace  : {}", format_trace(&result.state_trace));
+            println!(
+                "  policy       : {}",
+                decision_short(&result.policy_decision)
+            );
+            if let Some(r) = &result.route {
+                println!("  route        : tier={} provider={}", r.tier, r.provider);
+                println!("  response     : {}", r.response_text);
+            }
+            if let Some(b) = &result.block {
+                println!("  blocked      : {}", format_block(b));
+            }
+        }
+        OutputDetail::Verbose => {
+            println!("  turn-id      : {}", result.turn_id.0);
+            println!("  final-state  : {:?}", result.final_state);
+            println!("  state-trace  : {}", format_trace(&result.state_trace));
+            println!(
+                "  policy       : {}",
+                format_decision(&result.policy_decision)
+            );
+            if let Some(r) = &result.route {
+                println!("  route        : tier={} provider={}", r.tier, r.provider);
+                println!("  response     : {}", r.response_text);
+            }
+            if let Some(b) = &result.block {
+                println!("  blocked      : {}", format_block(b));
+            }
+        }
     }
     println!();
 }
@@ -213,6 +273,16 @@ fn format_decision(d: &Decision) -> String {
     }
 }
 
+fn decision_short(d: &Decision) -> &'static str {
+    match d {
+        Decision::Allow { .. } => "Allow",
+        Decision::Ask { .. } => "Ask",
+        Decision::Deny { .. } => "Deny",
+        Decision::NeedsUpgrade { .. } => "NeedsUpgrade",
+        Decision::DraftOnly { .. } => "DraftOnly",
+    }
+}
+
 fn format_block(b: &BlockReason) -> &'static str {
     match b {
         BlockReason::AwaitingApproval => "awaiting user approval (Ask ticket open)",
@@ -226,10 +296,15 @@ fn format_block(b: &BlockReason) -> &'static str {
 mod tests {
     use super::*;
 
-    fn req(cap: Capability, resource: ResourceScope, text: &str) -> TurnRequest {
+    fn req(
+        compiled: &CompiledPersona,
+        cap: Capability,
+        resource: ResourceScope,
+        text: &str,
+    ) -> TurnRequest {
         TurnRequest {
             session_id: SessionId(SESSION.to_string()),
-            persona: PersonaId(PERSONA.to_string()),
+            persona: persona_id_from(compiled),
             task_id: None,
             utterance: text.to_string(),
             capability: cap,
@@ -240,9 +315,11 @@ mod tests {
 
     #[test]
     fn demo_engine_runs_allow_path_end_to_end() {
-        let engine = build_engine();
+        let compiled = compile_demo_persona().unwrap();
+        let engine = build_engine(&compiled);
         let r = engine
             .handle_turn(req(
+                &compiled,
                 Capability::FilesRead,
                 ResourceScope::Path("/tmp/x".into()),
                 "read /tmp/x",
@@ -252,13 +329,21 @@ mod tests {
         assert_eq!(route.provider, PROVIDER_LABEL);
         assert!(route.response_text.contains("read /tmp/x"));
         assert!(r.block.is_none());
+        // Persona-derived tier surfaces through RouteOutcome.
+        assert_eq!(route.tier, compiled.routing.preferred_tier);
     }
 
     #[test]
     fn demo_engine_blocks_shell_exec() {
-        let engine = build_engine();
+        let compiled = compile_demo_persona().unwrap();
+        let engine = build_engine(&compiled);
         let r = engine
-            .handle_turn(req(Capability::ShellExec, ResourceScope::None, "shell"))
+            .handle_turn(req(
+                &compiled,
+                Capability::ShellExec,
+                ResourceScope::None,
+                "shell",
+            ))
             .unwrap();
         assert_eq!(r.block, Some(BlockReason::Denied));
         assert!(r.route.is_none());

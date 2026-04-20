@@ -20,6 +20,7 @@ path = "src/main.rs"
 aether-l1-interaction = { path = "../../packages/l1-interaction" }
 aether-l4-router      = { path = "../../packages/l4-router" }
 aether-l5-policy      = { path = "../../packages/l5-policy" }
+aether-l6-persona     = { path = "../../packages/l6-persona" }
 
 serde_json = { workspace = true }
 

@@ -20,6 +20,7 @@ dependencies = [
  "aether-l1-interaction",
  "aether-l4-router",
  "aether-l5-policy",
+ "aether-l6-persona",
  "serde_json",
 ]
 
