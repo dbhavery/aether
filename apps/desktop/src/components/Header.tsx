@@ -1,23 +1,31 @@
-import type { CompanionBanner, PresencePayload } from "../lib/types";
+import type {
+  CompanionBanner,
+  PersonaCatalogEntry,
+  PresencePayload,
+} from "../lib/types";
 import { PresenceDot } from "./PresenceDot";
 import { ProviderBadge } from "./ProviderBadge";
 
 interface Props {
   banner: CompanionBanner;
   presence: PresencePayload;
+  personas: PersonaCatalogEntry[];
   onOpenMemory: () => void;
   onOpenTrust: () => void;
   onReopenDisclosure: () => void;
   onClearSession: () => void;
+  onSwitchPersona: (id: string) => void;
 }
 
 export function Header({
   banner,
   presence,
+  personas,
   onOpenMemory,
   onOpenTrust,
   onReopenDisclosure,
   onClearSession,
+  onSwitchPersona,
 }: Props) {
   return (
     <header className="flex items-center justify-between border-b border-aether-border bg-aether-bg/95 px-5 py-3 backdrop-blur">
@@ -30,6 +38,26 @@ export function Header({
             · {banner.persona_name}
           </div>
         </div>
+        {personas.length > 1 && (
+          <>
+            <div className="h-5 w-px bg-aether-border" aria-hidden />
+            <label className="flex items-center gap-2 text-[11px] text-aether-muted">
+              <span className="hidden sm:inline">Persona</span>
+              <select
+                value={banner.persona_id}
+                onChange={(e) => onSwitchPersona(e.target.value)}
+                className="rounded-md border border-aether-border bg-aether-elevated px-2 py-1 text-[11.5px] text-aether-text focus:outline-none focus:ring-1 focus:ring-aether-accent"
+                title="Switch active persona (clears session)"
+              >
+                {personas.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} · {p.stance}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </>
+        )}
         <div className="h-5 w-px bg-aether-border" aria-hidden />
         <PresenceDot state={presence.state} detail={presence.detail} />
       </div>

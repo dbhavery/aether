@@ -1,13 +1,19 @@
 //! App-level shared state for the Tauri shell.
 //!
-//! Owns the compiled persona, memory store, policy engine, turn engine,
-//! presence controller, and the pending-approval registry that lets us
-//! split a turn across two IPC calls (submit → resolve_approval) without
-//! holding an async wait inside a Tauri command.
+//! Owns the currently-active compiled persona, memory store, policy
+//! engine, turn engine, presence controller, and the pending-approval
+//! registry that lets us split a turn across two IPC calls (submit →
+//! resolve_approval) without holding an async wait inside a Tauri
+//! command.
+//!
+//! The swappable engine pieces — compiled persona, turn engine, policy
+//! engine, audit store, provider mode — live inside an `RwLock` so
+//! `switch_persona` can rebuild them atomically without forcing every
+//! command site to take a write lock.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 use aether_l1_interaction::{TurnEngine, TurnRequest, TurnResult, TurnRouter};
 use aether_l2_memory::{InMemorySessionMemoryStore, SessionMemoryStore};
@@ -17,6 +23,7 @@ use aether_l5_policy::{
     InMemoryGrantLedger, InMemorySink, PersonaId,
 };
 use aether_l6_persona::{CompiledPersona, DefaultPersonaCompiler, PersonaProfile};
+use serde::Serialize;
 
 use crate::adapter::{ModelRouterAdapter, ReflexModelRouter};
 use crate::memory_router::MemoryAwareRouter;
@@ -25,25 +32,45 @@ use crate::provider::ProviderMode;
 /// The single active session id for v0. One conversation per app instance.
 pub const SESSION_ID: &str = "desktop-session";
 
-/// Application-wide shared state held in a Tauri `State<AppState>`. Every
-/// field is cheap to clone (`Arc` or primitive) — commands that mutate
-/// state take a single `Mutex` lock for the pending-approval registry.
-pub struct AppState {
+/// Default persona id used on boot when no explicit choice has been made.
+pub const DEFAULT_PERSONA_ID: &str = "aurora";
+
+/// Lightweight persona catalog entry — shown in the header picker. Not
+/// the same as a compiled persona; this is just the "which persona
+/// would you like?" menu surface.
+#[derive(Debug, Clone, Serialize)]
+pub struct PersonaCatalogEntry {
+    pub id: String,
+    pub name: String,
+    pub tagline: String,
+    pub stance: String,
+    pub tone: String,
+}
+
+/// The active engine pieces that must rebuild when the persona changes.
+/// Wrapped in `RwLock` on `AppState` so writers (persona switch) can
+/// swap the whole tuple at once while readers (every command) take a
+/// cheap shared lock.
+pub struct ActiveEngine {
     pub compiled: CompiledPersona,
-    /// Display name sourced from the profile (CompiledPersona drops it).
     pub persona_display_name: String,
-    /// Short tagline sourced from the profile description.
     pub persona_tagline: String,
-    pub presence: Arc<dyn PresenceController>,
-    pub memory: Arc<dyn SessionMemoryStore>,
     pub policy: Arc<dyn PolicyEngine>,
-    /// Direct handle for read-side audit queries (the PolicyEngine trait
-    /// does not expose a list API; we keep our own Arc and pass a clone
-    /// to the engine at construction).
     pub audit: Arc<dyn AuditStore>,
     pub engine: TurnEngine,
     pub provider_mode: ProviderMode,
     pub provider_label: String,
+}
+
+/// Application-wide shared state held in a Tauri `State<AppState>`.
+pub struct AppState {
+    /// Pre-defined personas available for runtime switching. Deliberately
+    /// hard-coded rather than loaded from YAML — that's a later slice
+    /// (persona-pack loader, per planning/17_persona_pack_schema.md).
+    pub catalog: Vec<PersonaProfile>,
+    pub presence: Arc<dyn PresenceController>,
+    pub memory: Arc<dyn SessionMemoryStore>,
+    pub active: RwLock<ActiveEngine>,
     ts: AtomicU64,
     pending: Mutex<HashMap<String, PendingTurn>>,
 }
@@ -57,58 +84,24 @@ pub struct PendingTurn {
 
 impl AppState {
     pub fn new() -> Result<Self, String> {
-        let profile = default_profile();
-        let persona_display_name = profile.name.clone();
-        let persona_tagline = profile.description.clone();
-        let compiled = DefaultPersonaCompiler::new()
-            .compile(&profile)
-            .map_err(|e| format!("persona compile: {e}"))?;
-
+        let catalog = default_catalog();
         let memory: Arc<dyn SessionMemoryStore> =
             Arc::new(InMemorySessionMemoryStore::new_default());
         let presence: Arc<dyn PresenceController> = Arc::new(InMemoryPresenceController::new());
-
-        let persona_id = PersonaId(compiled.persona_id.0.clone());
-        // Persona-driven defaults are threaded into the engine here so
-        // Cautious / Balanced / Bold stances actually change which
-        // capabilities are Auto vs Ask vs Deny in the shell. The preset
-        // is still the floor (ShellExec can never be promoted out of
-        // Deny); the overlay only adjusts modes the preset defines or
-        // adds new capabilities the persona cares about.
-        let cfg = EngineConfig::wave3_default(persona_id).with_persona_overlay(
-            &compiled.policy_defaults.per_capability_defaults,
-            compiled.policy_defaults.privacy_posture,
-        );
-        let audit: Arc<dyn AuditStore> = Arc::new(InMemoryAuditStore::new());
-        let policy: Arc<dyn PolicyEngine> = Arc::new(DefaultPolicyEngine::new(
-            cfg,
-            Arc::new(InMemoryGrantLedger::new()),
-            audit.clone(),
-            Arc::new(InMemorySink::new()),
-        ));
-
-        let (router, provider_mode, provider_label) = build_router_stack(&compiled, memory.clone());
-        let engine = TurnEngine::new(policy.clone(), router);
+        let active = build_active(&pick_default(&catalog), memory.clone())?;
 
         Ok(Self {
-            compiled,
-            persona_display_name,
-            persona_tagline,
+            catalog,
             presence,
             memory,
-            policy,
-            audit,
-            engine,
-            provider_mode,
-            provider_label,
+            active: RwLock::new(active),
             ts: AtomicU64::new(1_000),
             pending: Mutex::new(HashMap::new()),
         })
     }
 
     /// Monotonic millisecond counter for stamp fields. Not a wall clock;
-    /// stable within one process run. Wall-clock ms would require pulling
-    /// `chrono` or `time` — not worth it for v0.
+    /// stable within one process run.
     pub fn next_ts(&self) -> u64 {
         self.ts.fetch_add(1, Ordering::Relaxed)
     }
@@ -137,19 +130,134 @@ impl AppState {
         g.clear();
         Ok(())
     }
+
+    /// List the available personas in catalog order.
+    pub fn catalog_entries(&self) -> Vec<PersonaCatalogEntry> {
+        self.catalog.iter().map(profile_to_entry).collect()
+    }
+
+    /// Swap the active persona. Clears session state (memory, presence,
+    /// pending approvals) and rebuilds the engine / policy / audit
+    /// against the new persona's defaults. Audit chain is reset because
+    /// a different persona is a different trust surface.
+    pub fn switch_persona(&self, id: &str) -> Result<(), String> {
+        let profile = self
+            .catalog
+            .iter()
+            .find(|p| p.persona_id.0 == id)
+            .ok_or_else(|| format!("unknown persona: {id}"))?
+            .clone();
+        let new_active = build_active(&profile, self.memory.clone())?;
+        self.clear_session()?;
+        let mut w = self.active.write().expect("active write lock");
+        *w = new_active;
+        Ok(())
+    }
 }
 
-fn default_profile() -> PersonaProfile {
+fn pick_default(catalog: &[PersonaProfile]) -> PersonaProfile {
+    let want = std::env::var("AETHER_PERSONA").unwrap_or_else(|_| DEFAULT_PERSONA_ID.to_string());
+    catalog
+        .iter()
+        .find(|p| p.persona_id.0 == want)
+        .cloned()
+        .unwrap_or_else(|| catalog[0].clone())
+}
+
+fn profile_to_entry(p: &PersonaProfile) -> PersonaCatalogEntry {
+    PersonaCatalogEntry {
+        id: p.persona_id.0.clone(),
+        name: p.name.clone(),
+        tagline: p.description.clone(),
+        stance: stance_label(p.stance),
+        tone: tone_label(p.tone),
+    }
+}
+
+fn stance_label(s: aether_l6_persona::Stance) -> String {
+    use aether_l6_persona::Stance::*;
+    match s {
+        Cautious => "cautious",
+        Balanced => "balanced",
+        Bold => "bold",
+    }
+    .to_string()
+}
+
+fn tone_label(t: aether_l6_persona::Tone) -> String {
+    use aether_l6_persona::Tone::*;
+    match t {
+        Warm => "warm",
+        Neutral => "neutral",
+        Formal => "formal",
+    }
+    .to_string()
+}
+
+/// Build every swappable engine piece for the given profile.
+fn build_active(
+    profile: &PersonaProfile,
+    memory: Arc<dyn SessionMemoryStore>,
+) -> Result<ActiveEngine, String> {
+    let persona_display_name = profile.name.clone();
+    let persona_tagline = profile.description.clone();
+    let compiled = DefaultPersonaCompiler::new()
+        .compile(profile)
+        .map_err(|e| format!("persona compile: {e}"))?;
+
+    let persona_id = PersonaId(compiled.persona_id.0.clone());
+    let cfg = EngineConfig::wave3_default(persona_id).with_persona_overlay(
+        &compiled.policy_defaults.per_capability_defaults,
+        compiled.policy_defaults.privacy_posture,
+    );
+    let audit: Arc<dyn AuditStore> = Arc::new(InMemoryAuditStore::new());
+    let policy: Arc<dyn PolicyEngine> = Arc::new(DefaultPolicyEngine::new(
+        cfg,
+        Arc::new(InMemoryGrantLedger::new()),
+        audit.clone(),
+        Arc::new(InMemorySink::new()),
+    ));
+
+    let (router, provider_mode, provider_label) = build_router_stack(&compiled, memory);
+    let engine = TurnEngine::new(policy.clone(), router);
+
+    Ok(ActiveEngine {
+        compiled,
+        persona_display_name,
+        persona_tagline,
+        policy,
+        audit,
+        engine,
+        provider_mode,
+        provider_label,
+    })
+}
+
+/// Hard-coded persona catalog. Two voices to start: Aurora (warm /
+/// balanced) and Sable (neutral / bold). A cautious option is a good
+/// next add.
+fn default_catalog() -> Vec<PersonaProfile> {
     use aether_l6_persona::{Humor, Stance, Tone, Verbosity};
-    let mut p = PersonaProfile::simple("aurora", "Aurora");
-    p.description = String::from(
+
+    let mut aurora = PersonaProfile::simple("aurora", "Aurora");
+    aurora.description = String::from(
         "Warm and grounded. A calm presence for focused work. Local-first by default.",
     );
-    p.tone = Tone::Warm;
-    p.verbosity = Verbosity::Balanced;
-    p.stance = Stance::Balanced;
-    p.humor = Humor::Occasional;
-    p
+    aurora.tone = Tone::Warm;
+    aurora.verbosity = Verbosity::Balanced;
+    aurora.stance = Stance::Balanced;
+    aurora.humor = Humor::Occasional;
+
+    let mut sable = PersonaProfile::simple("sable", "Sable");
+    sable.description = String::from(
+        "Direct and decisive. Moves fast, auto-approves low-risk moves, still asks before touching anything sharp.",
+    );
+    sable.tone = Tone::Neutral;
+    sable.verbosity = Verbosity::Terse;
+    sable.stance = Stance::Bold;
+    sable.humor = Humor::Dry;
+
+    vec![aurora, sable]
 }
 
 fn build_router_stack(
@@ -164,9 +272,6 @@ fn build_router_stack(
                 Ok(cfg) => {
                     let provider = OllamaProvider::new(cfg.clone());
                     if provider.healthcheck().is_ok() {
-                        // Use the role-tagged path: instruction-tuned
-                        // models respond better to their own chat
-                        // template than to a pre-rendered transcript.
                         let tier =
                             crate::provider::tier_from_rules(&compiled.routing.preferred_tier);
                         let tier_label = crate::provider::tier_label(tier).to_string();

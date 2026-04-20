@@ -81,3 +81,11 @@ export interface TrustAuditRow {
   at_mono_ns: number;
   at_epoch_s: number;
 }
+
+export interface PersonaCatalogEntry {
+  id: string;
+  name: string;
+  tagline: string;
+  stance: string;
+  tone: string;
+}

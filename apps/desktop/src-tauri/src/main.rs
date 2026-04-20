@@ -35,6 +35,8 @@ fn main() {
             commands::memory_recent,
             commands::clear_session,
             commands::audit_recent,
+            commands::list_personas,
+            commands::switch_persona,
         ])
         .run(tauri::generate_context!())
         .expect("error while running aether-desktop");

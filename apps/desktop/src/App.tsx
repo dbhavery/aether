@@ -3,14 +3,17 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   clearSession as apiClearSession,
   companionBanner,
+  listPersonas,
   onPresence,
   presenceCurrent,
   resolveApproval,
   submitTurn,
+  switchPersona as apiSwitchPersona,
 } from "./lib/api";
 import type {
   ApprovalPayload,
   CompanionBanner,
+  PersonaCatalogEntry,
   PresencePayload,
   TranscriptMessage,
   TurnOutcome,
@@ -41,6 +44,7 @@ export function App() {
   const [memoryRefreshKey, setMemoryRefreshKey] = useState(0);
   const [forceDisclosure, setForceDisclosure] = useState(false);
   const [sessionNonce, setSessionNonce] = useState(0);
+  const [personas, setPersonas] = useState<PersonaCatalogEntry[]>([]);
 
   // Boot — load banner, seed presence, subscribe to presence events.
   useEffect(() => {
@@ -54,6 +58,9 @@ export function App() {
         const p = await presenceCurrent();
         if (!alive) return;
         setPresence(p);
+        const cat = await listPersonas();
+        if (!alive) return;
+        setPersonas(cat);
       } catch (e) {
         if (alive) setBootError(String(e));
       }
@@ -170,6 +177,37 @@ export function App() {
     setMemoryRefreshKey((k) => k + 1);
   }, []);
 
+  const handleSwitchPersona = useCallback(
+    async (id: string) => {
+      if (busy) return;
+      if (banner && id === banner.persona_id) return;
+      setBusy(true);
+      try {
+        const b = await apiSwitchPersona(id);
+        setBanner(b);
+        setMessages([]);
+        setPendingApproval(null);
+        setSessionNonce((n) => n + 1);
+        setMemoryRefreshKey((k) => k + 1);
+      } catch (e) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `err-${Date.now()}`,
+            role: "system",
+            content: `Could not switch persona: ${String(e)}`,
+            sequence: 0,
+            timestamp_ms: Date.now(),
+            meta: null,
+          },
+        ]);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [banner, busy],
+  );
+
   const fresh = messages.length === 0;
   const placeholder = useMemo(() => {
     if (banner?.provider_mode === "ollama") {
@@ -212,10 +250,12 @@ export function App() {
       <Header
         banner={banner}
         presence={presence}
+        personas={personas}
         onOpenMemory={() => setDrawer("memory")}
         onOpenTrust={() => setDrawer("trust")}
         onReopenDisclosure={() => setForceDisclosure(true)}
         onClearSession={handleClearSession}
+        onSwitchPersona={handleSwitchPersona}
       />
       <div className="flex flex-1 overflow-hidden">
         <div className="flex flex-1 flex-col">

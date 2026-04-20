@@ -80,18 +80,40 @@ pub struct PresencePayload {
 
 #[tauri::command]
 pub fn companion_banner(state: State<'_, AppState>) -> CompanionBanner {
-    let c = &state.compiled;
+    let a = state.active.read().expect("active read lock");
     CompanionBanner {
-        persona_id: c.persona_id.0.clone(),
-        persona_name: state.persona_display_name.clone(),
-        persona_version: c.version.to_string(),
-        preferred_tier: c.routing.preferred_tier.clone(),
-        provider_mode: state.provider_mode.as_str().to_string(),
-        provider_label: state.provider_label.clone(),
-        output_detail: detail_label(c.voice.rate),
-        tagline: state.persona_tagline.clone(),
-        system_prompt: c.prompts.system.clone(),
+        persona_id: a.compiled.persona_id.0.clone(),
+        persona_name: a.persona_display_name.clone(),
+        persona_version: a.compiled.version.to_string(),
+        preferred_tier: a.compiled.routing.preferred_tier.clone(),
+        provider_mode: a.provider_mode.as_str().to_string(),
+        provider_label: a.provider_label.clone(),
+        output_detail: detail_label(a.compiled.voice.rate),
+        tagline: a.persona_tagline.clone(),
+        system_prompt: a.compiled.prompts.system.clone(),
     }
+}
+
+#[tauri::command]
+pub fn list_personas(state: State<'_, AppState>) -> Vec<crate::state::PersonaCatalogEntry> {
+    state.catalog_entries()
+}
+
+#[tauri::command]
+pub fn switch_persona(
+    id: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<CompanionBanner, String> {
+    state.switch_persona(&id)?;
+    transition_presence(
+        &app,
+        &state.presence,
+        PresenceState::Quiet,
+        state.next_ts(),
+        None,
+    );
+    Ok(companion_banner(state))
 }
 
 fn detail_label(rate: f32) -> String {
@@ -126,14 +148,17 @@ pub fn submit_turn(
     );
     let ts = state.next_ts();
     let (capability, resource) = parse_command(&text);
-    let request = TurnRequest {
-        session_id: SessionId(SESSION_ID.into()),
-        persona: PersonaId(state.compiled.persona_id.0.clone()),
-        task_id: None,
-        utterance: text.clone(),
-        capability,
-        resource,
-        emitted_at: MonotonicTimestamp(ts),
+    let request = {
+        let a = state.active.read().expect("active read lock");
+        TurnRequest {
+            session_id: SessionId(SESSION_ID.into()),
+            persona: PersonaId(a.compiled.persona_id.0.clone()),
+            task_id: None,
+            utterance: text.clone(),
+            capability,
+            resource,
+            emitted_at: MonotonicTimestamp(ts),
+        }
     };
     transition_presence(
         &app,
@@ -143,10 +168,12 @@ pub fn submit_turn(
         None,
     );
 
-    let first = state
-        .engine
-        .handle_turn(request.clone())
-        .map_err(|e| format!("engine error: {e}"))?;
+    let first = {
+        let a = state.active.read().expect("active read lock");
+        a.engine
+            .handle_turn(request.clone())
+            .map_err(|e| format!("engine error: {e}"))?
+    };
 
     if let Decision::Ask { ticket, .. } = &first.policy_decision {
         let prompt = approval_prompt_from_ticket(ticket.clone(), None);
@@ -206,10 +233,12 @@ pub fn resolve_approval(
     };
     let response =
         build_approval_response(&ticket, resolution, MonotonicTimestamp(state.next_ts()));
-    state
-        .policy
-        .respond_approval(response)
-        .map_err(|e| format!("respond_approval: {e}"))?;
+    {
+        let a = state.active.read().expect("active read lock");
+        a.policy
+            .respond_approval(response)
+            .map_err(|e| format!("respond_approval: {e}"))?;
+    }
 
     transition_presence(
         &app,
@@ -220,8 +249,8 @@ pub fn resolve_approval(
     );
 
     let final_result: TurnResult = if approve {
-        state
-            .engine
+        let a = state.active.read().expect("active read lock");
+        a.engine
             .handle_turn(pending.request.clone())
             .map_err(|e| format!("post-approval engine: {e}"))?
     } else {
@@ -316,7 +345,10 @@ pub fn audit_recent(
 ) -> Result<Vec<TrustAuditRow>, String> {
     let filter = AuditFilter::default();
     let cap = limit.unwrap_or(50).clamp(1, 500);
-    let rows = state.audit.query(&filter, cap);
+    let rows = {
+        let a = state.active.read().expect("active read lock");
+        a.audit.query(&filter, cap)
+    };
     Ok(rows
         .into_iter()
         .map(|r| TrustAuditRow {

@@ -7,6 +7,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import type {
   CompanionBanner,
+  PersonaCatalogEntry,
   PresencePayload,
   TranscriptMessage,
   TrustAuditRow,
@@ -53,4 +54,12 @@ export function onPresence(
   handler: (p: PresencePayload) => void,
 ): Promise<UnlistenFn> {
   return listen<PresencePayload>("presence:update", (e) => handler(e.payload));
+}
+
+export async function listPersonas(): Promise<PersonaCatalogEntry[]> {
+  return invoke<PersonaCatalogEntry[]>("list_personas");
+}
+
+export async function switchPersona(id: string): Promise<CompanionBanner> {
+  return invoke<CompanionBanner>("switch_persona", { id });
 }
