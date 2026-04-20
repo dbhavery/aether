@@ -6,6 +6,7 @@ interface Props {
   banner: CompanionBanner;
   presence: PresencePayload;
   onOpenMemory: () => void;
+  onOpenTrust: () => void;
   onReopenDisclosure: () => void;
   onClearSession: () => void;
 }
@@ -14,6 +15,7 @@ export function Header({
   banner,
   presence,
   onOpenMemory,
+  onOpenTrust,
   onReopenDisclosure,
   onClearSession,
 }: Props) {
@@ -41,6 +43,14 @@ export function Header({
           title="Inspect session memory"
         >
           Memory
+        </button>
+        <button
+          type="button"
+          onClick={onOpenTrust}
+          className="rounded-md border border-transparent px-2.5 py-1 text-[11.5px] text-aether-muted transition-colors hover:border-aether-border hover:text-aether-text"
+          title="Review every decision Aether has made"
+        >
+          Trust
         </button>
         <button
           type="button"

@@ -7,7 +7,8 @@ use aether_l1_interaction::{BlockReason, TurnRequest, TurnResult, TurnState};
 use aether_l2_memory::MemoryRole;
 use aether_l3_presence::{PresenceController, PresenceState};
 use aether_l5_policy::{
-    Capability, Decision, MonotonicTimestamp, PersonaId, ResourceScope, SessionId,
+    AuditFilter, Capability, Decision, DecisionKind, MonotonicTimestamp, PersonaId, ResourceScope,
+    SessionId,
 };
 use aether_l7_trust::{
     approval_prompt_from_ticket, build_approval_response, human_capability, human_scope,
@@ -291,6 +292,53 @@ pub fn clear_session(state: State<'_, AppState>, app: AppHandle) -> Result<(), S
         None,
     );
     Ok(())
+}
+
+/// Audit row projected for the UI. Tiny subset of `AuditRecordEvent` —
+/// enough for a trust panel showing "what did Aether decide, when, and
+/// about what".
+#[derive(Debug, Clone, Serialize)]
+pub struct TrustAuditRow {
+    pub audit_id: String,
+    pub decision: String,
+    pub capability: String,
+    pub scope: String,
+    pub change_id: String,
+    pub at_mono_ns: u64,
+    pub at_epoch_s: i64,
+}
+
+#[tauri::command]
+pub fn audit_recent(
+    limit: Option<u32>,
+    state: State<'_, AppState>,
+) -> Result<Vec<TrustAuditRow>, String> {
+    let filter = AuditFilter::default();
+    let cap = limit.unwrap_or(50).clamp(1, 500);
+    let rows = state.audit.query(&filter, cap);
+    Ok(rows
+        .into_iter()
+        .map(|r| TrustAuditRow {
+            audit_id: r.audit_id.0,
+            decision: decision_kind_label(r.decision).to_string(),
+            capability: aether_l7_trust::human_capability(&r.capability).to_string(),
+            scope: aether_l7_trust::human_scope(&r.resource),
+            change_id: r.change_id.0,
+            at_mono_ns: r.timestamp_monotonic.0,
+            at_epoch_s: r.timestamp_wall.epoch_s,
+        })
+        .collect())
+}
+
+fn decision_kind_label(k: DecisionKind) -> &'static str {
+    match k {
+        DecisionKind::Allow => "allow",
+        DecisionKind::Ask => "ask",
+        DecisionKind::Deny => "deny",
+        DecisionKind::NeedsUpgrade => "needs_upgrade",
+        DecisionKind::DraftOnlySystem => "draft_only_system",
+        DecisionKind::DraftOnlyUserChoice => "draft_only_user_choice",
+    }
 }
 
 fn role_label(r: MemoryRole) -> &'static str {

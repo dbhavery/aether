@@ -9,6 +9,7 @@ import type {
   CompanionBanner,
   PresencePayload,
   TranscriptMessage,
+  TrustAuditRow,
   TurnOutcome,
 } from "./types";
 
@@ -40,6 +41,12 @@ export async function memoryRecent(): Promise<TranscriptMessage[]> {
 
 export async function clearSession(): Promise<void> {
   return invoke<void>("clear_session");
+}
+
+export async function auditRecent(
+  limit: number = 50,
+): Promise<TrustAuditRow[]> {
+  return invoke<TrustAuditRow[]>("audit_recent", { limit });
 }
 
 export function onPresence(

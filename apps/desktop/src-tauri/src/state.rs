@@ -13,7 +13,7 @@ use aether_l1_interaction::{TurnEngine, TurnRequest, TurnResult, TurnRouter};
 use aether_l2_memory::{InMemorySessionMemoryStore, SessionMemoryStore};
 use aether_l3_presence::{InMemoryPresenceController, PresenceController};
 use aether_l5_policy::{
-    policy_engine::PolicyEngine, DefaultPolicyEngine, EngineConfig, InMemoryAuditStore,
+    policy_engine::PolicyEngine, AuditStore, DefaultPolicyEngine, EngineConfig, InMemoryAuditStore,
     InMemoryGrantLedger, InMemorySink, PersonaId,
 };
 use aether_l6_persona::{CompiledPersona, DefaultPersonaCompiler, PersonaProfile};
@@ -37,6 +37,10 @@ pub struct AppState {
     pub presence: Arc<dyn PresenceController>,
     pub memory: Arc<dyn SessionMemoryStore>,
     pub policy: Arc<dyn PolicyEngine>,
+    /// Direct handle for read-side audit queries (the PolicyEngine trait
+    /// does not expose a list API; we keep our own Arc and pass a clone
+    /// to the engine at construction).
+    pub audit: Arc<dyn AuditStore>,
     pub engine: TurnEngine,
     pub provider_mode: ProviderMode,
     pub provider_label: String,
@@ -66,10 +70,11 @@ impl AppState {
 
         let persona_id = PersonaId(compiled.persona_id.0.clone());
         let cfg = EngineConfig::wave3_default(persona_id);
+        let audit: Arc<dyn AuditStore> = Arc::new(InMemoryAuditStore::new());
         let policy: Arc<dyn PolicyEngine> = Arc::new(DefaultPolicyEngine::new(
             cfg,
             Arc::new(InMemoryGrantLedger::new()),
-            Arc::new(InMemoryAuditStore::new()),
+            audit.clone(),
             Arc::new(InMemorySink::new()),
         ));
 
@@ -83,6 +88,7 @@ impl AppState {
             presence,
             memory,
             policy,
+            audit,
             engine,
             provider_mode,
             provider_label,

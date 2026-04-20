@@ -63,3 +63,21 @@ export interface PresencePayload {
   detail: string | null;
   updated_at_ms: number;
 }
+
+export type AuditDecisionLabel =
+  | "allow"
+  | "ask"
+  | "deny"
+  | "needs_upgrade"
+  | "draft_only_system"
+  | "draft_only_user_choice";
+
+export interface TrustAuditRow {
+  audit_id: string;
+  decision: AuditDecisionLabel;
+  capability: string;
+  scope: string;
+  change_id: string;
+  at_mono_ns: number;
+  at_epoch_s: number;
+}

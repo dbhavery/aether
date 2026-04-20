@@ -23,6 +23,7 @@ import { InputBar } from "./components/InputBar";
 import { MemoryDrawer } from "./components/MemoryDrawer";
 import { PersonaCard } from "./components/PersonaCard";
 import { Transcript } from "./components/Transcript";
+import { TrustDrawer } from "./components/TrustDrawer";
 
 export function App() {
   const [banner, setBanner] = useState<CompanionBanner | null>(null);
@@ -36,7 +37,7 @@ export function App() {
   const [pendingApproval, setPendingApproval] =
     useState<ApprovalPayload | null>(null);
   const [busy, setBusy] = useState(false);
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawer, setDrawer] = useState<"none" | "memory" | "trust">("none");
   const [memoryRefreshKey, setMemoryRefreshKey] = useState(0);
   const [forceDisclosure, setForceDisclosure] = useState(false);
   const [sessionNonce, setSessionNonce] = useState(0);
@@ -211,7 +212,8 @@ export function App() {
       <Header
         banner={banner}
         presence={presence}
-        onOpenMemory={() => setDrawerOpen(true)}
+        onOpenMemory={() => setDrawer("memory")}
+        onOpenTrust={() => setDrawer("trust")}
         onReopenDisclosure={() => setForceDisclosure(true)}
         onClearSession={handleClearSession}
       />
@@ -227,9 +229,14 @@ export function App() {
         </div>
       </div>
       <MemoryDrawer
-        open={drawerOpen}
+        open={drawer === "memory"}
         refreshKey={memoryRefreshKey}
-        onClose={() => setDrawerOpen(false)}
+        onClose={() => setDrawer("none")}
+      />
+      <TrustDrawer
+        open={drawer === "trust"}
+        refreshKey={memoryRefreshKey}
+        onClose={() => setDrawer("none")}
       />
       {pendingApproval && (
         <ApprovalModal
