@@ -18,7 +18,7 @@ pub mod error;
 
 pub use compiler::{
     CompiledBehaviorMap, CompiledMemoryHints, CompiledPersona, CompiledPrompts,
-    CompiledRoutingRules, CompiledToolAllowList, CompiledVoiceConfig, PersonaCompiler,
-    PersonaId, PersonaPack, SwapState,
+    CompiledRoutingRules, CompiledToolAllowList, CompiledVoiceConfig, PersonaCompiler, PersonaId,
+    PersonaPack, SwapState,
 };
 pub use error::L6Error;

@@ -6,12 +6,25 @@ use aether_l1_interaction::*;
 fn turn_state_machine_has_nineteen_variants_named() {
     // If any of these evaporates during refactor, the compile breaks here.
     let _all = [
-        TurnState::Idle, TurnState::Listening, TurnState::EndOfUserSpeech,
-        TurnState::ReflexClassifying, TurnState::ReflexAck, TurnState::DeliberativeThinking,
-        TurnState::RouterDispatched, TurnState::AwaitingPolicyApproval, TurnState::PolicyDenied,
-        TurnState::ToolExecuting, TurnState::ToolCompleted, TurnState::Drafting,
-        TurnState::Speaking, TurnState::BargeIn, TurnState::Repairing,
-        TurnState::Deflected, TurnState::Completed, TurnState::TimedOut, TurnState::Errored,
+        TurnState::Idle,
+        TurnState::Listening,
+        TurnState::EndOfUserSpeech,
+        TurnState::ReflexClassifying,
+        TurnState::ReflexAck,
+        TurnState::DeliberativeThinking,
+        TurnState::RouterDispatched,
+        TurnState::AwaitingPolicyApproval,
+        TurnState::PolicyDenied,
+        TurnState::ToolExecuting,
+        TurnState::ToolCompleted,
+        TurnState::Drafting,
+        TurnState::Speaking,
+        TurnState::BargeIn,
+        TurnState::Repairing,
+        TurnState::Deflected,
+        TurnState::Completed,
+        TurnState::TimedOut,
+        TurnState::Errored,
     ];
     assert_eq!(_all.len(), 19);
 }

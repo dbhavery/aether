@@ -39,7 +39,10 @@ fn cold_open_creates_all_policy_tables() {
                 |r| r.get(0),
             )
             .unwrap_or_else(|e| panic!("failed to query for table '{table}': {e}"));
-        assert_eq!(count, 1, "expected table '{table}' to exist after migrations");
+        assert_eq!(
+            count, 1,
+            "expected table '{table}' to exist after migrations"
+        );
     }
 }
 

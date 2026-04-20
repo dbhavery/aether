@@ -19,6 +19,4 @@ pub mod error;
 pub mod shell;
 
 pub use error::L7Error;
-pub use shell::{
-    ApprovalPrompt, OnboardingScreen, OnboardingState, PostureBanner, ShellAdapter,
-};
+pub use shell::{ApprovalPrompt, OnboardingScreen, OnboardingState, PostureBanner, ShellAdapter};

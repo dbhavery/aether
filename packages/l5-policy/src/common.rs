@@ -14,14 +14,32 @@ macro_rules! id_newtype {
     };
 }
 
-id_newtype!(RequestId, "ULID of a single `ActionRequest`. Process-unique.");
-id_newtype!(TurnId, "L1 turn identifier; correlates with turn state machine.");
+id_newtype!(
+    RequestId,
+    "ULID of a single `ActionRequest`. Process-unique."
+);
+id_newtype!(
+    TurnId,
+    "L1 turn identifier; correlates with turn state machine."
+);
 id_newtype!(TaskId, "Task id for task-scoped grants.");
-id_newtype!(SessionId, "Session id for session-scoped counters and grants.");
-id_newtype!(PersonaId, "Persona id. Privileged overlay flag is a separate field.");
-id_newtype!(PresetId, "Named policy preset (Balanced, Operator, Analyst, ...).");
+id_newtype!(
+    SessionId,
+    "Session id for session-scoped counters and grants."
+);
+id_newtype!(
+    PersonaId,
+    "Persona id. Privileged overlay flag is a separate field."
+);
+id_newtype!(
+    PresetId,
+    "Named policy preset (Balanced, Operator, Analyst, ...)."
+);
 id_newtype!(ChangeId, "Correlation id for a write-class command chain.");
-id_newtype!(AuditIdString, "String form of an audit id; see audit::AuditId.");
+id_newtype!(
+    AuditIdString,
+    "String form of an audit id; see audit::AuditId."
+);
 
 /// Bus-global monotonic sequence number.
 pub type Seq = u64;

@@ -18,6 +18,10 @@ fn nine_behavior_classes_named() {
 
 #[test]
 fn three_tiers_named() {
-    let _all = [PresenceTier::Lite, PresenceTier::Balanced, PresenceTier::Pro];
+    let _all = [
+        PresenceTier::Lite,
+        PresenceTier::Balanced,
+        PresenceTier::Pro,
+    ];
     assert_eq!(_all.len(), 3);
 }

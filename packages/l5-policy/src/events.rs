@@ -9,9 +9,7 @@ use crate::approval::ApprovalTicketId;
 use crate::audit::{AuditId, AuditRecordEvent};
 use crate::byok::{CostWindow, ProviderId};
 use crate::capability::{Capability, ResourceScope, RiskClass};
-use crate::common::{
-    ActorRef, Cents, ChangeId, MonotonicTimestamp, PersonaId, RequestId, Seq,
-};
+use crate::common::{ActorRef, Cents, ChangeId, MonotonicTimestamp, PersonaId, RequestId, Seq};
 use crate::decision::{DecisionKind, StaticReasonId};
 use crate::grants::{ApprovalMode, GrantDuration, GrantId};
 use crate::posture::{PolicyPostureSummary, PostureTrigger, WarnLevel};

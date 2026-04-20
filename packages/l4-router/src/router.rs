@@ -81,11 +81,7 @@ pub trait ProviderAdapter: Send + Sync {
     /// Is this provider currently reachable?
     fn healthcheck(&self) -> Result<(), L4Error>;
     /// Dispatch a completion request; blocking for Wave 4 contract clarity.
-    fn complete(
-        &self,
-        prompt: &str,
-        tier: RouterTier,
-    ) -> Result<String, L4Error>;
+    fn complete(&self, prompt: &str, tier: RouterTier) -> Result<String, L4Error>;
 }
 
 /// Router surface consumed by L1. Every tool-call and remote-model request

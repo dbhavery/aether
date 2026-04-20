@@ -84,10 +84,22 @@ fn safe_capability_allows_and_issues_session_grant() {
         ))
         .expect("evaluate should succeed");
 
-    assert!(matches!(d, Decision::Allow { grant_ref: Some(_), .. }));
+    assert!(matches!(
+        d,
+        Decision::Allow {
+            grant_ref: Some(_),
+            ..
+        }
+    ));
     assert_eq!(d.kind(), DecisionKind::Allow);
     assert_eq!(
-        ledger.snapshot(&GrantFilter { active_only: true, persona_id: Some(persona.clone()), capability: Some(Capability::FilesRead) }).len(),
+        ledger
+            .snapshot(&GrantFilter {
+                active_only: true,
+                persona_id: Some(persona.clone()),
+                capability: Some(Capability::FilesRead)
+            })
+            .len(),
         1,
         "one session grant issued for the Auto capability"
     );
@@ -96,10 +108,22 @@ fn safe_capability_allows_and_issues_session_grant() {
     assert_eq!(audit.count_kind(DecisionKind::Allow), 1);
 
     // Event family emitted: ActionRequest, AuditRecord, GrantIssued, PolicyDecision.
-    assert_eq!(count_events(&sink, |e| matches!(e, L5Event::ActionRequest(_))), 1);
-    assert_eq!(count_events(&sink, |e| matches!(e, L5Event::AuditRecord(_))), 1);
-    assert_eq!(count_events(&sink, |e| matches!(e, L5Event::GrantIssued(_))), 1);
-    assert_eq!(count_events(&sink, |e| matches!(e, L5Event::PolicyDecision(_))), 1);
+    assert_eq!(
+        count_events(&sink, |e| matches!(e, L5Event::ActionRequest(_))),
+        1
+    );
+    assert_eq!(
+        count_events(&sink, |e| matches!(e, L5Event::AuditRecord(_))),
+        1
+    );
+    assert_eq!(
+        count_events(&sink, |e| matches!(e, L5Event::GrantIssued(_))),
+        1
+    );
+    assert_eq!(
+        count_events(&sink, |e| matches!(e, L5Event::PolicyDecision(_))),
+        1
+    );
 }
 
 #[test]
@@ -125,14 +149,29 @@ fn second_evaluate_reuses_existing_grant_and_does_not_issue_new() {
         ))
         .unwrap();
 
-    assert!(matches!(d, Decision::Allow { grant_ref: Some(_), .. }));
+    assert!(matches!(
+        d,
+        Decision::Allow {
+            grant_ref: Some(_),
+            ..
+        }
+    ));
     assert_eq!(
-        ledger.snapshot(&GrantFilter { active_only: true, persona_id: Some(persona.clone()), capability: Some(Capability::FilesRead) }).len(),
+        ledger
+            .snapshot(&GrantFilter {
+                active_only: true,
+                persona_id: Some(persona.clone()),
+                capability: Some(Capability::FilesRead)
+            })
+            .len(),
         1,
         "still exactly one grant — the Auto-mode fast path reused it"
     );
     // Only one GrantIssued in the event stream.
-    assert_eq!(count_events(&sink, |e| matches!(e, L5Event::GrantIssued(_))), 1);
+    assert_eq!(
+        count_events(&sink, |e| matches!(e, L5Event::GrantIssued(_))),
+        1
+    );
 }
 
 // -------------------------------------------------------------------------
@@ -198,10 +237,12 @@ fn defer_to_draft_resolves_to_draft_only_user_choice() {
         .expect("respond_approval succeeds");
 
     // A follow-up PolicyDecision event with DraftOnlyUserChoice was emitted.
-    let draft_user_events = sink.count_where(|e| matches!(
-        e,
-        L5Event::PolicyDecision(pd) if pd.decision == DecisionKind::DraftOnlyUserChoice
-    ));
+    let draft_user_events = sink.count_where(|e| {
+        matches!(
+            e,
+            L5Event::PolicyDecision(pd) if pd.decision == DecisionKind::DraftOnlyUserChoice
+        )
+    });
     assert_eq!(draft_user_events, 1);
     assert_eq!(audit.count_kind(DecisionKind::DraftOnlyUserChoice), 1);
 }
@@ -250,7 +291,13 @@ fn allow_approval_issues_grant_that_covers_future_evaluates() {
             200,
         ))
         .unwrap();
-    assert!(matches!(d2, Decision::Allow { grant_ref: Some(_), .. }));
+    assert!(matches!(
+        d2,
+        Decision::Allow {
+            grant_ref: Some(_),
+            ..
+        }
+    ));
 }
 
 // -------------------------------------------------------------------------
@@ -410,8 +457,13 @@ fn capability_outside_preset_returns_needs_upgrade() {
 
     assert_eq!(d.kind(), DecisionKind::NeedsUpgrade);
     match d {
-        Decision::NeedsUpgrade { suggested_preset, .. } => {
-            assert!(suggested_preset.is_some(), "operator-preset suggestion expected");
+        Decision::NeedsUpgrade {
+            suggested_preset, ..
+        } => {
+            assert!(
+                suggested_preset.is_some(),
+                "operator-preset suggestion expected"
+            );
         }
         _ => unreachable!(),
     }
@@ -436,7 +488,10 @@ fn shell_exec_is_mode_denied() {
         .unwrap();
 
     match d {
-        Decision::Deny { reason: DenyReason::ModeDeny, .. } => {}
+        Decision::Deny {
+            reason: DenyReason::ModeDeny,
+            ..
+        } => {}
         other => panic!("expected Deny(ModeDeny), got {:?}", other),
     }
     assert_eq!(audit.count_kind(DecisionKind::Deny), 1);

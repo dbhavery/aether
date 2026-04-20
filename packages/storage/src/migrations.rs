@@ -25,10 +25,7 @@ pub const MIGRATIONS: &[Migration] = &[MIGRATION_0001_INIT];
 
 /// Return the expected schema-version id after applying every known migration.
 pub fn expected_head_id() -> &'static str {
-    MIGRATIONS
-        .last()
-        .map(|m| m.id)
-        .unwrap_or("pre-genesis")
+    MIGRATIONS.last().map(|m| m.id).unwrap_or("pre-genesis")
 }
 
 #[cfg(test)]
@@ -40,7 +37,10 @@ mod tests {
         let ids: Vec<_> = MIGRATIONS.iter().map(|m| m.id).collect();
         let mut sorted = ids.clone();
         sorted.sort_unstable();
-        assert_eq!(ids, sorted, "MIGRATIONS must be declared in ascending order");
+        assert_eq!(
+            ids, sorted,
+            "MIGRATIONS must be declared in ascending order"
+        );
     }
 
     #[test]

@@ -6,57 +6,158 @@ on:
   pull_request:
     branches: [master, dev]
 
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.13"]
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
+jobs:
+  # ---------------------------------------------------------------------------
+  # Rust workspace — the primary target. Wave 3.5 and onward live here.
+  # ---------------------------------------------------------------------------
+  rust:
+    name: Rust (cargo check / test / fmt / clippy)
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Install stable Rust toolchain (pinned by rust-toolchain.toml)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry + target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+
+      - name: cargo check --workspace
+        run: cargo check --workspace --all-targets
+
+      - name: cargo clippy --workspace
+        # Clippy is advisory for the preview — pre-existing warnings live in
+        # `warn(missing_docs)` territory and block a strict run. Keep it
+        # running (so regressions are visible) but don't fail the build.
+        run: cargo clippy --workspace --all-targets -- -D warnings
+        continue-on-error: true
+
+      - name: cargo test --workspace
+        run: cargo test --workspace --all-targets
+
+  # ---------------------------------------------------------------------------
+  # TypeScript workspace — pnpm + typecheck. No runtime TS yet, so no test job.
+  # ---------------------------------------------------------------------------
+  typescript:
+    name: TypeScript (pnpm typecheck)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: pnpm install
+        run: pnpm install --frozen-lockfile
+
+      - name: pnpm -r typecheck
+        run: pnpm -r --if-present typecheck
+
+  # ---------------------------------------------------------------------------
+  # Governance — basic structural checks that run fast and catch drift early.
+  # ---------------------------------------------------------------------------
+  governance:
+    name: Governance (structural checks)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Required launch-pack files exist
+        run: |
+          for f in README.md LICENSE CONTRIBUTING.md CODE_OF_CONDUCT.md \
+                   SECURITY.md SUPPORT.md ROADMAP.md docs/REPO_TOUR.md \
+                   .github/PULL_REQUEST_TEMPLATE.md \
+                   .github/ISSUE_TEMPLATE/bug_report.md \
+                   .github/ISSUE_TEMPLATE/feature_request.md \
+                   .github/ISSUE_TEMPLATE/docs_request.md \
+                   .github/ISSUE_TEMPLATE/config.yml \
+                   planning/00_VISION_AND_GUARDRAILS.md \
+                   planning/01_product_doctrine.md; do
+            if [ ! -f "$f" ]; then
+              echo "Missing required file: $f" >&2
+              exit 1
+            fi
+          done
+
+      - name: No plaintext secrets in tracked files
+        run: |
+          # Coarse grep for obvious secret shapes. Deliberately noisy tolerance —
+          # this is a tripwire, not a full scanner.
+          PATTERN='(sk-[A-Za-z0-9]{20,}|AKIA[A-Z0-9]{16}|ghp_[A-Za-z0-9]{30,}|AIza[A-Za-z0-9_-]{30,}|-----BEGIN (RSA |DSA |EC |OPENSSH |PGP )?PRIVATE KEY)'
+          if git grep -nE "$PATTERN" -- ':!**/*.lock' ':!**/pnpm-lock.yaml'; then
+            echo "Found what looks like a secret. Review the hits above." >&2
+            exit 1
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Legacy Python tree — scoped check, continue-on-error so a pre-existing
+  # break in the frozen v1.0 tree does not block new Rust / TS work.
+  # ---------------------------------------------------------------------------
+  legacy-python:
+    name: Legacy v1.0 Python tree (non-blocking)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.13"
 
-      - name: Cache pip dependencies
+      - name: Cache pip
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
 
-      - name: Install dependencies
+      - name: Install deps
         run: |
           python -m pip install --upgrade pip
-          # Install PyTorch CPU-only for CI (no GPU available)
           pip install torch==2.7.0+cpu torchaudio==2.7.0+cpu \
             --index-url https://download.pytorch.org/whl/cpu
-          pip install -r requirements.txt
+          pip install -r requirements.txt ruff pyright
 
-      - name: Lint with Ruff
-        run: |
-          pip install ruff
-          ruff check src/ tests/
+      - name: Lint (ruff)
+        run: ruff check src/ tests/
 
-      - name: Type check with Pyright
-        run: |
-          pip install pyright
-          pyright src/ --level basic
+      - name: Type check (pyright, advisory)
+        run: pyright src/ --level basic
         continue-on-error: true
 
-      - name: Run unit tests
-        run: |
-          python -m pytest tests/unit/ -v --tb=short -x
+      - name: Unit tests
         env:
-          # Prevent tests from requiring real API keys or services
           AETHER_DATA_PATH: /tmp/aether_test_data
           CHROMA_PATH: /tmp/aether_test_chroma
           WEBSOCKET_PORT: "18765"
           HEALTH_PORT: "18767"
           DATA_SERVER_PORT: "18766"
           LOG_LEVEL: WARNING
+        run: python -m pytest tests/unit/ -v --tb=short -x

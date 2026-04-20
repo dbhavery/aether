@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "description": "Aether monorepo root — workspace tooling only. No runtime code here.",
-  "license": "Apache-2.0",
+  "license": "MIT",
   "packageManager": "pnpm@9.12.0",
   "engines": {
     "node": ">=20.10"

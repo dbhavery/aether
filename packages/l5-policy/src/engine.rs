@@ -35,9 +35,7 @@ use std::sync::{Arc, Mutex};
 use crate::approval::{ApprovalResponse, ApprovalTicket, ApprovalTicketId, UserChoice};
 use crate::audit::{AuditId, AuditRecordEvent, KeyId};
 use crate::audit_store::InMemoryAuditStore;
-use crate::capability::{
-    Capability, CapabilityFilter, CapabilityInfo, CapabilityPath, RiskClass,
-};
+use crate::capability::{Capability, CapabilityFilter, CapabilityInfo, CapabilityPath, RiskClass};
 use crate::common::{
     ActorRef, ChangeId, MonotonicTimestamp, PersonaId, PresetId, TaskId, WallTimestamp,
 };
@@ -99,23 +97,38 @@ impl EngineConfig {
         let mut d: HashMap<Capability, CapabilityPolicy> = HashMap::new();
         d.insert(
             Capability::FilesRead,
-            CapabilityPolicy { mode: ApprovalMode::Auto, risk: RiskClass::Low },
+            CapabilityPolicy {
+                mode: ApprovalMode::Auto,
+                risk: RiskClass::Low,
+            },
         );
         d.insert(
             Capability::FilesCreate,
-            CapabilityPolicy { mode: ApprovalMode::Ask, risk: RiskClass::Medium },
+            CapabilityPolicy {
+                mode: ApprovalMode::Ask,
+                risk: RiskClass::Medium,
+            },
         );
         d.insert(
             Capability::FilesEdit,
-            CapabilityPolicy { mode: ApprovalMode::Ask, risk: RiskClass::Medium },
+            CapabilityPolicy {
+                mode: ApprovalMode::Ask,
+                risk: RiskClass::Medium,
+            },
         );
         d.insert(
             Capability::FilesDelete,
-            CapabilityPolicy { mode: ApprovalMode::Ask, risk: RiskClass::High },
+            CapabilityPolicy {
+                mode: ApprovalMode::Ask,
+                risk: RiskClass::High,
+            },
         );
         d.insert(
             Capability::ShellExec,
-            CapabilityPolicy { mode: ApprovalMode::Deny, risk: RiskClass::Critical },
+            CapabilityPolicy {
+                mode: ApprovalMode::Deny,
+                risk: RiskClass::Critical,
+            },
         );
         Self {
             preset: PresetId(String::from("wave3.balanced")),
@@ -248,11 +261,17 @@ impl DefaultPolicyEngine {
     }
 
     fn next_change(&self) -> ChangeId {
-        ChangeId(format!("ch-{}", self.change_ctr.fetch_add(1, Ordering::Relaxed)))
+        ChangeId(format!(
+            "ch-{}",
+            self.change_ctr.fetch_add(1, Ordering::Relaxed)
+        ))
     }
 
     fn next_audit_id(&self) -> AuditId {
-        AuditId(format!("a-{}", self.audit_ctr.fetch_add(1, Ordering::Relaxed)))
+        AuditId(format!(
+            "a-{}",
+            self.audit_ctr.fetch_add(1, Ordering::Relaxed)
+        ))
     }
 
     fn next_ticket_id(&self) -> ApprovalTicketId {
@@ -315,12 +334,7 @@ impl DefaultPolicyEngine {
         Ok(audit_id)
     }
 
-    fn emit_decision_event(
-        &self,
-        req: &ActionRequest,
-        decision: &Decision,
-        change_id: &ChangeId,
-    ) {
+    fn emit_decision_event(&self, req: &ActionRequest, decision: &Decision, change_id: &ChangeId) {
         self.sink.emit(L5Event::PolicyDecision(PolicyDecisionEvent {
             request_id: req.request_id.clone(),
             decision: decision.kind(),
@@ -519,16 +533,17 @@ impl PolicyEngine for DefaultPolicyEngine {
                     );
                 }
                 let audit_id = self.write_audit(&req, DecisionKind::Ask, &change_id, None)?;
-                self.sink.emit(L5Event::ApprovalPending(ApprovalPendingEvent {
-                    ticket_id,
-                    request_id: req.request_id.clone(),
-                    capability: req.capability.clone(),
-                    resource: req.resource.clone(),
-                    risk_class: policy.risk,
-                    explanation: StaticReasonId(String::from("approval_required")),
-                    change_id: change_id.clone(),
-                    seq: self.next_seq(),
-                }));
+                self.sink
+                    .emit(L5Event::ApprovalPending(ApprovalPendingEvent {
+                        ticket_id,
+                        request_id: req.request_id.clone(),
+                        capability: req.capability.clone(),
+                        resource: req.resource.clone(),
+                        risk_class: policy.risk,
+                        explanation: StaticReasonId(String::from("approval_required")),
+                        change_id: change_id.clone(),
+                        seq: self.next_seq(),
+                    }));
                 let d = Decision::Ask { ticket, audit_id };
                 self.emit_decision_event(&req, &d, &change_id);
                 Ok(d)
@@ -568,16 +583,17 @@ impl PolicyEngine for DefaultPolicyEngine {
             }
         };
         let audit_id = self.next_audit_id();
-        self.sink.emit(L5Event::EmergencyRevokeAll(EmergencyRevokeAllEvent {
-            initiated_by: ActorRef::User,
-            scope,
-            initiated_at: MonotonicTimestamp(0),
-            completed_at: Some(MonotonicTimestamp(0)),
-            revoked_count: Some(revoked),
-            audit_ref: audit_id,
-            change_id,
-            seq: self.next_seq(),
-        }));
+        self.sink
+            .emit(L5Event::EmergencyRevokeAll(EmergencyRevokeAllEvent {
+                initiated_by: ActorRef::User,
+                scope,
+                initiated_at: MonotonicTimestamp(0),
+                completed_at: Some(MonotonicTimestamp(0)),
+                revoked_count: Some(revoked),
+                audit_ref: audit_id,
+                change_id,
+                seq: self.next_seq(),
+            }));
         Ok(EmergencyReceipt {
             completed_ns: 0,
             revoked_count: revoked,
@@ -602,10 +618,7 @@ impl PolicyEngine for DefaultPolicyEngine {
             .collect()
     }
 
-    fn respond_approval(
-        &self,
-        response: ApprovalResponse,
-    ) -> Result<ChangeId, PolicyEngineError> {
+    fn respond_approval(&self, response: ApprovalResponse) -> Result<ChangeId, PolicyEngineError> {
         let change_id = self.next_change();
 
         // Remove the ticket from pending before doing any side-effecting work.
@@ -672,12 +685,8 @@ impl PolicyEngine for DefaultPolicyEngine {
                     _ => GrantDuration::Once,
                 };
 
-                let audit_id = self.write_audit(
-                    &pending.request,
-                    DecisionKind::Allow,
-                    &change_id,
-                    None,
-                )?;
+                let audit_id =
+                    self.write_audit(&pending.request, DecisionKind::Allow, &change_id, None)?;
 
                 let _grant_id = self.issue_and_emit_grant(
                     &pending.request,

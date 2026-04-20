@@ -38,10 +38,7 @@ impl InMemoryGrantLedger {
     /// Count of currently-active (non-revoked, non-expired) grants.
     pub fn active_len(&self) -> usize {
         let s = self.inner.lock().unwrap();
-        s.grants
-            .values()
-            .filter(|r| r.revoked.is_none())
-            .count()
+        s.grants.values().filter(|r| r.revoked.is_none()).count()
     }
 
     /// Expire every TTL-bearing grant whose `expires_at <= now`. Returns the
@@ -111,7 +108,13 @@ impl GrantLedger for InMemoryGrantLedger {
     fn issue(&self, grant: Grant) -> Option<GrantId> {
         let mut s = self.inner.lock().unwrap();
         let id = grant.grant_id.clone();
-        s.grants.insert(id.clone(), GrantRow { grant, revoked: None });
+        s.grants.insert(
+            id.clone(),
+            GrantRow {
+                grant,
+                revoked: None,
+            },
+        );
         Some(id)
     }
 

@@ -93,8 +93,7 @@ pub fn open_with_migrations(path: impl AsRef<Path>) -> Result<OpenOutcome, OpenE
 
 fn apply_pragmas(conn: &Connection) -> Result<(), rusqlite::Error> {
     // journal_mode returns a row; use query_row to consume it.
-    let _journal: String =
-        conn.query_row("PRAGMA journal_mode = WAL", [], |row| row.get(0))?;
+    let _journal: String = conn.query_row("PRAGMA journal_mode = WAL", [], |row| row.get(0))?;
     conn.execute_batch(
         "PRAGMA synchronous  = NORMAL;\n\
          PRAGMA foreign_keys = ON;\n\
@@ -183,6 +182,9 @@ mod tests {
         .unwrap();
 
         let err = run_pending_migrations(&conn, MIGRATIONS).unwrap_err();
-        matches!(err, OpenError::OrderMismatch { .. } | OpenError::UnknownRecordedMigration { .. });
+        matches!(
+            err,
+            OpenError::OrderMismatch { .. } | OpenError::UnknownRecordedMigration { .. }
+        );
     }
 }

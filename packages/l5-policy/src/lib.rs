@@ -58,29 +58,25 @@ pub use capability::{
     IntegrationId, ResourceScope,
 };
 pub use common::{
-    ActorRef, Cents, ChangeId, Duration, MonotonicTimestamp, PersonaId, PresetId, RequestId,
-    Seq, SessionId, TaskId,
+    ActorRef, Cents, ChangeId, Duration, MonotonicTimestamp, PersonaId, PresetId, RequestId, Seq,
+    SessionId, TaskId,
 };
 pub use decision::{
     Decision, DecisionKind, DenyReason, DraftSource, HardcodedBlockId, ReEvalTrigger,
     StaticReasonId, TaintKind,
 };
 pub use events::{
-    ActionRequestEvent, ApprovalPendingEvent, CostThresholdHitEvent,
-    EmergencyRevokeAllEvent, EmergencyScope, GrantIssuedEvent, GrantRevokedEvent,
-    L5Event, L5EventKind, PolicyDecisionEvent, PolicyPostureChangedEvent, RevokeReason,
+    ActionRequestEvent, ApprovalPendingEvent, CostThresholdHitEvent, EmergencyRevokeAllEvent,
+    EmergencyScope, GrantIssuedEvent, GrantRevokedEvent, L5Event, L5EventKind, PolicyDecisionEvent,
+    PolicyPostureChangedEvent, RevokeReason,
 };
 pub use grants::{
     ApprovalMode, Grant, GrantDuration, GrantFilter, GrantId, GrantLedger,
     PersonaCompiledPolicyDefaults,
 };
 pub use ipc::{AuditExportFormat, PolicyCommands, PolicyIpcError};
-pub use policy_engine::{
-    ActionRequest, EventFilter, EventStream, PolicyEngine, PolicyEngineError,
-};
-pub use posture::{
-    DegradedMode, PolicyPostureSummary, PostureTrigger, PrivacyPosture, WarnLevel,
-};
+pub use policy_engine::{ActionRequest, EventFilter, EventStream, PolicyEngine, PolicyEngineError};
+pub use posture::{DegradedMode, PolicyPostureSummary, PostureTrigger, PrivacyPosture, WarnLevel};
 pub use storage_hooks::{AuditStore, CostCounterStore, GrantStore};
 
 // --- Wave 3 live surfaces ---

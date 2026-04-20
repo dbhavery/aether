@@ -13,10 +13,10 @@
 use serde::{Deserialize, Serialize};
 
 use crate::approval::{ApprovalResponse, ApprovalTicket};
-use crate::audit::{AuditFilter, AuditSummary, AuditRecordEvent};
+use crate::audit::{AuditFilter, AuditRecordEvent, AuditSummary};
 use crate::byok::{CostCap, CostWindow, ProviderId};
 use crate::capability::{CapabilityFilter, CapabilityInfo};
-use crate::common::{ChangeId, RequestId, PresetId};
+use crate::common::{ChangeId, PresetId, RequestId};
 use crate::decision::Decision;
 use crate::events::{EmergencyScope, GrantRevokedEvent};
 use crate::grants::{Grant, GrantFilter};
@@ -124,7 +124,10 @@ pub trait PolicyCommands: Send + Sync {
     /// Fetch a ticket for a pending request id.
     fn request_approval(&self, request_id: RequestId) -> Result<ApprovalTicket, PolicyIpcError>;
     /// Submit a user response to a pending ticket.
-    fn respond_approval(&self, response: ApprovalResponse) -> Result<ApprovalReceipt, PolicyIpcError>;
+    fn respond_approval(
+        &self,
+        response: ApprovalResponse,
+    ) -> Result<ApprovalReceipt, PolicyIpcError>;
     /// Switch preset. Gated behind re-auth.
     fn set_preset(&self, preset: PresetId) -> Result<PresetSwitchReceipt, PolicyIpcError>;
     /// Read current preset.
@@ -139,7 +142,10 @@ pub trait PolicyCommands: Send + Sync {
         filter: CapabilityFilter,
     ) -> Result<Vec<CapabilityInfo>, PolicyIpcError>;
     /// Explain a single decision by audit id.
-    fn explain_decision(&self, audit_id: crate::audit::AuditId) -> Result<Explanation, PolicyIpcError>;
+    fn explain_decision(
+        &self,
+        audit_id: crate::audit::AuditId,
+    ) -> Result<Explanation, PolicyIpcError>;
     /// Preview a plan of action requests (P1/P2 scope open).
     fn preview_plan(&self, plan: Vec<ActionRequest>) -> Result<PlanPreview, PolicyIpcError>;
     /// Big-red-button emergency revoke.

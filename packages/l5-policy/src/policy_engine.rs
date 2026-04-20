@@ -3,10 +3,10 @@
 use serde::{Deserialize, Serialize};
 
 use crate::approval::ApprovalResponse;
-use crate::capability::{Capability, CapabilityFilter, CapabilityInfo, ProvenanceTag, ResourceScope};
-use crate::common::{
-    ChangeId, MonotonicTimestamp, PersonaId, RequestId, TaskId, TurnId,
+use crate::capability::{
+    Capability, CapabilityFilter, CapabilityInfo, ProvenanceTag, ResourceScope,
 };
+use crate::common::{ChangeId, MonotonicTimestamp, PersonaId, RequestId, TaskId, TurnId};
 use crate::decision::Decision;
 use crate::events::{EmergencyScope, L5Event, L5EventKind};
 use crate::grants::{Grant, GrantFilter};
@@ -107,10 +107,7 @@ pub trait PolicyEngine: Send + Sync {
     fn capabilities(&self, filter: CapabilityFilter) -> Vec<CapabilityInfo>;
 
     /// Ingest a user response to a pending approval ticket.
-    fn respond_approval(
-        &self,
-        response: ApprovalResponse,
-    ) -> Result<ChangeId, PolicyEngineError>;
+    fn respond_approval(&self, response: ApprovalResponse) -> Result<ChangeId, PolicyEngineError>;
 }
 
 /// In-process error vocabulary.
