@@ -7,6 +7,9 @@
 **Status:** `dev` branch, pre-0.1 preview. The repository is under active
 architecture. Expect breaking changes.
 
+**▶ Live showcase:** [dbhavery.dev/aether](https://dbhavery.dev/aether) — the
+architectural tour, the seven layers, the trust model, and the end-product tease.
+
 ---
 
 ## 1. What Aether is
