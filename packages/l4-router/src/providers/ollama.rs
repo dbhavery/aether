@@ -388,6 +388,183 @@ mod tests {
         assert!(parse_chat_response(&raw).is_err());
     }
 
+    // --- Mock-HTTP integration tests ------------------------------------
+    //
+    // We spin up a tiny single-shot HTTP/1.1 responder on an ephemeral
+    // port using only `std::net::TcpListener`. No new dev-deps, no real
+    // network — 127.0.0.1 only, timeouts short, each test owns its port.
+    //
+    // The responder reads request bytes until it has both the full header
+    // block (terminated by `\r\n\r\n`) and the `Content-Length` bytes of
+    // body, then writes a canned HTTP/1.1 response.
+
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::thread;
+
+    /// Captured request shape the responder hands back to the test thread.
+    struct CapturedRequest {
+        method: String,
+        path: String,
+        headers: Vec<(String, String)>,
+        body: String,
+    }
+
+    /// Start a single-shot HTTP/1.1 responder on an ephemeral port.
+    /// Returns `(base_url, join_handle)`. The spawned thread accepts
+    /// exactly one connection, reads one request, and writes
+    /// `response_body` as an HTTP/1.1 200 with JSON content-type. The join
+    /// handle yields the captured request for assertions.
+    fn spawn_mock_ollama(response_body: String) -> (String, thread::JoinHandle<CapturedRequest>) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind 127.0.0.1:0 for mock ollama");
+        let addr = listener.local_addr().expect("listener local_addr");
+        let base_url = format!("http://{}", addr);
+
+        let handle = thread::spawn(move || {
+            let (mut stream, _peer) = listener.accept().expect("mock accept");
+            stream
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .expect("read timeout");
+            stream
+                .set_write_timeout(Some(Duration::from_secs(2)))
+                .expect("write timeout");
+
+            // Read until headers complete, then drain Content-Length bytes.
+            let mut buf = Vec::with_capacity(1024);
+            let mut tmp = [0u8; 512];
+            let header_end: usize;
+            loop {
+                let n = stream.read(&mut tmp).expect("mock read");
+                if n == 0 {
+                    panic!("mock peer closed before headers complete");
+                }
+                buf.extend_from_slice(&tmp[..n]);
+                if let Some(idx) = find_subslice(&buf, b"\r\n\r\n") {
+                    header_end = idx + 4;
+                    break;
+                }
+            }
+            let header_bytes = &buf[..header_end - 4];
+            let header_text = std::str::from_utf8(header_bytes).expect("mock headers utf8");
+            let mut lines = header_text.split("\r\n");
+            let request_line = lines.next().unwrap_or("");
+            let mut parts = request_line.splitn(3, ' ');
+            let method = parts.next().unwrap_or("").to_string();
+            let path = parts.next().unwrap_or("").to_string();
+
+            let mut headers: Vec<(String, String)> = Vec::new();
+            let mut content_length: usize = 0;
+            for line in lines {
+                if let Some((k, v)) = line.split_once(':') {
+                    let k = k.trim().to_string();
+                    let v = v.trim().to_string();
+                    if k.eq_ignore_ascii_case("content-length") {
+                        content_length = v.parse::<usize>().unwrap_or(0);
+                    }
+                    headers.push((k, v));
+                }
+            }
+
+            let mut body = buf[header_end..].to_vec();
+            while body.len() < content_length {
+                let n = stream.read(&mut tmp).expect("mock body read");
+                if n == 0 {
+                    break;
+                }
+                body.extend_from_slice(&tmp[..n]);
+            }
+            body.truncate(content_length);
+            let body_str = String::from_utf8(body).expect("mock body utf8");
+
+            let response = format!(
+                "HTTP/1.1 200 OK\r\n\
+                 Content-Type: application/json\r\n\
+                 Content-Length: {}\r\n\
+                 Connection: close\r\n\
+                 \r\n{}",
+                response_body.len(),
+                response_body
+            );
+            stream
+                .write_all(response.as_bytes())
+                .expect("mock write response");
+            stream.flush().ok();
+            // Dropping `stream` closes the connection.
+
+            CapturedRequest {
+                method,
+                path,
+                headers,
+                body: body_str,
+            }
+        });
+
+        (base_url, handle)
+    }
+
+    fn find_subslice(hay: &[u8], needle: &[u8]) -> Option<usize> {
+        if needle.is_empty() || hay.len() < needle.len() {
+            return None;
+        }
+        (0..=hay.len() - needle.len()).find(|&i| &hay[i..i + needle.len()] == needle)
+    }
+
+    #[test]
+    fn chat_round_trips_through_mock_ollama() {
+        let response =
+            r#"{"model":"llama3","message":{"role":"assistant","content":"pong"},"done":true}"#
+                .to_string();
+        let (base_url, handle) = spawn_mock_ollama(response);
+
+        let provider = OllamaProvider::new(OllamaConfig {
+            base_url,
+            model: "llama3".into(),
+            timeout_ms: 3_000,
+        });
+        let reply = provider.chat("ping").expect("chat ok");
+        assert_eq!(reply, "pong");
+
+        let req = handle.join().expect("mock thread join");
+        assert_eq!(req.method, "POST");
+        assert_eq!(req.path, "/api/chat");
+
+        let has_json_ct = req
+            .headers
+            .iter()
+            .any(|(k, v)| k.eq_ignore_ascii_case("content-type") && v.contains("application/json"));
+        assert!(has_json_ct, "expected application/json Content-Type");
+
+        let sent: serde_json::Value = serde_json::from_str(&req.body).expect("request body JSON");
+        assert_eq!(sent["model"], "llama3");
+        assert_eq!(sent["stream"], false);
+        assert_eq!(sent["messages"].as_array().unwrap().len(), 1);
+        assert_eq!(sent["messages"][0]["role"], "user");
+        assert_eq!(sent["messages"][0]["content"], "ping");
+    }
+
+    #[test]
+    fn chat_surfaces_provider_error_on_malformed_response_body() {
+        let response = r#"{"not":"what we expected"}"#.to_string();
+        let (base_url, handle) = spawn_mock_ollama(response);
+
+        let provider = OllamaProvider::new(OllamaConfig {
+            base_url,
+            model: "llama3".into(),
+            timeout_ms: 3_000,
+        });
+        let err = provider
+            .chat("ping")
+            .expect_err("malformed body should fail");
+        let _ = handle.join();
+        match err {
+            L4Error::Provider(msg) => assert!(
+                msg.contains("invalid response") || msg.contains("missing field"),
+                "unexpected error message: {msg}"
+            ),
+            other => panic!("expected Provider error, got {other:?}"),
+        }
+    }
+
     #[test]
     fn provider_id_is_stable() {
         let p = OllamaProvider::new(OllamaConfig {
