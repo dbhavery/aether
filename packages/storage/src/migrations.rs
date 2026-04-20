@@ -36,11 +36,19 @@ pub const MIGRATION_0003_AUDIT_SEAL: Migration = Migration {
     sql: include_str!("../migrations/0003_audit_seal.sql"),
 };
 
+/// P3 — Durable conversation log backing
+/// `aether_l2_memory::SqliteSessionMemoryStore` (feature-gated).
+pub const MIGRATION_0004_CONVERSATION_LOG: Migration = Migration {
+    id: "0004_conversation_log",
+    sql: include_str!("../migrations/0004_conversation_log.sql"),
+};
+
 /// Ordered, append-only migration set. New migrations push to the tail.
 pub const MIGRATIONS: &[Migration] = &[
     MIGRATION_0001_INIT,
     MIGRATION_0002_AUDIT_CHAIN,
     MIGRATION_0003_AUDIT_SEAL,
+    MIGRATION_0004_CONVERSATION_LOG,
 ];
 
 /// Return the expected schema-version id after applying every known migration.
@@ -77,6 +85,6 @@ mod tests {
 
     #[test]
     fn head_id_matches_last_entry() {
-        assert_eq!(expected_head_id(), "0003_audit_seal");
+        assert_eq!(expected_head_id(), "0004_conversation_log");
     }
 }

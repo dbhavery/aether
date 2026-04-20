@@ -16,6 +16,9 @@ pub mod error;
 pub mod kernel;
 pub mod session;
 
+#[cfg(feature = "sqlite-backend")]
+pub mod sqlite_session;
+
 pub use error::L2Error;
 pub use kernel::{
     EmbeddingRef, EmbeddingStore, MemoryDomain, MemoryId, MemoryItem, MemoryKernel, PrivacyClass,
@@ -25,3 +28,6 @@ pub use session::{
     render_transcript, InMemorySessionMemoryStore, MemoryRole, RecentMemoryConfig,
     RecentMemoryWindow, SessionMemoryStore, TurnMemoryRecord,
 };
+
+#[cfg(feature = "sqlite-backend")]
+pub use sqlite_session::{DurableSessionStore, SqliteSessionMemoryStore};
