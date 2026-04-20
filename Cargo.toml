@@ -12,6 +12,7 @@ members = [
     "packages/l4-router",
     "packages/l6-persona",
     "packages/l7-trust",
+    "apps/l1-cli",
 ]
 
 # Wave 1 baseline workspace. Layer crates (l1-timing .. l7-*) and apps/desktop/src-tauri

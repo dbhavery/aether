@@ -231,6 +231,34 @@ cargo test -p aether-storage                              # 8 storage tests
 If any of these fail on a clean clone, please open a Bug report — the wave
 reports assume they all pass on stable Rust.
 
+### Try the L1 demo
+
+A tiny stdin REPL that drives one turn through the real L1 engine, real
+L5 policy gate, and a stub L4 router — just to see the layers interlock.
+
+```bash
+cargo run -p aether-l1-cli
+```
+
+```
+aether> read /tmp/x
+  final-state  : Completed
+  policy       : Allow  (grant=g-1, audit=a-1)
+  route        : tier=reflex provider=reflex-stub
+  response     : [reflex] heard you: read /tmp/x
+
+aether> shell ls
+  final-state  : PolicyDenied
+  policy       : Deny   (ModeDeny, audit=a-2)
+  blocked      : policy denied
+```
+
+Full command table and architecture notes in
+[`apps/l1-cli/README.md`](apps/l1-cli/README.md). The demo uses a stub
+`ReflexModelRouter` that does no inference — the honest part is the
+engine path itself (FSM transitions, policy evaluate with audit write,
+`TurnRouter → ModelRouter` adapter).
+
 ### Opting into durable L5
 
 The default build uses in-memory policy backends. To use SQLite-backed

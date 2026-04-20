@@ -1,0 +1,30 @@
+[package]
+name = "aether-l1-cli"
+version = "0.0.1"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Community demo — stdin REPL that drives the L1 turn engine through an L4 router adapter."
+publish = false
+
+[[bin]]
+name = "aether-l1-cli"
+path = "src/main.rs"
+
+[dependencies]
+# Engines — the whole point of this app is to be the authorized bridge that
+# depends on both L1 and L4 so the sibling-engine rule can stay intact in
+# the libraries themselves. See tools/lint-layer-boundaries/check.py.
+aether-l1-interaction = { path = "../../packages/l1-interaction" }
+aether-l4-router      = { path = "../../packages/l4-router" }
+aether-l5-policy      = { path = "../../packages/l5-policy" }
+
+serde_json = { workspace = true }
+
+[features]
+default = []
+# Run the demo with SQLite-backed L5 instead of the in-memory default.
+#   cargo run -p aether-l1-cli --features sqlite-backend -- --db ./aether.db
+sqlite-backend = ["aether-l5-policy/sqlite-backend"]
