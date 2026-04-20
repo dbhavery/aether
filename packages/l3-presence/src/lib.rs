@@ -12,10 +12,12 @@
 #![warn(missing_docs)]
 #![allow(dead_code)]
 
+pub mod bridge;
 pub mod controller;
 pub mod engine;
 pub mod error;
 
+pub use bridge::behavior_for_presence;
 pub use controller::{
     render_presence, InMemoryPresenceController, PresenceController, PresenceSnapshot,
     PresenceState, TRANSITION_LOG_CAP,
