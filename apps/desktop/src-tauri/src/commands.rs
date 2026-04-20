@@ -20,7 +20,7 @@ use tauri::{AppHandle, Emitter, State};
 #[cfg(feature = "ollama-provider")]
 use crate::memory_router::PROVIDER_ERROR_PREFIX;
 use crate::memory_router::{assistant_record, user_record};
-use crate::state::{AppState, PendingTurn, SESSION_ID};
+use crate::state::{AppState, PendingTurn, TelemetryEntry, SESSION_ID};
 
 /// Banner payload sent to the UI on startup.
 #[derive(Debug, Clone, Serialize)]
@@ -579,6 +579,21 @@ fn provider_error_payload(
         timestamp_ms: ts_ms,
     });
     let id = format!("provider-err-{ts_ms}");
+    let persona_id = {
+        let a = state.active.read().expect("active read lock");
+        a.compiled.persona_id.0.clone()
+    };
+    state.record_telemetry(TelemetryEntry {
+        turn_id: id.clone(),
+        timestamp_ms: ts_ms,
+        kind: "provider_error".into(),
+        persona_id,
+        provider: None,
+        tier: None,
+        latency_ms: None,
+        prompt_tokens: None,
+        completion_tokens: None,
+    });
     transition_presence(
         app,
         &state.presence,
@@ -686,6 +701,32 @@ fn finalize_turn(
         ),
     };
 
+    // Record telemetry for the trust drawer's History tab. Derive
+    // provider / tier / token fields from the route when present;
+    // blocks produce a row too so the user can inspect denials.
+    let persona_id = {
+        let a = state.active.read().expect("active read lock");
+        a.compiled.persona_id.0.clone()
+    };
+    let telemetry_entry = TelemetryEntry {
+        turn_id: result.turn_id.0.clone(),
+        timestamp_ms: ts_ms,
+        kind: kind.to_string(),
+        persona_id,
+        provider: result.route.as_ref().map(|r| r.provider.clone()),
+        tier: result.route.as_ref().map(|r| r.tier.clone()),
+        latency_ms: result.route.as_ref().and_then(|r| r.latency_ms),
+        prompt_tokens: result
+            .route
+            .as_ref()
+            .and_then(|r| r.tokens.map(|t| t.prompt)),
+        completion_tokens: result
+            .route
+            .as_ref()
+            .and_then(|r| r.tokens.map(|t| t.completion)),
+    };
+    state.record_telemetry(telemetry_entry);
+
     transition_presence(
         app,
         &state.presence,
@@ -701,6 +742,24 @@ fn finalize_turn(
         approval: None,
         error_note: None,
     }
+}
+
+/// Return the newest-first telemetry entries for the Trust drawer
+/// History tab. `limit` is clamped to the internal buffer capacity.
+#[tauri::command]
+pub fn telemetry_recent(
+    limit: Option<usize>,
+    state: State<'_, AppState>,
+) -> Vec<TelemetryEntry> {
+    let cap = crate::state::TELEMETRY_BUFFER_CAPACITY;
+    let n = limit.unwrap_or(cap).min(cap);
+    state.telemetry_recent(n)
+}
+
+/// Wipe the telemetry buffer. Does not affect the audit log.
+#[tauri::command]
+pub fn telemetry_clear(state: State<'_, AppState>) {
+    state.clear_telemetry();
 }
 
 /// Parse the leading verb of a user utterance into a

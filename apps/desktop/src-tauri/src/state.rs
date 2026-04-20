@@ -11,7 +11,7 @@
 //! `switch_persona` can rebuild them atomically without forcing every
 //! command site to take a write lock.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
@@ -89,6 +89,46 @@ pub struct AppState {
     /// without downcasting the trait-object `memory`.
     #[cfg(feature = "sqlite-backend")]
     durable_store: Option<Arc<SqliteSessionMemoryStore>>,
+    /// Ring buffer of recent-turn telemetry surfaced by the Trust
+    /// drawer's History tab. Bounded to `TELEMETRY_BUFFER_CAPACITY`
+    /// entries — this is a UX convenience, not a durable record.
+    telemetry: Mutex<VecDeque<TelemetryEntry>>,
+}
+
+/// How many telemetry entries the shell retains for the History tab.
+/// In-memory only; cleared on app restart. A durable telemetry log is
+/// a separate concern and out of scope for this slice.
+pub const TELEMETRY_BUFFER_CAPACITY: usize = 50;
+
+/// One observable turn on the telemetry surface. `kind` distinguishes
+/// normal completed turns from policy-blocked / denied turns so the UI
+/// can colour them without re-parsing the content.
+#[derive(Debug, Clone, Serialize)]
+pub struct TelemetryEntry {
+    /// Stable per-turn id (mirrors the transcript id).
+    pub turn_id: String,
+    /// Monotonic timestamp stamped by AppState::next_ts at record time.
+    pub timestamp_ms: u64,
+    /// High-level outcome — "completed" | "denied" | "needs_upgrade" |
+    /// "draft_only" | "provider_error".
+    pub kind: String,
+    /// Persona id that served the turn.
+    pub persona_id: String,
+    /// Provider mode (e.g. "ollama", "reflex-stub") or None for blocks.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+    /// Tier the router chose.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tier: Option<String>,
+    /// End-to-end latency in ms, if observed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latency_ms: Option<u64>,
+    /// Prompt-side token count, if reported.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prompt_tokens: Option<u32>,
+    /// Completion-side token count, if reported.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completion_tokens: Option<u32>,
 }
 
 /// Which backend is behind `AppState::memory`. Used for diagnostics and
@@ -186,7 +226,42 @@ impl AppState {
             preset: RwLock::new(None),
             #[cfg(feature = "sqlite-backend")]
             durable_store: None,
+            telemetry: Mutex::new(VecDeque::with_capacity(TELEMETRY_BUFFER_CAPACITY)),
         })
+    }
+
+    /// Record a telemetry entry. Evicts the oldest entry if the buffer
+    /// is at capacity. Never errors; poisoned locks fall back to a
+    /// no-op with a tracing warning because telemetry is UX-only.
+    pub fn record_telemetry(&self, entry: TelemetryEntry) {
+        match self.telemetry.lock() {
+            Ok(mut g) => {
+                if g.len() == TELEMETRY_BUFFER_CAPACITY {
+                    g.pop_front();
+                }
+                g.push_back(entry);
+            }
+            Err(e) => {
+                tracing::warn!("telemetry lock poisoned: {e}; entry dropped");
+            }
+        }
+    }
+
+    /// Snapshot of the newest-first telemetry entries, capped at
+    /// `limit`. Returns a clone so the webview sees a frozen view.
+    pub fn telemetry_recent(&self, limit: usize) -> Vec<TelemetryEntry> {
+        let Ok(g) = self.telemetry.lock() else {
+            return Vec::new();
+        };
+        g.iter().rev().take(limit).cloned().collect()
+    }
+
+    /// Wipe the telemetry buffer. Used by the UI's "Clear history" on
+    /// the trust drawer History tab; does NOT touch the audit log.
+    pub fn clear_telemetry(&self) {
+        if let Ok(mut g) = self.telemetry.lock() {
+            g.clear();
+        }
     }
 
     /// Current autonomy preset, or `None` if the user has not chosen or
@@ -655,6 +730,62 @@ mod tests {
             state2.memory_backend(),
             MemoryBackend::Durable { .. }
         ));
+    }
+
+    #[test]
+    fn telemetry_ring_buffer_evicts_oldest_and_returns_newest_first() {
+        let state = AppState::new().unwrap();
+        // Push more than capacity so eviction triggers.
+        for i in 0..(TELEMETRY_BUFFER_CAPACITY + 5) {
+            state.record_telemetry(TelemetryEntry {
+                turn_id: format!("t-{i}"),
+                timestamp_ms: (i as u64) * 10,
+                kind: "completed".into(),
+                persona_id: "aurora".into(),
+                provider: Some("reflex-stub".into()),
+                tier: Some("local".into()),
+                latency_ms: Some(100 + i as u64),
+                prompt_tokens: None,
+                completion_tokens: None,
+            });
+        }
+        let all = state.telemetry_recent(TELEMETRY_BUFFER_CAPACITY);
+        assert_eq!(all.len(), TELEMETRY_BUFFER_CAPACITY);
+        // Newest-first: first element is the last we pushed.
+        assert_eq!(
+            all[0].turn_id,
+            format!("t-{}", TELEMETRY_BUFFER_CAPACITY + 4)
+        );
+        // Oldest entries (t-0..t-4) must have been evicted.
+        assert!(all.iter().all(|e| !e.turn_id.ends_with("-0")
+            || e.turn_id == format!("t-{}", TELEMETRY_BUFFER_CAPACITY + 0)));
+
+        // Limit clamps correctly.
+        let five = state.telemetry_recent(5);
+        assert_eq!(five.len(), 5);
+        assert_eq!(
+            five[0].turn_id,
+            format!("t-{}", TELEMETRY_BUFFER_CAPACITY + 4)
+        );
+    }
+
+    #[test]
+    fn telemetry_clear_empties_buffer() {
+        let state = AppState::new().unwrap();
+        state.record_telemetry(TelemetryEntry {
+            turn_id: "x".into(),
+            timestamp_ms: 1,
+            kind: "completed".into(),
+            persona_id: "aurora".into(),
+            provider: None,
+            tier: None,
+            latency_ms: None,
+            prompt_tokens: None,
+            completion_tokens: None,
+        });
+        assert_eq!(state.telemetry_recent(10).len(), 1);
+        state.clear_telemetry();
+        assert_eq!(state.telemetry_recent(10).len(), 0);
     }
 
     /// Booting against a real DB file populates the `durable_store`

@@ -41,6 +41,8 @@ fn main() {
             commands::set_autonomy_preset,
             commands::current_autonomy_preset,
             commands::forget_older_than_days,
+            commands::telemetry_recent,
+            commands::telemetry_clear,
         ])
         .run(tauri::generate_context!())
         .expect("error while running aether-desktop");

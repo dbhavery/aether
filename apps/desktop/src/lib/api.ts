@@ -73,3 +73,36 @@ export async function setAutonomyPreset(
 export async function currentAutonomyPreset(): Promise<string | null> {
   return invoke<string | null>("current_autonomy_preset");
 }
+
+export interface TelemetryEntry {
+  turn_id: string;
+  timestamp_ms: number;
+  kind: string;
+  persona_id: string;
+  provider?: string;
+  tier?: string;
+  latency_ms?: number;
+  prompt_tokens?: number;
+  completion_tokens?: number;
+}
+
+export async function telemetryRecent(
+  limit: number | null = null,
+): Promise<TelemetryEntry[]> {
+  return invoke<TelemetryEntry[]>("telemetry_recent", { limit });
+}
+
+export async function telemetryClear(): Promise<void> {
+  return invoke<void>("telemetry_clear");
+}
+
+export interface ForgetOlderReport {
+  removed: number;
+  applied: boolean;
+}
+
+export async function forgetOlderThanDays(
+  days: number,
+): Promise<ForgetOlderReport> {
+  return invoke<ForgetOlderReport>("forget_older_than_days", { days });
+}
