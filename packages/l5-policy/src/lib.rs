@@ -35,6 +35,8 @@
 
 pub mod approval;
 pub mod audit;
+#[cfg(feature = "sqlite-backend")]
+pub mod audit_seal;
 pub mod audit_store;
 pub mod byok;
 pub mod capability;
@@ -90,3 +92,10 @@ pub use sink::{InMemorySink, L5EventSink, NullSink};
 // --- Wave 4.5 live surfaces (feature-gated) ---
 #[cfg(feature = "sqlite-backend")]
 pub use sqlite_backends::{DurableBackends, SqliteAuditStore, SqliteGrantLedger};
+
+// --- Wave 4.6 audit sealing (feature-gated) ---
+#[cfg(feature = "sqlite-backend")]
+pub use audit_seal::{
+    canonical_bytes, compute_event_hash, compute_event_hmac, HmacKey, GENESIS_PREV_HASH,
+    HMAC_KEY_ENV,
+};

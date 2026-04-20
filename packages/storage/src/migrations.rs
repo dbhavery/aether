@@ -28,8 +28,20 @@ pub const MIGRATION_0002_AUDIT_CHAIN: Migration = Migration {
     sql: include_str!("../migrations/0002_audit_chain.sql"),
 };
 
+/// Wave 4.6 — audit hash-chain + HMAC sealing. Adds `event_hash` column
+/// and an index so `SqliteAuditStore::verify_chain` can walk the log in
+/// order and detect tampering.
+pub const MIGRATION_0003_AUDIT_SEAL: Migration = Migration {
+    id: "0003_audit_seal",
+    sql: include_str!("../migrations/0003_audit_seal.sql"),
+};
+
 /// Ordered, append-only migration set. New migrations push to the tail.
-pub const MIGRATIONS: &[Migration] = &[MIGRATION_0001_INIT, MIGRATION_0002_AUDIT_CHAIN];
+pub const MIGRATIONS: &[Migration] = &[
+    MIGRATION_0001_INIT,
+    MIGRATION_0002_AUDIT_CHAIN,
+    MIGRATION_0003_AUDIT_SEAL,
+];
 
 /// Return the expected schema-version id after applying every known migration.
 pub fn expected_head_id() -> &'static str {
@@ -65,6 +77,6 @@ mod tests {
 
     #[test]
     fn head_id_matches_last_entry() {
-        assert_eq!(expected_head_id(), "0002_audit_chain");
+        assert_eq!(expected_head_id(), "0003_audit_seal");
     }
 }

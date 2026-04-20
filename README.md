@@ -280,6 +280,30 @@ let engine = DefaultPolicyEngine::new(
 Known limitations of the Wave 4.5 SQLite mode are listed in
 [`WAVE4_5_EXECUTION_REPORT_2026-04-19.md`](WAVE4_5_EXECUTION_REPORT_2026-04-19.md).
 
+### Tamper-evident audit log (Wave 4.6)
+
+When the `sqlite-backend` feature is active, every audit row is sealed
+with a SHA-256 hash chain and HMAC-SHA256 signature before insertion:
+
+- Row N stores `event_hash = SHA256(prev_hash || canonical_payload)`.
+- `record_hmac = HMAC-SHA256(key, event_hash)`.
+- A singleton `policy_audit_chain_head` points at the current tip.
+- `SqliteAuditStore::verify_chain()` walks the log in order and returns
+  `AuditVerifyError::ChainBreak` or `HmacMismatch` if anything was
+  altered out-of-band (DB edits, row splicing, tip rollback, wrong key).
+
+The signing key is loaded in this priority:
+
+1. `AETHER_AUDIT_HMAC_KEY_HEX` env var (64-char hex = 32 bytes), or
+2. A 32-byte file at `<db_path>.hmac.key`, auto-generated on first run.
+
+What this protects: local DB mutation (someone editing `payload`,
+deleting rows, or rolling the chain tip back) becomes detectable on the
+next `verify_chain()` call. What it does **not** protect: key compromise
+(reading the key file lets an attacker re-seal tampered history), host
+root, or remote attestation. Those are future waves (OS-keyring
+integration, asymmetric checkpoint signing).
+
 ### Where to start reading
 
 1. `planning/00_VISION_AND_GUARDRAILS.md` — start here. This file is doctrine.

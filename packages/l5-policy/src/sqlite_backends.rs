@@ -229,61 +229,91 @@ fn scope_covers(pattern: &ResourceScope, target: &ResourceScope) -> bool {
 
 /// SQLite-backed [`AuditStore`]. Writes append-only rows to
 /// `policy_audit_log` — `UPDATE` / `DELETE` are rejected by triggers
-/// declared in `0001_init.sql`, giving us a minimal tamper guarantee
-/// without needing a hash chain in place yet.
+/// declared in `0001_init.sql`, and every row is sealed with the Wave 4.6
+/// hash-chain + HMAC pipeline (`audit_seal` module).
 #[derive(Debug)]
 pub struct SqliteAuditStore {
     conn: Arc<Mutex<Connection>>,
+    key: crate::audit_seal::HmacKey,
 }
 
 impl SqliteAuditStore {
-    /// Build an audit store from a shared connection. Assumes migrations
-    /// (0001 + 0002) have been run.
-    pub fn new(conn: Arc<Mutex<Connection>>) -> Self {
-        Self { conn }
+    /// Build an audit store from a shared connection + HMAC signing key.
+    /// Assumes migrations 0001 / 0002 / 0003 have been run.
+    pub fn new(conn: Arc<Mutex<Connection>>, key: crate::audit_seal::HmacKey) -> Self {
+        Self { conn, key }
+    }
+
+    /// Key id the store is sealing with. Useful for tests and reporting.
+    pub fn key_id(&self) -> &crate::audit::KeyId {
+        self.key.id()
     }
 }
 
 impl AuditStore for SqliteAuditStore {
     fn append(&self, row: &AuditRecordEvent) -> Result<AuditId, AuditWriteError> {
-        let payload =
-            serde_json::to_string(row).map_err(|e| AuditWriteError::Canonical(e.to_string()))?;
+        // Build a sealed copy of the incoming row: the caller's supplied
+        // prev_hash / record_hmac / key_id are overwritten with values
+        // derived from the current chain head and the configured key.
+        // This keeps `AuditRecordEvent` a plain data struct and prevents
+        // callers from accidentally forging sealing fields.
         let conn = self
             .conn
             .lock()
             .map_err(|e| AuditWriteError::Io(format!("mutex poisoned: {e}")))?;
 
-        let cap_tag = capability_tag(&row.capability);
-        let resource_json = serde_json::to_string(&row.resource)
+        let prev_hash: Vec<u8> = read_chain_head(&conn)
+            .map_err(|e| AuditWriteError::Io(e.to_string()))?
+            .unwrap_or_else(|| crate::audit_seal::GENESIS_PREV_HASH.to_vec());
+
+        let mut sealed = row.clone();
+        sealed.prev_hash = prev_hash.clone();
+        sealed.key_id = self.key.id().clone();
+
+        let canonical = crate::audit_seal::canonical_bytes(&sealed)
             .map_err(|e| AuditWriteError::Canonical(e.to_string()))?;
-        let actor_ref = serde_json::to_string(&row.actor)
+        let event_hash = crate::audit_seal::compute_event_hash(&prev_hash, &canonical);
+        let hmac_bytes = crate::audit_seal::compute_event_hmac(&self.key, &event_hash);
+        sealed.record_hmac = hmac_bytes.to_vec();
+
+        let payload = serde_json::to_string(&sealed)
             .map_err(|e| AuditWriteError::Canonical(e.to_string()))?;
-        let decision_tag = format!("{:?}", row.decision).to_lowercase();
+
+        let cap_tag = capability_tag(&sealed.capability);
+        let resource_json = serde_json::to_string(&sealed.resource)
+            .map_err(|e| AuditWriteError::Canonical(e.to_string()))?;
+        let actor_ref = serde_json::to_string(&sealed.actor)
+            .map_err(|e| AuditWriteError::Canonical(e.to_string()))?;
+        let decision_tag = format!("{:?}", sealed.decision).to_lowercase();
 
         conn.execute(
             "INSERT INTO policy_audit_log (\
                  audit_id, timestamp, actor_persona, capability, resource, \
                  decision, change_id, prev_hash, record_hmac, payload, \
-                 key_id, privileged_profile\
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                 key_id, privileged_profile, event_hash\
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             aether_storage::rusqlite::params![
-                row.audit_id.0,
-                row.timestamp_monotonic.0 as i64,
+                sealed.audit_id.0,
+                sealed.timestamp_monotonic.0 as i64,
                 actor_ref,
                 cap_tag,
                 resource_json,
                 decision_tag,
-                row.change_id.0.clone(),
-                row.prev_hash.clone(),
-                row.record_hmac.clone(),
+                sealed.change_id.0.clone(),
+                prev_hash.clone(),
+                hmac_bytes.to_vec(),
                 payload,
-                row.key_id.0.clone(),
-                row.privileged_profile as i64,
+                sealed.key_id.0.clone(),
+                sealed.privileged_profile as i64,
+                event_hash.to_vec(),
             ],
         )
         .map_err(|e| AuditWriteError::Io(e.to_string()))?;
 
-        Ok(row.audit_id.clone())
+        update_chain_head(&conn, &sealed.audit_id, &event_hash)
+            .map_err(|e| AuditWriteError::Io(e.to_string()))?;
+
+        Ok(sealed.audit_id)
     }
 
     fn query(&self, filter: &AuditFilter, limit: u32) -> Vec<AuditRecordEvent> {
@@ -318,12 +348,124 @@ impl AuditStore for SqliteAuditStore {
     }
 
     fn verify_chain(&self) -> Result<(), AuditVerifyError> {
-        // Wave 4.5 posture: rely on 0001's append-only triggers + 0002's
-        // key_id / chain_head groundwork. Full hash-chain verification is
-        // a future wave; surface Ok here so callers don't flip L5 into
-        // `AuditBroken` spuriously.
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| AuditVerifyError::Io(format!("mutex poisoned: {e}")))?;
+
+        // Walk the log in insertion order (rowid ASC is stable for an
+        // INSERT-only table).
+        let mut stmt = conn
+            .prepare(
+                "SELECT rowid, payload, prev_hash, record_hmac, event_hash \
+                 FROM policy_audit_log ORDER BY rowid ASC",
+            )
+            .map_err(|e| AuditVerifyError::Io(e.to_string()))?;
+
+        struct Row {
+            rowid: i64,
+            payload: String,
+            prev_hash: Vec<u8>,
+            record_hmac: Vec<u8>,
+            event_hash: Option<Vec<u8>>,
+        }
+        let rows = stmt
+            .query_map([], |r| {
+                Ok(Row {
+                    rowid: r.get(0)?,
+                    payload: r.get(1)?,
+                    prev_hash: r.get::<_, Option<Vec<u8>>>(2)?.unwrap_or_default(),
+                    record_hmac: r.get::<_, Vec<u8>>(3)?,
+                    event_hash: r.get::<_, Option<Vec<u8>>>(4)?,
+                })
+            })
+            .map_err(|e| AuditVerifyError::Io(e.to_string()))?;
+
+        let mut expected_prev: Vec<u8> = crate::audit_seal::GENESIS_PREV_HASH.to_vec();
+        let mut last_computed: Option<Vec<u8>> = None;
+        let mut sealed_rows: u64 = 0;
+
+        for row_result in rows {
+            let row = row_result.map_err(|e| AuditVerifyError::Io(e.to_string()))?;
+            let row_id = row.rowid as u64;
+
+            // Rows written before Wave 4.6 may lack event_hash; skip them.
+            // A future 0004 migration can backfill.
+            let Some(stored_event_hash) = row.event_hash else {
+                continue;
+            };
+
+            // Chain linkage — stored prev_hash must match expected prev.
+            if !crate::audit_seal::ct_eq(&row.prev_hash, &expected_prev) {
+                return Err(AuditVerifyError::ChainBreak { row_id });
+            }
+
+            let parsed: AuditRecordEvent = serde_json::from_str(&row.payload)
+                .map_err(|e| AuditVerifyError::Io(format!("payload parse @ row {row_id}: {e}")))?;
+            let canonical = crate::audit_seal::canonical_bytes(&parsed)
+                .map_err(|e| AuditVerifyError::Io(format!("canonical @ row {row_id}: {e}")))?;
+            let recomputed_hash = crate::audit_seal::compute_event_hash(&row.prev_hash, &canonical);
+
+            if !crate::audit_seal::ct_eq(&recomputed_hash, &stored_event_hash) {
+                return Err(AuditVerifyError::ChainBreak { row_id });
+            }
+
+            let recomputed_hmac =
+                crate::audit_seal::compute_event_hmac(&self.key, &recomputed_hash);
+            if !crate::audit_seal::ct_eq(&recomputed_hmac, &row.record_hmac) {
+                return Err(AuditVerifyError::HmacMismatch { row_id });
+            }
+
+            expected_prev = stored_event_hash.clone();
+            last_computed = Some(stored_event_hash);
+            sealed_rows += 1;
+        }
+
+        // If any sealed rows were seen, the chain tip must equal the
+        // singleton's head_hash — catches chain-tip rollback.
+        if sealed_rows > 0 {
+            if let Some(last) = last_computed {
+                let stored_head: Option<Vec<u8>> = conn
+                    .query_row(
+                        "SELECT head_hash FROM policy_audit_chain_head WHERE id = 1",
+                        [],
+                        |r| r.get::<_, Option<Vec<u8>>>(0),
+                    )
+                    .map_err(|e| AuditVerifyError::Io(e.to_string()))?;
+                match stored_head {
+                    Some(h) if crate::audit_seal::ct_eq(&h, &last) => {}
+                    _ => return Err(AuditVerifyError::ChainBreak { row_id: u64::MAX }),
+                }
+            }
+        }
+
         Ok(())
     }
+}
+
+fn read_chain_head(
+    conn: &aether_storage::rusqlite::Connection,
+) -> Result<Option<Vec<u8>>, aether_storage::rusqlite::Error> {
+    conn.query_row(
+        "SELECT head_hash FROM policy_audit_chain_head WHERE id = 1",
+        [],
+        |r| r.get::<_, Option<Vec<u8>>>(0),
+    )
+}
+
+fn update_chain_head(
+    conn: &aether_storage::rusqlite::Connection,
+    audit_id: &AuditId,
+    event_hash: &[u8; 32],
+) -> Result<(), aether_storage::rusqlite::Error> {
+    conn.execute(
+        "UPDATE policy_audit_chain_head \
+         SET head_audit_id = ?1, head_hash = ?2, \
+             updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') \
+         WHERE id = 1",
+        aether_storage::rusqlite::params![audit_id.0, event_hash.to_vec()],
+    )?;
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -358,14 +500,35 @@ pub struct DurableBackends {
 }
 
 impl DurableBackends {
-    /// Open (or create) a SQLite DB at `path`, run migrations, and return
-    /// ledger + audit backends sharing the connection.
+    /// Open (or create) a SQLite DB at `path`, run migrations, load (or
+    /// create) the HMAC signing key next to the DB, and return ledger +
+    /// audit backends sharing the connection. The key is sourced from
+    /// `AETHER_AUDIT_HMAC_KEY_HEX` when set, otherwise from
+    /// `<path>.hmac.key` (auto-generated on first run).
     pub fn open(path: impl AsRef<Path>) -> Result<Self, OpenError> {
+        let p = path.as_ref().to_path_buf();
+        let outcome = aether_storage::open_with_migrations(&p)?;
+        let key = crate::audit_seal::HmacKey::load_or_create(&p)
+            .map_err(|e| OpenError::Io(format!("hmac key: {e}")))?;
+        let conn = Arc::new(Mutex::new(outcome.conn));
+        Ok(Self {
+            ledger: Arc::new(SqliteGrantLedger::new(conn.clone())),
+            audit: Arc::new(SqliteAuditStore::new(conn.clone(), key)),
+            conn,
+        })
+    }
+
+    /// Open with an explicit HMAC key instead of the env/file lookup. Useful
+    /// in tests and advanced deployments.
+    pub fn open_with_key(
+        path: impl AsRef<Path>,
+        key: crate::audit_seal::HmacKey,
+    ) -> Result<Self, OpenError> {
         let outcome = aether_storage::open_with_migrations(path)?;
         let conn = Arc::new(Mutex::new(outcome.conn));
         Ok(Self {
             ledger: Arc::new(SqliteGrantLedger::new(conn.clone())),
-            audit: Arc::new(SqliteAuditStore::new(conn.clone())),
+            audit: Arc::new(SqliteAuditStore::new(conn.clone(), key)),
             conn,
         })
     }

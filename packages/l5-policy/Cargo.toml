@@ -21,14 +21,22 @@ aether-event-bus = { path = "../event-bus" }
 aether-storage   = { path = "../storage" }
 aether-telemetry = { path = "../telemetry" }
 
+# Wave 4.6 — audit sealing. Optional; only compiled when `sqlite-backend`
+# is enabled (see [features]).
+sha2 = { workspace = true, optional = true }
+hmac = { workspace = true, optional = true }
+rand = { workspace = true, optional = true }
+
 [features]
 default = []
 # Wave 4.5 — SQLite-backed GrantLedger + AuditStore. When enabled, the
 # `sqlite_backends` module compiles and exposes `SqliteGrantLedger`,
 # `SqliteAuditStore`, and the `DurableBackends` convenience builder. The
 # driver itself lives in `aether-storage` (already a dep); this feature
-# only gates the additional L5 code path.
-sqlite-backend = []
+# only gates the additional L5 code path. Wave 4.6 extends the same feature
+# with hash-chain + HMAC audit sealing; the extra crypto crates
+# (`sha2`, `hmac`, `rand`) only compile when this feature is active.
+sqlite-backend = ["dep:sha2", "dep:hmac", "dep:rand"]
 
 [dev-dependencies]
 serde_json = { workspace = true }

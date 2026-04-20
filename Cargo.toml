@@ -36,6 +36,12 @@ tracing = "0.1"
 # Wave 3.5 — storage substrate. `bundled` vendors SQLite so no system lib needed.
 rusqlite = { version = "0.31", features = ["bundled"] }
 tempfile = "3"
+# Wave 4.6 — audit hash-chain + HMAC sealing. Pure-Rust, no_std-friendly,
+# widely reviewed. Kept behind L5's `sqlite-backend` feature so OSS default
+# builds do not pull them in.
+sha2 = "0.10"
+hmac = "0.12"
+rand = "0.8"
 
 [profile.release]
 opt-level = 3

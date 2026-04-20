@@ -67,6 +67,11 @@ pub enum OpenError {
         /// Migration id the binary expected at that position.
         expected: &'static str,
     },
+
+    /// Adjacent I/O failure outside of rusqlite itself — for example,
+    /// loading the HMAC signing key file next to the DB.
+    #[error("adjacent io: {0}")]
+    Io(String),
 }
 
 /// Open (or create) a SQLite database at `path` and apply all pending
