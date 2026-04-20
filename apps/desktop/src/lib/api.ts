@@ -63,3 +63,13 @@ export async function listPersonas(): Promise<PersonaCatalogEntry[]> {
 export async function switchPersona(id: string): Promise<CompanionBanner> {
   return invoke<CompanionBanner>("switch_persona", { id });
 }
+
+export async function setAutonomyPreset(
+  preset: string | null,
+): Promise<CompanionBanner> {
+  return invoke<CompanionBanner>("set_autonomy_preset", { preset });
+}
+
+export async function currentAutonomyPreset(): Promise<string | null> {
+  return invoke<string | null>("current_autonomy_preset");
+}

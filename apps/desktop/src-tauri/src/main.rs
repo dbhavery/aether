@@ -38,6 +38,8 @@ fn main() {
             commands::audit_recent,
             commands::list_personas,
             commands::switch_persona,
+            commands::set_autonomy_preset,
+            commands::current_autonomy_preset,
         ])
         .run(tauri::generate_context!())
         .expect("error while running aether-desktop");
@@ -50,9 +52,7 @@ fn main() {
 /// failure) we fall back to [`AppState::new`] which uses the in-memory
 /// store. The shell must still boot either way — a missing data dir is
 /// not a valid reason to deny the user their companion.
-fn build_app_state(
-    app: &tauri::AppHandle,
-) -> Result<AppState, Box<dyn std::error::Error>> {
+fn build_app_state(app: &tauri::AppHandle) -> Result<AppState, Box<dyn std::error::Error>> {
     #[cfg(feature = "sqlite-backend")]
     {
         match app.path().app_data_dir() {

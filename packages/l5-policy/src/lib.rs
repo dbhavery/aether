@@ -85,7 +85,7 @@ pub use storage_hooks::{AuditStore, CostCounterStore, GrantStore};
 
 // --- Wave 3 live surfaces ---
 pub use audit_store::InMemoryAuditStore;
-pub use engine::{CapabilityPolicy, DefaultPolicyEngine, EngineConfig};
+pub use engine::{AutonomyPreset, CapabilityPolicy, DefaultPolicyEngine, EngineConfig};
 pub use ledger::InMemoryGrantLedger;
 pub use sink::{InMemorySink, L5EventSink, NullSink};
 

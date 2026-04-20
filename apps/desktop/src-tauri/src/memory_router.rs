@@ -5,9 +5,9 @@
 
 use std::sync::Arc;
 
-use aether_l1_interaction::{L1Error, RouteOutcome, TurnId, TurnRequest, TurnResult, TurnRouter};
 #[cfg(feature = "ollama-provider")]
 use aether_l1_interaction::TokenUsage;
+use aether_l1_interaction::{L1Error, RouteOutcome, TurnId, TurnRequest, TurnResult, TurnRouter};
 use aether_l2_memory::{
     render_transcript, MemoryRole, RecentMemoryWindow, SessionMemoryStore, TurnMemoryRecord,
 };

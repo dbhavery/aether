@@ -17,13 +17,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 
 use aether_l1_interaction::{TurnEngine, TurnRequest, TurnResult, TurnRouter};
-use aether_l2_memory::{InMemorySessionMemoryStore, SessionMemoryStore};
 #[cfg(feature = "sqlite-backend")]
 use aether_l2_memory::DurableSessionStore;
+use aether_l2_memory::{InMemorySessionMemoryStore, SessionMemoryStore};
 use aether_l3_presence::{InMemoryPresenceController, PresenceController};
 use aether_l5_policy::{
-    policy_engine::PolicyEngine, AuditStore, DefaultPolicyEngine, EngineConfig, InMemoryAuditStore,
-    InMemoryGrantLedger, InMemorySink, PersonaId,
+    policy_engine::PolicyEngine, AuditStore, AutonomyPreset, DefaultPolicyEngine, EngineConfig,
+    InMemoryAuditStore, InMemoryGrantLedger, InMemorySink, PersonaId,
 };
 use aether_l6_persona::{CompiledPersona, DefaultPersonaCompiler, PersonaProfile};
 use serde::Serialize;
@@ -78,6 +78,11 @@ pub struct AppState {
     pending: Mutex<HashMap<String, PendingTurn>>,
     #[allow(dead_code)] // Read via `memory_backend()` accessor and in tests.
     memory_backend: MemoryBackend,
+    /// Current autonomy preset overlay. Applied after the persona
+    /// overlay when `build_active` rebuilds the engine. `None` means the
+    /// baseline Assistant behaviour is used — equivalent to the user
+    /// having never picked, or explicitly deferring.
+    preset: RwLock<Option<AutonomyPreset>>,
 }
 
 /// Which backend is behind `AppState::memory`. Used for diagnostics and
@@ -148,13 +153,10 @@ impl AppState {
         }
     }
 
-    fn build(
-        memory: Arc<dyn SessionMemoryStore>,
-        backend: MemoryBackend,
-    ) -> Result<Self, String> {
+    fn build(memory: Arc<dyn SessionMemoryStore>, backend: MemoryBackend) -> Result<Self, String> {
         let catalog = default_catalog();
         let presence: Arc<dyn PresenceController> = Arc::new(InMemoryPresenceController::new());
-        let active = build_active(&pick_default(&catalog), memory.clone())?;
+        let active = build_active(&pick_default(&catalog), memory.clone(), None)?;
 
         Ok(Self {
             catalog,
@@ -164,7 +166,37 @@ impl AppState {
             ts: AtomicU64::new(1_000),
             pending: Mutex::new(HashMap::new()),
             memory_backend: backend,
+            preset: RwLock::new(None),
         })
+    }
+
+    /// Current autonomy preset, or `None` if the user has not chosen or
+    /// deferred. Exposed for commands and diagnostics.
+    pub fn current_preset(&self) -> Option<AutonomyPreset> {
+        *self.preset.read().expect("preset read lock")
+    }
+
+    /// Apply a new autonomy preset (or clear it with `None`) and rebuild
+    /// the active engine so the change takes effect immediately. Keeps
+    /// the current persona; does NOT clear session memory — preset
+    /// changes are non-destructive.
+    pub fn apply_preset(&self, preset: Option<AutonomyPreset>) -> Result<(), String> {
+        {
+            let mut w = self.preset.write().expect("preset write lock");
+            *w = preset;
+        }
+        let profile = {
+            let active = self.active.read().expect("active read lock");
+            self.catalog
+                .iter()
+                .find(|p| p.persona_id.0 == active.compiled.persona_id.0)
+                .cloned()
+                .ok_or_else(|| "active persona missing from catalog".to_string())?
+        };
+        let new_active = build_active(&profile, self.memory.clone(), preset)?;
+        let mut w = self.active.write().expect("active write lock");
+        *w = new_active;
+        Ok(())
     }
 
     /// Identify which backend is providing session memory. Exposed for
@@ -220,7 +252,8 @@ impl AppState {
             .find(|p| p.persona_id.0 == id)
             .ok_or_else(|| format!("unknown persona: {id}"))?
             .clone();
-        let new_active = build_active(&profile, self.memory.clone())?;
+        let preset = self.current_preset();
+        let new_active = build_active(&profile, self.memory.clone(), preset)?;
         self.clear_session()?;
         let mut w = self.active.write().expect("active write lock");
         *w = new_active;
@@ -271,6 +304,7 @@ fn tone_label(t: aether_l6_persona::Tone) -> String {
 fn build_active(
     profile: &PersonaProfile,
     memory: Arc<dyn SessionMemoryStore>,
+    preset: Option<AutonomyPreset>,
 ) -> Result<ActiveEngine, String> {
     let persona_display_name = profile.name.clone();
     let persona_tagline = profile.description.clone();
@@ -279,10 +313,13 @@ fn build_active(
         .map_err(|e| format!("persona compile: {e}"))?;
 
     let persona_id = PersonaId(compiled.persona_id.0.clone());
-    let cfg = EngineConfig::wave3_default(persona_id).with_persona_overlay(
+    let mut cfg = EngineConfig::wave3_default(persona_id).with_persona_overlay(
         &compiled.policy_defaults.per_capability_defaults,
         compiled.policy_defaults.privacy_posture,
     );
+    if let Some(p) = preset {
+        cfg = cfg.with_preset_overlay(p);
+    }
     let audit: Arc<dyn AuditStore> = Arc::new(InMemoryAuditStore::new());
     let policy: Arc<dyn PolicyEngine> = Arc::new(DefaultPolicyEngine::new(
         cfg,
@@ -564,7 +601,10 @@ mod tests {
 
         {
             let state = AppState::new_with_db_path(&db_path).expect("first AppState");
-            assert!(matches!(state.memory_backend(), MemoryBackend::Durable { .. }));
+            assert!(matches!(
+                state.memory_backend(),
+                MemoryBackend::Durable { .. }
+            ));
             state
                 .memory
                 .append(TurnMemoryRecord {
@@ -592,7 +632,60 @@ mod tests {
         assert_eq!(w.records.len(), 2);
         assert_eq!(w.records[0].content, "hello across restarts");
         assert_eq!(w.records[1].content, "remembered");
-        assert!(matches!(state2.memory_backend(), MemoryBackend::Durable { .. }));
+        assert!(matches!(
+            state2.memory_backend(),
+            MemoryBackend::Durable { .. }
+        ));
+    }
+
+    /// Applying the Observer preset must force write capabilities to
+    /// Deny even on a Bold persona (Sable) that would normally leave
+    /// them Ask/Auto. The overlay is the last word.
+    #[test]
+    fn apply_preset_observer_denies_write_capabilities() {
+        let state = AppState::new().expect("AppState::new");
+        state.switch_persona("sable").unwrap();
+
+        state
+            .apply_preset(Some(AutonomyPreset::Observer))
+            .expect("apply observer preset");
+        assert_eq!(state.current_preset(), Some(AutonomyPreset::Observer));
+
+        // Drive a FilesEdit turn: under Observer the engine should Deny
+        // rather than Ask.
+        let req = TurnRequest {
+            session_id: SessionId(SESSION_ID.into()),
+            persona: PersonaId("sable".into()),
+            task_id: None,
+            utterance: "edit /tmp/observer".into(),
+            capability: Capability::FilesEdit,
+            resource: ResourceScope::Path("/tmp/observer".into()),
+            emitted_at: MonotonicTimestamp(state.next_ts()),
+        };
+        let res = {
+            let a = state.active.read().unwrap();
+            a.engine.handle_turn(req).unwrap()
+        };
+        assert!(
+            matches!(res.policy_decision, Decision::Deny { .. }),
+            "observer preset should deny FilesEdit, got {:?}",
+            res.policy_decision
+        );
+
+        // Clearing the overlay restores baseline (Sable hints Auto here;
+        // at minimum we should stop Denying).
+        state.apply_preset(None).unwrap();
+        assert_eq!(state.current_preset(), None);
+    }
+
+    /// Observer preset must survive a persona switch — switching persona
+    /// should re-apply the current preset overlay, not silently drop it.
+    #[test]
+    fn preset_persists_across_persona_switch() {
+        let state = AppState::new().expect("AppState::new");
+        state.apply_preset(Some(AutonomyPreset::Observer)).unwrap();
+        state.switch_persona("ember").unwrap();
+        assert_eq!(state.current_preset(), Some(AutonomyPreset::Observer));
     }
 
     /// If we point the durable constructor at an un-writable path, it

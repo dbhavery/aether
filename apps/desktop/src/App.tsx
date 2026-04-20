@@ -7,6 +7,7 @@ import {
   onPresence,
   presenceCurrent,
   resolveApproval,
+  setAutonomyPreset,
   submitTurn,
   switchPersona as apiSwitchPersona,
 } from "./lib/api";
@@ -25,7 +26,7 @@ import { Header } from "./components/Header";
 import { InputBar } from "./components/InputBar";
 import { MemoryDrawer } from "./components/MemoryDrawer";
 import { PersonaCard } from "./components/PersonaCard";
-import { PresetPicker } from "./components/PresetPicker";
+import { PresetPicker, readStoredPreset } from "./components/PresetPicker";
 import { Transcript } from "./components/Transcript";
 import { TrustDrawer } from "./components/TrustDrawer";
 
@@ -101,6 +102,24 @@ export function App() {
           } catch {
             // Non-fatal — fall through with the default banner.
           }
+        }
+        if (!alive) return;
+        // Re-apply any stored autonomy preset so the engine picks up the
+        // user's prior choice on boot. Storage holds "observer" |
+        // "assistant" | "operator" | "later" | null. "later" and null
+        // both map to "no overlay" on the backend.
+        const storedPreset = readStoredPreset();
+        try {
+          const wire =
+            storedPreset === "observer" ||
+            storedPreset === "assistant" ||
+            storedPreset === "operator"
+              ? storedPreset
+              : null;
+          b = await setAutonomyPreset(wire);
+        } catch {
+          // Non-fatal — engine remains on whatever the last-known
+          // overlay was.
         }
         if (!alive) return;
         setBanner(b);

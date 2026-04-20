@@ -1,5 +1,7 @@
 import { useState } from "react";
 
+import { setAutonomyPreset } from "../lib/api";
+
 const PRESET_STORAGE_KEY = "aether.onboarding.autonomy-preset";
 const PRESET_VERSION_KEY = "aether.onboarding.autonomy-preset.version";
 const PRESET_VERSION = "v0-2026-04-21";
@@ -55,10 +57,10 @@ const PRESETS: Preset[] = [
  * acknowledgement. A versioned key re-shows this card if the preset
  * surface ever changes shape.
  *
- * The backend does *not* yet consume the selected preset — `EngineConfig::
- * wave3_default` still governs policy defaults. This component stores the
- * user's intent so a subsequent slice can wire it through L6 persona
- * overlay / L5 policy configuration without re-prompting.
+ * The backend consumes the selected preset via the
+ * `set_autonomy_preset` Tauri command: `EngineConfig::with_preset_overlay`
+ * runs after the persona overlay so the user's chosen posture is the
+ * final word on which capabilities are Auto / Ask / Deny.
  *
  * "I'll decide later" persists a sentinel so the card doesn't keep
  * re-showing every launch, per onboarding spec §"No dead ends".
@@ -100,12 +102,23 @@ export function PresetPicker({
 
   const choose = () => {
     persist(selected);
+    // Push the user's choice to the backend so EngineConfig overlays it
+    // on top of the persona-adjusted preset. Fire-and-forget — the
+    // overlay is idempotent and the frontend is not blocked on success.
+    void setAutonomyPreset(selected).catch((e) => {
+      console.warn("set_autonomy_preset failed:", e);
+    });
     setOpen(false);
     onClose?.();
   };
 
   const decideLater = () => {
     persist("later");
+    // "Decide later" == no overlay. Clear any prior overlay the backend
+    // may still be carrying from an earlier session.
+    void setAutonomyPreset(null).catch((e) => {
+      console.warn("set_autonomy_preset(null) failed:", e);
+    });
     setOpen(false);
     onClose?.();
   };

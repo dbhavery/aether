@@ -7,8 +7,8 @@ use aether_l1_interaction::{BlockReason, TurnRequest, TurnResult, TurnState};
 use aether_l2_memory::MemoryRole;
 use aether_l3_presence::{PresenceController, PresenceState};
 use aether_l5_policy::{
-    AuditFilter, Capability, Decision, DecisionKind, MonotonicTimestamp, PersonaId, ResourceScope,
-    SessionId,
+    AuditFilter, AutonomyPreset, Capability, Decision, DecisionKind, MonotonicTimestamp, PersonaId,
+    ResourceScope, SessionId,
 };
 use aether_l7_trust::{
     approval_prompt_from_ticket, build_approval_response, human_capability, human_scope,
@@ -128,6 +128,35 @@ pub fn switch_persona(
         None,
     );
     Ok(companion_banner(state))
+}
+
+/// Apply (or clear with `null`) the onboarding autonomy preset. Accepts
+/// the same wire strings the PresetPicker writes to localStorage —
+/// `"observer" | "assistant" | "operator"` — plus the picker's
+/// "decide later" sentinel `"later"`, which is mapped to "no overlay"
+/// on the backend. Unknown values are rejected so UI bugs surface
+/// instead of silently accepting bad state.
+#[tauri::command]
+pub fn set_autonomy_preset(
+    preset: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<CompanionBanner, String> {
+    let parsed = match preset.as_deref() {
+        None | Some("") | Some("later") => None,
+        Some(other) => match AutonomyPreset::from_wire(other) {
+            Some(p) => Some(p),
+            None => return Err(format!("unknown autonomy preset: {other}")),
+        },
+    };
+    state.apply_preset(parsed)?;
+    Ok(companion_banner(state))
+}
+
+/// Report the autonomy preset currently overlaid on the engine. `null`
+/// means no overlay (baseline Assistant behaviour).
+#[tauri::command]
+pub fn current_autonomy_preset(state: State<'_, AppState>) -> Option<String> {
+    state.current_preset().map(|p| p.wire_name().to_string())
 }
 
 fn detail_label(rate: f32) -> String {
@@ -729,9 +758,7 @@ mod tests {
     #[cfg(feature = "ollama-provider")]
     #[test]
     fn extract_provider_error_none_for_unrelated_message() {
-        assert!(
-            extract_provider_error("router client: memory recall failed: oh no").is_none()
-        );
+        assert!(extract_provider_error("router client: memory recall failed: oh no").is_none());
         assert!(extract_provider_error("policy: denied").is_none());
     }
 

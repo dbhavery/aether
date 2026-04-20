@@ -179,6 +179,113 @@ impl EngineConfig {
     }
 }
 
+/// Autonomy preset the user picks during onboarding (and can revisit in
+/// Settings). Overlays on top of the persona-adjusted preset defaults to
+/// give the user a final safety rail regardless of the active persona.
+///
+/// Rank ordered least-to-most autonomy: `Observer ⊂ Assistant ⊂ Operator`.
+/// That ordering is only a UX ranking, not a strict subset at the
+/// capability level — Operator is permitted to auto-approve some
+/// capabilities that Assistant asks about. The invariant that matters is
+/// the *deny-side*: whatever Observer forbids, Assistant and Operator do
+/// too (with the single exception that Assistant/Operator reopen write
+/// paths behind Ask or grants).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AutonomyPreset {
+    /// Read-only — watches and answers, never acts.
+    Observer,
+    /// Helps with files, asks before anything risky. Recommended.
+    Assistant,
+    /// Acts within pre-approved folders after explicit grants.
+    Operator,
+}
+
+impl AutonomyPreset {
+    /// Wire name used in preset ids and serialization. Matches the
+    /// lowercase strings the PresetPicker emits.
+    pub fn wire_name(self) -> &'static str {
+        match self {
+            Self::Observer => "observer",
+            Self::Assistant => "assistant",
+            Self::Operator => "operator",
+        }
+    }
+
+    /// Parse a wire-name string. Returns `None` for unknown values.
+    pub fn from_wire(raw: &str) -> Option<Self> {
+        match raw {
+            "observer" => Some(Self::Observer),
+            "assistant" => Some(Self::Assistant),
+            "operator" => Some(Self::Operator),
+            _ => None,
+        }
+    }
+}
+
+impl EngineConfig {
+    /// Apply the onboarding autonomy preset on top of the current
+    /// per-capability defaults. Unlike [`Self::with_persona_overlay`],
+    /// which reshapes modes based on personality stance, this overlay is
+    /// the **user's final safety rail** — it runs last and is allowed to
+    /// tighten or loosen modes the persona would otherwise set.
+    ///
+    /// Semantics per preset (applied to capabilities already present in
+    /// `preset_defaults`; capabilities absent from the preset continue to
+    /// return `NeedsUpgrade` regardless):
+    ///
+    /// - **Observer** — force every capability except `FilesRead` to
+    ///   `Deny`. The user explicitly chose read-only posture; we honour
+    ///   that over any persona hint.
+    /// - **Assistant** — no-op. Baseline balanced posture matches the
+    ///   recommended experience exactly.
+    /// - **Operator** — promote `FilesRead` and `FilesCreate` to `Auto`
+    ///   so the operator archetype can write without prompting for every
+    ///   new file. `ShellExec` is pinned to `Deny` — shell access is a
+    ///   separate capability escalation, not something the preset alone
+    ///   unlocks. Other capabilities (e.g. `FilesEdit`, `FilesDelete`,
+    ///   `BrowserOpen`) retain their persona-adjusted mode, which means
+    ///   Ask by default.
+    ///
+    /// Risk classes are never changed — a capability is as risky as its
+    /// action type, independent of how the preset has chosen to surface
+    /// that risk to the user.
+    ///
+    /// Also updates [`Self::preset`] to `"wave3.<wire_name>"` so policy
+    /// decision events and audit rows carry the effective preset id.
+    pub fn with_preset_overlay(mut self, preset: AutonomyPreset) -> Self {
+        match preset {
+            AutonomyPreset::Observer => {
+                for (cap, policy) in self.preset_defaults.iter_mut() {
+                    policy.mode = if matches!(cap, Capability::FilesRead) {
+                        ApprovalMode::Auto
+                    } else {
+                        ApprovalMode::Deny
+                    };
+                }
+            }
+            AutonomyPreset::Assistant => {
+                // Baseline — no modifications.
+            }
+            AutonomyPreset::Operator => {
+                for (cap, policy) in self.preset_defaults.iter_mut() {
+                    match cap {
+                        Capability::FilesRead | Capability::FilesCreate => {
+                            policy.mode = ApprovalMode::Auto;
+                        }
+                        Capability::ShellExec => {
+                            policy.mode = ApprovalMode::Deny;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        self.preset = PresetId(format!("wave3.{}", preset.wire_name()));
+        self
+    }
+}
+
 /// Conservative default risk for a capability the persona wants enabled
 /// but the preset doesn't know about. Used only by
 /// [`EngineConfig::with_persona_overlay`] as a fallback.
@@ -836,5 +943,98 @@ mod tests {
         assert_eq!(shell.mode, ApprovalMode::Auto);
         // Risk stays preset-declared Critical even if mode flips.
         assert_eq!(shell.risk, RiskClass::Critical);
+    }
+
+    // --- AutonomyPreset overlay ---
+
+    #[test]
+    fn preset_overlay_observer_denies_every_write_and_shell() {
+        let cfg =
+            EngineConfig::wave3_default(persona()).with_preset_overlay(AutonomyPreset::Observer);
+        assert_eq!(
+            cfg.preset_defaults[&Capability::FilesRead].mode,
+            ApprovalMode::Auto
+        );
+        for cap in [
+            Capability::FilesCreate,
+            Capability::FilesEdit,
+            Capability::FilesDelete,
+            Capability::ShellExec,
+        ] {
+            assert_eq!(
+                cfg.preset_defaults[&cap].mode,
+                ApprovalMode::Deny,
+                "Observer must deny {cap:?}"
+            );
+        }
+        assert_eq!(cfg.preset.0, "wave3.observer");
+    }
+
+    #[test]
+    fn preset_overlay_assistant_is_baseline_noop() {
+        let baseline = EngineConfig::wave3_default(persona());
+        let assistant =
+            EngineConfig::wave3_default(persona()).with_preset_overlay(AutonomyPreset::Assistant);
+        for cap in baseline.preset_defaults.keys() {
+            assert_eq!(
+                assistant.preset_defaults[cap].mode, baseline.preset_defaults[cap].mode,
+                "Assistant preset must not shift {cap:?}",
+            );
+        }
+        assert_eq!(assistant.preset.0, "wave3.assistant");
+    }
+
+    #[test]
+    fn preset_overlay_operator_auto_approves_read_and_create_but_not_shell() {
+        let cfg =
+            EngineConfig::wave3_default(persona()).with_preset_overlay(AutonomyPreset::Operator);
+        assert_eq!(
+            cfg.preset_defaults[&Capability::FilesRead].mode,
+            ApprovalMode::Auto
+        );
+        assert_eq!(
+            cfg.preset_defaults[&Capability::FilesCreate].mode,
+            ApprovalMode::Auto,
+            "Operator should auto-approve file creation",
+        );
+        assert_eq!(
+            cfg.preset_defaults[&Capability::FilesEdit].mode,
+            ApprovalMode::Ask,
+            "Operator still asks before edits",
+        );
+        assert_eq!(
+            cfg.preset_defaults[&Capability::ShellExec].mode,
+            ApprovalMode::Deny,
+            "Operator must NOT loosen shell execution",
+        );
+        assert_eq!(cfg.preset.0, "wave3.operator");
+    }
+
+    #[test]
+    fn preset_overlay_runs_after_persona_and_wins() {
+        // Bold persona hint: Auto-approve ShellExec.
+        let mut hints: HashMap<Capability, ApprovalMode> = HashMap::new();
+        hints.insert(Capability::ShellExec, ApprovalMode::Auto);
+        let cfg = EngineConfig::wave3_default(persona())
+            .with_persona_overlay(&hints, PrivacyPosture::Open)
+            .with_preset_overlay(AutonomyPreset::Observer);
+        // Observer must re-pin ShellExec to Deny regardless of the persona hint.
+        assert_eq!(
+            cfg.preset_defaults[&Capability::ShellExec].mode,
+            ApprovalMode::Deny,
+        );
+    }
+
+    #[test]
+    fn autonomy_preset_wire_names_round_trip() {
+        for p in [
+            AutonomyPreset::Observer,
+            AutonomyPreset::Assistant,
+            AutonomyPreset::Operator,
+        ] {
+            assert_eq!(Some(p), AutonomyPreset::from_wire(p.wire_name()));
+        }
+        assert_eq!(AutonomyPreset::from_wire("unknown"), None);
+        assert_eq!(AutonomyPreset::from_wire("later"), None);
     }
 }
