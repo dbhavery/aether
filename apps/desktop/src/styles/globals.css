@@ -1,0 +1,86 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: theme("fontFamily.sans");
+  font-size: 14px;
+  line-height: 1.55;
+  letter-spacing: -0.005em;
+  background: theme("colors.aether.bg");
+  color: theme("colors.aether.text");
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Let transcript and input content be user-selectable even though the rest
+   of the chrome is not. */
+.allow-select,
+.allow-select * {
+  user-select: text;
+}
+
+::selection {
+  background: #2f2f36;
+  color: #fff;
+}
+
+/* Subtle scrollbar to fit the neumorphic dark theme. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a30 transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #2a2a30;
+  border-radius: 8px;
+  border: 2px solid #0a0a0b;
+}
+
+.neu-surface {
+  background: theme("colors.aether.surface");
+  border: 1px solid theme("colors.aether.border");
+  box-shadow: theme("boxShadow.neu");
+}
+
+.neu-raised {
+  background: theme("colors.aether.raised");
+  border: 1px solid theme("colors.aether.border");
+  box-shadow: theme("boxShadow.neuRaised");
+}
+
+.neu-inset {
+  background: #0d0d10;
+  border: 1px solid #1a1a20;
+  box-shadow: theme("boxShadow.neuInset");
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 1px solid theme("colors.aether.focus");
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001s !important;
+    transition-duration: 0.001s !important;
+  }
+}
