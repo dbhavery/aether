@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/dbhavery/aether/security/advisories/new
+    about: Report a suspected vulnerability privately. See SECURITY.md for scope and process.
+  - name: Code of Conduct concern
+    url: https://github.com/dbhavery/aether/blob/dev/CODE_OF_CONDUCT.md
+    about: How to report a code-of-conduct issue privately.
+  - name: Support / how-do-I questions
+    url: https://github.com/dbhavery/aether/blob/dev/SUPPORT.md
+    about: Where to ask what, and what support is and is not promised during the preview.
+  - name: Contributor guide
+    url: https://github.com/dbhavery/aether/blob/dev/CONTRIBUTING.md
+    about: Read this before opening a feature request or architecture proposal.

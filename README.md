@@ -1,174 +1,297 @@
-<p align="center">
-  <img src="personas/aurora/avatar/portrait.png" width="180" alt="Aurora" />
-  <img src="personas/caelum/avatar/portrait.png" width="180" alt="Caelum" />
-  <img src="personas/luma/avatar/portrait.png" width="180" alt="Luma" />
-</p>
+# Free Aether — Community Edition (OSS Preview)
 
-<h1 align="center">Aether</h1>
+> A local-first, desktop-native AI companion architecture. Rust-first engines, a
+> non-bypassable policy gate, explicit trust surfaces. Early preview — the
+> foundations are in place, most engine logic is not yet.
 
-<p align="center"><strong>A desktop AI companion you actually own.<br/>
-Pick a face. Pick a voice. Pick a mind. They live on your machine.</strong></p>
-
-<p align="center">
-  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.13+-blue.svg" alt="Python 3.13+"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT"></a>
-  <img src="https://img.shields.io/badge/status-public%20preview-e3b770" alt="Public preview">
-</p>
+**Status:** `dev` branch, pre-0.1 preview. The repository is under active
+architecture. Expect breaking changes.
 
 ---
 
-## What Aether is for
+## 1. What Aether is
 
-Aether is a **desktop AI companion**. You install it once. You set it up once. After that, it's *yours* — a specific character you picked, with a voice you picked, living quietly on your own computer, ready whenever you are.
+Aether is not a chatbot UI and not a general-purpose "AI app." It is an
+architecture for a **long-lived companion** that runs locally on a user's
+machine and treats the user relationship — memory, presence, timing, trust —
+as first-class engines, not afterthoughts.
 
-There are three ways to talk to it:
+The project is organized into **seven layers**, each an independent engine
+with explicit contracts:
 
-- **Text chat** — streaming replies, markdown, everything you'd expect.
-- **Voice** — push-to-talk microphone, local speech-to-text, persona-cloned voice back at you.
-- **Video** — the same character, animated, lip-synced, looking at you on a call.
+| Layer | Name              | Responsibility                                          |
+|-------|-------------------|---------------------------------------------------------|
+| L1    | Interaction       | Turn FSM, reflex classifier, STT/TTS adapters, timing   |
+| L2    | Memory            | Local memory kernel, embeddings, provenance             |
+| L3    | Presence          | Avatar scheduler, behavior frames, rendering surface    |
+| L4    | Router            | Model / tool router (local + remote providers)          |
+| L5    | **Policy**        | Non-bypassable authorization gate, audit, grants, BYOK  |
+| L6    | Persona           | YAML → compiled persona artifacts, hot-reload           |
+| L7    | Trust UX          | Onboarding, approvals, posture banners                  |
 
-You can **switch any time** without losing context. You can **switch the character** without losing memory. You can **switch the LLM** powering it without losing either.
+Shared infrastructure (`event-bus`, `storage`, `telemetry`, `types`, `ui-kit`,
+`media-engine`) sits underneath. Everything routes through L5 for
+side-effectful actions — there is no back door.
 
----
-
-## Why you want it
-
-**Because the assistants you have right now aren't yours.**
-
-Cloud assistants send every word you say to a server, train on a slice of it, charge you per request, and change the personality every six weeks without asking. They're rented. Aether is owned.
-
-Here's what that unlocks:
-
-### 1. Privacy by default
-Your conversations, your memory, your voice clone, your API keys — all live on your machine. In the OS keyring for secrets, in a local ChromaDB for memory, in your own home directory for configuration. Nothing leaves unless **you** configured a cloud provider yourself, and even then only the traffic to *that* provider.
-
-### 2. Cost that rounds to zero
-Point it at a local Ollama model and you get a 449 ms voice latency at literally **$0 per query**. Bring your own OpenAI/Anthropic/Google key and pay their rate — no middleman markup, no subscription, no monthly fee to Aether. The product is free; the inference is whatever you want it to be.
-
-### 3. A relationship, not a session
-Aether remembers the last time you talked to it. It remembers that you already told it what you do for work. It remembers your kids' names and your dog's name and that you're training for a half-marathon. There's no "reset" button because there's no reason to hit one — it's been the same character the whole time, building on what it already knows.
-
-### 4. Twelve personas, not one
-Different moods, different tasks, different people in your life who want different things out of an assistant. Aurora is warm and grounded. Caelum is structured and precise. Luma is playful. Nine more pre-built characters ship with v1.0, and you can author your own with a YAML file and a portrait.
-
-### 5. Any LLM you want
-Aether uses [litellm](https://github.com/BerriAI/litellm) under the hood, which means 100+ providers work out of the box. Ollama, Anthropic, OpenAI, Google, Groq, OpenRouter — pick per-tier, or let Aether route automatically between a fast local model for greetings and a heavy cloud model for real reasoning.
-
-### 6. Open-source, MIT
-You can read every line. You can fork it. You can ship your own branded build. You can trust it because you can verify it.
+**Free Aether — Community Edition** is the open-source preview track. A
+separate Pro flagship and a private build (Isabelle) exist in the doctrine
+but are out of scope for this repository.
 
 ---
 
-## Who it's for
+## 2. Why Aether
 
-- **People who care about privacy** and don't want every conversation going through OpenAI.
-- **Developers** who want a real local-first AI runtime to build on.
-- **Tinkerers** who want to author custom personas, voices, and prompts.
-- **Anyone** who just wants a calm, consistent companion at their desk without a monthly bill.
+Most "AI companion" projects collapse into chat UIs on top of an LLM API.
+Aether refuses that shape on purpose:
+
+- **Companion, not chatbot.** Long-lived relationship, not single-session Q&A.
+- **Local-first.** User data, memory, and persona state live on the user's
+  machine. Remote calls are deliberate, visible, and policy-governed.
+- **Policy is load-bearing.** Grants, audit, cost caps, degraded modes, and
+  re-evaluation triggers are in the type system, not bolted on later.
+- **Rust-first for engines.** Timing, policy, storage, routing, and memory
+  engines are Rust crates. TypeScript is for UI and generated bindings only.
+- **Desktop-first product.** Tauri long-term, pywebview tactical for the
+  preview. Browser UI is an implementation detail, not the core product.
+
+If you want a two-hour "chat with my notes" demo, this is the wrong repo. If
+you want to help build durable architecture for a companion that still works
+offline, you're in the right place.
 
 ---
 
-## Download
+## 3. Current status — honest snapshot
 
-> **Status — public preview (v1.0.0-pre).** The runtime is feature-complete and E2E-verified on Windows 11; a packaged installer is the next milestone. For now you run from source.
+```
+FREE AETHER — COMMUNITY EDITION — STATUS 2026-04-19
+
+FOUNDATION / DOCTRINE
+[##########] 100%  Vision & guardrails locked
+[##########] 100%  Product doctrine
+[##########] 100%  7-layer orchestration map
+[##########] 100%  5 control-plane decisions locked
+
+DESIGN / PREP
+[##########] 100%  L1–L7 system designs
+[##########] 100%  L1–L7 interface packs
+[##########] 100%  Event contracts master
+[##########] 100%  SQLite schema pack (DDL drafted)
+[##########] 100%  Test matrix master
+
+REPO / INFRA
+[##########] 100%  Wave 0 — monorepo assimilation
+[##########] 100%  Wave 1 — workspace + shared crates + governance
+[##########] 100%  Wave 2 — L5 scaffold (types, traits, IPC surface)
+
+L5 — POLICY ENGINE
+[##########] 100%  Wave 3 — first real logic slice
+                   (in-memory ledger + audit + 5-stage evaluator,
+                    18 tests across engine_slice + ipc + sink + audit_store,
+                    audit-before-Allow invariant)
+[##########] 100%  Wave 3.5 — SQLite storage substrate
+                   (rusqlite bundled, open_with_migrations() runs the
+                    drafted DDL, 3 integration tests incl. append-only
+                    trigger + warm-open idempotency.
+                    L5 backends still in-memory — flipping L5 onto the
+                    substrate is future work.)
+[..........]   0%  Wave 4.x — hash-chain + HMAC + BYOK cost-cap +
+                   SqliteGrantLedger / SqliteAuditStore
+
+OTHER ENGINES — STUB SHELLS (Wave 4)
+[##########] 100%  L1/L2/L3/L4/L6/L7 traits + core enums + smoke tests
+[..........]   0%  L1–L7 first-logic slices
+
+PRODUCT INTEGRATION
+[..........]   0%  apps/desktop (Tauri shell)
+[..........]   0%  apps/guest  (Cloudflare Worker + Groq endpoint)
+[..........]   0%  apps/docs-site
+[..........]   0%  End-to-end onboarding → first turn
+```
+
+### What runs today
+
+- `pnpm -r --if-present typecheck` is green across the TS packages.
+- `cargo check --workspace` is **green** on stable Rust (toolchain pinned in
+  `rust-toolchain.toml`).
+- `cargo test --workspace` is **green** — every crate's tests pass. Highlights:
+  - `aether-l5-policy`: 18 tests (10 integration slice + 8 type/IPC/sink).
+  - `aether-storage`: 8 tests, including 3 integration tests that open a
+    real SQLite file, run the drafted migration, assert every expected
+    table exists, assert the append-only trigger rejects `DELETE`, and
+    assert a warm reopen is idempotent.
+  - Six engine stub crates (L1–L7 minus L5): smoke tests only.
+
+### What does not run yet
+
+- No end-to-end user-facing flow. There is no runnable desktop app in this
+  repository yet.
+- No LLM, STT, TTS, or avatar pipeline is wired up. The engine stubs declare
+  the right traits and enums; none of the I/O is hooked up.
+- **L5 still uses in-memory persistence.** The storage substrate
+  (`rusqlite` + `open_with_migrations()`) exists and runs, but L5's
+  `GrantLedger` and `AuditStore` have not yet been swapped onto SQLite-backed
+  implementations. That swap is an explicit future wave (see
+  [ROADMAP.md](ROADMAP.md) § "L5 durable persistence"). Today, L5 state is
+  lost on process exit.
+
+### What is in `src/`, `desktop/`, `frontend/`
+
+The legacy **v1.0 Python tree** is intentionally left in place. It is the
+predecessor product; its useful content is being ported forward into the new
+architecture capability-by-capability. Do not import from it into Rust or TS
+workspace members, and do not "clean it up." See
+`planning/LEGACY_ROOT_MAPPING_2026-04-19.md` for the port plan.
+
+---
+
+## 4. Repo layout
+
+```
+aether/
+├── planning/              # Canonical doctrine + plans. Read before editing.
+│   ├── 00_VISION_AND_GUARDRAILS.md     # Sits above everything else.
+│   ├── 01_product_doctrine.md
+│   ├── 02..18_*.md                      # Numbered spec corpus.
+│   ├── plans/                           # L1–L7 system designs + interface packs.
+│   └── plans/implementation_prep/       # Event contracts, SQLite schema, test matrix.
+│
+├── packages/              # Cargo + pnpm workspace members.
+│   ├── event-bus/         # Typed envelopes (Rust).
+│   ├── storage/           # Local persistence substrate (Rust; migrations drafted).
+│   ├── media-engine/      # Media I/O surface (Rust, stub).
+│   ├── telemetry/         # Structured logging (Rust, stub).
+│   ├── types/             # Shared TS types.
+│   ├── ui-kit/            # Shared TS UI primitives + tokens.
+│   ├── l5-policy/         # THE policy engine. First logic slice landed.
+│   ├── l5-policy-ts/      # Hand-written TS mirror of stable L5 types.
+│   ├── l1-interaction/    # Engine stubs — traits, enums, smoke tests only.
+│   ├── l2-memory/         # Engine stubs.
+│   ├── l3-presence/       # Engine stubs.
+│   ├── l4-router/         # Engine stubs.
+│   ├── l6-persona/        # Engine stubs.
+│   └── l7-trust/          # Engine stubs.
+│
+├── apps/                  # Scaffolds only; no runnable app yet.
+├── infra/                 # Deployment / ops scaffolds.
+├── tools/                 # Governance linters (cargo-deny, ESLint rules, ts-rs).
+├── research/              # Research notes.
+│
+├── src/, desktop/,        # Legacy v1.0 Python tree. Frozen; being ported out.
+│   frontend/, configs/,
+│   personas/, scripts/,
+│   tests/
+│
+├── Cargo.toml             # Rust workspace manifest.
+├── pnpm-workspace.yaml    # TS workspace manifest.
+├── rust-toolchain.toml    # Pinned Rust version.
+└── WAVE{0..4}_*_2026-04-19.md   # Per-wave execution reports.
+```
+
+---
+
+## 5. Getting started
+
+### Prerequisites
+
+- **Rust toolchain** — install via [rustup](https://rustup.rs/). The workspace
+  pins the toolchain in `rust-toolchain.toml`.
+- **Node 20+** and **pnpm 9+** — `corepack enable && corepack prepare pnpm@latest --activate`.
+- **Git**. That's it for the preview.
+
+### First run
 
 ```bash
 git clone https://github.com/dbhavery/aether.git
 cd aether
-git checkout dev
 
-python -m venv .venv
-.venv/Scripts/activate          # Windows
-# source .venv/bin/activate      # macOS / Linux
+# TypeScript workspace
+pnpm install
+pnpm -r --if-present typecheck
 
-pip install -r requirements.txt
-
-# Optional — local voice (STT + TTS, needs a GPU for best results):
-#   pip install -r requirements-voice.txt
-#   pip install torch==2.7.0+cu128 torchaudio==2.7.0+cu128 \
-#       --index-url https://download.pytorch.org/whl/cu128
+# Rust workspace (requires rustup)
+cargo check --workspace          # green as of Wave 3.5 (2026-04-19)
+cargo test --workspace           # green: storage substrate + L5 slice + stubs
+cargo test -p aether-l5-policy   # 18 tests on the first L5 logic slice
+cargo test -p aether-storage     # 8 tests incl. 3 SQLite integration tests
 ```
 
-Start the backend and the UI:
+If any of these fail on a clean clone, please open a Bug report — the wave
+reports assume they all pass on stable Rust.
 
-```bash
-# terminal 1
-python -m src.main
+### Where to start reading
 
-# terminal 2
-cd frontend
-npm install --legacy-peer-deps
-npm run dev
-
-# browser → http://127.0.0.1:3000/
-```
-
-First launch walks you through **eight screens** — welcome, pick a face, pick a personality, name them, pick an LLM, pick a voice mode, accept the (short, honest) Terms, and you're talking.
-
----
-
-## What you get out of the box
-
-| Surface | What ships |
-|---|---|
-| **Personas** | 3 fully-rendered packs (Aurora / Caelum / Luma) + 9 placeholder slots you can fill with `scripts/persona_generator/` |
-| **LLM providers** | litellm-backed: Ollama, OpenAI, Anthropic, Google, Groq, OpenRouter, "Aether Guest" free tier, plus anything else litellm supports — 100+ models |
-| **Voice in** | faster-whisper (local), ElevenLabs Scribe (optional cloud fallback) |
-| **Voice out** | Chatterbox Turbo with per-persona voice cloning, or ElevenLabs |
-| **Video mode** | Headshot avatar with lip-sync (LivePortrait-ready; preprocessing is opt-in) |
-| **Memory** | Hybrid BM25 + dense-vector search via ChromaDB, per-persona isolation |
-| **Settings** | Sandbox panel: swap persona, swap provider, swap tier map, inspect memory, manage keys |
-| **Secrets** | OS keyring (Windows Credential Manager / macOS Keychain / Secret Service on Linux). Never plaintext on disk. |
-| **Desktop shell** | Optional pywebview native window wrapper — `desktop/launcher.ps1` |
+1. `planning/00_VISION_AND_GUARDRAILS.md` — start here. This file is doctrine.
+2. `planning/01_product_doctrine.md` — hard rules for the product family.
+3. `planning/plans/00_ORCHESTRATION_MAP.md` — how the layers fit together.
+4. `planning/plans/implementation_prep/` — interface packs, event contracts,
+   schema, and test matrix. These are the concrete contracts the code
+   materializes.
+5. `WAVE3_EXECUTION_REPORT_2026-04-19.md` and `WAVE4_EXECUTION_REPORT_2026-04-19.md`
+   — what was done last, with honest deferrals called out.
+6. `docs/REPO_TOUR.md` — a short guided walk through the directories.
 
 ---
 
-## Hardware notes
+## 6. Roadmap
 
-| Use case | Minimum | Recommended |
-|---|---|---|
-| Text chat only (cloud LLM) | Any machine that runs Python 3.13 | — |
-| Text chat + local LLM (Ollama) | 16 GB RAM, 8 GB VRAM | 32 GB RAM, 12+ GB VRAM |
-| Voice (local STT + TTS) | NVIDIA GPU, 6 GB VRAM | 8 GB+ VRAM |
-| Video avatar | NVIDIA GPU, 8 GB VRAM | 12 GB+ VRAM |
-| OS | Windows 10/11 primary; code runs on macOS + Linux but not yet packaged |
+See [ROADMAP.md](ROADMAP.md) for the full list. The next three meaningful
+moves, in priority order:
 
-No GPU? Run **cloud BYOK** and Aether is a pure network client. Everything still works.
-
----
-
-## What's NOT in v1.0
-
-These are deferred to the ground-up v2 rebuild (see [`docs/PRODUCT-PLAN.md § 2`](docs/PRODUCT-PLAN.md)):
-
-- Tool use / agent workflows (file system, browsing, IDE actions)
-- Vision / image understanding
-- Mobile client
-- Full-body photorealistic avatar
-- Real-time interruption / barge-in
-- Hosted cloud tier
-- Packaged installers for macOS + Linux
+1. **Wave 4.1** — activate the `[bans]` block in
+   `tools/lint-layer-boundaries/deny.toml`. All six sibling engine crates now
+   exist, so the no-cross-layer-import rule can be enforced mechanically.
+2. **L5 durable persistence** (the real follow-up to Wave 3.5) — introduce
+   `SqliteGrantLedger` + `SqliteAuditStore` behind the existing ledger /
+   audit traits, flip L5 onto them behind a feature flag first, then as
+   default. Add migration `0002_audit_chain.sql` for hash-chain + HMAC.
+3. **An L1 or L4 first-logic slice** — either unblocks a visible end-to-end
+   demo path: L1 turn FSM, or L4 provider adapter + policy gate.
 
 ---
 
-## Build your own persona
+## 7. Contributing
 
-Every persona is a folder of YAML + images + one 20s voice reference WAV. Full schema: [`docs/PERSONA-SCHEMA.md`](docs/PERSONA-SCHEMA.md). Recipe + generator scripts: [`scripts/persona_generator/README.md`](scripts/persona_generator/README.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the long version. Short version:
 
-If your persona follows the schema, Aether loads it automatically on next boot — no code changes, no builds, no installer rebuild.
+- **Docs, tests, and tooling PRs** are the friendliest entry points.
+- **Engine logic** should be scoped to a single layer and produce a wave
+  execution report alongside the code.
+- **Planning doc changes** require extra care: `planning/00_VISION_AND_GUARDRAILS.md`
+  and `planning/01_product_doctrine.md` are doctrine — do not edit without
+  prior discussion.
+- **Never bypass L5** for any side-effectful action. If you need a new
+  capability, add it to the L5 contract, not around it.
+
+By participating you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ---
 
-## Links
+## 8. Guardrails (short form)
 
-- **Source** — [github.com/dbhavery/aether](https://github.com/dbhavery/aether)
-- **Issues / bug reports** — [github.com/dbhavery/aether/issues](https://github.com/dbhavery/aether/issues)
-- **Roadmap** — [`docs/PRODUCT-PLAN.md`](docs/PRODUCT-PLAN.md)
-- **Architecture** — [`docs/ARCHITECTURE-V2.md`](docs/ARCHITECTURE-V2.md)
-- **Portfolio** — [dbhavery.dev](https://dbhavery.dev)
+Full list: `planning/00_VISION_AND_GUARDRAILS.md`. In summary:
+
+1. **Seven-layer architecture is non-negotiable.** No collapsing layers into
+   each other "for convenience."
+2. **L5 is the single writer for side effects.** All file I/O, network,
+   subprocess, and tool execution goes through `packages/l5-policy`.
+3. **No uncontrolled remote dependence.** The system must remain useful in
+   degraded or offline modes.
+4. **No "just a chat app" pivot.** Any chat UI is a skin on top of the full
+   companion stack.
+5. **No ad-hoc cross-package dependencies.** Packages depend only along
+   approved directions, enforced by `tools/lint-layer-boundaries/`.
+6. **Docs-first for significant changes.** Architecture moves land in
+   `planning/` before they land in code.
 
 ---
 
-## License
+## 9. Security & reporting
 
-MIT — use it, fork it, ship your own build. See [`LICENSE`](LICENSE).
+Please see [SECURITY.md](SECURITY.md) for how to report vulnerabilities
+responsibly. Do **not** file public issues for security problems.
+
+---
+
+## 10. License
+
+Aether Community Edition is released under the [MIT License](LICENSE).
