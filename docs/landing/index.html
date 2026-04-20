@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Aether — local-first AI companion architecture</title>
+<meta name="description" content="A local-first AI companion architecture with a non-bypassable policy gate. Rust, MIT, preview-grade.">
+
+<meta property="og:title" content="Aether — local-first AI companion architecture">
+<meta property="og:description" content="A local-first AI companion architecture with a non-bypassable policy gate. Rust, MIT, preview-grade.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://dbhavery.dev/aether/">
+<meta name="twitter:card" content="summary">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Serif:ital,wght@1,300&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --bg:           #0b0c0e;
+    --bg-raised:   #121316;
+    --bg-inset:    #07080a;
+    --ink:         #e9e6df;
+    --ink-dim:     #9b988f;
+    --ink-faint:   #55534c;
+    --rule:        #1e2025;
+    --accent:      #d4c8a8;     /* warm paper tone, quiet */
+    --shadow-up:   rgba(255,255,255,0.02);
+    --shadow-down: rgba(0,0,0,0.55);
+    --max:         72ch;
+    --gap:         clamp(1.25rem, 2vw, 1.75rem);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+
+  html {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'IBM Plex Sans', system-ui, -apple-system, Segoe UI, sans-serif;
+    font-weight: 300;
+    font-size: 17px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    min-height: 100dvh;
+    padding: clamp(2rem, 4vw, 4rem) clamp(1.25rem, 4vw, 2.5rem);
+    background:
+      radial-gradient(ellipse at 15% -10%, rgba(212, 200, 168, 0.025) 0%, transparent 45%),
+      radial-gradient(ellipse at 85% 110%, rgba(212, 200, 168, 0.02) 0%, transparent 50%),
+      var(--bg);
+  }
+
+  main { max-width: var(--max); margin: 0 auto; }
+
+  /* Typography */
+  h1, h2, h3 { font-weight: 400; letter-spacing: -0.01em; margin: 0; }
+  h1 { font-size: clamp(2rem, 5.5vw, 3rem); line-height: 1.1; font-weight: 300; letter-spacing: -0.02em; }
+  h2 { font-size: 1.125rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-dim); font-weight: 500; }
+  h3 { font-size: 1.05rem; font-weight: 500; color: var(--ink); }
+  p  { margin: 0 0 1em; max-width: 62ch; }
+  a  { color: var(--ink); text-underline-offset: 3px; text-decoration-thickness: 1px; text-decoration-color: var(--ink-faint); transition: text-decoration-color 120ms ease; }
+  a:hover { text-decoration-color: var(--accent); }
+  code, pre, .mono { font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace; font-weight: 400; }
+  code { font-size: 0.92em; color: var(--accent); }
+  em { font-family: 'IBM Plex Serif', serif; font-style: italic; font-weight: 300; color: var(--ink); letter-spacing: 0; }
+  strong { font-weight: 500; color: var(--ink); }
+
+  /* Sections */
+  section { padding: clamp(3rem, 7vw, 5rem) 0; border-bottom: 1px solid var(--rule); }
+  section:last-of-type { border-bottom: none; }
+  section > .lede { color: var(--ink); font-size: clamp(1.15rem, 2.2vw, 1.35rem); line-height: 1.5; font-weight: 300; max-width: 58ch; }
+  section > h2 + * { margin-top: 1.75rem; }
+
+  /* Hero */
+  header.hero { padding: clamp(1rem, 3vw, 2rem) 0 clamp(4rem, 8vw, 6rem); border-bottom: 1px solid var(--rule); }
+  .wordmark {
+    display: flex; align-items: baseline; gap: 0.75rem;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.85rem; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--ink-dim);
+    margin-bottom: clamp(3rem, 7vw, 5rem);
+  }
+  .wordmark .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); opacity: 0.7; }
+  .wordmark .status { margin-left: auto; color: var(--ink-faint); font-size: 0.75rem; }
+  .hero-lede {
+    margin-top: 1.75rem; color: var(--ink-dim);
+    font-size: clamp(1.15rem, 2.2vw, 1.35rem); line-height: 1.45; font-weight: 300;
+    max-width: 52ch;
+  }
+  .hero-meta {
+    margin-top: 2.5rem; display: flex; flex-wrap: wrap; gap: 1.5rem 2.25rem;
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.82rem;
+    color: var(--ink-faint); letter-spacing: 0.05em;
+  }
+  .hero-meta span strong { color: var(--ink-dim); font-weight: 500; }
+
+  /* CTA row */
+  .cta { margin-top: 2.5rem; display: flex; flex-wrap: wrap; gap: 0.75rem; }
+  .cta a {
+    display: inline-flex; align-items: center; gap: 0.6rem;
+    padding: 0.7rem 1.1rem;
+    border: 1px solid var(--rule);
+    background: var(--bg-raised);
+    color: var(--ink);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.85rem; letter-spacing: 0.04em;
+    text-decoration: none;
+    border-radius: 2px;
+    transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
+    box-shadow:
+      inset 0 1px 0 var(--shadow-up),
+      0 1px 0 var(--shadow-down);
+  }
+  .cta a:hover { border-color: var(--accent); background: #15171b; transform: translateY(-1px); }
+  .cta a.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .cta a.primary:hover { background: var(--accent); border-color: var(--accent); }
+  .cta a .arrow { opacity: 0.6; transition: transform 150ms ease, opacity 150ms ease; }
+  .cta a:hover .arrow { transform: translateX(2px); opacity: 1; }
+
+  /* Code block */
+  pre.terminal {
+    background: var(--bg-inset);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 1rem 1.25rem;
+    overflow-x: auto;
+    font-size: 0.86rem; line-height: 1.65;
+    color: var(--ink);
+    box-shadow:
+      inset 0 1px 0 rgba(0,0,0,0.3),
+      0 1px 0 var(--shadow-up);
+  }
+  pre.terminal .prompt { color: var(--ink-faint); user-select: none; }
+  pre.terminal .comment { color: var(--ink-faint); }
+  pre.terminal .accent { color: var(--accent); }
+
+  /* Layer diagram */
+  .diagram-wrap {
+    margin: 2.5rem 0 0;
+    padding: 2rem 1rem 2.25rem;
+    background:
+      linear-gradient(180deg, var(--bg-raised), var(--bg));
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    box-shadow:
+      inset 0 1px 0 var(--shadow-up),
+      0 1px 0 var(--shadow-down),
+      0 20px 40px -20px rgba(0,0,0,0.5);
+  }
+  .diagram-wrap svg { display: block; width: 100%; height: auto; }
+  .diagram-caption {
+    margin-top: 1.25rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.78rem;
+    color: var(--ink-faint); letter-spacing: 0.04em; text-align: center;
+  }
+
+  /* Two-column list */
+  .cols {
+    display: grid; gap: 2rem;
+    grid-template-columns: repeat(auto-fit, minmax(24ch, 1fr));
+    margin-top: 2rem;
+  }
+  .cols h3 { margin-bottom: 0.5rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-dim); font-weight: 500; }
+  .cols ul { margin: 0; padding: 0; list-style: none; }
+  .cols li { padding: 0.55rem 0; color: var(--ink); border-bottom: 1px solid var(--rule); font-size: 0.96rem; }
+  .cols li:last-child { border-bottom: none; }
+  .cols li .muted { color: var(--ink-faint); font-size: 0.85rem; display: block; margin-top: 0.15rem; }
+
+  /* Footer */
+  footer {
+    margin-top: clamp(3rem, 6vw, 5rem);
+    padding-top: 2rem; border-top: 1px solid var(--rule);
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.78rem;
+    color: var(--ink-faint); letter-spacing: 0.05em;
+    display: flex; flex-wrap: wrap; gap: 1rem 2rem; justify-content: space-between;
+  }
+  footer a { color: var(--ink-dim); text-decoration-color: var(--ink-faint); }
+
+  /* Respect user motion prefs */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition: none !important; animation: none !important; }
+  }
+
+  /* Narrow screens: tighten */
+  @media (max-width: 480px) {
+    html { font-size: 16px; }
+    section { padding: 2.5rem 0; }
+    .hero-meta { gap: 0.85rem 1.5rem; }
+  }
+
+  /* Selection */
+  ::selection { background: var(--accent); color: var(--bg); }
+</style>
+</head>
+<body>
+<main>
+
+<header class="hero">
+  <div class="wordmark">
+    <span class="dot" aria-hidden="true"></span>
+    <span>Aether</span>
+    <span class="status">v0.1.0 · oss preview</span>
+  </div>
+
+  <h1>A local-first AI&nbsp;companion, built around one&nbsp;invariant.</h1>
+
+  <p class="hero-lede">
+    Every action Aether takes clears a non-bypassable policy gate before it
+    touches the world. <em>No exceptions, no fast paths, no admin mode.</em>
+    The gate is the ground floor; everything else grows on&nbsp;top.
+  </p>
+
+  <div class="cta">
+    <a class="primary" href="https://github.com/dbhavery/aether">
+      <span>read the code</span><span class="arrow">→</span>
+    </a>
+    <a href="https://github.com/dbhavery/aether/blob/dev/ARCHITECTURE.md">
+      <span>architecture&nbsp;doc</span><span class="arrow">→</span>
+    </a>
+    <a href="https://github.com/dbhavery/aether/releases/tag/v0.1.0-oss-preview.0">
+      <span>release&nbsp;notes</span><span class="arrow">→</span>
+    </a>
+  </div>
+
+  <div class="hero-meta" aria-label="Project metadata">
+    <span><strong>status</strong> preview-grade</span>
+    <span><strong>license</strong> MIT</span>
+    <span><strong>language</strong> Rust</span>
+    <span><strong>author</strong> Donald Havery</span>
+  </div>
+</header>
+
+<section id="why">
+  <h2>Why</h2>
+  <p class="lede">
+    Most AI assistants assume the language model is the product. Aether
+    doesn&rsquo;t. The model is a service. The <em>relationship</em> —
+    memory, presence, trust, timing — is the product, and policy is what
+    keeps the relationship intact over years of use.
+  </p>
+  <p style="color: var(--ink-dim); margin-top: 1.25rem;">
+    That means a companion you can still trust when half the system is
+    broken. A persona you can swap without rewriting history. An audit
+    trail you can read in five years without vendor lock-in. A local
+    model by default, with remote calls as a deliberate escalation.
+  </p>
+</section>
+
+<section id="layers">
+  <h2>Seven layers, one gate</h2>
+
+  <p class="lede" style="margin-bottom: 0.5rem;">
+    Aether is organized into seven independent engines. Every
+    side-effectful call routes through <strong>L5, the policy engine</strong>.
+    Sibling engines do not import each other — a CI-enforced linter
+    refuses the edge.
+  </p>
+
+  <div class="diagram-wrap" aria-label="Seven-layer stack diagram">
+    <svg viewBox="0 0 640 380" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="diag-title diag-desc">
+      <title id="diag-title">Aether seven-layer architecture</title>
+      <desc id="diag-desc">Six sibling engines arranged around L5, the policy gate, with shared infrastructure underneath. Every call routes through L5.</desc>
+
+      <defs>
+        <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#16181c"/>
+          <stop offset="100%" stop-color="#0f1114"/>
+        </linearGradient>
+        <linearGradient id="gate" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#1a1c20"/>
+          <stop offset="100%" stop-color="#131519"/>
+        </linearGradient>
+        <linearGradient id="infra" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#0c0e11"/>
+          <stop offset="100%" stop-color="#07090b"/>
+        </linearGradient>
+      </defs>
+
+      <style>
+        .lid   { font: 500 11px 'IBM Plex Mono', monospace; fill: #9b988f; letter-spacing: 1.5px; }
+        .lname { font: 400 14px 'IBM Plex Sans', sans-serif; fill: #e9e6df; }
+        .lsub  { font: 300 11px 'IBM Plex Sans', sans-serif; fill: #7b786f; }
+        .gatelbl { font: 500 14px 'IBM Plex Mono', monospace; fill: #e9e6df; letter-spacing: 1.5px; }
+        .gatesub { font: 400 11px 'IBM Plex Sans', sans-serif; fill: #d4c8a8; }
+        .infralbl { font: 400 10px 'IBM Plex Mono', monospace; fill: #55534c; letter-spacing: 2px; }
+        .rule { stroke: #1e2025; stroke-width: 1; fill: none; }
+        .arrow { stroke: #55534c; stroke-width: 1; fill: none; stroke-dasharray: 2 3; }
+      </style>
+
+      <!-- Top row: L1, L2, L3 -->
+      <g>
+        <rect x="20"  y="20" width="180" height="70" rx="3" fill="url(#card)" stroke="#1e2025"/>
+        <text class="lid"   x="34"  y="42">L1</text>
+        <text class="lname" x="34"  y="62">Interaction</text>
+        <text class="lsub"  x="34"  y="80">turn fsm · timing · reflex</text>
+
+        <rect x="230" y="20" width="180" height="70" rx="3" fill="url(#card)" stroke="#1e2025"/>
+        <text class="lid"   x="244" y="42">L2</text>
+        <text class="lname" x="244" y="62">Memory</text>
+        <text class="lsub"  x="244" y="80">kernel · embeddings · provenance</text>
+
+        <rect x="440" y="20" width="180" height="70" rx="3" fill="url(#card)" stroke="#1e2025"/>
+        <text class="lid"   x="454" y="42">L3</text>
+        <text class="lname" x="454" y="62">Presence</text>
+        <text class="lsub"  x="454" y="80">avatar · behavior frames</text>
+      </g>
+
+      <!-- Middle row: L4, L5 gate, L6 -->
+      <g>
+        <rect x="20"  y="120" width="180" height="70" rx="3" fill="url(#card)" stroke="#1e2025"/>
+        <text class="lid"   x="34"  y="142">L4</text>
+        <text class="lname" x="34"  y="162">Router</text>
+        <text class="lsub"  x="34"  y="180">7-tier · providers · tools</text>
+
+        <!-- Gate -->
+        <rect x="230" y="115" width="180" height="80" rx="3" fill="url(#gate)" stroke="#d4c8a8" stroke-opacity="0.35"/>
+        <text class="gatelbl" x="244" y="142">L5 · POLICY</text>
+        <text class="gatesub" x="244" y="162">non-bypassable gate</text>
+        <text class="lsub"    x="244" y="180">allow · ask · deny · draft</text>
+
+        <rect x="440" y="120" width="180" height="70" rx="3" fill="url(#card)" stroke="#1e2025"/>
+        <text class="lid"   x="454" y="142">L6</text>
+        <text class="lname" x="454" y="162">Persona</text>
+        <text class="lsub"  x="454" y="180">profile → compiled artifacts</text>
+      </g>
+
+      <!-- Bottom single row: L7 centered -->
+      <g>
+        <rect x="230" y="220" width="180" height="70" rx="3" fill="url(#card)" stroke="#1e2025"/>
+        <text class="lid"   x="244" y="242">L7</text>
+        <text class="lname" x="244" y="262">Trust UX</text>
+        <text class="lsub"  x="244" y="280">approvals · posture · incidents</text>
+      </g>
+
+      <!-- Shared infra strip -->
+      <g>
+        <rect x="20" y="310" width="600" height="50" rx="3" fill="url(#infra)" stroke="#1e2025"/>
+        <text class="infralbl" x="36" y="330">SHARED INFRASTRUCTURE</text>
+        <text class="lsub"     x="36" y="348">event-bus &nbsp;·&nbsp; storage &nbsp;·&nbsp; telemetry &nbsp;·&nbsp; media-engine</text>
+      </g>
+
+      <!-- Arrows from engines to L5 -->
+      <path class="arrow" d="M110 92 L300 115"/>
+      <path class="arrow" d="M320 92 L320 115"/>
+      <path class="arrow" d="M530 92 L340 115"/>
+      <path class="arrow" d="M110 190 L300 195"/>
+      <path class="arrow" d="M530 190 L340 195"/>
+      <path class="arrow" d="M320 220 L320 200"/>
+    </svg>
+    <div class="diagram-caption">every call clears L5 before it touches the world</div>
+  </div>
+</section>
+
+<section id="try">
+  <h2>Try&nbsp;it</h2>
+  <p class="lede">
+    Preview-grade. Not a product. One command and a tiny CLI that walks a
+    real turn through L5 and into a router adapter.
+  </p>
+
+  <pre class="terminal" aria-label="Terminal example"><span class="prompt">$</span> git clone https://github.com/dbhavery/aether.git
+<span class="prompt">$</span> cd aether
+<span class="prompt">$</span> cargo run -p aether-l1-cli
+
+<span class="comment">Aether L1 demo — community preview.</span>
+<span class="comment">persona     : aurora (v1, preferred tier local-full)</span>
+
+<span class="prompt">aether&gt;</span> read /tmp/x
+  final-state  : Completed
+  policy       : <span class="accent">Allow</span>   (grant=g-1, audit=a-1)
+  route        : tier=local-full  provider=reflex-stub
+
+<span class="prompt">aether&gt;</span> shell ls
+  final-state  : PolicyDenied
+  policy       : <span class="accent">Deny</span>    (ModeDeny, audit=a-2)
+
+<span class="prompt">aether&gt;</span> delete /tmp/y
+  final-state  : AwaitingPolicyApproval
+  policy       : <span class="accent">Ask</span>     (ticket=t-1, audit=a-3)</pre>
+
+  <p style="color: var(--ink-dim); margin-top: 1.5rem; font-size: 0.95rem;">
+    Every field in that output is produced by real engine code. The audit
+    id comes from <code>write_audit</code>. The grant id comes from
+    <code>issue_and_emit_grant</code>. The state trace is the path the
+    turn FSM actually walked.
+  </p>
+</section>
+
+<section id="what">
+  <h2>What&rsquo;s inside</h2>
+
+  <div class="cols">
+    <div>
+      <h3>Shipped in&nbsp;v0.1.0</h3>
+      <ul>
+        <li>L5 policy engine: 5-stage evaluator, typed decisions
+          <span class="muted">allow · ask · draft-only · deny · needs-upgrade</span></li>
+        <li>Sealed audit log: SHA-256 chain + HMAC-SHA256 per row
+          <span class="muted">tampering → named error on <code>verify_chain</code></span></li>
+        <li>Durable L5: <code>SqliteGrantLedger</code>, <code>SqliteAuditStore</code>
+          <span class="muted">feature-gated, survives process restart</span></li>
+        <li>L1 turn FSM, first vertical slice
+          <span class="muted">idle → policy → route → completed</span></li>
+        <li>L6 persona compiler, deterministic
+          <span class="muted">profile → 7 typed artifacts, no LLM calls</span></li>
+        <li>Layer-boundary linter, CI-blocking
+          <span class="muted">no sibling-engine imports, ever</span></li>
+      </ul>
+    </div>
+
+    <div>
+      <h3>Not&nbsp;yet</h3>
+      <ul>
+        <li>Real LLM calls
+          <span class="muted">router adapter ships as a stub; provider integrations next</span></li>
+        <li>Persistent cross-session memory
+          <span class="muted">L2 memory kernel is a trait surface so far</span></li>
+        <li>Desktop shell
+          <span class="muted"><code>apps/desktop/</code> is empty on purpose</span></li>
+        <li>STT / TTS / avatar pipeline
+          <span class="muted">L1 accepts text utterances today</span></li>
+        <li>OS-keyring for audit key
+          <span class="muted">preview stores a 32-byte file next to the DB</span></li>
+        <li>Approval UX
+          <span class="muted"><code>Ask</code> tickets emit but don&rsquo;t yet render</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <p style="margin-top: 2.25rem; color: var(--ink-dim); max-width: 58ch;">
+    The <a href="https://github.com/dbhavery/aether/blob/dev/ROADMAP.md">roadmap</a>
+    names the next six sessions: memory, approvals, presence, a real
+    provider, persona-driven policy, and a Tauri shell. After that it
+    starts to feel like a companion.
+  </p>
+</section>
+
+<section id="read">
+  <h2>Read&nbsp;deeper</h2>
+
+  <div class="cols">
+    <div>
+      <ul>
+        <li><a href="https://github.com/dbhavery/aether/blob/dev/ARCHITECTURE.md">ARCHITECTURE.md</a>
+          <span class="muted">the reference document, ~300 lines</span></li>
+        <li><a href="https://github.com/dbhavery/aether/blob/dev/planning/00_VISION_AND_GUARDRAILS.md">Vision &amp; guardrails</a>
+          <span class="muted">doctrine, sits above everything else</span></li>
+        <li><a href="https://github.com/dbhavery/aether/blob/dev/planning/01_product_doctrine.md">Product doctrine</a>
+          <span class="muted">hard rules for the product family</span></li>
+      </ul>
+    </div>
+    <div>
+      <ul>
+        <li><a href="https://github.com/dbhavery/aether/tree/dev/packages/l5-policy">L5 source</a>
+          <span class="muted">the richest code in the repo</span></li>
+        <li><a href="https://github.com/dbhavery/aether/blob/dev/packages/l5-policy/src/audit_seal.rs">audit_seal.rs</a>
+          <span class="muted">the hash chain + HMAC, ~220 lines</span></li>
+        <li><a href="https://github.com/dbhavery/aether/blob/dev/docs/REPO_TOUR.md">REPO_TOUR.md</a>
+          <span class="muted">a fifteen-minute guided walk</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <span>MIT © 2026 Donald Havery</span>
+  <span><a href="https://github.com/dbhavery/aether">github</a> &nbsp;·&nbsp; <a href="https://github.com/dbhavery/aether/issues">issues</a> &nbsp;·&nbsp; <a href="https://github.com/dbhavery/aether/blob/dev/CONTRIBUTING.md">contribute</a></span>
+  <span>preview-grade — calibrate expectations</span>
+</footer>
+
+</main>
+</body>
+</html>
