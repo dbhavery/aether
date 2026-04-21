@@ -10,7 +10,16 @@ import {
 import type { VisionModelList, VisionStatus } from "../lib/types";
 
 interface Props {
+  /** Bumping this number forces the badge to refetch its status —
+   * lets a parent panel coordinate the badge with sibling surfaces
+   * (the per-panel ActiveVisionRoute hint, primarily). */
   refreshKey?: number;
+  /** Fires after a successful provider swap, model swap, or refresh.
+   * Parents use it to invalidate sibling views that depend on the
+   * vision route (e.g. the active-route hint above the Analyze
+   * button). Failures don't fire — the user-visible error line stays
+   * inside the badge. */
+  onRouteChanged?: () => void;
 }
 
 const TEXT_ONLY_VALUE = "__text_only__";
@@ -27,7 +36,7 @@ const TEXT_ONLY_VALUE = "__text_only__";
  * When no vision provider is registered (no env opt-in), the
  * dropdown is hidden and the badge explains how to enable one.
  */
-export function VisionBadge({ refreshKey }: Props) {
+export function VisionBadge({ refreshKey, onRouteChanged }: Props) {
   const [status, setStatus] = useState<VisionStatus | null>(null);
   const [models, setModels] = useState<VisionModelList | null>(null);
   const [modelsLoading, setModelsLoading] = useState(false);
@@ -94,13 +103,14 @@ export function VisionBadge({ refreshKey }: Props) {
         const id = next === TEXT_ONLY_VALUE ? null : next;
         const updated = await setActiveVisionProvider(id);
         setStatus(updated);
+        onRouteChanged?.();
       } catch (e) {
         setErr(String(e));
       } finally {
         setBusy(false);
       }
     },
-    [],
+    [onRouteChanged],
   );
 
   if (!status) return null;
@@ -169,6 +179,7 @@ export function VisionBadge({ refreshKey }: Props) {
                   // the UI's snapshot so the "Active" ring moves.
                   const fresh = await listVisionModels();
                   setModels(fresh);
+                  onRouteChanged?.();
                 } catch (e) {
                   setErr(String(e));
                 } finally {
@@ -181,6 +192,7 @@ export function VisionBadge({ refreshKey }: Props) {
                 try {
                   const fresh = await refreshVisionModels();
                   setModels(fresh);
+                  onRouteChanged?.();
                 } catch (e) {
                   setErr(String(e));
                 } finally {

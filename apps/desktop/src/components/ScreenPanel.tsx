@@ -12,6 +12,7 @@ import type {
   TranscriptMessage,
 } from "../lib/types";
 
+import { ActiveVisionRoute } from "./ActiveVisionRoute";
 import { CueHistoryStrip } from "./CueHistoryStrip";
 import { VisionBadge } from "./VisionBadge";
 
@@ -38,6 +39,7 @@ export function ScreenPanel({ open, onClose, onFrameAnalyzed }: Props) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
   const [cueHistory, setCueHistory] = useState<string[]>([]);
+  const [routeKey, setRouteKey] = useState(0);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -293,7 +295,10 @@ export function ScreenPanel({ open, onClose, onFrameAnalyzed }: Props) {
         </div>
 
         <div className="mt-5 border-t border-aether-border pt-4">
-          <VisionBadge />
+          <VisionBadge
+            refreshKey={routeKey}
+            onRouteChanged={() => setRouteKey((k) => k + 1)}
+          />
           <label className="mt-3 block text-[11px] uppercase tracking-[0.18em] text-aether-dim">
             Optional note
           </label>
@@ -304,6 +309,7 @@ export function ScreenPanel({ open, onClose, onFrameAnalyzed }: Props) {
             className="mt-1 w-full rounded-md border border-aether-border bg-aether-elevated px-2.5 py-1.5 text-[12px] text-aether-text placeholder:text-aether-dim focus:outline-none focus:ring-1 focus:ring-aether-accent"
           />
           <CueHistoryStrip cues={cueHistory} onPick={(cue) => setNote(cue)} />
+          <ActiveVisionRoute refreshKey={routeKey} />
           <button
             type="button"
             onClick={captureAndAnalyze}
