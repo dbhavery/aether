@@ -34,6 +34,45 @@ pub const TTL_CEILING_SECS: u64 = 3_600;
 /// TTL. Documented as an advanced operator knob — there's no UI for it.
 pub const TTL_ENV_VAR: &str = "AETHER_VISION_MODEL_TTL_SECS";
 
+/// Where the effective TTL came from. Surfaced in the boot log line
+/// so operators can tell at a glance whether the cache is running on
+/// the default value, an env override, or a fallback after an invalid
+/// env value. Pure data; exposed for tests.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TtlSource {
+    /// No `AETHER_VISION_MODEL_TTL_SECS` set — using `DEFAULT_TTL`.
+    Default,
+    /// `AETHER_VISION_MODEL_TTL_SECS` parsed cleanly and is being used.
+    EnvOverride,
+    /// `AETHER_VISION_MODEL_TTL_SECS` was set but invalid; fell back
+    /// to `DEFAULT_TTL` and logged a WARN.
+    DefaultAfterInvalidEnv,
+}
+
+impl TtlSource {
+    /// Short, log-friendly label for the variant.
+    pub fn label(self) -> &'static str {
+        match self {
+            TtlSource::Default => "default",
+            TtlSource::EnvOverride => "env override",
+            TtlSource::DefaultAfterInvalidEnv => "default after invalid env",
+        }
+    }
+}
+
+/// Resolve the effective TTL from the environment without constructing
+/// a cache. Pure helper exposed for unit tests so the source-resolution
+/// rules can be locked without sniffing log output.
+pub fn resolve_ttl_from_env() -> (Duration, TtlSource) {
+    match env::var(TTL_ENV_VAR) {
+        Ok(raw) => match parse_ttl_secs(&raw) {
+            Some(ttl) => (ttl, TtlSource::EnvOverride),
+            None => (DEFAULT_TTL, TtlSource::DefaultAfterInvalidEnv),
+        },
+        Err(_) => (DEFAULT_TTL, TtlSource::Default),
+    }
+}
+
 /// Pure parser for the TTL env var value. Returns `Some(Duration)` when
 /// the input parses as a `u64` of seconds within
 /// `[TTL_FLOOR_SECS, TTL_CEILING_SECS]`. Returns `None` for missing,
@@ -80,34 +119,32 @@ impl ModelListCache {
 
     /// Build a cache whose TTL is read from [`TTL_ENV_VAR`]. Falls
     /// back to [`DEFAULT_TTL`] when the var is unset, empty,
-    /// non-numeric, or out of range. Logs a warning at WARN level
-    /// when an invalid value is supplied so misconfiguration is
-    /// visible without blocking boot.
+    /// non-numeric, or out of range. Always emits an INFO log line
+    /// stating the effective TTL plus its source so operators can
+    /// confirm at boot which value the cache is using; emits a
+    /// WARN line first when an invalid value forced a fallback.
     pub fn from_env() -> Self {
-        match env::var(TTL_ENV_VAR) {
-            Ok(raw) => match parse_ttl_secs(&raw) {
-                Some(ttl) => {
-                    tracing::info!(
-                        "vision model-list cache TTL overridden via {}={}s",
-                        TTL_ENV_VAR,
-                        ttl.as_secs()
-                    );
-                    Self::with_ttl(ttl)
-                }
-                None => {
-                    tracing::warn!(
-                        "{}={:?} is not in [{},{}] seconds; using default {}s",
-                        TTL_ENV_VAR,
-                        raw,
-                        TTL_FLOOR_SECS,
-                        TTL_CEILING_SECS,
-                        DEFAULT_TTL.as_secs()
-                    );
-                    Self::new()
-                }
-            },
-            Err(_) => Self::new(),
+        let (ttl, source) = resolve_ttl_from_env();
+        if matches!(source, TtlSource::DefaultAfterInvalidEnv) {
+            // Be specific about what the operator passed so they can
+            // fix it. The pure helper hides the raw value, so re-read
+            // here purely for the warning message.
+            let raw = env::var(TTL_ENV_VAR).unwrap_or_default();
+            tracing::warn!(
+                "{}={:?} is not in [{},{}] seconds; using default {}s",
+                TTL_ENV_VAR,
+                raw,
+                TTL_FLOOR_SECS,
+                TTL_CEILING_SECS,
+                DEFAULT_TTL.as_secs()
+            );
         }
+        tracing::info!(
+            "vision model-list cache TTL: {}s ({})",
+            ttl.as_secs(),
+            source.label()
+        );
+        Self::with_ttl(ttl)
     }
 
     /// Effective TTL of this cache. Used by tests + diagnostics.
@@ -311,6 +348,51 @@ mod tests {
         let c = ModelListCache::from_env();
         assert_eq!(c.ttl(), Duration::from_secs(30));
         unset_ttl_env();
+    }
+
+    #[test]
+    fn resolve_ttl_from_env_reports_default_when_unset() {
+        let _g = ENV_MUTEX.lock().unwrap_or_else(|p| p.into_inner());
+        unset_ttl_env();
+        let (ttl, source) = resolve_ttl_from_env();
+        assert_eq!(ttl, DEFAULT_TTL);
+        assert_eq!(source, TtlSource::Default);
+    }
+
+    #[test]
+    fn resolve_ttl_from_env_reports_env_override() {
+        let _g = ENV_MUTEX.lock().unwrap_or_else(|p| p.into_inner());
+        unset_ttl_env();
+        env::set_var(TTL_ENV_VAR, "45");
+        let (ttl, source) = resolve_ttl_from_env();
+        assert_eq!(ttl, Duration::from_secs(45));
+        assert_eq!(source, TtlSource::EnvOverride);
+        unset_ttl_env();
+    }
+
+    #[test]
+    fn resolve_ttl_from_env_reports_invalid_env_fallback() {
+        let _g = ENV_MUTEX.lock().unwrap_or_else(|p| p.into_inner());
+        unset_ttl_env();
+        env::set_var(TTL_ENV_VAR, "garbage");
+        let (ttl, source) = resolve_ttl_from_env();
+        assert_eq!(ttl, DEFAULT_TTL);
+        assert_eq!(source, TtlSource::DefaultAfterInvalidEnv);
+        env::set_var(TTL_ENV_VAR, "0");
+        let (ttl2, source2) = resolve_ttl_from_env();
+        assert_eq!(ttl2, DEFAULT_TTL);
+        assert_eq!(source2, TtlSource::DefaultAfterInvalidEnv);
+        unset_ttl_env();
+    }
+
+    #[test]
+    fn ttl_source_label_is_stable() {
+        assert_eq!(TtlSource::Default.label(), "default");
+        assert_eq!(TtlSource::EnvOverride.label(), "env override");
+        assert_eq!(
+            TtlSource::DefaultAfterInvalidEnv.label(),
+            "default after invalid env"
+        );
     }
 
     #[test]
