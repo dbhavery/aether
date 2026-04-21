@@ -1,17 +1,22 @@
 import { defineConfig } from "vitest/config";
 
-// Minimal Vitest config for pure-logic unit tests under src/lib and
-// adjacent helpers. We deliberately do NOT set up React Testing
-// Library / component rendering here — the cue history and
-// media-turn classification surfaces are pure functions and that's
-// the scope of this harness.
+// Vitest config for the desktop shell.
 //
-// `jsdom` is the environment so `localStorage`-touching code can
-// run unmodified inside tests.
+// Two flavours of test live alongside each other:
+//
+// 1. Pure-logic unit tests under `src/lib/*.test.ts` — cue history,
+//    media-turn classification, etc. No DOM, no React.
+// 2. Component tests under `src/**/*.test.tsx` — React Testing
+//    Library renders against jsdom; the api.ts wrapper around Tauri
+//    `invoke` is mocked per-test so tests don't need a Tauri runtime.
+//
+// `setupFiles` registers RTL's auto-cleanup so tests don't leak DOM
+// state across runs.
 export default defineConfig({
   test: {
     environment: "jsdom",
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
     globals: false,
+    setupFiles: ["./src/test/setup.ts"],
   },
 });
