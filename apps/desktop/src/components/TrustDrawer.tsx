@@ -6,7 +6,11 @@ import {
   telemetryRecent,
   type TelemetryEntry,
 } from "../lib/api";
-import { isMediaTurn, MEDIA_TURN_KINDS } from "../lib/mediaTurns";
+import {
+  isMediaTurn,
+  MEDIA_TURN_KINDS,
+  visionProviderShortLabel,
+} from "../lib/mediaTurns";
 import type { AuditDecisionLabel, TrustAuditRow } from "../lib/types";
 
 type Tab = "audit" | "history";
@@ -301,29 +305,44 @@ function HistoryList({
   }
   return (
     <div className="flex flex-col gap-2">
-      {entries.map((e) => (
-        <div
-          key={e.turn_id}
-          className="rounded-md border border-aether-border bg-aether-bg/50 px-3 py-2"
-        >
-          <div className="flex items-baseline justify-between gap-2">
-            <span className={`text-[11px] font-mono uppercase tracking-wider ${kindClass(e.kind)}`}>
-              {e.kind.replace(/_/g, " ")}
-            </span>
-            <span className="text-[10px] font-mono text-aether-dim">
-              {formatLatencyMs(e.latency_ms)}
-            </span>
+      {entries.map((e) => {
+        const visionLabel = visionProviderShortLabel(e.provider);
+        return (
+          <div
+            key={e.turn_id}
+            className="rounded-md border border-aether-border bg-aether-bg/50 px-3 py-2"
+          >
+            <div className="flex items-baseline justify-between gap-2">
+              <span
+                className={`text-[11px] font-mono uppercase tracking-wider ${kindClass(e.kind)}`}
+              >
+                {e.kind.replace(/_/g, " ")}
+              </span>
+              <div className="flex items-center gap-2">
+                {visionLabel && (
+                  <span
+                    className="rounded-full border border-aether-ok/40 bg-aether-ok/5 px-1.5 py-0.5 text-[10px] text-aether-ok"
+                    title={`Served by ${e.provider}`}
+                  >
+                    {visionLabel}
+                  </span>
+                )}
+                <span className="text-[10px] font-mono text-aether-dim">
+                  {formatLatencyMs(e.latency_ms)}
+                </span>
+              </div>
+            </div>
+            <div className="mt-1 font-mono text-[12px] text-aether-text break-all">
+              {e.persona_id}
+              {e.provider ? ` · ${e.provider}` : ""}
+              {e.tier ? ` · ${e.tier}` : ""}
+            </div>
+            <div className="text-[11.5px] font-mono text-aether-muted">
+              {formatTokens(e.prompt_tokens, e.completion_tokens)}
+            </div>
           </div>
-          <div className="mt-1 font-mono text-[12px] text-aether-text break-all">
-            {e.persona_id}
-            {e.provider ? ` · ${e.provider}` : ""}
-            {e.tier ? ` · ${e.tier}` : ""}
-          </div>
-          <div className="text-[11.5px] font-mono text-aether-muted">
-            {formatTokens(e.prompt_tokens, e.completion_tokens)}
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

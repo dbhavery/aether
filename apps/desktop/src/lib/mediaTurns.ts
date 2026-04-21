@@ -23,3 +23,39 @@ export const MEDIA_TURN_KINDS: ReadonlySet<string> = new Set([
 export function isMediaTurn(kind: string): boolean {
   return MEDIA_TURN_KINDS.has(kind);
 }
+
+/**
+ * Stable ids of every VisionProvider implementation registered in
+ * the shell. Mirrors the Rust id() returns for OllamaVisionProvider
+ * (`"ollama-vision"`) and LlamaCppVisionProvider (`"llamacpp-vision"`).
+ * Used by the Trust drawer's History tab to badge media turns
+ * served by a vision-capable provider.
+ */
+export const VISION_PROVIDER_IDS: ReadonlySet<string> = new Set([
+  "ollama-vision",
+  "llamacpp-vision",
+]);
+
+/** True when the telemetry `provider` string names a known vision provider. */
+export function isVisionProvider(provider: string | null | undefined): boolean {
+  if (!provider) return false;
+  return VISION_PROVIDER_IDS.has(provider);
+}
+
+/**
+ * Short display label for the vision-provider badge in the Trust
+ * drawer. `null` when the provider is not a known vision route.
+ */
+export function visionProviderShortLabel(
+  provider: string | null | undefined,
+): string | null {
+  if (!provider) return null;
+  switch (provider) {
+    case "ollama-vision":
+      return "Ollama vision";
+    case "llamacpp-vision":
+      return "llama.cpp vision";
+    default:
+      return null;
+  }
+}
