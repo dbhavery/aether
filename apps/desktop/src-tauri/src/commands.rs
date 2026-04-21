@@ -1384,6 +1384,17 @@ fn maybe_apply_vision(
     // turn keeps its block — vision should never resurrect a denied
     // action.
     let route = result.route.as_mut()?;
+    // Mirror the shell-side `analyze_frame` validation here so this
+    // function is safe regardless of caller. In production
+    // `analyze_frame` already short-circuits these shapes with a
+    // user-facing error; if a future caller reaches us with the same
+    // bad shape, swallow it silently (debug-level) rather than
+    // duplicating the WARN line about a decode that we know would
+    // fail. Real provider/decode failures still WARN below.
+    if let Err(detail) = validate_frame_data_url(frame_data_url) {
+        tracing::debug!("vision: skipping route, frame failed validation: {detail}");
+        return None;
+    }
     let (mime, body) = match split_data_url(frame_data_url) {
         Ok(parts) => parts,
         Err(e) => {
