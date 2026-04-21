@@ -273,7 +273,7 @@ impl AppState {
             media_permissions: RwLock::new(MediaPermissions::defaults()),
             media_permissions_path: None,
             vision: RwLock::new(VisionRegistry::empty()),
-            vision_model_cache: ModelListCache::new(),
+            vision_model_cache: ModelListCache::from_env(),
         })
     }
 

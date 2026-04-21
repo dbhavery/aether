@@ -11,6 +11,7 @@
 //! can drive the clock deterministically.
 
 use std::collections::HashMap;
+use std::env;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -19,6 +20,36 @@ use std::time::{Duration, Instant};
 /// the VisionBadge + ModelListSection both render, but short enough
 /// that a new model pulled via `ollama pull` shows up quickly.
 pub const DEFAULT_TTL: Duration = Duration::from_secs(60);
+
+/// Hard floor on operator-supplied TTLs. Anything below this would
+/// thrash the daemon enough that the cache becomes a net negative.
+pub const TTL_FLOOR_SECS: u64 = 5;
+
+/// Hard ceiling on operator-supplied TTLs. One hour is well past any
+/// reasonable freshness budget; rejecting anything higher protects
+/// against typo'd values like 60000 (meant ms, not s).
+pub const TTL_CEILING_SECS: u64 = 3_600;
+
+/// Env var read by [`ModelListCache::from_env`] to override the default
+/// TTL. Documented as an advanced operator knob — there's no UI for it.
+pub const TTL_ENV_VAR: &str = "AETHER_VISION_MODEL_TTL_SECS";
+
+/// Pure parser for the TTL env var value. Returns `Some(Duration)` when
+/// the input parses as a `u64` of seconds within
+/// `[TTL_FLOOR_SECS, TTL_CEILING_SECS]`. Returns `None` for missing,
+/// non-numeric, or out-of-range values — caller falls back to
+/// [`DEFAULT_TTL`] in that case.
+pub fn parse_ttl_secs(raw: &str) -> Option<Duration> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let secs: u64 = trimmed.parse().ok()?;
+    if !(TTL_FLOOR_SECS..=TTL_CEILING_SECS).contains(&secs) {
+        return None;
+    }
+    Some(Duration::from_secs(secs))
+}
 
 #[derive(Debug, Clone)]
 struct CacheEntry {
@@ -45,6 +76,44 @@ impl ModelListCache {
             ttl,
             entries: Mutex::new(HashMap::new()),
         }
+    }
+
+    /// Build a cache whose TTL is read from [`TTL_ENV_VAR`]. Falls
+    /// back to [`DEFAULT_TTL`] when the var is unset, empty,
+    /// non-numeric, or out of range. Logs a warning at WARN level
+    /// when an invalid value is supplied so misconfiguration is
+    /// visible without blocking boot.
+    pub fn from_env() -> Self {
+        match env::var(TTL_ENV_VAR) {
+            Ok(raw) => match parse_ttl_secs(&raw) {
+                Some(ttl) => {
+                    tracing::info!(
+                        "vision model-list cache TTL overridden via {}={}s",
+                        TTL_ENV_VAR,
+                        ttl.as_secs()
+                    );
+                    Self::with_ttl(ttl)
+                }
+                None => {
+                    tracing::warn!(
+                        "{}={:?} is not in [{},{}] seconds; using default {}s",
+                        TTL_ENV_VAR,
+                        raw,
+                        TTL_FLOOR_SECS,
+                        TTL_CEILING_SECS,
+                        DEFAULT_TTL.as_secs()
+                    );
+                    Self::new()
+                }
+            },
+            Err(_) => Self::new(),
+        }
+    }
+
+    /// Effective TTL of this cache. Used by tests + diagnostics.
+    #[allow(dead_code)]
+    pub fn ttl(&self) -> Duration {
+        self.ttl
     }
 
     /// Fresh lookup. Returns the cached list when it's inside the TTL,
@@ -183,5 +252,77 @@ mod tests {
         c.clear();
         assert!(c.get_with_now("a", now).is_none());
         assert!(c.get_with_now("b", now).is_none());
+    }
+
+    // ---------------------------------------------------------------
+    // TTL env-override parsing.
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn parse_ttl_secs_accepts_in_range_values() {
+        assert_eq!(parse_ttl_secs("5"), Some(Duration::from_secs(5)));
+        assert_eq!(parse_ttl_secs("60"), Some(Duration::from_secs(60)));
+        assert_eq!(parse_ttl_secs("3600"), Some(Duration::from_secs(3600)));
+        // Whitespace tolerated.
+        assert_eq!(parse_ttl_secs("  120  "), Some(Duration::from_secs(120)));
+    }
+
+    #[test]
+    fn parse_ttl_secs_rejects_out_of_range() {
+        // Below the floor: thrashes the daemon, useless cache.
+        assert!(parse_ttl_secs("0").is_none());
+        assert!(parse_ttl_secs("4").is_none());
+        // Above the ceiling: typo guard (60000 was likely meant ms).
+        assert!(parse_ttl_secs("3601").is_none());
+        assert!(parse_ttl_secs("60000").is_none());
+    }
+
+    #[test]
+    fn parse_ttl_secs_rejects_non_numeric_and_empty() {
+        assert!(parse_ttl_secs("").is_none());
+        assert!(parse_ttl_secs("   ").is_none());
+        assert!(parse_ttl_secs("abc").is_none());
+        assert!(parse_ttl_secs("60s").is_none());
+        assert!(parse_ttl_secs("-1").is_none());
+        assert!(parse_ttl_secs("1.5").is_none());
+    }
+
+    /// Env-set tests share process state, so they're serialised
+    /// through this mutex (same pattern as ollama provider tests).
+    static ENV_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn unset_ttl_env() {
+        env::remove_var(TTL_ENV_VAR);
+    }
+
+    #[test]
+    fn from_env_uses_default_when_var_unset() {
+        let _g = ENV_MUTEX.lock().unwrap_or_else(|p| p.into_inner());
+        unset_ttl_env();
+        let c = ModelListCache::from_env();
+        assert_eq!(c.ttl(), DEFAULT_TTL);
+    }
+
+    #[test]
+    fn from_env_picks_up_valid_override() {
+        let _g = ENV_MUTEX.lock().unwrap_or_else(|p| p.into_inner());
+        unset_ttl_env();
+        env::set_var(TTL_ENV_VAR, "30");
+        let c = ModelListCache::from_env();
+        assert_eq!(c.ttl(), Duration::from_secs(30));
+        unset_ttl_env();
+    }
+
+    #[test]
+    fn from_env_falls_back_to_default_on_invalid_value() {
+        let _g = ENV_MUTEX.lock().unwrap_or_else(|p| p.into_inner());
+        unset_ttl_env();
+        env::set_var(TTL_ENV_VAR, "garbage");
+        let c = ModelListCache::from_env();
+        assert_eq!(c.ttl(), DEFAULT_TTL);
+        env::set_var(TTL_ENV_VAR, "0");
+        let c2 = ModelListCache::from_env();
+        assert_eq!(c2.ttl(), DEFAULT_TTL);
+        unset_ttl_env();
     }
 }
