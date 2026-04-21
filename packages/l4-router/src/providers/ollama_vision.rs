@@ -128,6 +128,21 @@ pub fn build_vision_payload(model: &str, cue: &str, image_b64: &str) -> serde_js
     serde_json::to_value(&body).expect("VisionRequestWire always serializes")
 }
 
+/// Parse the JSON body returned by `/api/tags` into a list of model
+/// ids (Ollama's `models[].name`). Pure; exposed for unit tests so
+/// the wire shape can be locked without a live daemon. Tolerant of
+/// missing fields — we never want a malformed `tags` response to
+/// blow up the UI.
+pub fn parse_tags_response(json: &serde_json::Value) -> Vec<String> {
+    let Some(arr) = json.get("models").and_then(|v| v.as_array()) else {
+        return Vec::new();
+    };
+    arr.iter()
+        .filter_map(|m| m.get("name").and_then(|n| n.as_str()))
+        .map(|s| s.to_string())
+        .collect()
+}
+
 /// Pull `(text, prompt_tokens, completion_tokens)` out of the JSON
 /// `/api/chat` non-streaming response. Defers to the same parser the
 /// text adapter uses so the token-count semantics stay aligned.
@@ -183,6 +198,22 @@ impl VisionProvider for OllamaVisionProvider {
                 detail: format!("ollama-vision healthcheck: {e}"),
             }),
         }
+    }
+
+    fn list_models(&self) -> Result<Vec<String>, L4Error> {
+        let url = format!("{}/api/tags", self.config.base_url.trim_end_matches('/'));
+        let resp = self
+            .agent
+            .get(&url)
+            .call()
+            .map_err(|e| L4Error::ProviderUnknown {
+                detail: format!("ollama-vision list_models: {e}"),
+            })?;
+        let json: serde_json::Value =
+            resp.into_json().map_err(|e| L4Error::ProviderBadResponse {
+                detail: format!("ollama-vision list_models body: {e}"),
+            })?;
+        Ok(parse_tags_response(&json))
     }
 
     fn analyze(&self, req: VisionRequest) -> Result<VisionResponse, L4Error> {
@@ -316,6 +347,39 @@ mod tests {
         let body = serde_json::json!({"oops": true});
         let err = parse_vision_response(&body).unwrap_err();
         assert!(matches!(err, L4Error::ProviderBadResponse { .. }));
+    }
+
+    #[test]
+    fn parse_tags_extracts_names_in_order() {
+        let body = serde_json::json!({
+            "models": [
+                {"name": "llava:latest", "modified_at": "x", "size": 1},
+                {"name": "gemma3:vision", "modified_at": "y", "size": 2},
+                {"name": "qwen2.5-vl", "modified_at": "z", "size": 3}
+            ]
+        });
+        assert_eq!(
+            parse_tags_response(&body),
+            vec!["llava:latest", "gemma3:vision", "qwen2.5-vl"]
+        );
+    }
+
+    #[test]
+    fn parse_tags_returns_empty_for_missing_models_key() {
+        let body = serde_json::json!({"oops": true});
+        assert!(parse_tags_response(&body).is_empty());
+    }
+
+    #[test]
+    fn parse_tags_skips_entries_without_name() {
+        let body = serde_json::json!({
+            "models": [
+                {"name": "good"},
+                {"size": 5},
+                {"name": "alsogood"}
+            ]
+        });
+        assert_eq!(parse_tags_response(&body), vec!["good", "alsogood"]);
     }
 
     #[test]

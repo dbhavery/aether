@@ -50,6 +50,7 @@ fn main() {
             commands::analyze_frame,
             commands::vision_status,
             commands::list_vision_providers,
+            commands::list_vision_models,
             commands::set_active_vision_provider,
         ])
         .run(tauri::generate_context!())

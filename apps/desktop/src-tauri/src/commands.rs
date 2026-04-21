@@ -817,6 +817,55 @@ pub fn list_vision_providers(
     state.vision_provider_list()
 }
 
+/// Models the active vision provider's daemon currently has
+/// available. Returns `{ provider_id, models, error }` so the UI can
+/// render either a model list (success) or a plain "models
+/// unavailable" message (failure / empty / no active provider). Errors
+/// are returned in-band rather than as a Tauri Err so the dropdown
+/// never spams the user.
+#[derive(Debug, Clone, Serialize)]
+pub struct VisionModelList {
+    /// Provider id the listing was fetched for. `None` when no
+    /// provider is currently active (text-only mode).
+    pub provider_id: Option<String>,
+    /// Discovered model ids. Empty when discovery failed, when the
+    /// adapter does not implement `list_models`, or when the daemon
+    /// reports no models.
+    pub models: Vec<String>,
+    /// Short, plain-language explanation when discovery did not
+    /// produce a usable list. `None` on success.
+    pub error: Option<String>,
+}
+
+#[tauri::command]
+pub fn list_vision_models(state: State<'_, AppState>) -> VisionModelList {
+    let Some(provider) = state.vision_provider() else {
+        return VisionModelList {
+            provider_id: None,
+            models: Vec::new(),
+            error: Some("No vision provider is active.".into()),
+        };
+    };
+    let id = provider.id().to_string();
+    match provider.list_models() {
+        Ok(models) if models.is_empty() => VisionModelList {
+            provider_id: Some(id),
+            models,
+            error: Some("Models unavailable for this provider.".into()),
+        },
+        Ok(models) => VisionModelList {
+            provider_id: Some(id),
+            models,
+            error: None,
+        },
+        Err(_) => VisionModelList {
+            provider_id: Some(id),
+            models: Vec::new(),
+            error: Some("Models unavailable for this provider.".into()),
+        },
+    }
+}
+
 /// Switch the active vision provider. `id = None` (or the wire
 /// sentinel `""` / `"none"`) deliberately switches to text-only
 /// fallback. Unknown ids are rejected so UI bugs surface instead of

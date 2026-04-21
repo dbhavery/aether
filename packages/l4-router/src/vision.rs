@@ -68,6 +68,18 @@ pub trait VisionProvider: Send + Sync {
     /// Single-image analysis. Implementations should keep the image
     /// data only in-transit; never log the full payload.
     fn analyze(&self, req: VisionRequest) -> Result<VisionResponse, L4Error>;
+    /// List the model ids the underlying daemon currently has
+    /// available. Default returns an empty vec — adapters that do not
+    /// expose a model-listing endpoint inherit this and the UI shows
+    /// a "models unavailable" state.
+    ///
+    /// `Err` is reserved for transport-level failures the caller may
+    /// want to surface differently from "no models known"; today both
+    /// the UI and the Tauri command treat them the same — silently —
+    /// so the dropdown never spams the user.
+    fn list_models(&self) -> Result<Vec<String>, L4Error> {
+        Ok(Vec::new())
+    }
 }
 
 /// Strip the `data:image/...;base64,` prefix off a data URL and return

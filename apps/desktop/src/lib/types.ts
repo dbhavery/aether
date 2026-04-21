@@ -145,3 +145,14 @@ export interface VisionStatus {
   label: string | null;
   providers: VisionProviderInfo[];
 }
+
+/**
+ * Result of `list_vision_models`. Errors are returned in-band as a
+ * plain-language string so the UI can render a quiet "models
+ * unavailable" hint without modal noise.
+ */
+export interface VisionModelList {
+  provider_id: string | null;
+  models: string[];
+  error: string | null;
+}

@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { setActiveVisionProvider, visionStatus } from "../lib/api";
-import type { VisionStatus } from "../lib/types";
+import {
+  listVisionModels,
+  setActiveVisionProvider,
+  visionStatus,
+} from "../lib/api";
+import type { VisionModelList, VisionStatus } from "../lib/types";
 
 interface Props {
   refreshKey?: number;
@@ -23,6 +27,8 @@ const TEXT_ONLY_VALUE = "__text_only__";
  */
 export function VisionBadge({ refreshKey }: Props) {
   const [status, setStatus] = useState<VisionStatus | null>(null);
+  const [models, setModels] = useState<VisionModelList | null>(null);
+  const [modelsLoading, setModelsLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -45,6 +51,37 @@ export function VisionBadge({ refreshKey }: Props) {
       cancelled = true;
     };
   }, [refreshKey]);
+
+  // Refresh the model list whenever the active provider changes (or
+  // the badge first renders with one). Failures collapse to a quiet
+  // "models unavailable" hint — no toast, no console spam.
+  const activeId = status?.active_id ?? null;
+  useEffect(() => {
+    if (!activeId) {
+      setModels(null);
+      return;
+    }
+    let cancelled = false;
+    setModelsLoading(true);
+    listVisionModels()
+      .then((m) => {
+        if (!cancelled) setModels(m);
+      })
+      .catch(() => {
+        if (!cancelled)
+          setModels({
+            provider_id: activeId,
+            models: [],
+            error: "Models unavailable for this provider.",
+          });
+      })
+      .finally(() => {
+        if (!cancelled) setModelsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeId]);
 
   const handleChange = useCallback(
     async (next: string) => {
@@ -92,25 +129,34 @@ export function VisionBadge({ refreshKey }: Props) {
       </div>
 
       {hasProviders ? (
-        <div className="mt-2 flex items-center gap-2">
-          <label className="text-[11px] text-aether-muted" htmlFor="vision-route">
-            Active
-          </label>
-          <select
-            id="vision-route"
-            value={selectValue}
-            disabled={busy}
-            onChange={(e) => handleChange(e.target.value)}
-            className="flex-1 rounded-md border border-aether-border bg-aether-elevated px-2 py-1 text-[11.5px] text-aether-text focus:outline-none focus:ring-1 focus:ring-aether-accent"
-          >
-            {status.providers.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label}
-              </option>
-            ))}
-            <option value={TEXT_ONLY_VALUE}>Text-only fallback</option>
-          </select>
-        </div>
+        <>
+          <div className="mt-2 flex items-center gap-2">
+            <label className="text-[11px] text-aether-muted" htmlFor="vision-route">
+              Active
+            </label>
+            <select
+              id="vision-route"
+              value={selectValue}
+              disabled={busy}
+              onChange={(e) => handleChange(e.target.value)}
+              className="flex-1 rounded-md border border-aether-border bg-aether-elevated px-2 py-1 text-[11.5px] text-aether-text focus:outline-none focus:ring-1 focus:ring-aether-accent"
+            >
+              {status.providers.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
+              <option value={TEXT_ONLY_VALUE}>Text-only fallback</option>
+            </select>
+          </div>
+          {status.enabled && (
+            <ModelListSection
+              loading={modelsLoading}
+              models={models}
+              activeProviderId={activeId ?? null}
+            />
+          )}
+        </>
       ) : (
         <div className="mt-1 text-aether-muted">
           Analyze will run the active text model on your note only —
@@ -125,6 +171,65 @@ export function VisionBadge({ refreshKey }: Props) {
       {err && (
         <div className="mt-2 text-aether-err">{err}</div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Compact "models on this provider" panel under the dropdown.
+ * Failures collapse to a quiet "models unavailable" hint so the
+ * dropdown UI never spams. Selecting a model is NOT supported in
+ * this slice — model swap inside a provider is a follow-up; this
+ * surface is informational only.
+ */
+function ModelListSection({
+  loading,
+  models,
+  activeProviderId,
+}: {
+  loading: boolean;
+  models: VisionModelList | null;
+  activeProviderId: string | null;
+}) {
+  if (loading) {
+    return (
+      <div className="mt-2 text-[11px] text-aether-muted">
+        Loading models on this provider…
+      </div>
+    );
+  }
+  if (!models) return null;
+  // If discovery returned an error or an empty list, render the
+  // plain-language hint and stop.
+  if (models.error || models.models.length === 0) {
+    return (
+      <div className="mt-2 text-[11px] text-aether-muted">
+        {models.error ?? "Models unavailable for this provider."}
+      </div>
+    );
+  }
+  return (
+    <div className="mt-2">
+      <div className="text-[10.5px] uppercase tracking-[0.18em] text-aether-dim">
+        Models on{" "}
+        {activeProviderId ?? models.provider_id ?? "this provider"}
+      </div>
+      <div
+        className="mt-1 flex flex-wrap gap-1"
+        role="list"
+        aria-label="Available models"
+      >
+        {models.models.map((m) => (
+          <span
+            key={m}
+            role="listitem"
+            title={m}
+            className="max-w-[14rem] truncate rounded-full border border-aether-border bg-aether-elevated/60 px-2 py-0.5 font-mono text-[10.5px] text-aether-muted"
+          >
+            {m}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }

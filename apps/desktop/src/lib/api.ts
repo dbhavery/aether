@@ -16,6 +16,7 @@ import type {
   TranscriptMessage,
   TrustAuditRow,
   TurnOutcome,
+  VisionModelList,
   VisionStatus,
 } from "./types";
 
@@ -156,4 +157,8 @@ export async function setActiveVisionProvider(
   id: string | null,
 ): Promise<VisionStatus> {
   return invoke<VisionStatus>("set_active_vision_provider", { id });
+}
+
+export async function listVisionModels(): Promise<VisionModelList> {
+  return invoke<VisionModelList>("list_vision_models");
 }

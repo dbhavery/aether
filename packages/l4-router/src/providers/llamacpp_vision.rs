@@ -192,6 +192,21 @@ pub fn build_vision_payload(
     serde_json::to_value(&body).expect("ChatRequest always serializes")
 }
 
+/// Parse the JSON body returned by `/v1/models` (OpenAI-compatible)
+/// into a list of model ids (`data[].id`). Pure; exposed for unit
+/// tests so the wire shape can be locked without a live server.
+/// Tolerant of missing fields — never blows up the UI on a malformed
+/// `models` response.
+pub fn parse_models_response(json: &serde_json::Value) -> Vec<String> {
+    let Some(arr) = json.get("data").and_then(|v| v.as_array()) else {
+        return Vec::new();
+    };
+    arr.iter()
+        .filter_map(|m| m.get("id").and_then(|n| n.as_str()))
+        .map(|s| s.to_string())
+        .collect()
+}
+
 /// Pull `(text, prompt_tokens, completion_tokens)` out of the JSON
 /// `/v1/chat/completions` non-streaming response.
 pub fn parse_vision_response(json: &serde_json::Value) -> Result<VisionResponse, L4Error> {
@@ -256,6 +271,22 @@ impl VisionProvider for LlamaCppVisionProvider {
                 detail: format!("llamacpp-vision healthcheck: {e}"),
             }),
         }
+    }
+
+    fn list_models(&self) -> Result<Vec<String>, L4Error> {
+        let url = format!("{}/v1/models", self.config.base_url.trim_end_matches('/'));
+        let resp = self
+            .agent
+            .get(&url)
+            .call()
+            .map_err(|e| L4Error::ProviderUnknown {
+                detail: format!("llamacpp-vision list_models: {e}"),
+            })?;
+        let json: serde_json::Value =
+            resp.into_json().map_err(|e| L4Error::ProviderBadResponse {
+                detail: format!("llamacpp-vision list_models body: {e}"),
+            })?;
+        Ok(parse_models_response(&json))
     }
 
     fn analyze(&self, req: VisionRequest) -> Result<VisionResponse, L4Error> {
@@ -388,6 +419,39 @@ mod tests {
         let body = serde_json::json!({ "nope": true });
         let err = parse_vision_response(&body).unwrap_err();
         assert!(matches!(err, L4Error::ProviderBadResponse { .. }));
+    }
+
+    #[test]
+    fn parse_models_extracts_ids_in_order() {
+        let body = serde_json::json!({
+            "object": "list",
+            "data": [
+                {"id": "llava-v1.6", "object": "model"},
+                {"id": "minicpm-v", "object": "model"}
+            ]
+        });
+        assert_eq!(
+            parse_models_response(&body),
+            vec!["llava-v1.6", "minicpm-v"]
+        );
+    }
+
+    #[test]
+    fn parse_models_returns_empty_for_missing_data_key() {
+        let body = serde_json::json!({"object": "list"});
+        assert!(parse_models_response(&body).is_empty());
+    }
+
+    #[test]
+    fn parse_models_skips_entries_without_id() {
+        let body = serde_json::json!({
+            "data": [
+                {"id": "good"},
+                {"object": "model"},
+                {"id": "alsogood"}
+            ]
+        });
+        assert_eq!(parse_models_response(&body), vec!["good", "alsogood"]);
     }
 
     #[test]
