@@ -55,6 +55,15 @@ pub struct TranscriptMessage {
 pub struct MessageMeta {
     pub tier: Option<String>,
     pub provider: Option<String>,
+    /// Vision-route model id, when the assistant message came from a
+    /// vision provider that exposes one. `None` for text-only turns
+    /// and for adapters that don't report a model. Mirrors the
+    /// `TelemetryEntry.model` field so transcript bubbles, the per-
+    /// panel hint, and the Trust drawer all show the same identifier
+    /// for the same turn. Wire-additive — old clients ignoring the
+    /// field still work because of the skip_serializing guard.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
     /// Wall-clock ms measured by [`TurnEngine::handle_turn`] around the
     /// router dispatch call.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -653,6 +662,9 @@ fn finalize_turn(
                 meta: Some(MessageMeta {
                     tier: Some(r.tier.clone()),
                     provider: Some(r.provider.clone()),
+                    // Text-only finalize_turn — vision substitution
+                    // happens in analyze_frame, not here.
+                    model: None,
                     latency_ms: r.latency_ms,
                     prompt_tokens: r.tokens.map(|t| t.prompt),
                     completion_tokens: r.tokens.map(|t| t.completion),
@@ -1204,6 +1216,11 @@ pub fn analyze_frame(
                     meta: Some(MessageMeta {
                         tier: Some(r.tier.clone()),
                         provider: Some(r.provider.clone()),
+                        // Same model id captured by maybe_apply_vision —
+                        // shared with telemetry so transcript bubble,
+                        // panel hint, and Trust drawer agree on the
+                        // route that served this turn.
+                        model: vision_model.clone(),
                         latency_ms: r.latency_ms,
                         prompt_tokens: r.tokens.map(|t| t.prompt),
                         completion_tokens: r.tokens.map(|t| t.completion),

@@ -17,6 +17,12 @@ export interface CompanionBanner {
 export interface MessageMeta {
   tier: string | null;
   provider: string | null;
+  /** Vision-route model id, when the assistant message came from a
+   * vision provider that exposes one. Mirrors `TelemetryEntry.model`
+   * so transcript bubbles, the per-panel hint, and the Trust drawer
+   * all show the same identifier for the same turn. Absent for
+   * text-only turns and for adapters that don't report a model. */
+  model?: string;
   // Optional because the Rust side `#[serde(skip_serializing_if = "Option::is_none")]`
   // drops these fields when absent; treat missing as "not reported".
   latency_ms?: number;

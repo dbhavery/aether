@@ -59,7 +59,8 @@ function renderAssistant(message: TranscriptMessage) {
  * Assistant-message meta-footer. Renders the pieces the router surfaced
  * for this turn, space-dot-separated. Each piece is opt-in:
  *   - tier              (e.g. "reflex", "local-small")
- *   - provider          (e.g. "ollama", "stub-echo")
+ *   - provider          (e.g. "ollama", "ollama-vision")
+ *   - model             (e.g. "llava:latest" — vision turns only)
  *   - latency_ms        → "1.4s" or "820ms"
  *   - tokens            → "42 tok" when either count is present;
  *                         "p123/c45 tok" when both are present.
@@ -68,12 +69,7 @@ function renderAssistant(message: TranscriptMessage) {
  * stubbed responses that carry no meta at all.
  */
 function MessageMetaFooter({ meta }: { meta: MessageMeta }) {
-  const parts: string[] = [];
-  if (meta.tier) parts.push(meta.tier);
-  if (meta.provider) parts.push(meta.provider);
-  if (typeof meta.latency_ms === "number") parts.push(formatLatency(meta.latency_ms));
-  const tokenStr = formatTokens(meta.prompt_tokens, meta.completion_tokens);
-  if (tokenStr) parts.push(tokenStr);
+  const parts = buildMetaParts(meta);
   if (parts.length === 0) return null;
   return (
     <div className="mt-1 pl-1 text-[10.5px] font-mono text-aether-dim">
@@ -85,6 +81,31 @@ function MessageMetaFooter({ meta }: { meta: MessageMeta }) {
       ))}
     </div>
   );
+}
+
+/**
+ * Pure helper that turns a `MessageMeta` into the ordered list of
+ * footer chips. Exposed for unit tests so the inclusion / ordering /
+ * formatting can be locked without rendering React.
+ *
+ * Order is fixed: tier · provider · model · latency · tokens. The
+ * model chip is included only when `meta.model` is a non-empty string
+ * — keeps the footer honest for text-only turns where vision didn't
+ * run.
+ */
+export function buildMetaParts(meta: MessageMeta): string[] {
+  const parts: string[] = [];
+  if (meta.tier) parts.push(meta.tier);
+  if (meta.provider) parts.push(meta.provider);
+  if (typeof meta.model === "string" && meta.model.trim().length > 0) {
+    parts.push(meta.model);
+  }
+  if (typeof meta.latency_ms === "number") {
+    parts.push(formatLatency(meta.latency_ms));
+  }
+  const tokenStr = formatTokens(meta.prompt_tokens, meta.completion_tokens);
+  if (tokenStr) parts.push(tokenStr);
+  return parts;
 }
 
 function formatLatency(ms: number): string {
