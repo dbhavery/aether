@@ -24,3 +24,33 @@ export function truncateForDisplay(s: string, max: number): string {
   if (s.length <= limit) return s;
   return s.slice(0, limit - 1) + "…";
 }
+
+/**
+ * Middle-truncate a string so both ends survive — better for
+ * filename-style identifiers where the suffix carries information
+ * (e.g. quantization tags like `q4_k_m` on a model id).
+ *
+ * Behavior:
+ *   - returns the original `s` when `s.length <= max`,
+ *   - otherwise returns `<prefix>…<suffix>` where `suffix` is the
+ *     last `suffixLen` characters and `prefix` fills the rest, so
+ *     the result length is exactly `max`.
+ *
+ * `max` is clamped to ≥ `suffixLen + 2` so the prefix always gets
+ * at least one character and we never collapse to `…<suffix>`.
+ * `suffixLen` defaults to 8 — long enough to preserve a typical
+ * quantization tag (`q4_k_m` = 6 chars + a leading `-`), short
+ * enough to leave the prefix room to breathe at small widths.
+ */
+export function truncateMiddleForDisplay(
+  s: string,
+  max: number,
+  suffixLen = 8,
+): string {
+  const suf = Math.max(1, Math.floor(suffixLen));
+  const limit = Math.max(suf + 2, Math.floor(max));
+  if (s.length <= limit) return s;
+  const tail = s.slice(s.length - suf);
+  const head = s.slice(0, limit - 1 - suf);
+  return head + "…" + tail;
+}

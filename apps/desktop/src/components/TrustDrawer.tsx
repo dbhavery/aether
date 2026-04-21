@@ -11,7 +11,7 @@ import {
   MEDIA_TURN_KINDS,
   visionRouteSummary,
 } from "../lib/mediaTurns";
-import { truncateForDisplay } from "../lib/displayString";
+import { truncateMiddleForDisplay } from "../lib/displayString";
 import type { AuditDecisionLabel, TrustAuditRow } from "../lib/types";
 
 /** Max characters of a model id we render inline on the Trust drawer
@@ -346,7 +346,7 @@ function HistoryList({
                 <>
                   {" · "}
                   <span title={e.model}>
-                    {truncateForDisplay(e.model, MODEL_ID_DISPLAY_MAX)}
+                    {truncateMiddleForDisplay(e.model, MODEL_ID_DISPLAY_MAX)}
                   </span>
                 </>
               ) : null}
