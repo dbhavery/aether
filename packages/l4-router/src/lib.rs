@@ -28,3 +28,5 @@ pub use providers::{
     ChatCompletion, ChatMessage, MessageRole, OllamaConfig, OllamaConfigError, OllamaProvider,
     OllamaVisionConfig, OllamaVisionProvider,
 };
+#[cfg(feature = "vision-llamacpp")]
+pub use providers::{LlamaCppVisionConfig, LlamaCppVisionProvider};

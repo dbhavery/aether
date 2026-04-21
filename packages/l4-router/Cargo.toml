@@ -26,6 +26,12 @@ ureq = { version = "2", default-features = false, features = ["json"], optional 
 
 [features]
 default = []
-# Enable the local Ollama provider adapter. Opt-in at both build and run
-# time — see `packages/l4-router/src/providers/ollama.rs`.
+# Enable the local Ollama provider adapter (text + vision). Opt-in at
+# both build and run time — see `packages/l4-router/src/providers/ollama.rs`
+# and `providers/ollama_vision.rs`.
 ollama-provider = ["dep:ureq"]
+# Enable the local llama.cpp HTTP vision adapter (OpenAI-compatible
+# `/v1/chat/completions` with `image_url` content blocks). Independent
+# of `ollama-provider` so users can enable either, both, or neither.
+# See `packages/l4-router/src/providers/llamacpp_vision.rs`.
+vision-llamacpp = ["dep:ureq"]
