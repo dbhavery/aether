@@ -41,8 +41,11 @@ aether-l7-trust       = { path = "../../../packages/l7-trust" }
 # By default Tauri's `custom-protocol` feature is enabled only in release
 # builds (see tauri-build). We leave it alone.
 default = ["sqlite-backend"]
-# Enable the Ollama provider for real local model routing.
+# Enable the Ollama provider for real local model routing (text + vision).
 ollama-provider = ["aether-l4-router/ollama-provider"]
+# Enable the llama.cpp HTTP vision adapter alongside (or instead of)
+# Ollama vision. Independent of `ollama-provider`.
+vision-llamacpp = ["aether-l4-router/vision-llamacpp"]
 # Route the session memory store through the on-disk SQLite backend so
 # conversation history survives restarts. Default-on; disabling falls
 # back to the transient in-memory store (useful for CI sandboxes that

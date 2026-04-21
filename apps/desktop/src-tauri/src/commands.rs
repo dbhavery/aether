@@ -773,26 +773,65 @@ pub fn get_media_permissions(state: State<'_, AppState>) -> MediaPermissions {
     state.media_permissions()
 }
 
-/// Status of the active vision provider, if any. The UI surfaces this
-/// in the camera/screen panels so the user can tell at a glance
-/// whether the next "Analyze" call will hit a vision-capable model or
-/// fall back to text-only output.
+/// Status of the active vision provider plus the full registered
+/// list. The UI surfaces this in the camera/screen panels so the
+/// user can tell at a glance whether the next "Analyze" call will
+/// hit a vision-capable model or fall back to text-only output, and
+/// in the runtime-swap dropdown so they can pick a different
+/// registered provider.
 #[derive(Debug, Clone, Serialize)]
 pub struct VisionStatus {
-    /// `true` when a vision provider was wired at boot.
+    /// `true` when a vision provider is currently active.
     pub enabled: bool,
-    /// Human-readable label, e.g. `"Ollama vision · llava · http://..."`.
-    /// `None` when `enabled = false`.
+    /// Active provider id (`"ollama-vision"` / `"llamacpp-vision"`),
+    /// `None` when in text-only mode.
+    pub active_id: Option<String>,
+    /// Human-readable label of the active provider, e.g.
+    /// `"Ollama vision · llava · http://..."`. `None` when text-only.
     pub label: Option<String>,
+    /// Every registered provider with an `active` flag — drives the
+    /// runtime-swap UI.
+    pub providers: Vec<crate::vision_registry::VisionProviderInfo>,
 }
 
 #[tauri::command]
 pub fn vision_status(state: State<'_, AppState>) -> VisionStatus {
     let label = state.vision_provider_label();
+    let active_id = state.vision_active_id();
+    let providers = state.vision_provider_list();
     VisionStatus {
         enabled: label.is_some(),
+        active_id,
         label,
+        providers,
     }
+}
+
+/// Snapshot of registered vision providers — same list shipped inside
+/// `VisionStatus` but exposed as its own command for callers that
+/// only want the inventory.
+#[tauri::command]
+pub fn list_vision_providers(
+    state: State<'_, AppState>,
+) -> Vec<crate::vision_registry::VisionProviderInfo> {
+    state.vision_provider_list()
+}
+
+/// Switch the active vision provider. `id = None` (or the wire
+/// sentinel `""` / `"none"`) deliberately switches to text-only
+/// fallback. Unknown ids are rejected so UI bugs surface instead of
+/// silently flipping to the wrong route.
+#[tauri::command]
+pub fn set_active_vision_provider(
+    id: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<VisionStatus, String> {
+    let normalized = match id.as_deref() {
+        None | Some("") | Some("none") => None,
+        Some(other) => Some(other.to_string()),
+    };
+    state.set_active_vision_provider(normalized)?;
+    Ok(vision_status(state))
 }
 
 /// Update one device's permission and persist the new state when a
@@ -1000,8 +1039,7 @@ pub fn analyze_frame(
     // policy — we keep that and just substitute the assistant text +
     // provider/tier metadata. When vision fails the text-only output
     // stays as a safe fallback.
-    let vision_used =
-        maybe_apply_vision(&state, &mut result, &request.frame_data_url, &cue);
+    let vision_used = maybe_apply_vision(&state, &mut result, &request.frame_data_url, &cue);
 
     let ts_ms = state.next_ts();
     let _ = state.memory.append(TurnMemoryRecord {

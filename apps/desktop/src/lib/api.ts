@@ -151,3 +151,9 @@ export async function analyzeFrame(
 export async function visionStatus(): Promise<VisionStatus> {
   return invoke<VisionStatus>("vision_status");
 }
+
+export async function setActiveVisionProvider(
+  id: string | null,
+): Promise<VisionStatus> {
+  return invoke<VisionStatus>("set_active_vision_provider", { id });
+}

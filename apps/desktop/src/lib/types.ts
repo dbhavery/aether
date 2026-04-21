@@ -131,8 +131,17 @@ export interface FrameAnalysisOutcome {
   error_note: string | null;
 }
 
+/** One registered vision provider entry. */
+export interface VisionProviderInfo {
+  id: string;
+  label: string;
+  active: boolean;
+}
+
 /** Status of the active vision provider (returned by `vision_status`). */
 export interface VisionStatus {
   enabled: boolean;
+  active_id: string | null;
   label: string | null;
+  providers: VisionProviderInfo[];
 }

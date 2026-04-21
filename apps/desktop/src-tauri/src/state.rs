@@ -18,6 +18,8 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use aether_l1_interaction::{TurnEngine, TurnRequest, TurnResult, TurnRouter};
 use aether_l4_router::VisionProvider;
+
+use crate::vision_registry::{VisionProviderInfo, VisionRegistry};
 #[cfg(feature = "sqlite-backend")]
 use aether_l2_memory::{DurableSessionStore, SqliteSessionMemoryStore};
 use aether_l2_memory::{InMemorySessionMemoryStore, SessionMemoryStore};
@@ -104,12 +106,12 @@ pub struct AppState {
     /// — the in-memory copy still works, but changes do not survive
     /// restarts.
     media_permissions_path: Option<PathBuf>,
-    /// Optional vision-capable provider for `analyze_frame`. Booted
-    /// from env on shell startup (`AETHER_OLLAMA_VISION_MODEL`); when
-    /// `None` the analyze-frame path falls back to its text-only
-    /// behaviour. Stored behind `Arc` so command handlers can clone
-    /// the handle cheaply across IPC calls.
-    vision_provider: Option<Arc<dyn VisionProvider>>,
+    /// Registry of zero or more vision-capable providers + the active
+    /// selection. Replaces the v0 single-`Option` model so the user
+    /// can swap providers at runtime (Ollama vision ↔ llama.cpp
+    /// vision ↔ text-only fallback). The active selection is
+    /// persisted via `vision_registry`'s attached file.
+    vision: RwLock<VisionRegistry>,
 }
 
 /// How many telemetry entries the shell retains for the History tab.
@@ -246,31 +248,70 @@ impl AppState {
             telemetry: Mutex::new(VecDeque::with_capacity(TELEMETRY_BUFFER_CAPACITY)),
             media_permissions: RwLock::new(MediaPermissions::defaults()),
             media_permissions_path: None,
-            vision_provider: None,
+            vision: RwLock::new(VisionRegistry::empty()),
         })
     }
 
-    /// Attach a vision-capable provider. Called from `build_app_state`
-    /// in main.rs when `AETHER_OLLAMA_VISION_MODEL` is set and the
-    /// daemon healthchecks. Idempotent; the most recent attach wins.
-    #[allow(dead_code)] // Wired only under the ollama-provider feature in main.rs.
-    pub fn attach_vision_provider(&mut self, provider: Arc<dyn VisionProvider>) {
-        self.vision_provider = Some(provider);
+    /// Register a vision-capable provider into the registry. Called
+    /// from `build_app_state` in main.rs for each provider whose
+    /// boot-time healthcheck passed. Order matters — first registered
+    /// is the fallback when persisted state names an unknown id.
+    #[allow(dead_code)] // Wired only behind provider features in main.rs.
+    pub fn register_vision_provider(&self, provider: Arc<dyn VisionProvider>) {
+        let mut w = self.vision.write().expect("vision registry write lock");
+        w.register(provider);
+    }
+
+    /// Wire the on-disk persistence file for the active vision-provider
+    /// selection. Loads the persisted state (with safe fallbacks).
+    #[allow(dead_code)] // Wired only behind provider features in main.rs.
+    pub fn attach_vision_persistence(&self, path: PathBuf) {
+        let mut w = self.vision.write().expect("vision registry write lock");
+        w.attach_persistence(path);
+    }
+
+    /// Auto-select the first registered provider if no active id was
+    /// loaded from persistence. No-op when an active id is already set.
+    #[allow(dead_code)] // Wired only behind provider features in main.rs.
+    pub fn vision_auto_select_if_unset(&self) {
+        let r = self.vision.read().expect("vision registry read lock");
+        r.auto_select_first_if_unset();
     }
 
     /// Cheap clone of the active vision provider handle. `None` when
-    /// none was wired at boot — `analyze_frame` uses the absence as a
-    /// signal to fall back to its text-only path.
+    /// no provider is selected (text-only mode) or the registry is
+    /// empty — `analyze_frame` uses the absence as a signal to fall
+    /// back to its text-only path.
     pub fn vision_provider(&self) -> Option<Arc<dyn VisionProvider>> {
-        self.vision_provider.clone()
+        let r = self.vision.read().expect("vision registry read lock");
+        r.active()
+    }
+
+    /// Active provider id (`"ollama-vision"` / `"llamacpp-vision"`),
+    /// if any. Surfaced via the `vision_status` Tauri command.
+    pub fn vision_active_id(&self) -> Option<String> {
+        let r = self.vision.read().expect("vision registry read lock");
+        r.active_id()
     }
 
     /// Human-readable label for the active vision provider, if any.
-    /// Used by the UI's "About vision" status surface (vision_status
-    /// command).
-    #[allow(dead_code)] // Surfaced via the vision_status Tauri command.
     pub fn vision_provider_label(&self) -> Option<String> {
-        self.vision_provider.as_ref().map(|p| p.label())
+        let r = self.vision.read().expect("vision registry read lock");
+        r.active_label()
+    }
+
+    /// Snapshot of every registered vision provider plus an `active`
+    /// flag. Surfaced via the `list_vision_providers` Tauri command.
+    pub fn vision_provider_list(&self) -> Vec<VisionProviderInfo> {
+        let r = self.vision.read().expect("vision registry read lock");
+        r.list()
+    }
+
+    /// Set the active vision provider by id. `None` switches to
+    /// text-only mode. Persists when a file is wired.
+    pub fn set_active_vision_provider(&self, id: Option<String>) -> Result<(), String> {
+        let r = self.vision.read().expect("vision registry read lock");
+        r.set_active(id)
     }
 
     /// Wire a disk-backed media-permissions file into this state. Loads
