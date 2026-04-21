@@ -691,6 +691,124 @@ mod tests {
     }
 
     #[test]
+    fn unknown_top_level_field_is_ignored_on_load() {
+        // Forward-compat contract: a future build may add a top-level
+        // field to vision_provider.json. Older shells must still be
+        // able to read the file — known fields preserved, unknown
+        // fields silently dropped — without spamming the malformed
+        // warning path.
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("vision_provider.json");
+        std::fs::write(
+            &path,
+            r#"{
+                "active": "alpha",
+                "model_per_provider": { "alpha": "llava" },
+                "future_unknown_field": "hello",
+                "future_object": { "nested": 42 },
+                "future_array": [1, 2, 3]
+            }"#,
+        )
+        .unwrap();
+
+        let mut r = VisionRegistry::empty();
+        r.register(StubProvider::new("alpha"));
+        r.attach_persistence(path);
+        assert_eq!(r.active_id().as_deref(), Some("alpha"));
+        assert_eq!(r.model_for("alpha").as_deref(), Some("llava"));
+    }
+
+    #[test]
+    fn load_persisted_directly_tolerates_unknown_fields() {
+        // Pure deserialization smoke test — proves serde itself is the
+        // gate (no `#[serde(deny_unknown_fields)]` on the struct), so
+        // the additive contract is enforced at the type level rather
+        // than relying on `attach_persistence` happening to swallow
+        // errors.
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("vision_provider.json");
+        std::fs::write(
+            &path,
+            r#"{
+                "active": "beta",
+                "model_per_provider": {
+                    "alpha": "llava",
+                    "beta": "gemma3:vision"
+                },
+                "schema_version": 7,
+                "telemetry_opt_in": false
+            }"#,
+        )
+        .unwrap();
+
+        let loaded = load_persisted(&path);
+        assert_eq!(loaded.active.as_deref(), Some("beta"));
+        assert_eq!(
+            loaded.model_per_provider.get("alpha").map(String::as_str),
+            Some("llava"),
+        );
+        assert_eq!(
+            loaded.model_per_provider.get("beta").map(String::as_str),
+            Some("gemma3:vision"),
+        );
+        // Extra fields are not retained on the strongly-typed struct,
+        // which is the documented behavior for the additive contract.
+    }
+
+    #[test]
+    fn unknown_fields_are_dropped_on_rewrite() {
+        // Document the intentional limitation: the persisted struct
+        // does not round-trip unknown keys. A future build's added
+        // field will be lost the first time an older shell saves the
+        // file (e.g. on a model swap). Acceptable under the additive
+        // contract — new fields must default-safe on read AND tolerate
+        // being absent from a freshly-rewritten file.
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("vision_provider.json");
+        std::fs::write(
+            &path,
+            r#"{
+                "active": "alpha",
+                "model_per_provider": { "alpha": "llava" },
+                "future_field": "preserved-elsewhere"
+            }"#,
+        )
+        .unwrap();
+
+        let mut r = VisionRegistry::empty();
+        r.register(StubProvider::new("alpha"));
+        r.attach_persistence(path.clone());
+        // Trigger a rewrite via a normal user action.
+        r.set_active_model("llava:13b").unwrap();
+
+        let on_disk = std::fs::read_to_string(&path).unwrap();
+        assert!(
+            !on_disk.contains("future_field"),
+            "rewrite should drop unknown fields; file was: {on_disk}",
+        );
+        assert!(on_disk.contains("\"active\""));
+        assert!(on_disk.contains("\"model_per_provider\""));
+        assert!(on_disk.contains("llava:13b"));
+    }
+
+    #[test]
+    fn malformed_json_falls_back_to_default_state() {
+        // Adjacent contract: a truly broken file (not just unknown
+        // fields, but invalid JSON / wrong type for a known field)
+        // must NOT panic — `load_persisted` warns and returns the
+        // default state so the shell still boots.
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("vision_provider.json");
+        // `active` must be a string-or-null; passing an array forces
+        // a real serde error rather than the unknown-field tolerance
+        // path.
+        std::fs::write(&path, r#"{ "active": ["not", "a", "string"] }"#).unwrap();
+
+        let loaded = load_persisted(&path);
+        assert_eq!(loaded, VisionPersistedState::default());
+    }
+
+    #[test]
     fn old_persistence_without_model_map_still_loads() {
         // Files written before model_per_provider existed carry only
         // the `active` field. Loading must not fail.
