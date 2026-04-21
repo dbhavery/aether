@@ -11,6 +11,19 @@
 //
 // Extracted here (out of TrustDrawer.tsx) so the contract has a
 // single home and is unit-testable without dragging React in.
+//
+// Vision-provider id helpers live in `./visionProviders.ts` — the
+// id ↔ short-label table has a single home so adding a third adapter
+// is one edit, not four. We re-export here for back-compat with
+// callers that already imported from this module.
+
+export {
+  isVisionProvider,
+  VISION_PROVIDER_IDS,
+  visionProviderShortLabel,
+} from "./visionProviders";
+
+import { visionProviderShortLabel } from "./visionProviders";
 
 export const MEDIA_TURN_KINDS: ReadonlySet<string> = new Set([
   "frame_analyzed",
@@ -22,42 +35,6 @@ export const MEDIA_TURN_KINDS: ReadonlySet<string> = new Set([
 /** True when this telemetry entry came from a camera/screen frame turn. */
 export function isMediaTurn(kind: string): boolean {
   return MEDIA_TURN_KINDS.has(kind);
-}
-
-/**
- * Stable ids of every VisionProvider implementation registered in
- * the shell. Mirrors the Rust id() returns for OllamaVisionProvider
- * (`"ollama-vision"`) and LlamaCppVisionProvider (`"llamacpp-vision"`).
- * Used by the Trust drawer's History tab to badge media turns
- * served by a vision-capable provider.
- */
-export const VISION_PROVIDER_IDS: ReadonlySet<string> = new Set([
-  "ollama-vision",
-  "llamacpp-vision",
-]);
-
-/** True when the telemetry `provider` string names a known vision provider. */
-export function isVisionProvider(provider: string | null | undefined): boolean {
-  if (!provider) return false;
-  return VISION_PROVIDER_IDS.has(provider);
-}
-
-/**
- * Short display label for the vision-provider badge in the Trust
- * drawer. `null` when the provider is not a known vision route.
- */
-export function visionProviderShortLabel(
-  provider: string | null | undefined,
-): string | null {
-  if (!provider) return null;
-  switch (provider) {
-    case "ollama-vision":
-      return "Ollama vision";
-    case "llamacpp-vision":
-      return "llama.cpp vision";
-    default:
-      return null;
-  }
 }
 
 /**
