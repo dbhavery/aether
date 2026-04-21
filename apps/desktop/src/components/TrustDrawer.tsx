@@ -9,6 +9,26 @@ import {
 import type { AuditDecisionLabel, TrustAuditRow } from "../lib/types";
 
 type Tab = "audit" | "history";
+type HistoryFilter = "all" | "media";
+
+/**
+ * Telemetry `kind` values produced by the media surfaces (camera /
+ * screen analyze_frame). Centralised here so the History filter, the
+ * "media turn" badge, and any future media-specific UI agree on what
+ * counts. Mirrors the Rust string constants in
+ * `apps/desktop/src-tauri/src/commands.rs::analyze_frame`.
+ */
+export const MEDIA_TURN_KINDS: ReadonlySet<string> = new Set([
+  "frame_analyzed",
+  "frame_blocked",
+  "permission_denied",
+  "permission_ask",
+]);
+
+/** True when this telemetry entry came from a camera/screen frame turn. */
+export function isMediaTurn(kind: string): boolean {
+  return MEDIA_TURN_KINDS.has(kind);
+}
 
 interface Props {
   open: boolean;
@@ -36,6 +56,7 @@ const DECISION_META: Record<
  */
 export function TrustDrawer({ open, refreshKey, onClose }: Props) {
   const [tab, setTab] = useState<Tab>("audit");
+  const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("all");
   const [rows, setRows] = useState<TrustAuditRow[]>([]);
   const [telemetry, setTelemetry] = useState<TelemetryEntry[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -116,7 +137,11 @@ export function TrustDrawer({ open, refreshKey, onClose }: Props) {
           <AuditList rows={rows} />
         )}
         {!err && tab === "history" && (
-          <HistoryList entries={telemetry} />
+          <HistoryView
+            entries={telemetry}
+            filter={historyFilter}
+            onFilterChange={setHistoryFilter}
+          />
         )}
       </div>
       <div className="flex items-center justify-between gap-3 border-t border-aether-border px-5 py-3 text-[11px] text-aether-muted">
@@ -209,11 +234,80 @@ function AuditList({ rows }: { rows: TrustAuditRow[] }) {
   );
 }
 
-function HistoryList({ entries }: { entries: TelemetryEntry[] }) {
+function HistoryView({
+  entries,
+  filter,
+  onFilterChange,
+}: {
+  entries: TelemetryEntry[];
+  filter: HistoryFilter;
+  onFilterChange: (f: HistoryFilter) => void;
+}) {
+  const filtered =
+    filter === "media" ? entries.filter((e) => isMediaTurn(e.kind)) : entries;
+  const mediaCount = entries.filter((e) => isMediaTurn(e.kind)).length;
+  return (
+    <div className="flex flex-col gap-3">
+      <div
+        role="radiogroup"
+        aria-label="History filter"
+        className="flex gap-2"
+      >
+        <FilterPill
+          active={filter === "all"}
+          onClick={() => onFilterChange("all")}
+          label={`All (${entries.length})`}
+        />
+        <FilterPill
+          active={filter === "media"}
+          onClick={() => onFilterChange("media")}
+          label={`Media only (${mediaCount})`}
+        />
+      </div>
+      <HistoryList entries={filtered} filterApplied={filter === "media"} />
+    </div>
+  );
+}
+
+function FilterPill({
+  active,
+  onClick,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={active}
+      onClick={onClick}
+      className={`rounded-md px-2.5 py-1 text-[11px] transition-colors ${
+        active
+          ? "border border-aether-borderHi bg-aether-elevated text-aether-text"
+          : "border border-aether-border bg-transparent text-aether-muted hover:border-aether-borderHi hover:text-aether-text"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function HistoryList({
+  entries,
+  filterApplied,
+}: {
+  entries: TelemetryEntry[];
+  filterApplied?: boolean;
+}) {
   if (entries.length === 0) {
     return (
       <div className="mt-6 text-center text-aether-muted">
-        No turns logged yet. Send a message and timing will appear here.
+        {filterApplied
+          ? "No media turns yet. Open the Camera or Screen panel and analyze a frame."
+          : "No turns logged yet. Send a message and timing will appear here."}
       </div>
     );
   }
@@ -249,12 +343,16 @@ function HistoryList({ entries }: { entries: TelemetryEntry[] }) {
 function kindClass(kind: string): string {
   switch (kind) {
     case "completed":
+    case "frame_analyzed":
       return "text-aether-ok";
     case "denied":
     case "provider_error":
+    case "frame_blocked":
+    case "permission_denied":
       return "text-aether-err";
     case "needs_upgrade":
     case "draft_only":
+    case "permission_ask":
       return "text-aether-warn";
     default:
       return "text-aether-muted";
