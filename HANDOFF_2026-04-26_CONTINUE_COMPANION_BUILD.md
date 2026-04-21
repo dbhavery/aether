@@ -1,7 +1,7 @@
 # Handoff — Continue the companion build (2026-04-26)
 
-**Written:** 2026-04-25 (autonomous continuation run).
-**Branch state:** `dev`, three new commits this run, **NOT pushed**.
+**Written:** 2026-04-25 (autonomous continuation run, evening update).
+**Branch state:** `dev`, **six** new commits this run, **NOT pushed**.
 **Next session mode:** broad autonomous build authorization on the
 multimodal/video assistant track; no push authorization assumed.
 
@@ -31,6 +31,9 @@ multimodal/video assistant track; no push authorization assumed.
 8b5385f feat(apps/desktop): [P1+P3 backend] media permission model + analyze_frame command
 76a0cb7 feat(apps/desktop): [P1 frontend] Settings drawer with media permission controls
 d660229 feat(apps/desktop): [P2+P3] camera capture panel + single-frame analysis UI
+b1145e6 docs(handoff): 2026-04-26 continuation handoff + multimodal foundation summary
+b410f7b feat(l5,apps/desktop): wire MediaCamera/MediaScreenCapture through analyze_frame
+c430fb4 feat(apps/desktop): screen-capture panel reusing analyze_frame pipeline
 ```
 
 ## 2. Execution reports
@@ -38,6 +41,7 @@ d660229 feat(apps/desktop): [P2+P3] camera capture panel + single-frame analysis
 - [P1_MEDIA_PERMISSIONS_EXECUTION_REPORT_2026-04-25.md](file:///C:/Users/dbhav/Projects/aether/P1_MEDIA_PERMISSIONS_EXECUTION_REPORT_2026-04-25.md)
 - [P2_CAMERA_CAPTURE_EXECUTION_REPORT_2026-04-25.md](file:///C:/Users/dbhav/Projects/aether/P2_CAMERA_CAPTURE_EXECUTION_REPORT_2026-04-25.md)
 - [P3_FRAME_ANALYSIS_EXECUTION_REPORT_2026-04-25.md](file:///C:/Users/dbhav/Projects/aether/P3_FRAME_ANALYSIS_EXECUTION_REPORT_2026-04-25.md)
+- [P2_P3_FOLLOWUP_EXECUTION_REPORT_2026-04-25.md](file:///C:/Users/dbhav/Projects/aether/P2_P3_FOLLOWUP_EXECUTION_REPORT_2026-04-25.md) — evening follow-up: MediaCamera/MediaScreenCapture wired, screen panel
 - New doc: [docs/MEDIA-PERMISSIONS.md](file:///C:/Users/dbhav/Projects/aether/docs/MEDIA-PERMISSIONS.md)
 
 ## 3. What the product does now
@@ -63,8 +67,24 @@ Everything from 2026-04-25, plus:
   TurnEngine, and lands an audit row + telemetry entry like any
   other turn. The transcript message returned is appended to the
   main conversation view.
+- **Capability-correct audit rows.** `analyze_frame` now uses the
+  pre-existing `Capability::MediaCamera` /
+  `Capability::MediaScreenCapture` instead of `FilesRead`. L5
+  declares both at `ApprovalMode::Auto` / `RiskClass::Medium`, so
+  audit rows read `media.camera` / `media.screen_capture`.
+- **Screen capture (P3 from this morning's handoff).** A new "Screen"
+  header button opens a sibling panel using
+  `navigator.mediaDevices.getDisplayMedia`. OS picker drives source
+  selection. Same in-app permission gate (`screen` device); same
+  `analyze_frame` pipeline; one screenshot per click. Listens for
+  the OS-level "Stop sharing" toolbar so local state stays in sync.
 
 ## 4. What to build next — multimodal track only
+
+> **Status update:** Yesterday's planned P2 (MediaAnalyze capability)
+> and P3 (screen capture) both shipped this run. The remaining
+> priority list focuses on the unfinished vision-provider work and
+> the surrounding hardening.
 
 ### Priority 1 — Vision-capable provider behind `analyze_frame`
 
@@ -80,39 +100,20 @@ reflects the frame contents. Suggested approach:
   provider declares vision support; fall back to the current
   text-only behaviour otherwise so the abstraction stays shippable.
 
-### Priority 2 — `MediaAnalyze` capability
-
-`analyze_frame` currently reuses `Capability::FilesRead`. Add a
-dedicated `MediaAnalyze` (or `MediaInspect`) capability in
-`packages/l5-policy` so:
-- the audit log distinguishes frame turns from filesystem reads,
-- personas can declare a per-capability default that is independent
-  of file access,
-- the autonomy presets can toggle frame analysis on/off without
-  affecting file reads.
-
-### Priority 3 — Screen-capture path (P4 from this run, deferred)
-
-The permission model already carries a `screen` field with no
-consumer. Add a "Screen" button or section that captures a single
-screenshot via `getDisplayMedia` (browser side; later Rust-side via
-DXGI / X11) and routes it through `analyze_frame`. Same permission
-gate, same audit story.
-
-### Priority 4 — Tauri capability allowlist hardening
+### Priority 2 — Tauri capability allowlist hardening
 
 The Tauri `tauri.conf.json` capabilities currently allow the IPC
 command surface. Audit whether `getUserMedia` / `getDisplayMedia`
 need a Tauri-side capability declaration; today the webview is
 permissive but a stricter policy will be needed for distribution.
 
-### Priority 5 — Telemetry filter UI
+### Priority 3 — Telemetry filter UI
 
 Frame turns now share the History tab with text turns. A filter
 toggle ("show frame turns only") would help reviewers audit how
 often Aether looked at media.
 
-### Priority 6 — Microphone consent (separate track)
+### Priority 4 — Microphone consent (separate track)
 
 Out of scope for the multimodal foundation, but parallel: mic
 capture has its own consent path through the voice/STT track. When
@@ -123,9 +124,11 @@ that lands, mirror the model used here.
 - **`Deny` is the "Never" semantic.** Users see "Never" in the UI;
   the wire / persistence shape is `deny`. If you ever surface the
   wire shape to end users (e.g. CLI flag), use the same word.
-- **`analyze_frame` reuses `FilesRead`.** Audit rows will read
-  "files read" until P1 above lands. Confusing in the audit drawer
-  if users start using the camera surface heavily before then.
+- **`analyze_frame` capability is now MediaCamera/MediaScreenCapture
+  at Auto/Medium.** Audit drawer reads `media.camera` /
+  `media.screen_capture` correctly. If a future Observer preset
+  flips media to Deny, expect frame analysis to start landing
+  `policy_denied` outcomes instead of model responses.
 - **`set_media_permission` parameter is `state_value` on the wire.**
   Renamed to avoid colliding with Tauri's `State<T>` extractor.
   Documented in `apps/desktop/src/lib/api.ts`. Update any future
@@ -161,17 +164,21 @@ First:
 
 Session focus (multimodal/video assistant track ONLY):
 - P1: vision-capable provider behind analyze_frame (Ollama
-      vision-tuned model OR llama.cpp vision route).
-- P2: dedicated MediaAnalyze capability in packages/l5-policy so
-      frame turns carry their own audit / preset story.
-- P3: screen-capture path (getDisplayMedia + analyze_frame),
-      reusing the existing permission gate.
+      vision-tuned model OR llama.cpp vision route). Wire the
+      data URL through aether-l4-router into a vision-aware path
+      and have the assistant response actually reflect the frame.
+- P2: Tauri capability allowlist hardening. Audit
+      tauri.conf.json for getUserMedia / getDisplayMedia exposure
+      before any distribution work.
+- P3: Telemetry filter UI — "show frame turns only" toggle on the
+      Trust drawer's History tab.
 
 Rules:
 - No push, no release, no weakening tests or boundary rules.
 - No broad media permission shortcuts; reuse the existing tri-state
   gate per device.
-- If blocked on P1, move to P2 (capability), then P3 (screen).
+- If blocked on P1, move to P2 (Tauri capabilities), then P3
+  (telemetry filter).
 - Do not start unrelated features or refactors.
 
 Before stopping:
