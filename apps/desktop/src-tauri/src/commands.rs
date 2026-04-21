@@ -1034,6 +1034,47 @@ pub struct FrameAnalysisOutcome {
 const DEFAULT_FRAME_PROMPT: &str =
     "Describe what you see in this frame in a short, helpful sentence.";
 
+/// Minimum number of base64 characters we require in the body before
+/// handing the frame to a provider. Base64 encodes 3 bytes per 4
+/// characters, so 4 is the absolute floor for a non-empty payload —
+/// anything shorter cannot represent even one decoded byte and almost
+/// certainly indicates a broken or empty capture.
+const MIN_FRAME_BODY_LEN: usize = 4;
+
+/// Validate a frame data URL before it reaches the model layer.
+///
+/// Returns the body slice on success so the caller doesn't need to
+/// re-split. The L4 `split_data_url` helper handles MIME / encoding
+/// strictness once the engine is invoked; this shell-side check is the
+/// friendly first line of defense — it surfaces obvious capture
+/// failures (empty body, missing separator, wrong scheme) as a clear
+/// error string before any audit row is written or any provider call
+/// is made.
+///
+/// Pure helper so the rules are unit-testable without booting Tauri.
+fn validate_frame_data_url(url: &str) -> Result<&str, String> {
+    if !url.starts_with("data:image/") {
+        return Err("frame_data_url must be a data:image/... URL".into());
+    }
+    let Some((_, body)) = url.split_once(',') else {
+        return Err(
+            "frame_data_url is missing the base64 body separator (',')".into(),
+        );
+    };
+    let trimmed = body.trim();
+    if trimmed.is_empty() {
+        return Err(
+            "frame_data_url has an empty image body — capture may have failed".into(),
+        );
+    }
+    if trimmed.len() < MIN_FRAME_BODY_LEN {
+        return Err(
+            "frame_data_url body is too short to decode — capture may have failed".into(),
+        );
+    }
+    Ok(body)
+}
+
 /// Single-frame analysis path (P3 v0). This is the foundation hook
 /// for video-assistant work — it does NOT stream, does NOT loop, and
 /// does NOT acquire the camera itself. The shell is expected to
@@ -1123,11 +1164,15 @@ pub fn analyze_frame(
     }
 
     // Sanity-check the frame data URL early so a malformed payload
-    // doesn't reach the model layer. We accept the standard data-URL
-    // shape and don't validate the base64 body — provider adapters
-    // get the strict check when they actually decode.
-    if !request.frame_data_url.starts_with("data:image/") {
-        return Err("frame_data_url must be a data:image/... URL".into());
+    // doesn't reach the model layer. The helper enforces both the
+    // `data:image/...` prefix and a non-empty base64 body — the
+    // shell-side first line of defense against silently-broken
+    // captures. Provider adapters still do the strict decode when
+    // they actually run.
+    if let Err(detail) = validate_frame_data_url(&request.frame_data_url) {
+        return Err(format!(
+            "{detail}. Try capturing a new frame."
+        ));
     }
 
     transition_presence(
@@ -1511,6 +1556,55 @@ mod tests {
     fn extract_provider_error_none_for_unrelated_message() {
         assert!(extract_provider_error("router client: memory recall failed: oh no").is_none());
         assert!(extract_provider_error("policy: denied").is_none());
+    }
+
+    #[test]
+    fn validate_frame_data_url_accepts_well_formed_payload() {
+        let url = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB";
+        let body = validate_frame_data_url(url).expect("valid URL should parse");
+        assert!(body.starts_with("iVBORw0KGgo"));
+    }
+
+    #[test]
+    fn validate_frame_data_url_accepts_jpeg() {
+        let url = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD";
+        assert!(validate_frame_data_url(url).is_ok());
+    }
+
+    #[test]
+    fn validate_frame_data_url_rejects_wrong_scheme() {
+        let err = validate_frame_data_url("https://example.com/x.png").unwrap_err();
+        assert!(err.contains("data:image/"), "{err}");
+    }
+
+    #[test]
+    fn validate_frame_data_url_rejects_non_image_mime() {
+        let err = validate_frame_data_url("data:text/plain,hello").unwrap_err();
+        assert!(err.contains("data:image/"), "{err}");
+    }
+
+    #[test]
+    fn validate_frame_data_url_rejects_missing_separator() {
+        let err = validate_frame_data_url("data:image/png;base64").unwrap_err();
+        assert!(err.contains("separator"), "{err}");
+    }
+
+    #[test]
+    fn validate_frame_data_url_rejects_empty_body() {
+        let err = validate_frame_data_url("data:image/png;base64,").unwrap_err();
+        assert!(err.contains("empty image body"), "{err}");
+    }
+
+    #[test]
+    fn validate_frame_data_url_rejects_whitespace_only_body() {
+        let err = validate_frame_data_url("data:image/png;base64,   \n\t  ").unwrap_err();
+        assert!(err.contains("empty image body"), "{err}");
+    }
+
+    #[test]
+    fn validate_frame_data_url_rejects_too_short_body() {
+        let err = validate_frame_data_url("data:image/png;base64,ab").unwrap_err();
+        assert!(err.contains("too short"), "{err}");
     }
 
     #[test]
