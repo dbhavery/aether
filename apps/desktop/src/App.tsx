@@ -29,6 +29,7 @@ import { InputBar } from "./components/InputBar";
 import { MemoryDrawer } from "./components/MemoryDrawer";
 import { PersonaCard } from "./components/PersonaCard";
 import { PresetPicker, readStoredPreset } from "./components/PresetPicker";
+import { ScreenPanel } from "./components/ScreenPanel";
 import { SettingsDrawer } from "./components/SettingsDrawer";
 import { Transcript } from "./components/Transcript";
 import { TrustDrawer } from "./components/TrustDrawer";
@@ -66,7 +67,7 @@ export function App() {
     useState<ApprovalPayload | null>(null);
   const [busy, setBusy] = useState(false);
   const [drawer, setDrawer] = useState<
-    "none" | "memory" | "trust" | "settings" | "camera"
+    "none" | "memory" | "trust" | "settings" | "camera" | "screen"
   >("none");
   const [memoryRefreshKey, setMemoryRefreshKey] = useState(0);
   const [forceDisclosure, setForceDisclosure] = useState(false);
@@ -342,6 +343,7 @@ export function App() {
         onOpenTrust={() => setDrawer("trust")}
         onOpenSettings={() => setDrawer("settings")}
         onOpenCamera={() => setDrawer("camera")}
+        onOpenScreen={() => setDrawer("screen")}
         onReopenDisclosure={() => setForceDisclosure(true)}
         onClearSession={handleClearSession}
         onSwitchPersona={handleSwitchPersona}
@@ -373,6 +375,14 @@ export function App() {
       />
       <CameraPanel
         open={drawer === "camera"}
+        onClose={() => setDrawer("none")}
+        onFrameAnalyzed={(msg) => {
+          setMessages((prev) => [...prev, msg]);
+          setMemoryRefreshKey((k) => k + 1);
+        }}
+      />
+      <ScreenPanel
+        open={drawer === "screen"}
         onClose={() => setDrawer("none")}
         onFrameAnalyzed={(msg) => {
           setMessages((prev) => [...prev, msg]);

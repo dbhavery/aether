@@ -14,6 +14,7 @@ interface Props {
   onOpenTrust: () => void;
   onOpenSettings: () => void;
   onOpenCamera: () => void;
+  onOpenScreen: () => void;
   onReopenDisclosure: () => void;
   onClearSession: () => void;
   onSwitchPersona: (id: string) => void;
@@ -27,6 +28,7 @@ export function Header({
   onOpenTrust,
   onOpenSettings,
   onOpenCamera,
+  onOpenScreen,
   onReopenDisclosure,
   onClearSession,
   onSwitchPersona,
@@ -91,6 +93,14 @@ export function Header({
           title="Camera capture (preview + single-frame analysis)"
         >
           Camera
+        </button>
+        <button
+          type="button"
+          onClick={onOpenScreen}
+          className="rounded-md border border-transparent px-2.5 py-1 text-[11.5px] text-aether-muted transition-colors hover:border-aether-border hover:text-aether-text"
+          title="Screen capture (single screenshot + analysis)"
+        >
+          Screen
         </button>
         <button
           type="button"
