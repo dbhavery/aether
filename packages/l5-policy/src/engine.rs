@@ -128,6 +128,28 @@ impl EngineConfig {
                 risk: RiskClass::Critical,
             },
         );
+        // Media capture: defaults to Auto with Medium risk. The shell
+        // layers a local-only tri-state (`media_permissions.json`) on
+        // top of L5 — that's the user-facing per-device gate. L5
+        // therefore records an audit row tagged with the correct
+        // capability without adding a redundant per-call modal on top
+        // of the in-app gate the user has already cleared. A future
+        // preset (e.g. `wave3.observer`) can flip these to Ask or Deny
+        // for users who want a stricter posture.
+        d.insert(
+            Capability::MediaCamera,
+            CapabilityPolicy {
+                mode: ApprovalMode::Auto,
+                risk: RiskClass::Medium,
+            },
+        );
+        d.insert(
+            Capability::MediaScreenCapture,
+            CapabilityPolicy {
+                mode: ApprovalMode::Auto,
+                risk: RiskClass::Medium,
+            },
+        );
         Self {
             preset: PresetId(String::from("wave3.balanced")),
             preset_version: 1,
@@ -297,6 +319,7 @@ fn default_risk_for(cap: &Capability) -> RiskClass {
         FilesDelete => RiskClass::High,
         BrowserOpen => RiskClass::Medium,
         ShellExec => RiskClass::Critical,
+        MediaCamera | MediaScreenCapture | MediaMic => RiskClass::Medium,
         _ => RiskClass::Medium,
     }
 }
@@ -914,6 +937,29 @@ mod tests {
             .expect("overlay inserts BrowserOpen");
         assert_eq!(browse.mode, ApprovalMode::Ask);
         assert_eq!(browse.risk, RiskClass::Medium);
+    }
+
+    #[test]
+    fn wave3_default_grants_media_capabilities_at_medium_risk() {
+        // The shell-side `media_permissions.json` gate is the user-
+        // facing per-device control. L5 still records an audit row for
+        // every media-tagged turn, but the engine should not double-
+        // prompt: media defaults are Auto with Medium risk so the audit
+        // story is correct without UX friction. A future Observer
+        // preset can flip this to Ask/Deny.
+        let cfg = EngineConfig::wave3_default(persona());
+        let cam = cfg
+            .preset_defaults
+            .get(&Capability::MediaCamera)
+            .expect("wave3_default should know MediaCamera");
+        assert_eq!(cam.mode, ApprovalMode::Auto);
+        assert_eq!(cam.risk, RiskClass::Medium);
+        let scr = cfg
+            .preset_defaults
+            .get(&Capability::MediaScreenCapture)
+            .expect("wave3_default should know MediaScreenCapture");
+        assert_eq!(scr.mode, ApprovalMode::Auto);
+        assert_eq!(scr.risk, RiskClass::Medium);
     }
 
     #[test]

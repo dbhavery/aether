@@ -948,11 +948,16 @@ pub fn analyze_frame(
             persona: PersonaId(a.compiled.persona_id.0.clone()),
             task_id: None,
             utterance: utterance.clone(),
-            // FilesRead is the closest existing capability — this is a
-            // read-only observation that does not touch the filesystem
-            // or network. A dedicated `MediaAnalyze` capability is a
-            // natural follow-up once the policy schema is opened.
-            capability: Capability::FilesRead,
+            // Map to the dedicated media capability so the audit log
+            // reads `media.camera` / `media.screen_capture` instead of
+            // misleading file-read rows. Both are configured Auto in
+            // `EngineConfig::wave3_default` because the shell-side
+            // permission gate (P1) is the user-facing per-device
+            // control; L5 records the audit row without doubling up.
+            capability: match kind {
+                MediaKind::Camera => Capability::MediaCamera,
+                MediaKind::Screen => Capability::MediaScreenCapture,
+            },
             resource: ResourceScope::None,
             emitted_at: MonotonicTimestamp(ts),
         }
