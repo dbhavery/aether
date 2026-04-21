@@ -7,6 +7,7 @@ mod media_permissions;
 mod memory_router;
 mod provider;
 mod state;
+mod vision_cache;
 mod vision_registry;
 
 use state::AppState;
@@ -51,6 +52,7 @@ fn main() {
             commands::vision_status,
             commands::list_vision_providers,
             commands::list_vision_models,
+            commands::refresh_vision_models,
             commands::set_active_vision_provider,
             commands::set_active_vision_model,
         ])

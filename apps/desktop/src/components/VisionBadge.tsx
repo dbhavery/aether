@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import {
   listVisionModels,
+  refreshVisionModels,
   setActiveVisionModel,
   setActiveVisionProvider,
   visionStatus,
@@ -164,10 +165,26 @@ export function VisionBadge({ refreshKey }: Props) {
                 try {
                   const updated = await setActiveVisionModel(modelId);
                   setStatus(updated);
+                  // Cache was invalidated server-side on pick; refresh
+                  // the UI's snapshot so the "Active" ring moves.
+                  const fresh = await listVisionModels();
+                  setModels(fresh);
                 } catch (e) {
                   setErr(String(e));
                 } finally {
                   setBusy(false);
+                }
+              }}
+              onRefresh={async () => {
+                setModelsLoading(true);
+                setErr(null);
+                try {
+                  const fresh = await refreshVisionModels();
+                  setModels(fresh);
+                } catch (e) {
+                  setErr(String(e));
+                } finally {
+                  setModelsLoading(false);
                 }
               }}
             />
@@ -206,6 +223,7 @@ function ModelListSection({
   activeModel,
   busy,
   onPickModel,
+  onRefresh,
 }: {
   loading: boolean;
   models: VisionModelList | null;
@@ -213,6 +231,7 @@ function ModelListSection({
   activeModel: string | null;
   busy: boolean;
   onPickModel: (modelId: string) => void | Promise<void>;
+  onRefresh: () => void | Promise<void>;
 }) {
   if (loading) {
     return (
@@ -223,19 +242,25 @@ function ModelListSection({
   }
   if (!models) return null;
   // If discovery returned an error or an empty list, render the
-  // plain-language hint and stop.
+  // plain-language hint alongside a retry affordance — a common
+  // cause is the daemon briefly unreachable, and a manual refresh
+  // is faster than waiting for the UI to remount.
   if (models.error || models.models.length === 0) {
     return (
-      <div className="mt-2 text-[11px] text-aether-muted">
-        {models.error ?? "Models unavailable for this provider."}
+      <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-aether-muted">
+        <span>{models.error ?? "Models unavailable for this provider."}</span>
+        <RefreshButton busy={busy || loading} onClick={onRefresh} />
       </div>
     );
   }
   return (
     <div className="mt-2">
-      <div className="text-[10.5px] uppercase tracking-[0.18em] text-aether-dim">
-        Models on{" "}
-        {activeProviderId ?? models.provider_id ?? "this provider"}
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-[10.5px] uppercase tracking-[0.18em] text-aether-dim">
+          Models on{" "}
+          {activeProviderId ?? models.provider_id ?? "this provider"}
+        </div>
+        <RefreshButton busy={busy || loading} onClick={onRefresh} />
       </div>
       <div
         className="mt-1 flex flex-wrap gap-1"
@@ -267,5 +292,31 @@ function ModelListSection({
         })}
       </div>
     </div>
+  );
+}
+
+/**
+ * Compact refresh affordance — a `↻` glyph that calls `onClick`.
+ * Disabled while a swap or load is in flight so we never queue a
+ * second refresh on top of an in-flight one.
+ */
+function RefreshButton({
+  busy,
+  onClick,
+}: {
+  busy: boolean;
+  onClick: () => void | Promise<void>;
+}) {
+  return (
+    <button
+      type="button"
+      title="Refresh model list"
+      aria-label="Refresh model list"
+      disabled={busy}
+      onClick={() => onClick()}
+      className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-aether-border bg-aether-elevated/60 text-[11px] text-aether-muted hover:border-aether-accent/60 hover:text-aether-text disabled:cursor-default disabled:opacity-50"
+    >
+      <span aria-hidden="true">↻</span>
+    </button>
   );
 }

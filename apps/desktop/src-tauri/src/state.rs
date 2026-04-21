@@ -19,6 +19,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use aether_l1_interaction::{TurnEngine, TurnRequest, TurnResult, TurnRouter};
 use aether_l4_router::VisionProvider;
 
+use crate::vision_cache::ModelListCache;
 use crate::vision_registry::{VisionProviderInfo, VisionRegistry};
 #[cfg(feature = "sqlite-backend")]
 use aether_l2_memory::{DurableSessionStore, SqliteSessionMemoryStore};
@@ -112,6 +113,22 @@ pub struct AppState {
     /// vision ↔ text-only fallback). The active selection is
     /// persisted via `vision_registry`'s attached file.
     vision: RwLock<VisionRegistry>,
+    /// Short-TTL cache in front of each vision provider's
+    /// `list_models`. Absorbs the burst of calls triggered by the
+    /// camera/screen panels without re-hitting the daemon.
+    vision_model_cache: ModelListCache,
+}
+
+/// Error surface for the cached vision model-list helpers. Lets the
+/// Tauri command layer translate each case into a plain-language
+/// message without leaking transport details.
+#[derive(Debug, Clone)]
+pub enum VisionModelListError {
+    /// No vision provider is currently active (text-only mode).
+    NoActive,
+    /// The active provider's adapter returned an error when asked for
+    /// its model list. Carries the provider id for UI annotation.
+    Unavailable(String),
 }
 
 /// How many telemetry entries the shell retains for the History tab.
@@ -249,6 +266,7 @@ impl AppState {
             media_permissions: RwLock::new(MediaPermissions::defaults()),
             media_permissions_path: None,
             vision: RwLock::new(VisionRegistry::empty()),
+            vision_model_cache: ModelListCache::new(),
         })
     }
 
@@ -311,7 +329,59 @@ impl AppState {
     /// text-only mode. Persists when a file is wired.
     pub fn set_active_vision_provider(&self, id: Option<String>) -> Result<(), String> {
         let r = self.vision.read().expect("vision registry read lock");
-        r.set_active(id)
+        let outcome = r.set_active(id.clone());
+        // Provider swap can change what the model list *means* for the
+        // active slot; drop the incoming provider's entry so the next
+        // lookup is fresh. We intentionally don't clear the whole
+        // cache — other providers' entries stay valid.
+        if let Some(id) = id.as_deref() {
+            self.vision_model_cache.invalidate(id);
+        }
+        outcome
+    }
+
+    /// Cached model list for the active vision provider. First call
+    /// (or call after invalidate / TTL expiry) hits the daemon; later
+    /// calls within the TTL return the cached snapshot.
+    ///
+    /// Returns `(provider_id, models)` so the caller can construct the
+    /// VisionModelList envelope without a second registry lookup.
+    pub fn vision_model_list_cached(
+        &self,
+    ) -> Result<(String, Vec<String>), VisionModelListError> {
+        let Some(provider) = self.vision_provider() else {
+            return Err(VisionModelListError::NoActive);
+        };
+        let id = provider.id().to_string();
+        if let Some(cached) = self.vision_model_cache.get(&id) {
+            return Ok((id, cached));
+        }
+        match provider.list_models() {
+            Ok(models) => {
+                self.vision_model_cache.put(&id, models.clone());
+                Ok((id, models))
+            }
+            Err(_) => Err(VisionModelListError::Unavailable(id)),
+        }
+    }
+
+    /// Force a fresh fetch of the active provider's model list,
+    /// bypassing the cache. Wired to the manual `refresh_vision_models`
+    /// command so the UI can show the user's newly-pulled model
+    /// without waiting for TTL expiry.
+    pub fn vision_model_list_refresh(&self) -> Result<(String, Vec<String>), VisionModelListError> {
+        let Some(provider) = self.vision_provider() else {
+            return Err(VisionModelListError::NoActive);
+        };
+        let id = provider.id().to_string();
+        self.vision_model_cache.invalidate(&id);
+        match provider.list_models() {
+            Ok(models) => {
+                self.vision_model_cache.put(&id, models.clone());
+                Ok((id, models))
+            }
+            Err(_) => Err(VisionModelListError::Unavailable(id)),
+        }
     }
 
     /// Current model id of the active vision provider, if any.
@@ -323,10 +393,19 @@ impl AppState {
     /// Switch the model used by the active vision provider. Persists
     /// alongside the active-provider selection so a future provider
     /// swap restores the same pick. Errors when no provider is active
-    /// or the adapter rejects the id.
+    /// or the adapter rejects the id. Invalidates the model-list
+    /// cache for the active provider so the next `list_vision_models`
+    /// sees the new pick without waiting for TTL expiry.
     pub fn set_active_vision_model(&self, model: &str) -> Result<(), String> {
-        let r = self.vision.read().expect("vision registry read lock");
-        r.set_active_model(model)
+        let active = self.vision_active_id();
+        let outcome = {
+            let r = self.vision.read().expect("vision registry read lock");
+            r.set_active_model(model)
+        };
+        if let Some(id) = active {
+            self.vision_model_cache.invalidate(&id);
+        }
+        outcome
     }
 
     /// Wire a disk-backed media-permissions file into this state. Loads

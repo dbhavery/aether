@@ -844,26 +844,53 @@ pub struct VisionModelList {
 
 #[tauri::command]
 pub fn list_vision_models(state: State<'_, AppState>) -> VisionModelList {
-    let Some(provider) = state.vision_provider() else {
-        return VisionModelList {
-            provider_id: None,
-            models: Vec::new(),
-            error: Some("No vision provider is active.".into()),
-        };
-    };
-    let id = provider.id().to_string();
-    match provider.list_models() {
-        Ok(models) if models.is_empty() => VisionModelList {
+    match state.vision_model_list_cached() {
+        Ok((id, models)) if models.is_empty() => VisionModelList {
             provider_id: Some(id),
             models,
             error: Some("Models unavailable for this provider.".into()),
         },
-        Ok(models) => VisionModelList {
+        Ok((id, models)) => VisionModelList {
             provider_id: Some(id),
             models,
             error: None,
         },
-        Err(_) => VisionModelList {
+        Err(crate::state::VisionModelListError::NoActive) => VisionModelList {
+            provider_id: None,
+            models: Vec::new(),
+            error: Some("No vision provider is active.".into()),
+        },
+        Err(crate::state::VisionModelListError::Unavailable(id)) => VisionModelList {
+            provider_id: Some(id),
+            models: Vec::new(),
+            error: Some("Models unavailable for this provider.".into()),
+        },
+    }
+}
+
+/// Force a fresh fetch of the active vision provider's model list,
+/// bypassing the short-TTL cache. Wired to the `↻` refresh button on
+/// the VisionBadge so the user can pick up a newly-pulled model
+/// without waiting for the TTL to expire.
+#[tauri::command]
+pub fn refresh_vision_models(state: State<'_, AppState>) -> VisionModelList {
+    match state.vision_model_list_refresh() {
+        Ok((id, models)) if models.is_empty() => VisionModelList {
+            provider_id: Some(id),
+            models,
+            error: Some("Models unavailable for this provider.".into()),
+        },
+        Ok((id, models)) => VisionModelList {
+            provider_id: Some(id),
+            models,
+            error: None,
+        },
+        Err(crate::state::VisionModelListError::NoActive) => VisionModelList {
+            provider_id: None,
+            models: Vec::new(),
+            error: Some("No vision provider is active.".into()),
+        },
+        Err(crate::state::VisionModelListError::Unavailable(id)) => VisionModelList {
             provider_id: Some(id),
             models: Vec::new(),
             error: Some("Models unavailable for this provider.".into()),
@@ -906,18 +933,29 @@ pub fn set_active_vision_model(
     if trimmed.is_empty() {
         return Err("model id must not be empty".into());
     }
-    // Validate against the active provider's current model list. We
-    // only reject when the list is non-empty AND the id isn't in it;
-    // an empty list means discovery isn't available (passive adapter,
-    // daemon down, etc.) and we defer to the daemon's own error path.
-    let Some(provider) = state.vision_provider() else {
-        return Err("no active vision provider".into());
-    };
-    if let Ok(known) = provider.list_models() {
-        if !known.is_empty() && !known.iter().any(|m| m == trimmed) {
-            return Err(format!(
-                "unknown model for active provider: {trimmed}"
-            ));
+    // Validate against the active provider's current model list. The
+    // cached helper fetches fresh on first call and reuses the list
+    // within the TTL; validation failures that bubble up here still
+    // let the user eventually discover the typo via analyze_frame's
+    // provider-error path.
+    match state.vision_model_list_cached() {
+        Ok((_, known)) if known.is_empty() => {
+            // Discovery returned an empty list — adapter doesn't
+            // expose models, or the daemon has none yet. Accept
+            // optimistically.
+        }
+        Ok((_, known)) => {
+            if !known.iter().any(|m| m == trimmed) {
+                return Err(format!("unknown model for active provider: {trimmed}"));
+            }
+        }
+        Err(crate::state::VisionModelListError::NoActive) => {
+            return Err("no active vision provider".into());
+        }
+        Err(crate::state::VisionModelListError::Unavailable(_)) => {
+            // Discovery unavailable (daemon error, passive adapter).
+            // Accept optimistically; analyze_frame surfaces any
+            // real model-not-found error.
         }
     }
     state.set_active_vision_model(trimmed)?;

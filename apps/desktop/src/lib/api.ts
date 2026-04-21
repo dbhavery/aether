@@ -163,6 +163,10 @@ export async function listVisionModels(): Promise<VisionModelList> {
   return invoke<VisionModelList>("list_vision_models");
 }
 
+export async function refreshVisionModels(): Promise<VisionModelList> {
+  return invoke<VisionModelList>("refresh_vision_models");
+}
+
 export async function setActiveVisionModel(
   id: string,
 ): Promise<VisionStatus> {
