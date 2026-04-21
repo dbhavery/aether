@@ -1,10 +1,13 @@
 // Centralised classification of telemetry `kind` strings produced by
 // the camera / screen `analyze_frame` path.
 //
-// Mirrors the four string constants the Rust `analyze_frame` command
+// Mirrors the five string constants the Rust `analyze_frame` command
 // emits in apps/desktop/src-tauri/src/commands.rs:
 //   - frame_analyzed     — model returned a response
 //   - frame_blocked      — policy blocked the turn after permission
+//   - frame_invalid      — shell-side validate_frame_data_url rejected
+//                          the payload (empty body, bad scheme, etc.)
+//                          before any provider call ran
 //   - permission_denied  — media permission set to Deny
 //   - permission_ask     — media permission still on Ask; UI must
 //                          flip to Allow before retrying
@@ -28,6 +31,7 @@ import { visionProviderShortLabel } from "./visionProviders";
 export const MEDIA_TURN_KINDS: ReadonlySet<string> = new Set([
   "frame_analyzed",
   "frame_blocked",
+  "frame_invalid",
   "permission_denied",
   "permission_ask",
 ]);

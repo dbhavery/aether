@@ -370,6 +370,7 @@ function kindClass(kind: string): string {
     case "denied":
     case "provider_error":
     case "frame_blocked":
+    case "frame_invalid":
     case "permission_denied":
       return "text-aether-err";
     case "needs_upgrade":

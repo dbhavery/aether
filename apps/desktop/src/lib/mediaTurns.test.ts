@@ -17,6 +17,7 @@ describe("MEDIA_TURN_KINDS", () => {
     const expected = new Set([
       "frame_analyzed",
       "frame_blocked",
+      "frame_invalid",
       "permission_denied",
       "permission_ask",
     ]);
@@ -31,6 +32,7 @@ describe("isMediaTurn", () => {
   it.each([
     "frame_analyzed",
     "frame_blocked",
+    "frame_invalid",
     "permission_denied",
     "permission_ask",
   ])("classifies %s as a media turn", (kind) => {

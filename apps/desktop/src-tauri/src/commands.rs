@@ -1075,6 +1075,42 @@ fn validate_frame_data_url(url: &str) -> Result<&str, String> {
     Ok(body)
 }
 
+/// Record a telemetry entry for an `analyze_frame` early-exit path
+/// (permission denied, permission ask, or frame validation failure).
+/// These paths short-circuit before any provider call or audit row is
+/// written, but they are still meaningful end-user events — recording
+/// them here keeps the Trust drawer's History tab honest about what
+/// the user actually attempted.
+///
+/// Stable `kind` values consumed by the History tab and the
+/// `MEDIA_TURN_KINDS` allow-list:
+///   - `"permission_denied"` — gate evaluated to Deny
+///   - `"permission_ask"`    — gate evaluated to PromptUser
+///   - `"frame_invalid"`     — `validate_frame_data_url` rejected
+///
+/// `provider`, `model`, `tier`, `latency_ms`, and the token fields
+/// are intentionally `None` — no provider was consulted. Only the
+/// persona id and timestamp carry signal.
+fn record_frame_early_exit_telemetry(state: &State<'_, AppState>, kind: &str) {
+    let ts_ms = state.next_ts();
+    let persona_id = {
+        let a = state.active.read().expect("active read lock");
+        a.compiled.persona_id.0.clone()
+    };
+    state.record_telemetry(TelemetryEntry {
+        turn_id: format!("frame-early-{ts_ms}"),
+        timestamp_ms: ts_ms,
+        kind: kind.to_string(),
+        persona_id,
+        provider: None,
+        tier: None,
+        model: None,
+        latency_ms: None,
+        prompt_tokens: None,
+        completion_tokens: None,
+    });
+}
+
 /// Single-frame analysis path (P3 v0). This is the foundation hook
 /// for video-assistant work — it does NOT stream, does NOT loop, and
 /// does NOT acquire the camera itself. The shell is expected to
@@ -1122,6 +1158,7 @@ pub fn analyze_frame(
                 content: copy.clone(),
                 timestamp_ms: ts_ms,
             });
+            record_frame_early_exit_telemetry(&state, "permission_denied");
             return Ok(FrameAnalysisOutcome {
                 turn_id: id.clone(),
                 kind: "permission_denied".into(),
@@ -1146,6 +1183,7 @@ pub fn analyze_frame(
                 MediaKind::Camera => "Camera permission is set to Ask. Approve camera analysis in Settings before retrying.",
                 MediaKind::Screen => "Screen permission is set to Ask. Approve screen analysis in Settings before retrying.",
             }.to_string();
+            record_frame_early_exit_telemetry(&state, "permission_ask");
             return Ok(FrameAnalysisOutcome {
                 turn_id: id.clone(),
                 kind: "permission_ask".into(),
@@ -1170,6 +1208,11 @@ pub fn analyze_frame(
     // captures. Provider adapters still do the strict decode when
     // they actually run.
     if let Err(detail) = validate_frame_data_url(&request.frame_data_url) {
+        // Record a telemetry-only entry (no audit row, no provider
+        // call) so the Trust drawer's History tab can show the user
+        // that their last capture was rejected. L5 / audit semantics
+        // stay untouched — no policy decision was made.
+        record_frame_early_exit_telemetry(&state, "frame_invalid");
         return Err(format!(
             "{detail}. Try capturing a new frame."
         ));
