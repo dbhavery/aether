@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildMetaParts } from "./Transcript";
+import { buildMetaParts, tierChipForFooter } from "./Transcript";
 import type { MessageMeta } from "../lib/types";
 
 function meta(overrides: Partial<MessageMeta> = {}): MessageMeta {
@@ -32,7 +32,7 @@ describe("buildMetaParts", () => {
     ]);
   });
 
-  it("inserts the model chip after the provider for vision turns", () => {
+  it("drops the duplicating tier chip on vision turns and shows provider · model instead", () => {
     const m = meta({
       tier: "Ollama vision · llava:latest · http://127.0.0.1:11434",
       provider: "ollama-vision",
@@ -43,12 +43,20 @@ describe("buildMetaParts", () => {
     });
     const parts = buildMetaParts(m);
     expect(parts).toEqual([
-      "Ollama vision · llava:latest · http://127.0.0.1:11434",
       "ollama-vision",
       "llava:latest",
       "1.5s",
       "p256/c12 tok",
     ]);
+  });
+
+  it("drops tier on llama.cpp vision turns too", () => {
+    const m = meta({
+      tier: "llama.cpp vision · minicpm-v · http://127.0.0.1:8080",
+      provider: "llamacpp-vision",
+      model: "minicpm-v",
+    });
+    expect(buildMetaParts(m)).toEqual(["llamacpp-vision", "minicpm-v"]);
   });
 
   it("omits the model chip when model is empty / whitespace / undefined", () => {
@@ -63,6 +71,11 @@ describe("buildMetaParts", () => {
     ]);
   });
 
+  it("keeps the tier chip on text-only turns where it adds info", () => {
+    const m = meta({ tier: "local", provider: "ollama" });
+    expect(buildMetaParts(m)).toEqual(["local", "ollama"]);
+  });
+
   it("falls back to a single token chip when only one count is present", () => {
     expect(
       buildMetaParts(meta({ provider: "ollama", completion_tokens: 7 })),
@@ -70,5 +83,41 @@ describe("buildMetaParts", () => {
     expect(
       buildMetaParts(meta({ provider: "ollama", prompt_tokens: 19 })),
     ).toEqual(["ollama", "19 tok"]);
+  });
+});
+
+describe("tierChipForFooter", () => {
+  it("returns null when tier itself is missing", () => {
+    expect(tierChipForFooter(meta())).toBeNull();
+    expect(tierChipForFooter(meta({ tier: null }))).toBeNull();
+  });
+
+  it("preserves tier on text-only / non-vision providers", () => {
+    expect(tierChipForFooter(meta({ tier: "local", provider: "ollama" })))
+      .toBe("local");
+    expect(
+      tierChipForFooter(meta({ tier: "reflex-stub", provider: "reflex-stub" })),
+    ).toBe("reflex-stub");
+    // No provider at all → keep tier (we don't know it's a vision turn).
+    expect(tierChipForFooter(meta({ tier: "local" }))).toBe("local");
+  });
+
+  it("drops tier on vision turns to avoid duplicating provider+model", () => {
+    expect(
+      tierChipForFooter(
+        meta({
+          tier: "Ollama vision · llava · http://127.0.0.1:11434",
+          provider: "ollama-vision",
+        }),
+      ),
+    ).toBeNull();
+    expect(
+      tierChipForFooter(
+        meta({
+          tier: "llama.cpp vision · minicpm · http://127.0.0.1:8080",
+          provider: "llamacpp-vision",
+        }),
+      ),
+    ).toBeNull();
   });
 });

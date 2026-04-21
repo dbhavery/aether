@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 
 import type { MessageMeta, TranscriptMessage } from "../lib/types";
+import { isVisionProvider } from "../lib/visionProviders";
 
 interface Props {
   messages: TranscriptMessage[];
@@ -89,13 +90,17 @@ function MessageMetaFooter({ meta }: { meta: MessageMeta }) {
  * formatting can be locked without rendering React.
  *
  * Order is fixed: tier · provider · model · latency · tokens. The
- * model chip is included only when `meta.model` is a non-empty string
- * — keeps the footer honest for text-only turns where vision didn't
- * run.
+ * model chip is included only when `meta.model` is a non-empty
+ * string — keeps the footer honest for text-only turns where vision
+ * didn't run. The tier chip is dropped on vision turns (see
+ * [`tierChipForFooter`]) because the long vision tier label
+ * (`"Ollama vision · llava · http://..."`) duplicates the
+ * provider+model chips that follow.
  */
 export function buildMetaParts(meta: MessageMeta): string[] {
   const parts: string[] = [];
-  if (meta.tier) parts.push(meta.tier);
+  const tier = tierChipForFooter(meta);
+  if (tier) parts.push(tier);
   if (meta.provider) parts.push(meta.provider);
   if (typeof meta.model === "string" && meta.model.trim().length > 0) {
     parts.push(meta.model);
@@ -106,6 +111,29 @@ export function buildMetaParts(meta: MessageMeta): string[] {
   const tokenStr = formatTokens(meta.prompt_tokens, meta.completion_tokens);
   if (tokenStr) parts.push(tokenStr);
   return parts;
+}
+
+/**
+ * Decide what (if anything) the tier chip should show in the
+ * transcript footer.
+ *
+ * - Text-only turns (`provider` is not a known vision id) keep their
+ *   tier as-is — for the reflex / Ollama text path it's a meaningful
+ *   summary like `"local"` or `"reflex-stub"`.
+ * - Vision turns (`provider` ∈ `VISION_PROVIDER_IDS`) drop the tier
+ *   entirely, because the Rust `maybe_apply_vision` substitution
+ *   pushes the long provider label
+ *   (`"Ollama vision · llava:latest · http://127.0.0.1:11434"`) into
+ *   `tier`, and the dedicated provider + model chips that follow
+ *   already cover that information without the URL noise.
+ *
+ * Returns `null` to signal "no tier chip"; otherwise returns the
+ * exact string to render. Pure: exposed for unit tests.
+ */
+export function tierChipForFooter(meta: MessageMeta): string | null {
+  if (!meta.tier) return null;
+  if (isVisionProvider(meta.provider)) return null;
+  return meta.tier;
 }
 
 function formatLatency(ms: number): string {
