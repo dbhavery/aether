@@ -6,29 +6,17 @@ import {
   telemetryRecent,
   type TelemetryEntry,
 } from "../lib/api";
+import { isMediaTurn, MEDIA_TURN_KINDS } from "../lib/mediaTurns";
 import type { AuditDecisionLabel, TrustAuditRow } from "../lib/types";
 
 type Tab = "audit" | "history";
 type HistoryFilter = "all" | "media";
 
-/**
- * Telemetry `kind` values produced by the media surfaces (camera /
- * screen analyze_frame). Centralised here so the History filter, the
- * "media turn" badge, and any future media-specific UI agree on what
- * counts. Mirrors the Rust string constants in
- * `apps/desktop/src-tauri/src/commands.rs::analyze_frame`.
- */
-export const MEDIA_TURN_KINDS: ReadonlySet<string> = new Set([
-  "frame_analyzed",
-  "frame_blocked",
-  "permission_denied",
-  "permission_ask",
-]);
-
-/** True when this telemetry entry came from a camera/screen frame turn. */
-export function isMediaTurn(kind: string): boolean {
-  return MEDIA_TURN_KINDS.has(kind);
-}
+// MEDIA_TURN_KINDS / isMediaTurn moved to ../lib/mediaTurns so the
+// constant can be unit-tested without dragging React in. Re-export
+// here for back-compat with any external consumers that imported from
+// this module before the move.
+export { isMediaTurn, MEDIA_TURN_KINDS };
 
 interface Props {
   open: boolean;
