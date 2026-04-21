@@ -68,6 +68,58 @@ well-formed and the model is asked the user's optional note (or a
 default cue). When a vision-capable provider lands, the same command
 will pass the data URL straight through.
 
+## Tauri / webview security model
+
+Three layers gate every capture call:
+
+1. **Tauri capability allowlist**
+   ([`apps/desktop/src-tauri/capabilities/default.json`](file:///C:/Users/dbhav/Projects/aether/apps/desktop/src-tauri/capabilities/default.json)).
+   Default-deny — only `core:default`, `core:window:default`,
+   `core:event:default`, `core:app:default`. The `fs`, `shell`,
+   `http`, `dialog`, and `notification` plugins are deliberately
+   absent. The IPC commands available to the webview are exactly the
+   ones registered in `tauri::generate_handler!` in `main.rs`.
+
+2. **Webview `getUserMedia` / `getDisplayMedia`**. These are standard
+   browser APIs the webview hosts; they do **not** require a Tauri
+   capability. They are governed by the OS-level permission prompt
+   and, on Windows, by WebView2 permission policies. Aether never
+   bypasses these.
+
+3. **In-app `media_permissions.json` gate** (this document). Sits in
+   front of every capture site so the user has one local control
+   surface for "may Aether see anything?" independent of the OS
+   prompt history.
+
+A future distribution build will additionally:
+
+- pin a stricter CSP (already locked to `default-src 'self'` plus
+  `data:` for image previews and the IPC channel),
+- consider WebView2 permission policies for camera / microphone /
+  screen capture explicitly per platform.
+
+## Vision provider
+
+When `AETHER_OLLAMA_VISION_MODEL` is set and the daemon healthchecks
+at boot, `analyze_frame` substitutes the active text-model output
+with a real vision response from Ollama (LLaVA, BakLLaVA,
+gemma3:vision, qwen2.5-vl, …). When unset, capture still works but
+the response reflects only the user's note — the pixels are not
+sent to any model.
+
+The `vision_status` Tauri command exposes the active provider label
+so the UI can tell users upfront which path is live. The
+[`VisionBadge`](file:///C:/Users/dbhav/Projects/aether/apps/desktop/src/components/VisionBadge.tsx)
+component renders this in both the camera and screen panels.
+
+Configuration env vars (all opt-in):
+
+| Var                                   | Default                         | Notes |
+| ------------------------------------- | ------------------------------- | ----- |
+| `AETHER_OLLAMA_VISION_MODEL`          | unset (no vision)               | Required to enable vision routing. |
+| `AETHER_OLLAMA_VISION_BASE_URL`       | inherit `AETHER_OLLAMA_BASE_URL`, then `http://127.0.0.1:11434` | Vision daemon endpoint. |
+| `AETHER_OLLAMA_VISION_TIMEOUT_MS`     | `120000`                        | Vision models are typically slower than text. |
+
 ## What this does NOT cover
 
 - **Microphone**. The voice/STT track owns its own consent path.
