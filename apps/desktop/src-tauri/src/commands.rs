@@ -593,6 +593,7 @@ fn provider_error_payload(
         persona_id,
         provider: None,
         tier: None,
+        model: None,
         latency_ms: None,
         prompt_tokens: None,
         completion_tokens: None,
@@ -718,6 +719,9 @@ fn finalize_turn(
         persona_id,
         provider: result.route.as_ref().map(|r| r.provider.clone()),
         tier: result.route.as_ref().map(|r| r.tier.clone()),
+        // Text-only path — vision-substitution is not in this code
+        // path, so the model field stays None here.
+        model: None,
         latency_ms: result.route.as_ref().and_then(|r| r.latency_ms),
         prompt_tokens: result
             .route
@@ -1167,7 +1171,8 @@ pub fn analyze_frame(
     // policy — we keep that and just substitute the assistant text +
     // provider/tier metadata. When vision fails the text-only output
     // stays as a safe fallback.
-    let vision_used = maybe_apply_vision(&state, &mut result, &request.frame_data_url, &cue);
+    let vision_model =
+        maybe_apply_vision(&state, &mut result, &request.frame_data_url, &cue);
 
     let ts_ms = state.next_ts();
     let _ = state.memory.append(TurnMemoryRecord {
@@ -1178,7 +1183,6 @@ pub fn analyze_frame(
         timestamp_ms: ts_ms,
     });
 
-    let _ = vision_used; // keeps the binding live for clippy
     let (kind_label, message) = match (&result.route, &result.block) {
         (Some(r), _) => {
             let assistant_ts = state.next_ts();
@@ -1242,6 +1246,11 @@ pub fn analyze_frame(
         persona_id,
         provider: result.route.as_ref().map(|r| r.provider.clone()),
         tier: result.route.as_ref().map(|r| r.tier.clone()),
+        // `model` is `Some(_)` only when the vision provider actually
+        // ran and reported its current model id. Text-fallback turns
+        // (no vision provider configured / vision call failed) leave
+        // it `None` so the History tab doesn't lie about the route.
+        model: vision_model,
         latency_ms: result.route.as_ref().and_then(|r| r.latency_ms),
         prompt_tokens: result
             .route
@@ -1294,34 +1303,35 @@ pub fn analyze_frame(
 /// Failures (no provider, malformed URL, daemon error) leave `result`
 /// untouched — the caller falls back to the existing text-only output.
 ///
-/// Returns `true` when the vision call ran and substituted content,
-/// `false` otherwise. Currently unused by the caller but exposed in
-/// case a future telemetry surface wants to count vision-vs-fallback
-/// usage.
+/// Returns `Some(model_id)` on success — the model the vision
+/// provider used at the moment of the call. Telemetry stamps this
+/// into the recorded entry so the Trust drawer can annotate media
+/// rows with the exact model that served them. Returns `None` when
+/// no vision call ran (no provider, blocked turn, malformed URL,
+/// daemon error). Adapters that don't expose `current_model` (passive
+/// future adapters) yield `Some` with the provider's id substring
+/// stripped — but today both built-in adapters report the model.
 fn maybe_apply_vision(
     state: &State<'_, AppState>,
     result: &mut TurnResult,
     frame_data_url: &str,
     cue: &str,
-) -> bool {
-    let Some(provider) = state.vision_provider() else {
-        return false;
-    };
+) -> Option<String> {
+    let provider = state.vision_provider()?;
     // Only override when policy actually allowed a route. A blocked
     // turn keeps its block — vision should never resurrect a denied
     // action.
-    let Some(route) = result.route.as_mut() else {
-        return false;
-    };
+    let route = result.route.as_mut()?;
     let (mime, body) = match split_data_url(frame_data_url) {
         Ok(parts) => parts,
         Err(e) => {
             tracing::warn!("vision: data URL decode failed: {e}; using text-only output");
-            return false;
+            return None;
         }
     };
     let label = provider.label();
     let id = provider.id().to_string();
+    let model = provider.current_model();
     match provider.analyze(VisionRequest {
         cue: cue.to_string(),
         image_b64: body,
@@ -1346,11 +1356,11 @@ fn maybe_apply_vision(
                     completion: resp.completion_tokens.unwrap_or(0),
                 });
             }
-            true
+            model
         }
         Err(e) => {
             tracing::warn!("vision: provider analyze failed: {e}; using text-only output");
-            false
+            None
         }
     }
 }

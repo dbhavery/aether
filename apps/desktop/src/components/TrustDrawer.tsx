@@ -9,7 +9,7 @@ import {
 import {
   isMediaTurn,
   MEDIA_TURN_KINDS,
-  visionProviderShortLabel,
+  visionRouteSummary,
 } from "../lib/mediaTurns";
 import type { AuditDecisionLabel, TrustAuditRow } from "../lib/types";
 
@@ -306,7 +306,8 @@ function HistoryList({
   return (
     <div className="flex flex-col gap-2">
       {entries.map((e) => {
-        const visionLabel = visionProviderShortLabel(e.provider);
+        const visionBadge = visionRouteSummary(e.provider, e.model);
+        const visionTitle = visionRouteTitle(e.provider, e.model);
         return (
           <div
             key={e.turn_id}
@@ -319,12 +320,12 @@ function HistoryList({
                 {e.kind.replace(/_/g, " ")}
               </span>
               <div className="flex items-center gap-2">
-                {visionLabel && (
+                {visionBadge && (
                   <span
                     className="rounded-full border border-aether-ok/40 bg-aether-ok/5 px-1.5 py-0.5 text-[10px] text-aether-ok"
-                    title={`Served by ${e.provider}`}
+                    title={visionTitle}
                   >
-                    {visionLabel}
+                    {visionBadge}
                   </span>
                 )}
                 <span className="text-[10px] font-mono text-aether-dim">
@@ -335,7 +336,8 @@ function HistoryList({
             <div className="mt-1 font-mono text-[12px] text-aether-text break-all">
               {e.persona_id}
               {e.provider ? ` · ${e.provider}` : ""}
-              {e.tier ? ` · ${e.tier}` : ""}
+              {e.model ? ` · ${e.model}` : ""}
+              {!e.model && e.tier ? ` · ${e.tier}` : ""}
             </div>
             <div className="text-[11.5px] font-mono text-aether-muted">
               {formatTokens(e.prompt_tokens, e.completion_tokens)}
@@ -364,6 +366,23 @@ function kindClass(kind: string): string {
     default:
       return "text-aether-muted";
   }
+}
+
+/**
+ * Tooltip copy for the vision-route badge. Mentions the model when
+ * we know it, the provider id either way. Plain English so the
+ * Trust drawer's hover surface still reads coherently when the
+ * adapter doesn't expose a model.
+ */
+function visionRouteTitle(
+  provider: string | null | undefined,
+  model: string | null | undefined,
+): string {
+  const p = provider ?? "vision provider";
+  const trimmed = typeof model === "string" ? model.trim() : "";
+  return trimmed.length > 0
+    ? `Served by ${p} (${trimmed})`
+    : `Served by ${p}`;
 }
 
 function formatLatencyMs(ms: number | undefined): string {

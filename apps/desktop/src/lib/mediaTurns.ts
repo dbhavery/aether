@@ -59,3 +59,20 @@ export function visionProviderShortLabel(
       return null;
   }
 }
+
+/**
+ * Combined "<provider> · <model>" label for the Trust drawer's
+ * History tab. Returns `null` when the provider isn't a known vision
+ * route. When the provider is known but the model is missing, falls
+ * back to the provider label alone — honest "we know it was a vision
+ * route, we don't know which model" copy beats inventing a name.
+ */
+export function visionRouteSummary(
+  provider: string | null | undefined,
+  model: string | null | undefined,
+): string | null {
+  const providerLabel = visionProviderShortLabel(provider);
+  if (!providerLabel) return null;
+  const trimmed = typeof model === "string" ? model.trim() : "";
+  return trimmed.length > 0 ? `${providerLabel} · ${trimmed}` : providerLabel;
+}

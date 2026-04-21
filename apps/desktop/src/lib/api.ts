@@ -87,6 +87,9 @@ export interface TelemetryEntry {
   persona_id: string;
   provider?: string;
   tier?: string;
+  /** Vision-route model id, when the turn was served by a vision
+   * provider that exposes one. Absent for text-only turns. */
+  model?: string;
   latency_ms?: number;
   prompt_tokens?: number;
   completion_tokens?: number;

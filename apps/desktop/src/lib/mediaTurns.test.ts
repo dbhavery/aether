@@ -6,6 +6,7 @@ import {
   MEDIA_TURN_KINDS,
   VISION_PROVIDER_IDS,
   visionProviderShortLabel,
+  visionRouteSummary,
 } from "./mediaTurns";
 
 describe("MEDIA_TURN_KINDS", () => {
@@ -91,5 +92,31 @@ describe("visionProviderShortLabel", () => {
     expect(visionProviderShortLabel(null)).toBeNull();
     expect(visionProviderShortLabel(undefined)).toBeNull();
     expect(visionProviderShortLabel("")).toBeNull();
+  });
+});
+
+describe("visionRouteSummary", () => {
+  it("combines provider + model when both are known", () => {
+    expect(visionRouteSummary("ollama-vision", "llava:latest")).toBe(
+      "Ollama vision · llava:latest",
+    );
+    expect(visionRouteSummary("llamacpp-vision", "minicpm-v")).toBe(
+      "llama.cpp vision · minicpm-v",
+    );
+  });
+
+  it("falls back to the provider label when the model is missing", () => {
+    expect(visionRouteSummary("ollama-vision", null)).toBe("Ollama vision");
+    expect(visionRouteSummary("ollama-vision", undefined)).toBe("Ollama vision");
+    expect(visionRouteSummary("ollama-vision", "")).toBe("Ollama vision");
+    // Whitespace-only model strings count as "missing".
+    expect(visionRouteSummary("ollama-vision", "   ")).toBe("Ollama vision");
+  });
+
+  it("returns null when the provider is not a known vision route", () => {
+    expect(visionRouteSummary("ollama", "llava")).toBeNull();
+    expect(visionRouteSummary("reflex-stub", null)).toBeNull();
+    expect(visionRouteSummary(null, null)).toBeNull();
+    expect(visionRouteSummary(undefined, "llava")).toBeNull();
   });
 });

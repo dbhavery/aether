@@ -156,6 +156,13 @@ pub struct TelemetryEntry {
     /// Tier the router chose.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tier: Option<String>,
+    /// Model id, when the route used a vision provider that exposes
+    /// one. `None` for text-only turns and for adapters that don't
+    /// report a model (passive adapters / discovery failures). Used
+    /// by the Trust drawer's History tab to annotate media rows with
+    /// the exact model that served them.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
     /// End-to-end latency in ms, if observed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub latency_ms: Option<u64>,
@@ -1027,6 +1034,7 @@ mod tests {
                 persona_id: "aurora".into(),
                 provider: Some("reflex-stub".into()),
                 tier: Some("local".into()),
+                model: None,
                 latency_ms: Some(100 + i as u64),
                 prompt_tokens: None,
                 completion_tokens: None,
@@ -1133,6 +1141,7 @@ humor: "playful"
             persona_id: "aurora".into(),
             provider: None,
             tier: None,
+            model: None,
             latency_ms: None,
             prompt_tokens: None,
             completion_tokens: None,
