@@ -5,12 +5,14 @@ import {
   getMediaPermissions,
   setMediaPermission,
 } from "../lib/api";
+import { pushCue, readCueHistory } from "../lib/cueHistory";
 import type {
   FrameAnalysisOutcome,
   MediaPermissions,
   TranscriptMessage,
 } from "../lib/types";
 
+import { CueHistoryStrip } from "./CueHistoryStrip";
 import { VisionBadge } from "./VisionBadge";
 
 interface Props {
@@ -35,8 +37,14 @@ export function ScreenPanel({ open, onClose, onFrameAnalyzed }: Props) {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
+  const [cueHistory, setCueHistory] = useState<string[]>([]);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setCueHistory(readCueHistory("screen"));
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -148,13 +156,17 @@ export function ScreenPanel({ open, onClose, onFrameAnalyzed }: Props) {
     setBusy(true);
     setErr(null);
     try {
+      const trimmedNote = note.trim();
       const outcome: FrameAnalysisOutcome = await analyzeFrame({
         kind: "screen",
         frame_data_url: dataUrl,
-        note: note.trim() || null,
+        note: trimmedNote || null,
       });
       if (outcome.message) {
         onFrameAnalyzed(outcome.message);
+      }
+      if (trimmedNote && outcome.kind === "frame_analyzed") {
+        setCueHistory(pushCue("screen", trimmedNote));
       }
       if (
         outcome.kind === "permission_denied" ||
@@ -291,6 +303,7 @@ export function ScreenPanel({ open, onClose, onFrameAnalyzed }: Props) {
             placeholder="What should I help with on this screen?"
             className="mt-1 w-full rounded-md border border-aether-border bg-aether-elevated px-2.5 py-1.5 text-[12px] text-aether-text placeholder:text-aether-dim focus:outline-none focus:ring-1 focus:ring-aether-accent"
           />
+          <CueHistoryStrip cues={cueHistory} onPick={(cue) => setNote(cue)} />
           <button
             type="button"
             onClick={captureAndAnalyze}
