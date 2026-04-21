@@ -124,6 +124,14 @@ fn wire_vision_registry(state: &AppState, app_data_dir: Option<&std::path::Path>
         state.attach_vision_persistence(path);
     }
     state.vision_auto_select_if_unset();
+    // First-launch seeding: if `model_per_provider` is missing entries
+    // for any registered adapter, fill them from each adapter's
+    // current model id (the env-supplied default at boot). Idempotent
+    // on later boots — adapters whose models were already persisted
+    // are left alone.
+    if let Err(e) = state.vision_seed_missing_models() {
+        tracing::warn!("vision: first-launch model seeding failed: {e}; continuing");
+    }
     if let Some(label) = state.vision_provider_label() {
         tracing::info!("vision provider active: {}", label);
     } else {

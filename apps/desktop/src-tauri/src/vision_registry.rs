@@ -298,6 +298,48 @@ impl VisionRegistry {
             .cloned()
     }
 
+    /// Boot-time first-launch hook. For every registered provider that
+    /// is NOT already in `model_per_provider`, ask the adapter for its
+    /// `current_model()` and seed the map with that value. If anything
+    /// changed, persist the result so the on-disk file reflects the
+    /// model the user is actually running, even before they've touched
+    /// the badge.
+    ///
+    /// Idempotent: re-running after first launch is a no-op because
+    /// every provider is already in the map. Adapters that don't
+    /// expose `current_model()` (passive future adapters) are skipped
+    /// — the map gets nothing rather than a misleading empty string.
+    ///
+    /// Persistence failures are returned as `Err` but the in-memory
+    /// seed is still applied; the caller logs and continues so a
+    /// read-only data dir doesn't block first launch.
+    pub fn seed_missing_models_from_adapters(&self) -> Result<(), String> {
+        let mut changed = false;
+        {
+            let mut map = self
+                .model_per_provider
+                .write()
+                .expect("vision model map write lock");
+            for p in &self.providers {
+                if map.contains_key(&p.id) {
+                    continue;
+                }
+                let Some(model) = p.provider.current_model() else {
+                    continue;
+                };
+                if model.trim().is_empty() {
+                    continue;
+                }
+                map.insert(p.id.clone(), model);
+                changed = true;
+            }
+        }
+        if changed {
+            self.save_current_state()?;
+        }
+        Ok(())
+    }
+
     fn save_current_state(&self) -> Result<(), String> {
         let Some(path) = &self.persistence_path else {
             return Ok(());
@@ -661,6 +703,109 @@ mod tests {
         r.attach_persistence(path);
         assert_eq!(r.active_id().as_deref(), Some("alpha"));
         assert!(r.model_for("alpha").is_none());
+    }
+
+    #[test]
+    fn seed_missing_models_writes_through_for_first_launch() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("vision_provider.json");
+
+        let mut r = VisionRegistry::empty();
+        r.register(StubProvider::new_with_model("alpha", "alpha-env-model"));
+        r.register(StubProvider::new_with_model("beta", "beta-env-model"));
+        // No persistence file yet — simulates first launch.
+        r.attach_persistence(path.clone());
+        r.auto_select_first_if_unset();
+
+        // Map is empty before seeding.
+        assert!(r.model_for("alpha").is_none());
+        assert!(r.model_for("beta").is_none());
+
+        r.seed_missing_models_from_adapters().unwrap();
+        assert_eq!(r.model_for("alpha").as_deref(), Some("alpha-env-model"));
+        assert_eq!(r.model_for("beta").as_deref(), Some("beta-env-model"));
+
+        // The file must reflect the seed — a fresh registry pointing at
+        // the same path should read those models back.
+        let mut r2 = VisionRegistry::empty();
+        r2.register(StubProvider::new_with_model("alpha", "irrelevant-default"));
+        r2.register(StubProvider::new_with_model("beta", "irrelevant-default"));
+        r2.attach_persistence(path);
+        // attach_persistence calls set_model on each adapter from the
+        // map, so the live model now matches the seeded value.
+        assert_eq!(r2.active_id().as_deref(), Some("alpha"));
+        assert_eq!(r2.active_model().as_deref(), Some("alpha-env-model"));
+        assert_eq!(r2.model_for("beta").as_deref(), Some("beta-env-model"));
+    }
+
+    #[test]
+    fn seed_missing_models_is_idempotent_after_user_pick() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("vision_provider.json");
+
+        let mut r = VisionRegistry::empty();
+        r.register(StubProvider::new_with_model("alpha", "alpha-env"));
+        r.attach_persistence(path);
+        r.auto_select_first_if_unset();
+
+        r.set_active_model("user-picked").unwrap();
+        assert_eq!(r.model_for("alpha").as_deref(), Some("user-picked"));
+
+        // Seeding again must NOT overwrite the user pick.
+        r.seed_missing_models_from_adapters().unwrap();
+        assert_eq!(r.model_for("alpha").as_deref(), Some("user-picked"));
+    }
+
+    #[test]
+    fn seed_missing_models_skips_providers_with_no_current_model() {
+        // A passive adapter that returns None from current_model
+        // should not produce a map entry — better an absent entry than
+        // a misleading empty string.
+        struct PassiveProvider;
+        impl VisionProvider for PassiveProvider {
+            fn id(&self) -> &str {
+                "passive"
+            }
+            fn label(&self) -> String {
+                "passive".into()
+            }
+            fn healthcheck(&self) -> Result<(), L4Error> {
+                Ok(())
+            }
+            fn analyze(&self, _r: VisionRequest) -> Result<VisionResponse, L4Error> {
+                Ok(VisionResponse {
+                    text: String::new(),
+                    prompt_tokens: None,
+                    completion_tokens: None,
+                })
+            }
+            // current_model defaults to None; set_model defaults to no-op.
+        }
+
+        let mut r = VisionRegistry::empty();
+        r.register(Arc::new(PassiveProvider) as Arc<dyn VisionProvider>);
+        r.seed_missing_models_from_adapters().unwrap();
+        assert!(r.model_for("passive").is_none());
+    }
+
+    #[test]
+    fn seed_missing_models_skips_whitespace_only_models() {
+        // Defensive — a buggy adapter that reports an empty string
+        // should be treated as "no model" rather than persisting "".
+        let mut r = VisionRegistry::empty();
+        r.register(StubProvider::new_with_model("blank", "   "));
+        r.seed_missing_models_from_adapters().unwrap();
+        assert!(r.model_for("blank").is_none());
+    }
+
+    #[test]
+    fn seed_missing_models_no_op_when_persistence_unwired() {
+        // Without a persistence path, seeding still updates the
+        // in-memory map but performs no I/O.
+        let mut r = VisionRegistry::empty();
+        r.register(StubProvider::new_with_model("alpha", "alpha-env"));
+        r.seed_missing_models_from_adapters().unwrap();
+        assert_eq!(r.model_for("alpha").as_deref(), Some("alpha-env"));
     }
 
     #[test]

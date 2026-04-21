@@ -303,6 +303,15 @@ impl AppState {
         r.auto_select_first_if_unset();
     }
 
+    /// First-launch hook: seed `model_per_provider` from each
+    /// registered adapter's `current_model()` for entries not already
+    /// present. Idempotent on subsequent launches.
+    #[allow(dead_code)] // Wired only behind provider features in main.rs.
+    pub fn vision_seed_missing_models(&self) -> Result<(), String> {
+        let r = self.vision.read().expect("vision registry read lock");
+        r.seed_missing_models_from_adapters()
+    }
+
     /// Cheap clone of the active vision provider handle. `None` when
     /// no provider is selected (text-only mode) or the registry is
     /// empty — `analyze_frame` uses the absence as a signal to fall
