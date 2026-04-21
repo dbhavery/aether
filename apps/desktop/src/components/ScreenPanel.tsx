@@ -11,6 +11,8 @@ import type {
   TranscriptMessage,
 } from "../lib/types";
 
+import { VisionBadge } from "./VisionBadge";
+
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -279,7 +281,8 @@ export function ScreenPanel({ open, onClose, onFrameAnalyzed }: Props) {
         </div>
 
         <div className="mt-5 border-t border-aether-border pt-4">
-          <label className="block text-[11px] uppercase tracking-[0.18em] text-aether-dim">
+          <VisionBadge />
+          <label className="mt-3 block text-[11px] uppercase tracking-[0.18em] text-aether-dim">
             Optional note
           </label>
           <input

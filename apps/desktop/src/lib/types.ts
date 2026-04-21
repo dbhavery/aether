@@ -130,3 +130,9 @@ export interface FrameAnalysisOutcome {
   message: TranscriptMessage | null;
   error_note: string | null;
 }
+
+/** Status of the active vision provider (returned by `vision_status`). */
+export interface VisionStatus {
+  enabled: boolean;
+  label: string | null;
+}

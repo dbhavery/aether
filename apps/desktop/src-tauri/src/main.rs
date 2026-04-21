@@ -47,6 +47,7 @@ fn main() {
             commands::get_media_permissions,
             commands::set_media_permission,
             commands::analyze_frame,
+            commands::vision_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running aether-desktop");
@@ -83,6 +84,7 @@ fn build_app_state(app: &tauri::AppHandle) -> Result<AppState, Box<dyn std::erro
                 let perms_path = media_permissions::permissions_path_for(&dir);
                 tracing::info!("media permissions file at {}", perms_path.display());
                 state.attach_media_permissions_file(perms_path);
+                attach_vision_provider_if_configured(&mut state);
                 return Ok(state);
             }
             Err(e) => {
@@ -92,5 +94,51 @@ fn build_app_state(app: &tauri::AppHandle) -> Result<AppState, Box<dyn std::erro
             }
         }
     }
-    AppState::new().map_err(Into::into)
+    let mut state = AppState::new()?;
+    attach_vision_provider_if_configured(&mut state);
+    Ok(state)
 }
+
+/// Attach the Ollama vision adapter when the user has opted in via
+/// `AETHER_OLLAMA_VISION_MODEL`. No-op when the env var is unset, the
+/// config parses badly, or the daemon does not respond — the
+/// `analyze_frame` command falls back cleanly in any of those cases.
+///
+/// Compiled out entirely when the `ollama-provider` feature is off so
+/// the OSS default build pulls no network dependencies.
+#[cfg(feature = "ollama-provider")]
+fn attach_vision_provider_if_configured(state: &mut AppState) {
+    use std::sync::Arc;
+
+    use aether_l4_router::{OllamaVisionConfig, OllamaVisionProvider, VisionProvider};
+    let Some(parsed) = OllamaVisionConfig::from_env() else {
+        return;
+    };
+    match parsed {
+        Ok(cfg) => {
+            tracing::info!(
+                "vision provider candidate: ollama model={} base={}",
+                cfg.model,
+                cfg.base_url
+            );
+            let provider = OllamaVisionProvider::new(cfg);
+            if let Err(e) = provider.healthcheck() {
+                tracing::warn!(
+                    "vision provider healthcheck failed: {e}; falling back to text-only frame analysis"
+                );
+                return;
+            }
+            let arc: Arc<dyn VisionProvider> = Arc::new(provider);
+            tracing::info!("vision provider attached: {}", arc.label());
+            state.attach_vision_provider(arc);
+        }
+        Err(e) => {
+            tracing::warn!(
+                "AETHER_OLLAMA_VISION_* config invalid: {e}; falling back to text-only frame analysis"
+            );
+        }
+    }
+}
+
+#[cfg(not(feature = "ollama-provider"))]
+fn attach_vision_provider_if_configured(_state: &mut AppState) {}

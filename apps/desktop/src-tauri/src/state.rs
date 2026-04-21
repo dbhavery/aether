@@ -17,6 +17,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 
 use aether_l1_interaction::{TurnEngine, TurnRequest, TurnResult, TurnRouter};
+use aether_l4_router::VisionProvider;
 #[cfg(feature = "sqlite-backend")]
 use aether_l2_memory::{DurableSessionStore, SqliteSessionMemoryStore};
 use aether_l2_memory::{InMemorySessionMemoryStore, SessionMemoryStore};
@@ -103,6 +104,12 @@ pub struct AppState {
     /// — the in-memory copy still works, but changes do not survive
     /// restarts.
     media_permissions_path: Option<PathBuf>,
+    /// Optional vision-capable provider for `analyze_frame`. Booted
+    /// from env on shell startup (`AETHER_OLLAMA_VISION_MODEL`); when
+    /// `None` the analyze-frame path falls back to its text-only
+    /// behaviour. Stored behind `Arc` so command handlers can clone
+    /// the handle cheaply across IPC calls.
+    vision_provider: Option<Arc<dyn VisionProvider>>,
 }
 
 /// How many telemetry entries the shell retains for the History tab.
@@ -239,7 +246,31 @@ impl AppState {
             telemetry: Mutex::new(VecDeque::with_capacity(TELEMETRY_BUFFER_CAPACITY)),
             media_permissions: RwLock::new(MediaPermissions::defaults()),
             media_permissions_path: None,
+            vision_provider: None,
         })
+    }
+
+    /// Attach a vision-capable provider. Called from `build_app_state`
+    /// in main.rs when `AETHER_OLLAMA_VISION_MODEL` is set and the
+    /// daemon healthchecks. Idempotent; the most recent attach wins.
+    #[allow(dead_code)] // Wired only under the ollama-provider feature in main.rs.
+    pub fn attach_vision_provider(&mut self, provider: Arc<dyn VisionProvider>) {
+        self.vision_provider = Some(provider);
+    }
+
+    /// Cheap clone of the active vision provider handle. `None` when
+    /// none was wired at boot — `analyze_frame` uses the absence as a
+    /// signal to fall back to its text-only path.
+    pub fn vision_provider(&self) -> Option<Arc<dyn VisionProvider>> {
+        self.vision_provider.clone()
+    }
+
+    /// Human-readable label for the active vision provider, if any.
+    /// Used by the UI's "About vision" status surface (vision_status
+    /// command).
+    #[allow(dead_code)] // Surfaced via the vision_status Tauri command.
+    pub fn vision_provider_label(&self) -> Option<String> {
+        self.vision_provider.as_ref().map(|p| p.label())
     }
 
     /// Wire a disk-backed media-permissions file into this state. Loads

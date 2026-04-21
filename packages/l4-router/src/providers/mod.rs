@@ -7,8 +7,12 @@
 
 #[cfg(feature = "ollama-provider")]
 pub mod ollama;
+#[cfg(feature = "ollama-provider")]
+pub mod ollama_vision;
 
 #[cfg(feature = "ollama-provider")]
 pub use ollama::{
     ChatCompletion, ChatMessage, MessageRole, OllamaConfig, OllamaConfigError, OllamaProvider,
 };
+#[cfg(feature = "ollama-provider")]
+pub use ollama_vision::{OllamaVisionConfig, OllamaVisionProvider};

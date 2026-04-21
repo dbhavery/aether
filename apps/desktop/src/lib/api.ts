@@ -16,6 +16,7 @@ import type {
   TranscriptMessage,
   TrustAuditRow,
   TurnOutcome,
+  VisionStatus,
 } from "./types";
 
 export async function companionBanner(): Promise<CompanionBanner> {
@@ -145,4 +146,8 @@ export async function analyzeFrame(
   req: AnalyzeFrameRequest,
 ): Promise<FrameAnalysisOutcome> {
   return invoke<FrameAnalysisOutcome>("analyze_frame", { request: req });
+}
+
+export async function visionStatus(): Promise<VisionStatus> {
+  return invoke<VisionStatus>("vision_status");
 }

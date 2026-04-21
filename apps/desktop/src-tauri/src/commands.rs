@@ -17,6 +17,8 @@ use aether_l7_trust::{
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
 
+use aether_l4_router::{split_data_url, VisionRequest};
+
 use crate::media_permissions::{CaptureGate, MediaKind, MediaPermissions, PermissionState};
 #[cfg(feature = "ollama-provider")]
 use crate::memory_router::PROVIDER_ERROR_PREFIX;
@@ -771,6 +773,28 @@ pub fn get_media_permissions(state: State<'_, AppState>) -> MediaPermissions {
     state.media_permissions()
 }
 
+/// Status of the active vision provider, if any. The UI surfaces this
+/// in the camera/screen panels so the user can tell at a glance
+/// whether the next "Analyze" call will hit a vision-capable model or
+/// fall back to text-only output.
+#[derive(Debug, Clone, Serialize)]
+pub struct VisionStatus {
+    /// `true` when a vision provider was wired at boot.
+    pub enabled: bool,
+    /// Human-readable label, e.g. `"Ollama vision · llava · http://..."`.
+    /// `None` when `enabled = false`.
+    pub label: Option<String>,
+}
+
+#[tauri::command]
+pub fn vision_status(state: State<'_, AppState>) -> VisionStatus {
+    let label = state.vision_provider_label();
+    VisionStatus {
+        enabled: label.is_some(),
+        label,
+    }
+}
+
 /// Update one device's permission and persist the new state when a
 /// disk-backed file is wired. Wire format mirrors the JSON file:
 /// `kind ∈ {"camera","screen"}`, `state ∈ {"allow","ask","deny"}`.
@@ -963,12 +987,21 @@ pub fn analyze_frame(
         }
     };
 
-    let result = {
+    let mut result = {
         let a = state.active.read().expect("active read lock");
         a.engine
             .handle_turn(req.clone())
             .map_err(|e| format!("frame turn engine: {e}"))?
     };
+
+    // If a vision provider is wired AND policy allowed the turn,
+    // replace the text-only model output with a real vision response.
+    // The handle_turn call already produced the L5 audit row and ran
+    // policy — we keep that and just substitute the assistant text +
+    // provider/tier metadata. When vision fails the text-only output
+    // stays as a safe fallback.
+    let vision_used =
+        maybe_apply_vision(&state, &mut result, &request.frame_data_url, &cue);
 
     let ts_ms = state.next_ts();
     let _ = state.memory.append(TurnMemoryRecord {
@@ -979,6 +1012,7 @@ pub fn analyze_frame(
         timestamp_ms: ts_ms,
     });
 
+    let _ = vision_used; // keeps the binding live for clippy
     let (kind_label, message) = match (&result.route, &result.block) {
         (Some(r), _) => {
             let assistant_ts = state.next_ts();
@@ -1087,6 +1121,74 @@ pub fn analyze_frame(
 ///   shell <cmd>    → ShellExec      (Deny)
 ///   browse <url>   → BrowserOpen    (NeedsUpgrade)
 ///   anything else  → FilesRead with ResourceScope::None (allowed).
+/// If a vision provider is wired and the policy engine returned a
+/// route, decode the data URL and call the provider. On success,
+/// substitute the assistant text + provider/tier metadata in `result`
+/// so downstream memory/telemetry/transcript see the vision output.
+/// Failures (no provider, malformed URL, daemon error) leave `result`
+/// untouched — the caller falls back to the existing text-only output.
+///
+/// Returns `true` when the vision call ran and substituted content,
+/// `false` otherwise. Currently unused by the caller but exposed in
+/// case a future telemetry surface wants to count vision-vs-fallback
+/// usage.
+fn maybe_apply_vision(
+    state: &State<'_, AppState>,
+    result: &mut TurnResult,
+    frame_data_url: &str,
+    cue: &str,
+) -> bool {
+    let Some(provider) = state.vision_provider() else {
+        return false;
+    };
+    // Only override when policy actually allowed a route. A blocked
+    // turn keeps its block — vision should never resurrect a denied
+    // action.
+    let Some(route) = result.route.as_mut() else {
+        return false;
+    };
+    let (mime, body) = match split_data_url(frame_data_url) {
+        Ok(parts) => parts,
+        Err(e) => {
+            tracing::warn!("vision: data URL decode failed: {e}; using text-only output");
+            return false;
+        }
+    };
+    let label = provider.label();
+    let id = provider.id().to_string();
+    match provider.analyze(VisionRequest {
+        cue: cue.to_string(),
+        image_b64: body,
+        mime,
+    }) {
+        Ok(resp) => {
+            route.response_text = resp.text;
+            route.provider = id;
+            route.tier = label;
+            // Token counts are merged when the vision adapter reports
+            // them; otherwise leave whatever the text path stamped.
+            if let Some(tokens) = route.tokens.as_mut() {
+                if let Some(p) = resp.prompt_tokens {
+                    tokens.prompt = p;
+                }
+                if let Some(c) = resp.completion_tokens {
+                    tokens.completion = c;
+                }
+            } else if resp.prompt_tokens.is_some() || resp.completion_tokens.is_some() {
+                route.tokens = Some(aether_l1_interaction::TokenUsage {
+                    prompt: resp.prompt_tokens.unwrap_or(0),
+                    completion: resp.completion_tokens.unwrap_or(0),
+                });
+            }
+            true
+        }
+        Err(e) => {
+            tracing::warn!("vision: provider analyze failed: {e}; using text-only output");
+            false
+        }
+    }
+}
+
 fn parse_command(line: &str) -> (Capability, ResourceScope) {
     let mut parts = line.splitn(2, char::is_whitespace);
     let verb = parts.next().unwrap_or("").to_ascii_lowercase();
