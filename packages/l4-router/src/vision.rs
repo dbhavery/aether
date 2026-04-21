@@ -80,6 +80,25 @@ pub trait VisionProvider: Send + Sync {
     fn list_models(&self) -> Result<Vec<String>, L4Error> {
         Ok(Vec::new())
     }
+    /// Switch the model this provider uses for subsequent `analyze`
+    /// calls. Default impl is a no-op returning `Ok(())` so passive
+    /// adapters (ones that cannot change model at runtime) inherit the
+    /// right behaviour without forcing every implementor to override.
+    ///
+    /// Implementors that support runtime model swap should store the id
+    /// behind interior mutability (e.g. `RwLock<String>`) so the trait
+    /// stays `&self`. Existing in-flight `analyze` calls keep whichever
+    /// model they captured on entry — the swap is per-call.
+    fn set_model(&self, _id: &str) -> Result<(), L4Error> {
+        Ok(())
+    }
+    /// Current model id this provider is pointed at. `None` when the
+    /// adapter does not expose a model field (passive adapters). The
+    /// default impl returns `None` so implementors that have a concept
+    /// of "current model" must opt in.
+    fn current_model(&self) -> Option<String> {
+        None
+    }
 }
 
 /// Strip the `data:image/...;base64,` prefix off a data URL and return

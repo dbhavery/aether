@@ -314,6 +314,21 @@ impl AppState {
         r.set_active(id)
     }
 
+    /// Current model id of the active vision provider, if any.
+    pub fn vision_active_model(&self) -> Option<String> {
+        let r = self.vision.read().expect("vision registry read lock");
+        r.active_model()
+    }
+
+    /// Switch the model used by the active vision provider. Persists
+    /// alongside the active-provider selection so a future provider
+    /// swap restores the same pick. Errors when no provider is active
+    /// or the adapter rejects the id.
+    pub fn set_active_vision_model(&self, model: &str) -> Result<(), String> {
+        let r = self.vision.read().expect("vision registry read lock");
+        r.set_active_model(model)
+    }
+
     /// Wire a disk-backed media-permissions file into this state. Loads
     /// the current contents (or falls back to defaults if the file is
     /// missing/malformed) and remembers the path so subsequent writes

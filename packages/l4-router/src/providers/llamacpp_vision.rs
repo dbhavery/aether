@@ -39,6 +39,7 @@
 //! ```
 
 use std::env;
+use std::sync::RwLock;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -107,8 +108,15 @@ impl LlamaCppVisionConfig {
 }
 
 /// Vision-capable llama.cpp HTTP adapter.
+///
+/// Model id is held behind an `RwLock` so the shell's
+/// `set_active_vision_model` command can hot-swap the model without
+/// rebuilding the provider. Base URL and timeout are immutable after
+/// construction — swapping those requires a restart anyway.
 pub struct LlamaCppVisionProvider {
-    config: LlamaCppVisionConfig,
+    base_url: String,
+    model: RwLock<String>,
+    timeout_ms: u64,
     agent: ureq::Agent,
 }
 
@@ -234,17 +242,31 @@ impl LlamaCppVisionProvider {
         let agent = ureq::AgentBuilder::new()
             .timeout(Duration::from_millis(config.timeout_ms))
             .build();
-        Self { config, agent }
+        Self {
+            base_url: config.base_url,
+            model: RwLock::new(config.model),
+            timeout_ms: config.timeout_ms,
+            agent,
+        }
     }
 
-    /// Model id this provider is pointed at.
-    pub fn model(&self) -> &str {
-        &self.config.model
+    /// Current model id this provider is pointed at.
+    pub fn model(&self) -> String {
+        self.model
+            .read()
+            .expect("llamacpp-vision model read lock")
+            .clone()
     }
 
     /// Base URL this provider is pointed at.
     pub fn base_url(&self) -> &str {
-        &self.config.base_url
+        &self.base_url
+    }
+
+    /// Per-request timeout in milliseconds. Immutable after construction.
+    #[allow(dead_code)]
+    pub fn timeout_ms(&self) -> u64 {
+        self.timeout_ms
     }
 }
 
@@ -254,17 +276,14 @@ impl VisionProvider for LlamaCppVisionProvider {
     }
 
     fn label(&self) -> String {
-        format!(
-            "llama.cpp vision · {} · {}",
-            self.config.model, self.config.base_url
-        )
+        format!("llama.cpp vision · {} · {}", self.model(), self.base_url)
     }
 
     fn healthcheck(&self) -> Result<(), L4Error> {
         // llama-server exposes `/health` on recent builds; older builds
         // serve a 200 on `/v1/models`. We try `/health` first and
         // accept anything that did not refuse the connection.
-        let url = format!("{}/health", self.config.base_url.trim_end_matches('/'));
+        let url = format!("{}/health", self.base_url.trim_end_matches('/'));
         match self.agent.get(&url).call() {
             Ok(_) => Ok(()),
             Err(e) => Err(L4Error::ProviderUnknown {
@@ -274,7 +293,7 @@ impl VisionProvider for LlamaCppVisionProvider {
     }
 
     fn list_models(&self) -> Result<Vec<String>, L4Error> {
-        let url = format!("{}/v1/models", self.config.base_url.trim_end_matches('/'));
+        let url = format!("{}/v1/models", self.base_url.trim_end_matches('/'));
         let resp = self
             .agent
             .get(&url)
@@ -287,6 +306,24 @@ impl VisionProvider for LlamaCppVisionProvider {
                 detail: format!("llamacpp-vision list_models body: {e}"),
             })?;
         Ok(parse_models_response(&json))
+    }
+
+    fn set_model(&self, id: &str) -> Result<(), L4Error> {
+        let trimmed = id.trim();
+        if trimmed.is_empty() {
+            return Err(L4Error::ProviderBadResponse {
+                detail: "llamacpp-vision set_model: id must not be empty".to_string(),
+            });
+        }
+        *self
+            .model
+            .write()
+            .expect("llamacpp-vision model write lock") = trimmed.to_string();
+        Ok(())
+    }
+
+    fn current_model(&self) -> Option<String> {
+        Some(self.model())
     }
 
     fn analyze(&self, req: VisionRequest) -> Result<VisionResponse, L4Error> {
@@ -302,9 +339,10 @@ impl VisionProvider for LlamaCppVisionProvider {
         };
         let url = format!(
             "{}/v1/chat/completions",
-            self.config.base_url.trim_end_matches('/')
+            self.base_url.trim_end_matches('/')
         );
-        let payload = build_vision_payload(&self.config.model, &cue, &req.image_b64, &req.mime);
+        let model = self.model();
+        let payload = build_vision_payload(&model, &cue, &req.image_b64, &req.mime);
         let resp = self
             .agent
             .post(&url)
@@ -470,6 +508,51 @@ mod tests {
             })
             .unwrap_err();
         assert!(matches!(err, L4Error::ProviderBadResponse { .. }));
+    }
+
+    #[test]
+    fn set_model_round_trips_and_label_reflects_new_model() {
+        let cfg = LlamaCppVisionConfig {
+            base_url: DEFAULT_BASE_URL.to_string(),
+            model: "llava-v1.6".to_string(),
+            timeout_ms: 1_000,
+        };
+        let p = LlamaCppVisionProvider::new(cfg);
+        assert_eq!(p.model(), "llava-v1.6");
+        assert_eq!(p.current_model().as_deref(), Some("llava-v1.6"));
+        assert!(p.label().contains("llava-v1.6"));
+
+        p.set_model("minicpm-v").expect("set_model");
+        assert_eq!(p.model(), "minicpm-v");
+        assert_eq!(p.current_model().as_deref(), Some("minicpm-v"));
+        assert!(p.label().contains("minicpm-v"));
+        assert!(!p.label().contains("llava-v1.6"));
+    }
+
+    #[test]
+    fn set_model_rejects_empty_id() {
+        let cfg = LlamaCppVisionConfig {
+            base_url: DEFAULT_BASE_URL.to_string(),
+            model: "llava".to_string(),
+            timeout_ms: 1_000,
+        };
+        let p = LlamaCppVisionProvider::new(cfg);
+        assert!(p.set_model("").is_err());
+        assert!(p.set_model("   ").is_err());
+        assert_eq!(p.model(), "llava");
+    }
+
+    #[test]
+    fn build_vision_payload_uses_current_model_after_swap() {
+        let cfg = LlamaCppVisionConfig {
+            base_url: DEFAULT_BASE_URL.to_string(),
+            model: "old".to_string(),
+            timeout_ms: 1_000,
+        };
+        let p = LlamaCppVisionProvider::new(cfg);
+        p.set_model("new").unwrap();
+        let v = build_vision_payload(&p.model(), "hi", "DATA", "image/jpeg");
+        assert_eq!(v.get("model").unwrap(), "new");
     }
 
     #[test]

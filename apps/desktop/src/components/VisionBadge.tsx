@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import {
   listVisionModels,
+  setActiveVisionModel,
   setActiveVisionProvider,
   visionStatus,
 } from "../lib/api";
@@ -44,6 +45,7 @@ export function VisionBadge({ refreshKey }: Props) {
             enabled: false,
             active_id: null,
             label: null,
+            active_model: null,
             providers: [],
           });
       });
@@ -154,6 +156,20 @@ export function VisionBadge({ refreshKey }: Props) {
               loading={modelsLoading}
               models={models}
               activeProviderId={activeId ?? null}
+              activeModel={status.active_model ?? null}
+              busy={busy}
+              onPickModel={async (modelId) => {
+                setBusy(true);
+                setErr(null);
+                try {
+                  const updated = await setActiveVisionModel(modelId);
+                  setStatus(updated);
+                } catch (e) {
+                  setErr(String(e));
+                } finally {
+                  setBusy(false);
+                }
+              }}
             />
           )}
         </>
@@ -177,19 +193,26 @@ export function VisionBadge({ refreshKey }: Props) {
 
 /**
  * Compact "models on this provider" panel under the dropdown.
+ *
  * Failures collapse to a quiet "models unavailable" hint so the
- * dropdown UI never spams. Selecting a model is NOT supported in
- * this slice — model swap inside a provider is a follow-up; this
- * surface is informational only.
+ * dropdown UI never spams. Each chip is clickable — clicking swaps
+ * the active provider's model via `set_active_vision_model`. The
+ * currently-selected model gets an "Active" ring.
  */
 function ModelListSection({
   loading,
   models,
   activeProviderId,
+  activeModel,
+  busy,
+  onPickModel,
 }: {
   loading: boolean;
   models: VisionModelList | null;
   activeProviderId: string | null;
+  activeModel: string | null;
+  busy: boolean;
+  onPickModel: (modelId: string) => void | Promise<void>;
 }) {
   if (loading) {
     return (
@@ -219,16 +242,29 @@ function ModelListSection({
         role="list"
         aria-label="Available models"
       >
-        {models.models.map((m) => (
-          <span
-            key={m}
-            role="listitem"
-            title={m}
-            className="max-w-[14rem] truncate rounded-full border border-aether-border bg-aether-elevated/60 px-2 py-0.5 font-mono text-[10.5px] text-aether-muted"
-          >
-            {m}
-          </span>
-        ))}
+        {models.models.map((m) => {
+          const isActive = activeModel !== null && m === activeModel;
+          const base =
+            "max-w-[14rem] truncate rounded-full border px-2 py-0.5 font-mono text-[10.5px]";
+          const activeStyle =
+            "border-aether-ok/60 bg-aether-ok/10 text-aether-ok";
+          const idleStyle =
+            "border-aether-border bg-aether-elevated/60 text-aether-muted hover:border-aether-accent/60 hover:text-aether-text";
+          return (
+            <button
+              key={m}
+              type="button"
+              role="listitem"
+              title={isActive ? `${m} (active)` : `Switch to ${m}`}
+              aria-pressed={isActive}
+              disabled={busy || isActive}
+              onClick={() => onPickModel(m)}
+              className={`${base} ${isActive ? activeStyle : idleStyle} disabled:cursor-default disabled:opacity-70`}
+            >
+              {m}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

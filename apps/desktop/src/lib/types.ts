@@ -143,6 +143,8 @@ export interface VisionStatus {
   enabled: boolean;
   active_id: string | null;
   label: string | null;
+  /** Active provider's current model id, if the adapter exposes one. */
+  active_model: string | null;
   providers: VisionProviderInfo[];
 }
 

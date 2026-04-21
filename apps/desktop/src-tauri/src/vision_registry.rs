@@ -24,6 +24,7 @@
 //! longer registered, the registry falls back to the first registered
 //! provider (insertion order) — never crashes the shell.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::io::{self, ErrorKind};
 use std::path::{Path, PathBuf};
@@ -32,13 +33,21 @@ use std::sync::{Arc, RwLock};
 use aether_l4_router::VisionProvider;
 use serde::{Deserialize, Serialize};
 
-/// Wire shape persisted to `vision_provider.json`. Tiny on purpose —
-/// the active id is the only piece of state the user controls.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+/// Wire shape persisted to `vision_provider.json`. Additive contract —
+/// old files that only carry `active` keep loading because
+/// `model_per_provider` has a serde default.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct VisionPersistedState {
     /// Provider id (matches `VisionProvider::id`). `None` when the
     /// user has explicitly cleared the selection (text-only mode).
     pub active: Option<String>,
+    /// Per-provider last-selected model id. Survives a provider swap
+    /// so switching Ollama → llama.cpp → Ollama restores the Ollama
+    /// model the user previously picked. Uses a BTreeMap so the JSON
+    /// output is deterministic (stable key order) — tests assert on
+    /// round-trips.
+    #[serde(default)]
+    pub model_per_provider: BTreeMap<String, String>,
 }
 
 /// Status entry shown to the UI for one registered provider.
@@ -59,6 +68,10 @@ pub struct VisionProviderInfo {
 pub struct VisionRegistry {
     providers: Vec<RegisteredProvider>,
     active: RwLock<Option<String>>,
+    /// Last-selected model id per provider id. Persisted to
+    /// `vision_provider.json` and applied to each provider via
+    /// `VisionProvider::set_model` at attach time and on provider swap.
+    model_per_provider: RwLock<BTreeMap<String, String>>,
     persistence_path: Option<PathBuf>,
 }
 
@@ -73,6 +86,7 @@ impl VisionRegistry {
         Self {
             providers: Vec::new(),
             active: RwLock::new(None),
+            model_per_provider: RwLock::new(BTreeMap::new()),
             persistence_path: None,
         }
     }
@@ -93,16 +107,43 @@ impl VisionRegistry {
     }
 
     /// Wire a disk-backed persistence file. Reads the persisted active
-    /// id and applies it (with the fallback rules described in the
-    /// module docs). Subsequent `set_active` calls write back through
-    /// this path.
+    /// id and the per-provider model map, applies each persisted model
+    /// to its matching adapter via `VisionProvider::set_model`, and
+    /// applies the active id (with fallback rules). Subsequent
+    /// `set_active` / `set_active_model` calls write back through this
+    /// path.
     pub fn attach_persistence(&mut self, path: PathBuf) {
         let persisted = load_persisted(&path);
         self.persistence_path = Some(path);
-        self.apply_persisted_active(persisted);
+        self.apply_persisted(persisted);
     }
 
-    fn apply_persisted_active(&self, persisted: VisionPersistedState) {
+    fn apply_persisted(&self, persisted: VisionPersistedState) {
+        // Hydrate the model map first so that once the active provider
+        // is set below, it's already pointed at the right model.
+        {
+            let mut map = self
+                .model_per_provider
+                .write()
+                .expect("vision model map write lock");
+            *map = persisted.model_per_provider.clone();
+        }
+        // Push each persisted model into its matching adapter. Unknown
+        // provider ids are tolerated — they may belong to a feature
+        // that's not compiled in this build; we keep the entry in the
+        // map so a future boot that does have the feature inherits it.
+        for (id, model) in persisted.model_per_provider.iter() {
+            if let Some(p) = self.providers.iter().find(|p| p.id == *id) {
+                if let Err(e) = p.provider.set_model(model) {
+                    tracing::warn!(
+                        "vision: persisted model {:?} for provider {:?} rejected: {e}",
+                        model,
+                        id
+                    );
+                }
+            }
+        }
+
         let mut w = self.active.write().expect("vision active write lock");
         match persisted.active {
             Some(id) if self.providers.iter().any(|p| p.id == id) => {
@@ -172,7 +213,8 @@ impl VisionRegistry {
     /// switch to text-only mode (the assistant will run the existing
     /// text-fallback path on subsequent `analyze_frame` calls).
     /// Persists the new selection through the attached file when one
-    /// is wired.
+    /// is wired, and reapplies the newly-active provider's persisted
+    /// model (if any) so the swap restores the user's last pick.
     pub fn set_active(&self, id: Option<String>) -> Result<(), String> {
         if let Some(want) = id.as_deref() {
             if !self.providers.iter().any(|p| p.id == want) {
@@ -183,12 +225,96 @@ impl VisionRegistry {
             let mut w = self.active.write().expect("vision active write lock");
             *w = id.clone();
         }
-        if let Some(path) = &self.persistence_path {
-            if let Err(e) = save_persisted(path, &VisionPersistedState { active: id }) {
-                return Err(format!("persist vision provider: {e}"));
+
+        // Reapply any persisted model for the newly-active provider so
+        // the adapter's model state matches what the user last picked
+        // on that provider.
+        if let Some(active_id) = id.as_deref() {
+            let persisted_model = self
+                .model_per_provider
+                .read()
+                .expect("vision model map read lock")
+                .get(active_id)
+                .cloned();
+            if let Some(model) = persisted_model {
+                if let Some(p) = self.providers.iter().find(|p| p.id == active_id) {
+                    if let Err(e) = p.provider.set_model(&model) {
+                        tracing::warn!(
+                            "vision: replaying persisted model {:?} for {:?} failed: {e}",
+                            model,
+                            active_id
+                        );
+                    }
+                }
             }
         }
-        Ok(())
+
+        self.save_current_state()
+    }
+
+    /// Switch the model used by the currently-active provider. Errors
+    /// when no provider is active, when the target provider has been
+    /// removed from the registry, or when the adapter rejects the id.
+    /// On success the new model is persisted under the active provider
+    /// id so a future provider swap restores the same pick.
+    pub fn set_active_model(&self, model: &str) -> Result<(), String> {
+        let active_id = self
+            .active_id()
+            .ok_or_else(|| "no active vision provider".to_string())?;
+        let provider = self
+            .providers
+            .iter()
+            .find(|p| p.id == active_id)
+            .ok_or_else(|| format!("active provider {active_id} no longer registered"))?;
+        provider
+            .provider
+            .set_model(model)
+            .map_err(|e| format!("set_model: {e}"))?;
+        {
+            let mut map = self
+                .model_per_provider
+                .write()
+                .expect("vision model map write lock");
+            map.insert(active_id, model.to_string());
+        }
+        self.save_current_state()
+    }
+
+    /// Currently-active provider's model id, if any. Reads the live
+    /// adapter (not the persisted map) so callers always see what the
+    /// next `analyze` call will actually use.
+    pub fn active_model(&self) -> Option<String> {
+        self.active().and_then(|p| p.current_model())
+    }
+
+    /// Snapshot of the per-provider persisted model map. Exposed for
+    /// the model-cache layer and tests.
+    #[allow(dead_code)]
+    pub fn model_for(&self, provider_id: &str) -> Option<String> {
+        self.model_per_provider
+            .read()
+            .expect("vision model map read lock")
+            .get(provider_id)
+            .cloned()
+    }
+
+    fn save_current_state(&self) -> Result<(), String> {
+        let Some(path) = &self.persistence_path else {
+            return Ok(());
+        };
+        let state = VisionPersistedState {
+            active: self
+                .active
+                .read()
+                .expect("vision active read lock")
+                .clone(),
+            model_per_provider: self
+                .model_per_provider
+                .read()
+                .expect("vision model map read lock")
+                .clone(),
+        };
+        save_persisted(path, &state).map_err(|e| format!("persist vision provider: {e}"))
     }
 
     /// Number of registered providers. Useful for boot-time logging.
@@ -245,13 +371,19 @@ mod tests {
     struct StubProvider {
         id: &'static str,
         label_text: String,
+        model: RwLock<String>,
     }
 
     impl StubProvider {
         fn new(id: &'static str) -> Arc<Self> {
+            Self::new_with_model(id, "default-model")
+        }
+
+        fn new_with_model(id: &'static str, model: &str) -> Arc<Self> {
             Arc::new(Self {
                 id,
                 label_text: format!("stub · {id}"),
+                model: RwLock::new(model.to_string()),
             })
         }
     }
@@ -261,10 +393,21 @@ mod tests {
             self.id
         }
         fn label(&self) -> String {
-            self.label_text.clone()
+            format!(
+                "{} ({})",
+                self.label_text,
+                self.model.read().unwrap().clone()
+            )
         }
         fn healthcheck(&self) -> Result<(), L4Error> {
             Ok(())
+        }
+        fn set_model(&self, id: &str) -> Result<(), L4Error> {
+            *self.model.write().unwrap() = id.to_string();
+            Ok(())
+        }
+        fn current_model(&self) -> Option<String> {
+            Some(self.model.read().unwrap().clone())
         }
         fn analyze(&self, _req: VisionRequest) -> Result<VisionResponse, L4Error> {
             Ok(VisionResponse {
@@ -362,6 +505,7 @@ mod tests {
             &path,
             &VisionPersistedState {
                 active: Some("ghost".into()),
+                ..Default::default()
             },
         )
         .unwrap();
@@ -378,7 +522,7 @@ mod tests {
     fn persisted_explicit_none_keeps_text_only_mode() {
         let tmp = TempDir::new().unwrap();
         let path = tmp.path().join("vision_provider.json");
-        save_persisted(&path, &VisionPersistedState { active: None }).unwrap();
+        save_persisted(&path, &VisionPersistedState::default()).unwrap();
 
         let mut r = VisionRegistry::empty();
         r.register(StubProvider::new("alpha"));
@@ -398,6 +542,125 @@ mod tests {
         assert!(r.active_id().is_none());
         r.auto_select_first_if_unset();
         assert_eq!(r.active_id().as_deref(), Some("alpha"));
+    }
+
+    #[test]
+    fn set_active_model_writes_through_provider_and_map() {
+        let mut r = VisionRegistry::empty();
+        r.register(StubProvider::new("alpha"));
+        r.register(StubProvider::new("beta"));
+        r.set_active(Some("alpha".into())).unwrap();
+
+        assert_eq!(r.active_model().as_deref(), Some("default-model"));
+        r.set_active_model("llava:7b").expect("set_active_model");
+        assert_eq!(r.active_model().as_deref(), Some("llava:7b"));
+        assert_eq!(r.model_for("alpha").as_deref(), Some("llava:7b"));
+        // Other provider untouched.
+        assert!(r.model_for("beta").is_none());
+    }
+
+    #[test]
+    fn set_active_model_errors_when_no_active_provider() {
+        let mut r = VisionRegistry::empty();
+        r.register(StubProvider::new("alpha"));
+        // No set_active or auto-select.
+        let err = r.set_active_model("x").unwrap_err();
+        assert!(err.contains("no active"));
+    }
+
+    #[test]
+    fn provider_swap_preserves_each_providers_last_model() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("vision_provider.json");
+
+        let mut r = VisionRegistry::empty();
+        r.register(StubProvider::new("alpha"));
+        r.register(StubProvider::new("beta"));
+        r.attach_persistence(path.clone());
+
+        // Pick alpha/llava, then beta/gemma3, then swap back to alpha.
+        r.set_active(Some("alpha".into())).unwrap();
+        r.set_active_model("llava").unwrap();
+
+        r.set_active(Some("beta".into())).unwrap();
+        r.set_active_model("gemma3:vision").unwrap();
+
+        // Swap back to alpha — the adapter's live model should be the
+        // previously-picked llava, not beta's gemma3.
+        r.set_active(Some("alpha".into())).unwrap();
+        assert_eq!(r.active_model().as_deref(), Some("llava"));
+
+        // Swap forward again — beta should still know gemma3.
+        r.set_active(Some("beta".into())).unwrap();
+        assert_eq!(r.active_model().as_deref(), Some("gemma3:vision"));
+    }
+
+    #[test]
+    fn persisted_model_map_round_trips_and_reapplies_on_reopen() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("vision_provider.json");
+
+        {
+            let mut r = VisionRegistry::empty();
+            r.register(StubProvider::new("alpha"));
+            r.register(StubProvider::new("beta"));
+            r.attach_persistence(path.clone());
+            r.set_active(Some("alpha".into())).unwrap();
+            r.set_active_model("llava").unwrap();
+            r.set_active(Some("beta".into())).unwrap();
+            r.set_active_model("gemma3").unwrap();
+        }
+
+        // Reopen — providers start at "default-model"; attach_persistence
+        // should push llava/gemma3 into each one via set_model, and the
+        // active provider should be beta (last set).
+        let mut r2 = VisionRegistry::empty();
+        r2.register(StubProvider::new("alpha"));
+        r2.register(StubProvider::new("beta"));
+        r2.attach_persistence(path);
+
+        assert_eq!(r2.active_id().as_deref(), Some("beta"));
+        assert_eq!(r2.active_model().as_deref(), Some("gemma3"));
+        assert_eq!(r2.model_for("alpha").as_deref(), Some("llava"));
+        assert_eq!(r2.model_for("beta").as_deref(), Some("gemma3"));
+    }
+
+    #[test]
+    fn persisted_model_for_unknown_provider_is_retained_but_not_applied() {
+        // A persisted entry names a provider id we don't have compiled
+        // in this build. The map should survive so a future build that
+        // DOES register the provider inherits the pick.
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("vision_provider.json");
+        let mut seed = VisionPersistedState::default();
+        seed.active = Some("alpha".into());
+        seed.model_per_provider
+            .insert("ghost".into(), "phantom-model".into());
+        seed.model_per_provider
+            .insert("alpha".into(), "llava".into());
+        save_persisted(&path, &seed).unwrap();
+
+        let mut r = VisionRegistry::empty();
+        r.register(StubProvider::new("alpha"));
+        r.attach_persistence(path);
+
+        assert_eq!(r.active_model().as_deref(), Some("llava"));
+        assert_eq!(r.model_for("ghost").as_deref(), Some("phantom-model"));
+    }
+
+    #[test]
+    fn old_persistence_without_model_map_still_loads() {
+        // Files written before model_per_provider existed carry only
+        // the `active` field. Loading must not fail.
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("vision_provider.json");
+        std::fs::write(&path, r#"{ "active": "alpha" }"#).unwrap();
+
+        let mut r = VisionRegistry::empty();
+        r.register(StubProvider::new("alpha"));
+        r.attach_persistence(path);
+        assert_eq!(r.active_id().as_deref(), Some("alpha"));
+        assert!(r.model_for("alpha").is_none());
     }
 
     #[test]

@@ -162,3 +162,9 @@ export async function setActiveVisionProvider(
 export async function listVisionModels(): Promise<VisionModelList> {
   return invoke<VisionModelList>("list_vision_models");
 }
+
+export async function setActiveVisionModel(
+  id: string,
+): Promise<VisionStatus> {
+  return invoke<VisionStatus>("set_active_vision_model", { id });
+}

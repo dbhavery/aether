@@ -789,6 +789,9 @@ pub struct VisionStatus {
     /// Human-readable label of the active provider, e.g.
     /// `"Ollama vision · llava · http://..."`. `None` when text-only.
     pub label: Option<String>,
+    /// Active provider's current model id, if the adapter exposes one.
+    /// Drives the "Active" indicator in the model strip.
+    pub active_model: Option<String>,
     /// Every registered provider with an `active` flag — drives the
     /// runtime-swap UI.
     pub providers: Vec<crate::vision_registry::VisionProviderInfo>,
@@ -798,11 +801,13 @@ pub struct VisionStatus {
 pub fn vision_status(state: State<'_, AppState>) -> VisionStatus {
     let label = state.vision_provider_label();
     let active_id = state.vision_active_id();
+    let active_model = state.vision_active_model();
     let providers = state.vision_provider_list();
     VisionStatus {
         enabled: label.is_some(),
         active_id,
         label,
+        active_model,
         providers,
     }
 }
@@ -880,6 +885,42 @@ pub fn set_active_vision_provider(
         Some(other) => Some(other.to_string()),
     };
     state.set_active_vision_provider(normalized)?;
+    Ok(vision_status(state))
+}
+
+/// Switch the model used by the currently-active vision provider.
+/// Validates the requested id against the most-recent `list_models`
+/// snapshot so UI bugs (typos, stale caches) surface immediately
+/// instead of silently pointing at a model the daemon doesn't have.
+///
+/// When list_models fails or returns an empty list (adapter does not
+/// expose discovery), we accept the id optimistically — the user's
+/// next `analyze_frame` will surface any real model-not-found error
+/// through the normal provider-error path.
+#[tauri::command]
+pub fn set_active_vision_model(
+    id: String,
+    state: State<'_, AppState>,
+) -> Result<VisionStatus, String> {
+    let trimmed = id.trim();
+    if trimmed.is_empty() {
+        return Err("model id must not be empty".into());
+    }
+    // Validate against the active provider's current model list. We
+    // only reject when the list is non-empty AND the id isn't in it;
+    // an empty list means discovery isn't available (passive adapter,
+    // daemon down, etc.) and we defer to the daemon's own error path.
+    let Some(provider) = state.vision_provider() else {
+        return Err("no active vision provider".into());
+    };
+    if let Ok(known) = provider.list_models() {
+        if !known.is_empty() && !known.iter().any(|m| m == trimmed) {
+            return Err(format!(
+                "unknown model for active provider: {trimmed}"
+            ));
+        }
+    }
+    state.set_active_vision_model(trimmed)?;
     Ok(vision_status(state))
 }
 
