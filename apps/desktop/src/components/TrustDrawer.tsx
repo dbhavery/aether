@@ -11,7 +11,13 @@ import {
   MEDIA_TURN_KINDS,
   visionRouteSummary,
 } from "../lib/mediaTurns";
+import { truncateForDisplay } from "../lib/displayString";
 import type { AuditDecisionLabel, TrustAuditRow } from "../lib/types";
+
+/** Max characters of a model id we render inline on the Trust drawer
+ * body line before truncating with an ellipsis. The full id is kept
+ * in the row's `title` attribute so it stays recoverable on hover. */
+const MODEL_ID_DISPLAY_MAX = 28;
 
 type Tab = "audit" | "history";
 type HistoryFilter = "all" | "media";
@@ -336,7 +342,14 @@ function HistoryList({
             <div className="mt-1 font-mono text-[12px] text-aether-text break-all">
               {e.persona_id}
               {e.provider ? ` · ${e.provider}` : ""}
-              {e.model ? ` · ${e.model}` : ""}
+              {e.model ? (
+                <>
+                  {" · "}
+                  <span title={e.model}>
+                    {truncateForDisplay(e.model, MODEL_ID_DISPLAY_MAX)}
+                  </span>
+                </>
+              ) : null}
               {!e.model && e.tier ? ` · ${e.tier}` : ""}
             </div>
             <div className="text-[11.5px] font-mono text-aether-muted">
