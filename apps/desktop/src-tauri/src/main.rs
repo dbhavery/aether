@@ -154,9 +154,12 @@ fn register_ollama_vision_if_configured(state: &AppState) {
                 cfg.model,
                 cfg.base_url
             );
+            let base = cfg.base_url.clone();
             let provider = OllamaVisionProvider::new(cfg);
             if let Err(e) = provider.healthcheck() {
-                tracing::warn!("ollama vision healthcheck failed: {e}; not registering");
+                tracing::warn!(
+                    "ollama vision healthcheck failed at {base}: {e}; not registering",
+                );
                 return;
             }
             let arc: Arc<dyn VisionProvider> = Arc::new(provider);
@@ -187,9 +190,12 @@ fn register_llamacpp_vision_if_configured(state: &AppState) {
                 cfg.model,
                 cfg.base_url
             );
+            let base = cfg.base_url.clone();
             let provider = LlamaCppVisionProvider::new(cfg);
             if let Err(e) = provider.healthcheck() {
-                tracing::warn!("llamacpp vision healthcheck failed: {e}; not registering");
+                tracing::warn!(
+                    "llamacpp vision healthcheck failed at {base}: {e}; not registering",
+                );
                 return;
             }
             let arc: Arc<dyn VisionProvider> = Arc::new(provider);

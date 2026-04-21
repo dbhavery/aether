@@ -381,12 +381,18 @@ pub fn vision_persistence_path_for(app_data_dir: &Path) -> PathBuf {
 fn load_persisted(path: &Path) -> VisionPersistedState {
     match fs::read_to_string(path) {
         Ok(s) => serde_json::from_str(&s).unwrap_or_else(|e| {
-            tracing::warn!("vision_provider.json is malformed ({e}); ignoring persisted selection");
+            tracing::warn!(
+                "vision_provider.json at {} is malformed ({e}); ignoring persisted selection",
+                path.display(),
+            );
             VisionPersistedState::default()
         }),
         Err(e) if e.kind() == ErrorKind::NotFound => VisionPersistedState::default(),
         Err(e) => {
-            tracing::warn!("could not read vision_provider.json: {e}");
+            tracing::warn!(
+                "could not read vision_provider.json at {}: {e}",
+                path.display(),
+            );
             VisionPersistedState::default()
         }
     }
