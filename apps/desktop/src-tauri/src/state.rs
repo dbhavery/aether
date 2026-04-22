@@ -486,10 +486,9 @@ impl AppState {
 
     /// Cheap clone of the active speech provider handle. `None` when
     /// no provider is selected (voice disabled) or the registry is
-    /// empty. Voice V1 step 4's `transcribe_utterance` will treat the
+    /// empty. Voice V1 step 4's `transcribe_utterance` treats the
     /// absence as a hard error — unlike vision, there is no silent
     /// text fallback for voice.
-    #[allow(dead_code)] // Consumed by step 4's transcribe_utterance.
     pub fn speech_provider(&self) -> Option<Arc<dyn SpeechProvider>> {
         let r = self.voice.read().expect("voice registry read lock");
         r.active()

@@ -53,6 +53,7 @@ fn main() {
             commands::get_mic_permission,
             commands::set_mic_permission,
             commands::analyze_frame,
+            commands::transcribe_utterance,
             commands::vision_status,
             commands::list_vision_providers,
             commands::list_vision_models,
