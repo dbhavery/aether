@@ -1,21 +1,20 @@
 # Handoff — Continue the companion build (2026-05-07)
 
 **Written:** 2026-05-06 (overnight autonomous run).
-**Branch state:** `dev`, **11 commits ahead of `origin/dev`** at SHA
-`d93d7f0`. (One follow-up doc commit will land on top before this
-file is final — see §1.)
-**Push status:** **NOT authorized this session.** Treat the next
-push as a fresh authorization decision.
-**Next session mode:** continue overnight-style polish + safety on
-the multimodal/video assistant track only, OR review the unpushed
-batch and authorize a push.
+**Branch state:** `dev` is **up to date with `origin/dev`** at SHA
+`01f40e5`. The 12-commit batch (90e4bc2..01f40e5) was pushed
+2026-05-06 after Don reviewed.
+**Push status:** **Pushed.** The next session starts from a clean
+`origin/dev`.
+**Next session mode:** continue polish + safety on the
+multimodal/video assistant track.
 
 ---
 
 ## 0. Morning status
 
-1. `dev` is `d93d7f0`.
-2. Working tree clean after the docs commit.
+1. `dev` is `01f40e5`, up to date with `origin/dev` (pushed 2026-05-06).
+2. Working tree clean.
 3. Full check set is green:
    - `cargo fmt --all -- --check`
    - `cargo check --workspace`
@@ -159,13 +158,12 @@ Branch:
 dev
 
 Current state (treat repo as source of truth if anything differs):
-- `dev` is at `d93d7f0` plus a docs commit on top.
-- 12 commits ahead of `origin/dev` since the last push.
+- `dev` is at `01f40e5`, up to date with `origin/dev`.
 - Working tree clean.
 - Push is NOT pre-authorized for this session. Do NOT push unless
   explicitly instructed at the end of the session.
 - All multimodal vision-track work through 2026-05-06 has shipped
-  AND committed locally; nothing has been pushed.
+  AND been pushed.
 - The multimodal vision stack now also includes:
   - shell-side empty/invalid frame data URL guard via
     `validate_frame_data_url`,
