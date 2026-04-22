@@ -34,6 +34,7 @@ use serde::Serialize;
 
 use crate::adapter::{ModelRouterAdapter, ReflexModelRouter};
 use crate::media_permissions::{self, CaptureGate, MediaKind, MediaPermissions, PermissionState};
+use crate::mic_permissions::{self, MicPermission};
 use crate::memory_router::MemoryAwareRouter;
 use crate::provider::ProviderMode;
 
@@ -107,6 +108,17 @@ pub struct AppState {
     /// — the in-memory copy still works, but changes do not survive
     /// restarts.
     media_permissions_path: Option<PathBuf>,
+    /// Local-only microphone permission posture. Loaded from disk at
+    /// boot when a `mic_permission_path` is configured; writes are
+    /// persisted atomically through `set_mic_permission`. Separate
+    /// file from `media_permissions` so the camera/screen consent and
+    /// the mic consent stay independently auditable.
+    mic_permission: RwLock<MicPermission>,
+    /// Disk-backed location for `mic_permission`. `None` when the
+    /// shell is running without a writable data dir (tests,
+    /// sandboxes) — the in-memory copy still works, but changes do
+    /// not survive restarts.
+    mic_permission_path: Option<PathBuf>,
     /// Registry of zero or more vision-capable providers + the active
     /// selection. Replaces the v0 single-`Option` model so the user
     /// can swap providers at runtime (Ollama vision ↔ llama.cpp
@@ -272,6 +284,8 @@ impl AppState {
             telemetry: Mutex::new(VecDeque::with_capacity(TELEMETRY_BUFFER_CAPACITY)),
             media_permissions: RwLock::new(MediaPermissions::defaults()),
             media_permissions_path: None,
+            mic_permission: RwLock::new(MicPermission::defaults()),
+            mic_permission_path: None,
             vision: RwLock::new(VisionRegistry::empty()),
             vision_model_cache: ModelListCache::from_env(),
         })
@@ -471,6 +485,65 @@ impl AppState {
     /// the caller should take.
     pub fn evaluate_media_permission(&self, kind: MediaKind) -> CaptureGate {
         self.media_permissions().evaluate(kind)
+    }
+
+    /// Wire a disk-backed mic-permission file into this state. Loads
+    /// the current contents (or falls back to defaults if the file is
+    /// missing/malformed) and remembers the path so subsequent writes
+    /// persist atomically. Mirrors `attach_media_permissions_file`.
+    pub fn attach_mic_permission_file(&mut self, path: PathBuf) {
+        let loaded = mic_permissions::load_or_default(&path);
+        *self.mic_permission.write().expect("mic perm write lock") = loaded;
+        self.mic_permission_path = Some(path);
+    }
+
+    /// Snapshot the current mic permission. Cheap clone; safe to hand
+    /// to a Tauri command response.
+    pub fn mic_permission(&self) -> MicPermission {
+        *self.mic_permission.read().expect("mic perm read lock")
+    }
+
+    /// Update the mic permission and persist the new state to disk if
+    /// a path is wired. Returns the resulting snapshot so the caller
+    /// can echo it back to the UI in one round trip.
+    ///
+    /// Persistence failures are surfaced as `Err` so the UI can show
+    /// the user the change did not stick. A tracing INFO line records
+    /// the transition for local observability; no L5 `AuditRecordEvent`
+    /// is emitted here — the audit surface for mic activity lives at
+    /// the capture site (see `transcribe_utterance`, step 4), the same
+    /// way `analyze_frame` owns the audit for media capture.
+    pub fn set_mic_permission(
+        &self,
+        state: PermissionState,
+    ) -> Result<MicPermission, String> {
+        let (previous, snapshot) = {
+            let mut w = self.mic_permission.write().expect("mic perm write lock");
+            let previous = w.state;
+            w.state = state;
+            (previous, *w)
+        };
+        if let Some(path) = &self.mic_permission_path {
+            mic_permissions::save(path, &snapshot)
+                .map_err(|e| format!("persist mic permission: {e}"))?;
+        }
+        if previous != state {
+            tracing::info!(
+                "mic permission: {} -> {}",
+                previous.wire(),
+                state.wire()
+            );
+        }
+        Ok(snapshot)
+    }
+
+    /// Pre-capture gate for mic. Future voice-capture sites must call
+    /// this before touching the microphone — it never starts capture
+    /// itself. See [`media_permissions::CaptureGate`] for the action
+    /// the caller should take.
+    #[allow(dead_code)] // Consumed by `transcribe_utterance` in Voice V1 step 4.
+    pub fn evaluate_mic_permission(&self) -> CaptureGate {
+        self.mic_permission().evaluate()
     }
 
     /// Record a telemetry entry. Evicts the oldest entry if the buffer
@@ -1324,6 +1397,84 @@ humor: "playful"
         let perms = state2.media_permissions();
         assert_eq!(perms.camera, PermissionState::Allow);
         assert_eq!(perms.screen, PermissionState::Deny);
+    }
+
+    /// Mic permission defaults to `Ask` at boot and the gate maps to
+    /// `PromptUser` accordingly — same "never auto-grant" rule as
+    /// camera/screen.
+    #[test]
+    fn mic_permission_defaults_to_ask_after_boot() {
+        let state = AppState::new().unwrap();
+        assert_eq!(state.mic_permission().state, PermissionState::Ask);
+        assert_eq!(state.evaluate_mic_permission(), CaptureGate::PromptUser);
+    }
+
+    /// `set_mic_permission` updates the in-memory snapshot and shifts
+    /// the capture gate accordingly. Without an attached file it is a
+    /// pure in-process change — exercised here so the no-file path
+    /// keeps working in tests / sandboxes.
+    #[test]
+    fn set_mic_permission_updates_snapshot_and_gate() {
+        let state = AppState::new().unwrap();
+        let snap = state
+            .set_mic_permission(PermissionState::Allow)
+            .expect("set");
+        assert_eq!(snap.state, PermissionState::Allow);
+        assert_eq!(state.evaluate_mic_permission(), CaptureGate::Proceed);
+
+        let snap = state
+            .set_mic_permission(PermissionState::Deny)
+            .expect("set");
+        assert_eq!(snap.state, PermissionState::Deny);
+        assert_eq!(state.evaluate_mic_permission(), CaptureGate::Deny);
+    }
+
+    /// With a mic-permission file attached, writes round-trip through
+    /// disk — a fresh AppState pointing at the same file recovers the
+    /// previously-saved posture instead of resetting to defaults.
+    #[test]
+    fn mic_permission_file_round_trips_across_appstates() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let mic_path = tmp.path().join("mic_permissions.json");
+
+        {
+            let mut state = AppState::new().unwrap();
+            state.attach_mic_permission_file(mic_path.clone());
+            state
+                .set_mic_permission(PermissionState::Allow)
+                .unwrap();
+        }
+
+        let mut state2 = AppState::new().unwrap();
+        state2.attach_mic_permission_file(mic_path);
+        assert_eq!(state2.mic_permission().state, PermissionState::Allow);
+    }
+
+    /// Mic and camera/screen permission files are independent: a write
+    /// to one must not bleed into the other. This locks the "distinct
+    /// consent boundaries" promise called out in mic_permissions.rs.
+    #[test]
+    fn mic_permission_is_independent_from_media_permissions() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let media_path = tmp.path().join("media_permissions.json");
+        let mic_path = tmp.path().join("mic_permissions.json");
+
+        let mut state = AppState::new().unwrap();
+        state.attach_media_permissions_file(media_path);
+        state.attach_mic_permission_file(mic_path);
+
+        state
+            .set_mic_permission(PermissionState::Allow)
+            .expect("mic set");
+        let media = state.media_permissions();
+        assert_eq!(media.camera, PermissionState::Ask);
+        assert_eq!(media.screen, PermissionState::Ask);
+
+        state
+            .set_media_permission(MediaKind::Camera, PermissionState::Deny)
+            .expect("media set");
+        let mic = state.mic_permission();
+        assert_eq!(mic.state, PermissionState::Allow);
     }
 
     /// If we point the durable constructor at an un-writable path, it

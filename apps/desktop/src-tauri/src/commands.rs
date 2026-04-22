@@ -20,6 +20,7 @@ use tauri::{AppHandle, Emitter, State};
 use aether_l4_router::{split_data_url, VisionRequest};
 
 use crate::media_permissions::{CaptureGate, MediaKind, MediaPermissions, PermissionState};
+use crate::mic_permissions::MicPermission;
 #[cfg(feature = "ollama-provider")]
 use crate::memory_router::PROVIDER_ERROR_PREFIX;
 use crate::memory_router::{assistant_record, user_record};
@@ -994,6 +995,35 @@ pub fn set_media_permission(
     let parsed_state = PermissionState::from_wire(&state_value)
         .ok_or_else(|| format!("unknown permission state: {state_value}"))?;
     state.set_media_permission(parsed_kind, parsed_state)
+}
+
+// ---------------------------------------------------------------------
+// Mic permission surface (Voice V1 step 1).
+// ---------------------------------------------------------------------
+
+/// Snapshot of the current local-only mic permission posture.
+/// Returned to the Settings UI so it can render the tri-state control
+/// for the microphone. Separate from `get_media_permissions` so the
+/// camera/screen consent and the mic consent stay independently
+/// auditable.
+#[tauri::command]
+pub fn get_mic_permission(state: State<'_, AppState>) -> MicPermission {
+    state.mic_permission()
+}
+
+/// Update the mic permission and persist the new state when a
+/// disk-backed file is wired. Wire format mirrors the mic JSON file
+/// shape: `state_value ∈ {"allow","ask","deny"}`. Unknown values are
+/// rejected so UI bugs surface instead of silently flipping to the
+/// wrong posture.
+#[tauri::command]
+pub fn set_mic_permission(
+    state_value: String,
+    state: State<'_, AppState>,
+) -> Result<MicPermission, String> {
+    let parsed_state = PermissionState::from_wire(&state_value)
+        .ok_or_else(|| format!("unknown permission state: {state_value}"))?;
+    state.set_mic_permission(parsed_state)
 }
 
 // ---------------------------------------------------------------------

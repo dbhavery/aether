@@ -5,6 +5,7 @@ mod adapter;
 mod commands;
 mod media_permissions;
 mod memory_router;
+mod mic_permissions;
 mod provider;
 mod state;
 mod vision_cache;
@@ -48,6 +49,8 @@ fn main() {
             commands::telemetry_clear,
             commands::get_media_permissions,
             commands::set_media_permission,
+            commands::get_mic_permission,
+            commands::set_mic_permission,
             commands::analyze_frame,
             commands::vision_status,
             commands::list_vision_providers,
@@ -91,6 +94,9 @@ fn build_app_state(app: &tauri::AppHandle) -> Result<AppState, Box<dyn std::erro
                 let perms_path = media_permissions::permissions_path_for(&dir);
                 tracing::info!("media permissions file at {}", perms_path.display());
                 state.attach_media_permissions_file(perms_path);
+                let mic_path = mic_permissions::permission_path_for(&dir);
+                tracing::info!("mic permission file at {}", mic_path.display());
+                state.attach_mic_permission_file(mic_path);
                 wire_vision_registry(&state, Some(&dir));
                 return Ok(state);
             }
