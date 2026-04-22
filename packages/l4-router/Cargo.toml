@@ -35,3 +35,9 @@ ollama-provider = ["dep:ureq"]
 # of `ollama-provider` so users can enable either, both, or neither.
 # See `packages/l4-router/src/providers/llamacpp_vision.rs`.
 vision-llamacpp = ["dep:ureq"]
+# Enable the local whisper.cpp HTTP speech adapter scaffold. Single-
+# utterance only, push-to-talk only, local-first. Voice V1 step 2
+# lands the provider abstraction + healthcheck; the transcription
+# wire call follows in step 4. Independent of the vision adapters.
+# See `packages/l4-router/src/providers/whispercpp_speech.rs`.
+speech-whispercpp = ["dep:ureq"]

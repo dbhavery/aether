@@ -11,6 +11,8 @@ pub mod llamacpp_vision;
 pub mod ollama;
 #[cfg(feature = "ollama-provider")]
 pub mod ollama_vision;
+#[cfg(feature = "speech-whispercpp")]
+pub mod whispercpp_speech;
 
 #[cfg(feature = "vision-llamacpp")]
 pub use llamacpp_vision::{LlamaCppVisionConfig, LlamaCppVisionProvider};
@@ -20,3 +22,7 @@ pub use ollama::{
 };
 #[cfg(feature = "ollama-provider")]
 pub use ollama_vision::{OllamaVisionConfig, OllamaVisionProvider};
+#[cfg(feature = "speech-whispercpp")]
+pub use whispercpp_speech::{
+    WhisperCppConfigError, WhisperCppSpeechConfig, WhisperCppSpeechProvider,
+};
