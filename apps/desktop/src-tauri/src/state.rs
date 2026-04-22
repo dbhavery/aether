@@ -17,10 +17,11 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 
 use aether_l1_interaction::{TurnEngine, TurnRequest, TurnResult, TurnRouter};
-use aether_l4_router::VisionProvider;
+use aether_l4_router::{SpeechProvider, VisionProvider};
 
 use crate::vision_cache::ModelListCache;
 use crate::vision_registry::{VisionProviderInfo, VisionRegistry};
+use crate::voice_registry::{SpeechProviderInfo, VoiceRegistry};
 #[cfg(feature = "sqlite-backend")]
 use aether_l2_memory::{DurableSessionStore, SqliteSessionMemoryStore};
 use aether_l2_memory::{InMemorySessionMemoryStore, SessionMemoryStore};
@@ -129,6 +130,12 @@ pub struct AppState {
     /// `list_models`. Absorbs the burst of calls triggered by the
     /// camera/screen panels without re-hitting the daemon.
     vision_model_cache: ModelListCache,
+    /// Registry of zero or more speech-capable providers + the active
+    /// selection. Parallel to `vision` but separate — the mic and
+    /// camera/screen consent boundaries stay auditable independently.
+    /// The active selection is persisted via `voice_registry`'s
+    /// attached file.
+    voice: RwLock<VoiceRegistry>,
 }
 
 /// Error surface for the cached vision model-list helpers. Lets the
@@ -288,6 +295,7 @@ impl AppState {
             mic_permission_path: None,
             vision: RwLock::new(VisionRegistry::empty()),
             vision_model_cache: ModelListCache::from_env(),
+            voice: RwLock::new(VoiceRegistry::empty()),
         })
     }
 
@@ -436,6 +444,102 @@ impl AppState {
             self.vision_model_cache.invalidate(&id);
         }
         outcome
+    }
+
+    // --- Voice (speech) provider registry ----------------------------------
+
+    /// Register a speech-capable provider into the registry. Called
+    /// from `build_app_state` in main.rs for each provider whose
+    /// boot-time healthcheck passed. Order matters — first registered
+    /// is the fallback when persisted state names an unknown id.
+    #[allow(dead_code)] // Wired only behind provider features in main.rs.
+    pub fn register_speech_provider(&self, provider: Arc<dyn SpeechProvider>) {
+        let mut w = self.voice.write().expect("voice registry write lock");
+        w.register(provider);
+    }
+
+    /// Wire the on-disk persistence file for the active speech-provider
+    /// selection. Loads the persisted state (with safe fallbacks).
+    #[allow(dead_code)] // Wired only behind provider features in main.rs.
+    pub fn attach_voice_persistence(&self, path: PathBuf) {
+        let mut w = self.voice.write().expect("voice registry write lock");
+        w.attach_persistence(path);
+    }
+
+    /// Auto-select the first registered speech provider if no active
+    /// id was loaded from persistence. No-op when an active id is
+    /// already set.
+    #[allow(dead_code)] // Wired only behind provider features in main.rs.
+    pub fn voice_auto_select_if_unset(&self) {
+        let r = self.voice.read().expect("voice registry read lock");
+        r.auto_select_first_if_unset();
+    }
+
+    /// First-launch hook: seed `model_per_provider` from each
+    /// registered speech adapter's `current_model()` for entries not
+    /// already present. Idempotent on subsequent launches.
+    #[allow(dead_code)] // Wired only behind provider features in main.rs.
+    pub fn voice_seed_missing_models(&self) -> Result<(), String> {
+        let r = self.voice.read().expect("voice registry read lock");
+        r.seed_missing_models_from_adapters()
+    }
+
+    /// Cheap clone of the active speech provider handle. `None` when
+    /// no provider is selected (voice disabled) or the registry is
+    /// empty. Voice V1 step 4's `transcribe_utterance` will treat the
+    /// absence as a hard error — unlike vision, there is no silent
+    /// text fallback for voice.
+    #[allow(dead_code)] // Consumed by step 4's transcribe_utterance.
+    pub fn speech_provider(&self) -> Option<Arc<dyn SpeechProvider>> {
+        let r = self.voice.read().expect("voice registry read lock");
+        r.active()
+    }
+
+    /// Active speech provider id, if any.
+    #[allow(dead_code)] // Surfaced in step 4 Tauri commands.
+    pub fn speech_active_id(&self) -> Option<String> {
+        let r = self.voice.read().expect("voice registry read lock");
+        r.active_id()
+    }
+
+    /// Human-readable label for the active speech provider, if any.
+    #[allow(dead_code)] // Surfaced in step 4 Tauri commands.
+    pub fn speech_provider_label(&self) -> Option<String> {
+        let r = self.voice.read().expect("voice registry read lock");
+        r.active_label()
+    }
+
+    /// Snapshot of every registered speech provider plus an `active`
+    /// flag. Surfaced via the future step 4 `list_speech_providers`
+    /// Tauri command.
+    #[allow(dead_code)] // Surfaced in step 4 Tauri commands.
+    pub fn speech_provider_list(&self) -> Vec<SpeechProviderInfo> {
+        let r = self.voice.read().expect("voice registry read lock");
+        r.list()
+    }
+
+    /// Set the active speech provider by id. `None` disables voice
+    /// input. Persists when a file is wired.
+    #[allow(dead_code)] // Surfaced in step 4 Tauri commands.
+    pub fn set_active_speech_provider(&self, id: Option<String>) -> Result<(), String> {
+        let r = self.voice.read().expect("voice registry read lock");
+        r.set_active(id)
+    }
+
+    /// Current model id of the active speech provider, if any.
+    #[allow(dead_code)] // Surfaced in step 4 Tauri commands.
+    pub fn speech_active_model(&self) -> Option<String> {
+        let r = self.voice.read().expect("voice registry read lock");
+        r.active_model()
+    }
+
+    /// Switch the model used by the active speech provider. Persists
+    /// under the active provider id so a future provider swap
+    /// restores the same pick.
+    #[allow(dead_code)] // Surfaced in step 4 Tauri commands.
+    pub fn set_active_speech_model(&self, model: &str) -> Result<(), String> {
+        let r = self.voice.read().expect("voice registry read lock");
+        r.set_active_model(model)
     }
 
     /// Wire a disk-backed media-permissions file into this state. Loads

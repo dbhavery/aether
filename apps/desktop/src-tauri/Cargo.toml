@@ -46,6 +46,10 @@ ollama-provider = ["aether-l4-router/ollama-provider"]
 # Enable the llama.cpp HTTP vision adapter alongside (or instead of)
 # Ollama vision. Independent of `ollama-provider`.
 vision-llamacpp = ["aether-l4-router/vision-llamacpp"]
+# Enable the whisper.cpp HTTP speech adapter (Voice V1). Feature-gated
+# independently of the vision adapters. Voice V1 step 2 landed the
+# adapter with healthcheck only; step 4 will wire the transcribe call.
+speech-whispercpp = ["aether-l4-router/speech-whispercpp"]
 # Route the session memory store through the on-disk SQLite backend so
 # conversation history survives restarts. Default-on; disabling falls
 # back to the transient in-memory store (useful for CI sandboxes that
