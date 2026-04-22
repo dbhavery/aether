@@ -1,10 +1,16 @@
 import { useEffect, useState } from "react";
 
-import { getMediaPermissions, setMediaPermission } from "../lib/api";
+import {
+  getMediaPermissions,
+  getMicPermission,
+  setMediaPermission,
+  setMicPermission,
+} from "../lib/api";
 import type {
   MediaKind,
   MediaPermissions,
   MediaPermissionState,
+  MicPermission,
 } from "../lib/types";
 
 interface Props {
@@ -54,8 +60,10 @@ const DEVICE_COPY: Record<MediaKind, { title: string; body: string }> = {
  */
 export function SettingsDrawer({ open, onClose }: Props) {
   const [perms, setPerms] = useState<MediaPermissions | null>(null);
+  const [mic, setMic] = useState<MicPermission | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busyKind, setBusyKind] = useState<MediaKind | null>(null);
+  const [busyMic, setBusyMic] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -64,6 +72,13 @@ export function SettingsDrawer({ open, onClose }: Props) {
     getMediaPermissions()
       .then((p) => {
         if (!cancelled) setPerms(p);
+      })
+      .catch((e) => {
+        if (!cancelled) setErr(String(e));
+      });
+    getMicPermission()
+      .then((m) => {
+        if (!cancelled) setMic(m);
       })
       .catch((e) => {
         if (!cancelled) setErr(String(e));
@@ -85,6 +100,19 @@ export function SettingsDrawer({ open, onClose }: Props) {
       setErr(String(e));
     } finally {
       setBusyKind(null);
+    }
+  };
+
+  const handleMicChange = async (next: MediaPermissionState) => {
+    setBusyMic(true);
+    setErr(null);
+    try {
+      const updated = await setMicPermission(next);
+      setMic(updated);
+    } catch (e) {
+      setErr(String(e));
+    } finally {
+      setBusyMic(false);
     }
   };
 
@@ -149,12 +177,43 @@ export function SettingsDrawer({ open, onClose }: Props) {
             })}
           </div>
         </section>
+
+        <section
+          aria-labelledby="settings-mic-heading"
+          className="mt-6 border-t border-aether-border pt-4"
+        >
+          <h2
+            id="settings-mic-heading"
+            className="text-[11px] uppercase tracking-[0.18em] text-aether-dim"
+          >
+            Microphone
+          </h2>
+          <p className="mt-1 text-[12px] text-aether-muted">
+            Mic consent is tracked separately from camera and screen.
+            Voice capture is push-to-talk only; Aether never listens
+            continuously.
+          </p>
+
+          <div className="mt-4">
+            <PermissionRow
+              title="Microphone"
+              body="Short push-to-talk utterances Aether may transcribe for voice input. Voice capture is scaffolded and not yet wired to a capture surface."
+              value={mic?.state ?? "ask"}
+              busy={busyMic}
+              onChange={(next) => handleMicChange(next)}
+            />
+          </div>
+        </section>
       </div>
 
       <div className="border-t border-aether-border px-5 py-3 text-[11px] text-aether-muted">
         Stored locally at{" "}
         <code className="font-mono text-aether-dim">
           %APPDATA%/Aether/media_permissions.json
+        </code>{" "}
+        and{" "}
+        <code className="font-mono text-aether-dim">
+          %APPDATA%/Aether/mic_permissions.json
         </code>
       </div>
     </div>

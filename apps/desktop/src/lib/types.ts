@@ -120,6 +120,18 @@ export interface MediaPermissions {
   screen: MediaPermissionState;
 }
 
+// --- Mic permission (Voice V1 step 1) -------------------------------------
+
+/**
+ * Local-only permission posture for the microphone. Separate from
+ * `MediaPermissions` so the camera/screen consent and the mic consent
+ * stay independently auditable. The tri-state vocabulary is shared
+ * with `MediaPermissionState` — the mic does not invent new states.
+ */
+export interface MicPermission {
+  state: MediaPermissionState;
+}
+
 // --- Single-frame analysis (P3) -------------------------------------------
 
 /** Outcome kinds the `analyze_frame` command can return. */

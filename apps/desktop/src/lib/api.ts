@@ -11,6 +11,7 @@ import type {
   MediaKind,
   MediaPermissions,
   MediaPermissionState,
+  MicPermission,
   PersonaCatalogEntry,
   PresencePayload,
   TranscriptMessage,
@@ -134,6 +135,25 @@ export async function setMediaPermission(
 ): Promise<MediaPermissions> {
   return invoke<MediaPermissions>("set_media_permission", {
     kind,
+    stateValue,
+  });
+}
+
+// --- Mic permission (Voice V1 step 1) -------------------------------------
+
+export async function getMicPermission(): Promise<MicPermission> {
+  return invoke<MicPermission>("get_mic_permission");
+}
+
+/**
+ * Update the mic permission. Same IPC quirk as `setMediaPermission` —
+ * the Rust command uses `state_value` because `state` collides with
+ * the Tauri `State<T>` extractor.
+ */
+export async function setMicPermission(
+  stateValue: MediaPermissionState,
+): Promise<MicPermission> {
+  return invoke<MicPermission>("set_mic_permission", {
     stateValue,
   });
 }
