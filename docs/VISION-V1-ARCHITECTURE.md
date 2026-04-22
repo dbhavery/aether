@@ -349,6 +349,11 @@ enum.
 Selected execution reports that justify the current shape (most
 recent first):
 
+- `P1_VISION_DOC_ROT_GUARD_EXECUTION_REPORT_2026-05-08.md`
+- `P1_MEDIAKIND_FROM_WIRE_TELEMETRY_DECISION_EXECUTION_REPORT_2026-05-07.md`
+- `CHUNK_A_FRAME_EARLY_EXIT_TELEMETRY_EXECUTION_REPORT_2026-05-06.md`
+- `CHUNK_B_LOG_CLARITY_EXECUTION_REPORT_2026-05-06.md`
+- `CHUNK_C_VISION_V1_ARCHITECTURE_DOC_EXECUTION_REPORT_2026-05-06.md`
 - `P1_VISION_PROVIDER_JSON_SCHEMA_TOLERANT_READ_EXECUTION_REPORT_2026-05-05.md`
 - `P1_MAYBE_APPLY_VISION_GUARD_SYMMETRY_EXECUTION_REPORT_2026-05-04.md`
 - `P2_MIDDLE_TRUNCATION_EXECUTION_REPORT_2026-05-04.md`
@@ -360,3 +365,49 @@ recent first):
 
 Handoffs are dated `HANDOFF_2026-05-0X_CONTINUE_COMPANION_BUILD.md`
 in the repo root.
+
+---
+
+## 11. Rot guard
+
+This doc is guarded by `tools/lint-vision-doc/check.py`. The guard
+carries a curated anchor manifest — files, symbols, and string
+constants (telemetry kinds, env var names, provider ids, config
+filenames) that this doc claims exist. If any anchor disappears from
+the code (rename, delete, typo), the guard fails.
+
+Run it:
+
+```
+python tools/lint-vision-doc/check.py
+```
+
+What the guard DOES check:
+
+- every FILE anchor resolves to an actual file,
+- every SYMBOL anchor (literal snippet like `fn analyze_frame`)
+  appears at least once in its named file,
+- every STRING anchor (`"frame_analyzed"`, `AETHER_VISION_MODEL_TTL_SECS`,
+  `ollama-vision`, `vision_provider.json`, ...) appears at least once
+  in its named file,
+- this doc has a parseable `**Status:** Current as of YYYY-MM-DD.`
+  header line.
+
+What the guard does NOT check:
+
+- prose accuracy,
+- whether a new code behavior has been reflected in the doc,
+- whether a newly-added telemetry kind has been added to the doc.
+
+**When you change anything this doc names:**
+
+1. Update the doc prose.
+2. Update the anchor manifest in `tools/lint-vision-doc/check.py`
+   if you add, remove, or rename an anchor.
+3. Bump the `Status: Current as of YYYY-MM-DD.` line.
+4. Run the guard before commit.
+
+The guard is deliberately not wired into `cargo test` or `pnpm
+test` — it is a doc linter, not a code test. Run it manually or
+from the session check set; a future CI config will run it on
+every PR that touches any anchor file.
