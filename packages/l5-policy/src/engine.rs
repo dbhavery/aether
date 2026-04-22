@@ -150,6 +150,19 @@ impl EngineConfig {
                 risk: RiskClass::Medium,
             },
         );
+        // Microphone capture. Same rationale as MediaCamera /
+        // MediaScreenCapture: the shell's `mic_permissions.json`
+        // tri-state is the user-facing per-device gate, so L5
+        // records the audit row without layering a redundant modal
+        // on top. Voice V1 step 4 (`transcribe_utterance`) is the
+        // first caller; earlier waves did not need this default.
+        d.insert(
+            Capability::MediaMic,
+            CapabilityPolicy {
+                mode: ApprovalMode::Auto,
+                risk: RiskClass::Medium,
+            },
+        );
         Self {
             preset: PresetId(String::from("wave3.balanced")),
             preset_version: 1,
@@ -960,6 +973,16 @@ mod tests {
             .expect("wave3_default should know MediaScreenCapture");
         assert_eq!(scr.mode, ApprovalMode::Auto);
         assert_eq!(scr.risk, RiskClass::Medium);
+        // Mirror for MediaMic — Voice V1 step 4 (`transcribe_utterance`)
+        // routes the turn with `Capability::MediaMic`. The shell's
+        // `mic_permissions.json` tri-state is the user-facing gate, same
+        // as media_permissions is for camera/screen.
+        let mic = cfg
+            .preset_defaults
+            .get(&Capability::MediaMic)
+            .expect("wave3_default should know MediaMic");
+        assert_eq!(mic.mode, ApprovalMode::Auto);
+        assert_eq!(mic.risk, RiskClass::Medium);
     }
 
     #[test]
