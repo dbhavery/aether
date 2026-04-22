@@ -366,16 +366,21 @@ function kindClass(kind: string): string {
   switch (kind) {
     case "completed":
     case "frame_analyzed":
+    case "utterance_transcribed":
       return "text-aether-ok";
     case "denied":
     case "provider_error":
     case "frame_blocked":
     case "frame_invalid":
     case "permission_denied":
+    case "utterance_blocked":
+    case "utterance_invalid":
+    case "mic_permission_denied":
       return "text-aether-err";
     case "needs_upgrade":
     case "draft_only":
     case "permission_ask":
+    case "mic_permission_ask":
       return "text-aether-warn";
     default:
       return "text-aether-muted";
