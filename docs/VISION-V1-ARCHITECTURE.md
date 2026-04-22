@@ -1,6 +1,6 @@
 # Vision v1 — architecture reference
 
-> **Status:** Current as of 2026-05-05.
+> **Status:** Current as of 2026-05-07.
 > **Scope:** The local-only single-frame vision assistant — Ollama
 > and llama.cpp adapters, frame validation, provider/model selection,
 > persistence, TTL cache, and UI surfaces.
@@ -248,6 +248,18 @@ this list and is unit-tested for parity.
 
 The three early-exit kinds carry no provider/model/tier/latency/
 tokens — only the persona id and timestamp.
+
+One early-exit of `analyze_frame` is **intentionally absent** from
+this list: `MediaKind::from_wire(&request.kind)` returning `None`
+short-circuits with a hard error (`"unknown media kind: {kind}"`)
+and emits **no** telemetry. That branch represents an IPC contract
+violation (the frontend sent a `kind` that is neither `"camera"` nor
+`"screen"`), not a user-attempted analysis. Keeping it out of
+History avoids mixing user-facing trust events with internal code
+bugs. See
+`P1_MEDIAKIND_FROM_WIRE_TELEMETRY_DECISION_EXECUTION_REPORT_2026-05-07.md`
+for the full rationale and the conditions that would reopen the
+decision.
 
 The TrustDrawer `kindClass` colors `frame_analyzed` as `text-aether-ok`,
 the three error kinds (`frame_blocked`, `frame_invalid`,
