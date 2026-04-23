@@ -107,6 +107,29 @@ pub enum Capability {
     /// Delete memory.
     MemoryDelete,
 
+    // ----- Memory V2 coarse surface (step 1) -----
+    // The four coarse capability variants `docs/MEMORY-V2-ARCHITECTURE.md`
+    // §10 item 1 mandates. Added additively — the older, finer-grained
+    // variants above remain valid for legacy consumers while the
+    // Memory V2 policy surface wires the new ones into the capability
+    // / audit path. Memory V2 step 2 defines their preset defaults
+    // (per-domain Auto / Ask / Deny); for now they are additive-only
+    // enum members with no preset policy entries, meaning any turn
+    // that requests them returns `NeedsUpgrade` until step 2 lands —
+    // exactly the behaviour we want for an L5-first slice.
+    /// Memory V2: coarse "write any memory item" capability. Risk
+    /// class is `Medium` by default; per-domain Ask semantics come
+    /// from the `memory.json` policy surface in step 2.
+    MemoryWrite,
+    /// Memory V2: explicit per-item forget. Distinct from
+    /// `MemoryDelete` (bulk). Retention-sweep eviction emits this
+    /// so the audit log can distinguish user-initiated forgets from
+    /// TTL expiry.
+    MemoryForget,
+    /// Memory V2: edit an existing memory item. Step 2 wires the
+    /// `Ask` flow on user-sensitive domains.
+    MemoryEdit,
+
     // ----- Media -----
     /// Access microphone.
     MediaMic,

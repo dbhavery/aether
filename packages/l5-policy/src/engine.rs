@@ -333,6 +333,14 @@ fn default_risk_for(cap: &Capability) -> RiskClass {
         BrowserOpen => RiskClass::Medium,
         ShellExec => RiskClass::Critical,
         MediaCamera | MediaScreenCapture | MediaMic => RiskClass::Medium,
+        // Memory V2 coarse surface. Read is Low (reads don't mutate
+        // user state); Write and Edit are Medium (durable mutation
+        // of user-sensitive context); Forget is Medium too — per-
+        // item forget is irreversible and worth an audit but does
+        // not escalate approval posture. Bulk delete stays `High`
+        // on the pre-V2 `MemoryDelete` variant.
+        MemoryRead => RiskClass::Low,
+        MemoryWrite | MemoryEdit | MemoryForget => RiskClass::Medium,
         _ => RiskClass::Medium,
     }
 }
@@ -983,6 +991,78 @@ mod tests {
             .expect("wave3_default should know MediaMic");
         assert_eq!(mic.mode, ApprovalMode::Auto);
         assert_eq!(mic.risk, RiskClass::Medium);
+    }
+
+    // ---- Memory V2 step 1: additive capability variants ----------------
+
+    /// The four coarse Memory V2 capabilities must exist on the
+    /// `Capability` enum so future Memory V2 code can reference them
+    /// without enum churn. Step 1 is L5-first: the variants land
+    /// without preset defaults, meaning any turn that requests them
+    /// today gets `NeedsUpgrade`. Step 2 wires the per-domain Ask
+    /// policy.
+    #[test]
+    fn memory_v2_coarse_capabilities_exist_and_hash() {
+        use std::collections::HashSet;
+
+        let mut s: HashSet<Capability> = HashSet::new();
+        s.insert(Capability::MemoryWrite);
+        s.insert(Capability::MemoryRead);
+        s.insert(Capability::MemoryForget);
+        s.insert(Capability::MemoryEdit);
+        // Confirms Hash + Eq round-trip so policy maps can key by
+        // these variants in step 2 without boilerplate.
+        assert_eq!(s.len(), 4);
+        assert!(s.contains(&Capability::MemoryWrite));
+        assert!(s.contains(&Capability::MemoryForget));
+    }
+
+    #[test]
+    fn memory_v2_capabilities_have_sensible_default_risks() {
+        // Read is Low; write/edit/forget are Medium. Mirrors the
+        // reasoning in `default_risk_for`.
+        assert_eq!(default_risk_for(&Capability::MemoryRead), RiskClass::Low);
+        assert_eq!(default_risk_for(&Capability::MemoryWrite), RiskClass::Medium);
+        assert_eq!(default_risk_for(&Capability::MemoryEdit), RiskClass::Medium);
+        assert_eq!(default_risk_for(&Capability::MemoryForget), RiskClass::Medium);
+    }
+
+    #[test]
+    fn memory_v2_capabilities_have_no_preset_default_yet() {
+        // Step 1 is additive-only: no preset defaults wired. This
+        // test locks that contract so step 2 is a conscious addition
+        // (flip `None` to `Some(CapabilityPolicy { ... })` in
+        // wave3_default and update this test).
+        let cfg = EngineConfig::wave3_default(persona());
+        assert!(
+            cfg.preset_defaults.get(&Capability::MemoryWrite).is_none(),
+            "MemoryWrite preset default should land in Memory V2 step 2, not step 1",
+        );
+        assert!(cfg.preset_defaults.get(&Capability::MemoryForget).is_none());
+        assert!(cfg.preset_defaults.get(&Capability::MemoryEdit).is_none());
+        // MemoryRead is NOT a step-1 addition — it pre-existed. Its
+        // preset entry may or may not land in the same PR as step 2;
+        // locking "does not exist yet" for it too keeps the door
+        // open.
+        assert!(cfg.preset_defaults.get(&Capability::MemoryRead).is_none());
+    }
+
+    #[test]
+    fn memory_v2_capabilities_round_trip_through_serde() {
+        // Audit / wire serialization must not collapse the new
+        // variants onto neighbours. `Capability` is untagged-enum-
+        // style serde by default (#[derive(Serialize, Deserialize)]
+        // on the enum), so the JSON representation of a unit variant
+        // is just its name string.
+        for cap in [
+            Capability::MemoryWrite,
+            Capability::MemoryForget,
+            Capability::MemoryEdit,
+        ] {
+            let s = serde_json::to_string(&cap).unwrap();
+            let back: Capability = serde_json::from_str(&s).unwrap();
+            assert_eq!(back, cap, "round-trip failed for {:?}", cap);
+        }
     }
 
     #[test]
