@@ -37,6 +37,8 @@ use std::env;
 use std::sync::RwLock;
 use std::time::Duration;
 
+use serde::Deserialize;
+
 use crate::error::L4Error;
 use crate::speech::{SpeechProvider, SpeechRequest, SpeechResponse};
 
@@ -170,6 +172,156 @@ impl WhisperCppSpeechProvider {
     }
 }
 
+/// Shape of the JSON response whisper.cpp returns from `/inference`.
+///
+/// The OpenAI-compatible minimal surface exposes `text`; richer
+/// shapes (segments, language, duration) may come along with newer
+/// builds — we deserialize only what we consume. `serde` drops the
+/// rest silently.
+#[derive(Debug, Deserialize)]
+struct WhisperResponse {
+    /// Full transcript. `None` / missing means "server returned
+    /// JSON but no text field" which we render as an empty
+    /// transcript (the caller decides how to surface that).
+    text: Option<String>,
+}
+
+/// Derive a reasonable filename for the multipart `file` part from
+/// the MIME type. whisper-server treats the extension as a hint for
+/// format sniffing. WAV is the Voice V1 native format.
+fn derive_filename(mime: &str) -> String {
+    let ext = match mime.to_ascii_lowercase().as_str() {
+        "audio/wav" | "audio/wave" | "audio/x-wav" => "wav",
+        "audio/mpeg" | "audio/mp3" => "mp3",
+        "audio/ogg" | "audio/opus" => "ogg",
+        _ => "wav",
+    };
+    format!("utterance.{ext}")
+}
+
+/// Stable-ish multipart boundary. Uses a time + pid mix so
+/// concurrent calls from the same process don't collide; the
+/// boundary does not need to be cryptographically random.
+fn multipart_boundary() -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let pid = std::process::id();
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0);
+    format!("----aether-whispercpp-{pid}-{nanos:x}-{n:x}")
+}
+
+/// Build a multipart/form-data body for whisper-server's
+/// `/inference` endpoint. Emits two parts when language is set:
+///   - `file`      — binary audio bytes
+///   - `language`  — ISO-639-1 hint string
+///
+/// Pure helper so the contract can be unit-tested without touching
+/// the network. Uses CRLF line endings per RFC 2046.
+fn build_multipart_body(
+    boundary: &str,
+    filename: &str,
+    mime: &str,
+    audio: &[u8],
+    language: Option<&str>,
+) -> Vec<u8> {
+    let mut body: Vec<u8> = Vec::with_capacity(audio.len() + 256);
+    // File part
+    body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+    body.extend_from_slice(
+        format!(
+            "Content-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\n"
+        )
+        .as_bytes(),
+    );
+    body.extend_from_slice(format!("Content-Type: {mime}\r\n\r\n").as_bytes());
+    body.extend_from_slice(audio);
+    body.extend_from_slice(b"\r\n");
+
+    // Optional language hint
+    if let Some(lang) = language {
+        body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+        body.extend_from_slice(
+            b"Content-Disposition: form-data; name=\"language\"\r\n\r\n",
+        );
+        body.extend_from_slice(lang.as_bytes());
+        body.extend_from_slice(b"\r\n");
+    }
+
+    // Closing boundary
+    body.extend_from_slice(format!("--{boundary}--\r\n").as_bytes());
+    body
+}
+
+/// Minimal pure-Rust base64 decoder. Accepts the standard alphabet
+/// (RFC 4648) with optional `=` padding; tolerant of a trailing
+/// newline and of whitespace (stripped). Returns the decoded bytes
+/// or a human-readable error string. Inline — saves a new
+/// dependency on `base64` for a single call site.
+fn decode_base64(input: &str) -> Result<Vec<u8>, String> {
+    // Strip whitespace (newlines, spaces, tabs). Case-sensitive
+    // alphabet: A-Z, a-z, 0-9, +, /. Padding is `=`.
+    let cleaned: Vec<u8> = input
+        .bytes()
+        .filter(|b| !b.is_ascii_whitespace())
+        .collect();
+    if cleaned.len() % 4 != 0 {
+        return Err(format!(
+            "base64 input length {} is not a multiple of 4",
+            cleaned.len()
+        ));
+    }
+    let mut out = Vec::with_capacity(cleaned.len() / 4 * 3);
+    let mut i = 0;
+    while i < cleaned.len() {
+        let chunk = &cleaned[i..i + 4];
+        let v0 = decode_base64_char(chunk[0])
+            .ok_or_else(|| format!("invalid base64 char at offset {i}: {:?}", chunk[0] as char))?;
+        let v1 = decode_base64_char(chunk[1])
+            .ok_or_else(|| format!("invalid base64 char at offset {}: {:?}", i + 1, chunk[1] as char))?;
+        let pad2 = chunk[2] == b'=';
+        let pad3 = chunk[3] == b'=';
+        let v2 = if pad2 {
+            0u8
+        } else {
+            decode_base64_char(chunk[2]).ok_or_else(|| {
+                format!("invalid base64 char at offset {}: {:?}", i + 2, chunk[2] as char)
+            })?
+        };
+        let v3 = if pad3 {
+            0u8
+        } else {
+            decode_base64_char(chunk[3]).ok_or_else(|| {
+                format!("invalid base64 char at offset {}: {:?}", i + 3, chunk[3] as char)
+            })?
+        };
+
+        out.push((v0 << 2) | (v1 >> 4));
+        if !pad2 {
+            out.push(((v1 & 0x0F) << 4) | (v2 >> 2));
+        }
+        if !pad3 {
+            out.push(((v2 & 0x03) << 6) | v3);
+        }
+        i += 4;
+    }
+    Ok(out)
+}
+
+fn decode_base64_char(b: u8) -> Option<u8> {
+    match b {
+        b'A'..=b'Z' => Some(b - b'A'),
+        b'a'..=b'z' => Some(b - b'a' + 26),
+        b'0'..=b'9' => Some(b - b'0' + 52),
+        b'+' => Some(62),
+        b'/' => Some(63),
+        _ => None,
+    }
+}
+
 impl SpeechProvider for WhisperCppSpeechProvider {
     fn id(&self) -> &str {
         "whispercpp-speech"
@@ -196,15 +348,74 @@ impl SpeechProvider for WhisperCppSpeechProvider {
         }
     }
 
-    fn transcribe(&self, _req: SpeechRequest) -> Result<SpeechResponse, L4Error> {
-        // Scaffold-only — the real wire call lands in Voice V1 step 4
-        // alongside the `transcribe_utterance` Tauri command. Return
-        // a loud error so an accidental early caller gets a clear
-        // signal instead of a silent empty transcript.
-        Err(L4Error::ProviderUnknown {
-            detail: "whispercpp-speech: transcription wiring deferred \
-                to Voice V1 step 4 (transcribe_utterance)"
-                .to_string(),
+    fn transcribe(&self, req: SpeechRequest) -> Result<SpeechResponse, L4Error> {
+        // Decode the base64 audio payload. Inline implementation —
+        // one new dependency (base64 crate) avoided; the payload is
+        // ~< a few hundred KB for a single utterance so the allocator
+        // cost is trivial.
+        let audio = decode_base64(&req.audio_b64).map_err(|detail| {
+            L4Error::ProviderBadResponse {
+                detail: format!("whispercpp-speech: audio base64 decode failed: {detail}"),
+            }
+        })?;
+        if audio.is_empty() {
+            return Err(L4Error::ProviderBadResponse {
+                detail: "whispercpp-speech: decoded audio payload was empty".to_string(),
+            });
+        }
+
+        // Language resolution precedence:
+        //   1. per-request `language` hint from the shell,
+        //   2. adapter config language (env override),
+        //   3. whisper.cpp's own auto-detect (absent `language` field).
+        let language = req
+            .language
+            .as_deref()
+            .or(self.language.as_deref())
+            .map(str::to_string);
+
+        let filename = derive_filename(&req.mime);
+        let boundary = multipart_boundary();
+        let body = build_multipart_body(
+            &boundary,
+            &filename,
+            &req.mime,
+            &audio,
+            language.as_deref(),
+        );
+
+        let url = format!("{}/inference", self.base_url.trim_end_matches('/'));
+        let content_type = format!("multipart/form-data; boundary={boundary}");
+
+        let resp = self
+            .agent
+            .post(&url)
+            .set("Content-Type", &content_type)
+            .send_bytes(&body)
+            .map_err(|e| L4Error::ProviderUnknown {
+                detail: format!("whispercpp-speech POST {url} failed: {e}"),
+            })?;
+
+        // Whisper's HTTP server defaults to a JSON body with at
+        // least a `text` field. Builds that support `response_format`
+        // may widen it; we only depend on `text`. `into_json` returns
+        // `Err` if the server returned non-JSON (e.g. HTML error
+        // page) — surface as a provider error.
+        let parsed: WhisperResponse = resp.into_json().map_err(|e| L4Error::ProviderBadResponse {
+            detail: format!("whispercpp-speech JSON decode failed: {e}"),
+        })?;
+        let text = parsed.text.unwrap_or_default();
+
+        Ok(SpeechResponse {
+            text,
+            // Whisper's OpenAI-compatible surface does not report an
+            // average logprob — leave confidence unset. Builds that
+            // expose segment-level logprobs could wire a min/avg
+            // here in a later slice; the trait contract says
+            // confidence is informational anyway.
+            confidence: None,
+            prompt_tokens: None,
+            completion_tokens: None,
         })
     }
 
@@ -389,9 +600,11 @@ mod tests {
     }
 
     #[test]
-    fn transcribe_returns_scaffold_error() {
-        // Scaffold must NOT silently succeed — any caller that reaches
-        // this before step 4 lands needs a loud signal.
+    fn transcribe_rejects_empty_audio() {
+        // Decoded empty payload must short-circuit with a clear
+        // bad-response error rather than sending an empty multipart
+        // part to the server. Same contract `transcribe_utterance`
+        // enforces at the shell gate.
         let cfg = WhisperCppSpeechConfig {
             base_url: DEFAULT_BASE_URL.to_string(),
             model: "ggml-base.en".to_string(),
@@ -400,7 +613,7 @@ mod tests {
         };
         let p = WhisperCppSpeechProvider::new(cfg);
         let req = SpeechRequest {
-            audio_b64: "DATA".to_string(),
+            audio_b64: String::new(),
             mime: "audio/wav".to_string(),
             sample_rate: 16000,
             channels: 1,
@@ -408,14 +621,144 @@ mod tests {
         };
         let err = p.transcribe(req).unwrap_err();
         match err {
-            L4Error::ProviderUnknown { detail } => {
+            L4Error::ProviderBadResponse { detail } => {
                 assert!(
-                    detail.contains("deferred to Voice V1 step 4"),
-                    "unexpected scaffold error detail: {detail}"
+                    detail.contains("empty"),
+                    "expected empty-payload detail, got: {detail}"
                 );
             }
-            other => panic!("expected ProviderUnknown, got {other:?}"),
+            other => panic!("expected ProviderBadResponse, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn transcribe_rejects_malformed_base64() {
+        let cfg = WhisperCppSpeechConfig {
+            base_url: DEFAULT_BASE_URL.to_string(),
+            model: "ggml-base.en".to_string(),
+            language: None,
+            timeout_ms: 1_000,
+        };
+        let p = WhisperCppSpeechProvider::new(cfg);
+        let req = SpeechRequest {
+            // Illegal chars in the alphabet.
+            audio_b64: "!!!!".to_string(),
+            mime: "audio/wav".to_string(),
+            sample_rate: 16000,
+            channels: 1,
+            language: None,
+        };
+        let err = p.transcribe(req).unwrap_err();
+        assert!(matches!(err, L4Error::ProviderBadResponse { .. }));
+    }
+
+    #[test]
+    fn transcribe_surfaces_transport_error_for_unreachable_server() {
+        // Tiny timeout against a port that's almost certainly closed
+        // (65535) — proves the error bubbles up as ProviderUnknown,
+        // not a silent empty transcript.
+        let cfg = WhisperCppSpeechConfig {
+            base_url: "http://127.0.0.1:65535".to_string(),
+            model: "ggml-base.en".to_string(),
+            language: None,
+            timeout_ms: 1,
+        };
+        let p = WhisperCppSpeechProvider::new(cfg);
+        let req = SpeechRequest {
+            // "AAAA" decodes to 3 zero bytes — non-empty so we reach
+            // the HTTP layer.
+            audio_b64: "AAAA".to_string(),
+            mime: "audio/wav".to_string(),
+            sample_rate: 16000,
+            channels: 1,
+            language: None,
+        };
+        let err = p.transcribe(req).unwrap_err();
+        assert!(matches!(err, L4Error::ProviderUnknown { .. }));
+    }
+
+    #[test]
+    fn decode_base64_round_trips_simple_payloads() {
+        assert_eq!(decode_base64("").unwrap(), Vec::<u8>::new());
+        // "Man" = TWFu
+        assert_eq!(decode_base64("TWFu").unwrap(), b"Man".to_vec());
+        // "Ma" = TWE=
+        assert_eq!(decode_base64("TWE=").unwrap(), b"Ma".to_vec());
+        // "M" = TQ==
+        assert_eq!(decode_base64("TQ==").unwrap(), b"M".to_vec());
+        // Binary bytes 0x00 0x80 0xff 0x7f = AID/fw==
+        assert_eq!(decode_base64("AID/fw==").unwrap(), vec![0x00, 0x80, 0xff, 0x7f]);
+    }
+
+    #[test]
+    fn decode_base64_tolerates_whitespace() {
+        assert_eq!(
+            decode_base64("TW\nFu").unwrap(),
+            b"Man".to_vec()
+        );
+        assert_eq!(decode_base64("TW Fu").unwrap(), b"Man".to_vec());
+    }
+
+    #[test]
+    fn decode_base64_rejects_bad_chars() {
+        assert!(decode_base64("!!!!").is_err());
+        assert!(decode_base64("AB@D").is_err());
+    }
+
+    #[test]
+    fn decode_base64_rejects_bad_length() {
+        // 3 chars after whitespace strip → not a multiple of 4.
+        assert!(decode_base64("ABC").is_err());
+    }
+
+    #[test]
+    fn build_multipart_body_includes_file_part_and_boundary() {
+        let body = build_multipart_body(
+            "bnd",
+            "utterance.wav",
+            "audio/wav",
+            &[0x01, 0x02, 0x03],
+            None,
+        );
+        let as_str = String::from_utf8_lossy(&body).to_string();
+        assert!(as_str.contains("--bnd\r\n"));
+        assert!(as_str.contains(
+            "Content-Disposition: form-data; name=\"file\"; filename=\"utterance.wav\""
+        ));
+        assert!(as_str.contains("Content-Type: audio/wav\r\n\r\n"));
+        assert!(as_str.ends_with("--bnd--\r\n"));
+        // Raw bytes survived verbatim in the middle.
+        assert!(body.windows(3).any(|w| w == [0x01, 0x02, 0x03]));
+    }
+
+    #[test]
+    fn build_multipart_body_emits_language_part_when_provided() {
+        let body = build_multipart_body("bnd", "u.wav", "audio/wav", &[0u8; 4], Some("ja"));
+        let as_str = String::from_utf8_lossy(&body).to_string();
+        assert!(
+            as_str.contains("Content-Disposition: form-data; name=\"language\""),
+            "language part missing: {as_str}"
+        );
+        assert!(as_str.contains("\r\n\r\nja\r\n"));
+    }
+
+    #[test]
+    fn derive_filename_defaults_to_wav() {
+        assert_eq!(derive_filename("audio/wav"), "utterance.wav");
+        assert_eq!(derive_filename("audio/wave"), "utterance.wav");
+        assert_eq!(derive_filename("audio/mpeg"), "utterance.mp3");
+        assert_eq!(derive_filename("audio/ogg"), "utterance.ogg");
+        // Unknown MIME → fall back to wav so whisper-server's
+        // default sniffer still has a hint.
+        assert_eq!(derive_filename("audio/something-weird"), "utterance.wav");
+    }
+
+    #[test]
+    fn multipart_boundary_is_unique_across_calls() {
+        let a = multipart_boundary();
+        let b = multipart_boundary();
+        assert_ne!(a, b);
+        assert!(a.starts_with("----aether-whispercpp-"));
     }
 
     #[test]

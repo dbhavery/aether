@@ -2433,14 +2433,16 @@ mod tests {
         assert_eq!(MIN_UTTERANCE_BODY_LEN, 64);
     }
 
-    /// Whisper.cpp scaffold `transcribe` still pins the "deferred"
-    /// marker so any accidental shadow implementation would trip this
-    /// shell-side sanity test. Proves no silent fallback from step
-    /// 4 — if someone implements `transcribe` without coordinating,
-    /// the marker vanishes and this test fires.
+    /// The whisper.cpp adapter now performs a real HTTP call to
+    /// `/inference`. With an unreachable server the shell must
+    /// surface a loud, user-visible error — NO silent empty
+    /// transcript. This test proves the no-silent-fallback contract
+    /// survives the scaffold → real-inference transition that landed
+    /// in this session. If the error goes quiet or turns into an
+    /// `Ok(SpeechResponse { text: "" })`, this test fires.
     #[cfg(feature = "speech-whispercpp")]
     #[test]
-    fn whispercpp_scaffold_error_still_pinned() {
+    fn whispercpp_transport_failure_surfaces_loudly() {
         use aether_l4_router::{
             SpeechProvider, SpeechRequest, WhisperCppSpeechConfig, WhisperCppSpeechProvider,
         };
@@ -2451,9 +2453,12 @@ mod tests {
             timeout_ms: 1,
         };
         let provider = WhisperCppSpeechProvider::new(cfg);
+        // "AAAA" decodes to 3 zero bytes — non-empty, so we clear
+        // the validator and reach the HTTP layer where the closed
+        // port trips the transport error.
         let err = provider
             .transcribe(SpeechRequest {
-                audio_b64: "A".repeat(128),
+                audio_b64: "AAAA".into(),
                 mime: "audio/wav".into(),
                 sample_rate: 16000,
                 channels: 1,
@@ -2461,9 +2466,11 @@ mod tests {
             })
             .unwrap_err();
         let msg = format!("{err}");
+        // Must mention the base URL or the POST path so the user
+        // has something to diagnose — not a silent empty transcript.
         assert!(
-            msg.contains("deferred to Voice V1 step 4 (transcribe_utterance)"),
-            "scaffold error marker missing; msg = {msg:?}",
+            msg.contains("127.0.0.1:65535") || msg.contains("/inference"),
+            "transport error should identify the endpoint; msg = {msg:?}",
         );
     }
 
