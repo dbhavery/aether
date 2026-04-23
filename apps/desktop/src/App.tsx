@@ -26,7 +26,6 @@ import { CameraPanel } from "./components/CameraPanel";
 import { Disclosure } from "./components/Disclosure";
 import { Header } from "./components/Header";
 import { InputBar } from "./components/InputBar";
-import { MemoryDrawer } from "./components/MemoryDrawer";
 import { PersonaCard } from "./components/PersonaCard";
 import { PresetPicker, readStoredPreset } from "./components/PresetPicker";
 import { ScreenPanel } from "./components/ScreenPanel";
@@ -361,14 +360,17 @@ export function App() {
           />
         </div>
       </div>
-      <MemoryDrawer
-        open={drawer === "memory"}
-        refreshKey={memoryRefreshKey}
-        onClose={() => setDrawer("none")}
-      />
+      {/* Run 5 (2026-04-23): the legacy `MemoryDrawer` was retired now
+       * that Memory V2 is closed. The header Memory button opens the
+       * Trust drawer on the Memory tab — one canonical surface for
+       * "what does Aether remember about me", with forget/edit/approval
+       * flows living next to audit + history. Both drawer states
+       * (`"memory"` and `"trust"`) render the same component; the
+       * `"memory"` state just picks the Memory tab initially. */}
       <TrustDrawer
-        open={drawer === "trust"}
+        open={drawer === "memory" || drawer === "trust"}
         refreshKey={memoryRefreshKey}
+        initialTab={drawer === "memory" ? "memory" : undefined}
         onClose={() => setDrawer("none")}
       />
       <SettingsDrawer

@@ -53,6 +53,14 @@ interface Props {
   open: boolean;
   refreshKey: number;
   onClose: () => void;
+  /** Tab to focus when the drawer opens. Defaults to `"audit"` to
+   * preserve v0 behaviour. Used by the header Memory button to jump
+   * straight to the Memory tab — the consolidated entry point for
+   * anything the user wants to see/forget/edit in memory (Memory V2
+   * step 4 is the durable UI; the prior MemoryDrawer was retired in
+   * Run 5). Re-applied on every `open: false → true` transition so a
+   * user can go audit → close → Memory button → opens on Memory. */
+  initialTab?: Tab;
 }
 
 const DECISION_META: Record<
@@ -73,8 +81,19 @@ const DECISION_META: Record<
  * trust that?" per planning/05_ux_principles §Information architecture
  * ("Action history is always reviewable").
  */
-export function TrustDrawer({ open, refreshKey, onClose }: Props) {
-  const [tab, setTab] = useState<Tab>("audit");
+export function TrustDrawer({ open, refreshKey, onClose, initialTab }: Props) {
+  const [tab, setTab] = useState<Tab>(initialTab ?? "audit");
+
+  // Re-apply `initialTab` on each open transition so the header's
+  // Memory button lands on Memory even after the user previously
+  // switched tabs and closed the drawer. Only fires when `open`
+  // actually transitions; pure re-renders don't clobber the user's
+  // current-session tab selection.
+  useEffect(() => {
+    if (open && initialTab) {
+      setTab(initialTab);
+    }
+  }, [open, initialTab]);
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("all");
   const [rows, setRows] = useState<TrustAuditRow[]>([]);
   const [telemetry, setTelemetry] = useState<TelemetryEntry[]>([]);
