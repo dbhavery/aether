@@ -1,6 +1,6 @@
-# Presence v1 — architecture reference (design only)
+# Presence v1 — architecture reference
 
-> **Status:** Design-only as of 2026-05-11.
+> **Status:** Current as of 2026-05-17.
 > **Scope:** Local, single-user desktop presence — signals about the
 > user's attention state and the assistant's responsiveness posture,
 > captured only while the app is foregrounded and the user is
@@ -12,9 +12,13 @@
 
 This doc mirrors `docs/VISION-V1-ARCHITECTURE.md` and
 `docs/VOICE-V1-ARCHITECTURE.md` section by section so all three
-modalities share a shape. When Presence v1 ships, this doc moves
-from "design-only" to "current" and a rot-guard manifest is added
-under `tools/lint-presence-doc/`.
+modalities share a shape. It describes the present implementation
+of Presence V1. Future / V2 material is explicitly labelled in
+each section.
+
+The rot-guard manifest at `tools/lint-presence-doc/check.py` holds
+this doc honest against the code — renames or deletes of the
+symbols and strings this doc claims exist will fail the linter.
 
 ---
 
@@ -26,17 +30,22 @@ deliberately a *local* and *coarse* signal — not continuous
 surveillance, not affective inference, not a replacement for the
 user's explicit commands.
 
-Three orthogonal axes:
+Presence V1 separates the concern onto **two orthogonal axes**.
+(The glossary records this as "assistant posture" and "user
+attention" being distinct L3 siblings, not a single monolithic
+"presence state".)
 
-| Axis | Values | Source |
-| ---- | ------ | ------ |
-| **User attention** | `Active` / `Idle` / `Away` | OS idle timer + window focus |
-| **Assistant posture** | `Listening` / `Working` / `Idle` / `Speaking` | L1 turn-state machine |
-| **Session lifecycle** | `Foreground` / `Background` / `Closed` | Tauri window events |
+| Axis | Values | Source | Status |
+| ---- | ------ | ------ | ------ |
+| **Assistant posture** | `Quiet` / `Listening` / `Thinking` / `Speaking` / `Paused` | L1 turn-state machine | Implemented |
+| **User attention** | `Active` / `Idle` / `Away` | OS idle timer | Implemented |
+| **Session lifecycle** | `Foreground` / `Background` / `Closed` | Tauri window events | **Future / V2** — see §9 |
 
-The three axes combine into a small, stable snapshot shape that the
-UI, audit, and transcript surfaces can read. No ML, no heuristics —
-just direct, explainable signals the user can audit.
+The two implemented axes drive the UI, transcript, and audit
+surfaces. No ML, no heuristics — just direct, explainable signals
+the user can audit. Session lifecycle remains a design target for
+a future track; the slot is held in §2 so composition shape can
+evolve additively without breaking existing consumers.
 
 ### Design parity with Vision/Voice
 
@@ -45,9 +54,9 @@ just direct, explainable signals the user can audit.
 | Consent model | per-device tri-state (Allow/Ask/Deny) | single tri-state | **always-on, local-only, opt-OUT via Settings toggle** |
 | Persistence | transcript + audit (metadata only) | transcript + audit (metadata only) | **transient snapshot + bounded session-lifetime history, no audit writes** |
 | Payload | image bytes, transient | audio bytes, transient | **no payload — only coarse state labels** |
-| Capability gate | `MediaCamera` / `MediaScreenCapture` | `Microphone` | **none — presence is observation, not action** |
+| Capability gate | `MediaCamera` / `MediaScreenCapture` | `MediaMic` | **none — presence is observation, not action** |
 | L5 audit entries | per capture | per utterance | **none — presence is not a policy-gated action** |
-| Telemetry kinds | 5 | 5 (planned) | **3 (state_changed, session_opened, session_closed)** |
+| Telemetry kinds | 5 | 5 | **1 (`presence_state_changed`)** — session kinds deferred |
 
 Presence is the only modality that does **not** go through L5's
 capability gate. It's observation of the shell's own window state
@@ -61,70 +70,132 @@ a **UX affordance**, not a policy-gated action.
 
 ```
 [OS]                                    [Tauri window]
- │ idle timer (system-provided)           │ focus change event
- │ — seconds since last input              │ — focused / blurred
+ │ idle timer (system-provided)           │ (V2 — session lifecycle)
+ │ — seconds since last input              │
  │ (no raw input events captured)          │
  │                                         │
  ▼                                         ▼
-[PresenceController — packages/l3-presence/src/controller.rs]
- │ polls OS idle + subscribes to window events
- │ applies thresholds (idle_after_s, away_after_s)
- │ emits PresenceEvent on state change ONLY (not on every poll)
+[idle_probe.rs — WindowsIdleProbe]       [future: session events]
+ │ trait IdleProbe + Windows raw-FFI impl
+ │ (macOS / Linux stub returns None)
  │
  ▼
-[PresenceEngine — packages/l3-presence/src/engine.rs]
- │ composes user attention + assistant posture into PresenceSnapshot
- │ buffers last N transitions in-memory (bounded ring, default 32)
- │ notifies subscribers via event-bus (L5 gateway + shell)
+[UserAttentionController — packages/l3-presence/src/attention.rs]
+ │ pure state machine on (now_ms, idle_seconds)
+ │ applies AttentionThresholds (idle_after_s, away_after_s)
+ │ returns AttentionEvent on state change ONLY (not on every tick)
+ │
+ │     (sibling axis — assistant posture)
+ │  [PresenceController — packages/l3-presence/src/controller.rs]
+ │   tracks Quiet / Listening / Thinking / Speaking / Paused
+ │   exposed via Tauri command presence_current
  │
  ▼
-[Shell (apps/desktop/src-tauri)]
- │ records telemetry entry (kind = "presence_state_changed")
- │ exposes presence_current / presence_recent Tauri commands
+[Shell poll loop — apps/desktop/src-tauri/src/main.rs::run_presence_loop]
+ │ 1 Hz tokio::interval tick
+ │ on transition:
+ │   - AppState::push_presence_history (bounded ring)
+ │   - app.emit("presence:attention", AttentionEventPayload)
  │ does NOT write an L5 AuditRecordEvent — presence is observation
  │
  ▼
+[Tauri commands — apps/desktop/src-tauri/src/commands.rs]
+ │ presence_current            — assistant posture snapshot
+ │ presence_status             — user-attention snapshot (§2 axis)
+ │ presence_recent_history     — bounded ring of recent transitions
+ │
+ ▼
 [UI — apps/desktop/src/components/]
- │ PresenceIndicator (header dot)
- │ Trust drawer History tab: presence rows alongside turn history
- │ optional Settings toggle: "Track presence in History"
+ │ SettingsDrawer: enabled + thresholds + history_in_trust_drawer toggles
+ │ TrustDrawer History tab: presence rows interleaved with turn history
+ │                           (gated by history_in_trust_drawer)
 ```
 
-No payload anywhere. The snapshot carries timestamps, coarse state
-enums, and nothing else.
+No payload anywhere. The telemetry carries timestamps and coarse
+state enums only.
 
 ---
 
 ## 2. State shapes
 
-### `PresenceSnapshot`
+Two controllers, two snapshot types. The glossary treats them as
+distinct so future composition (session lifecycle, avatar wiring)
+can be added additively.
 
-```
+### Assistant posture — `PresenceController` / `PresenceSnapshot`
+
+`packages/l3-presence/src/controller.rs`:
+
+```rust
+pub enum PresenceState {
+    Quiet, Listening, Thinking, Speaking, Paused,
+}
+
 pub struct PresenceSnapshot {
-    pub user_attention: UserAttention,   // Active | Idle | Away
-    pub assistant_posture: Posture,      // Listening | Working | Idle | Speaking
-    pub session_lifecycle: Session,      // Foreground | Background | Closed
-    pub as_of_ms: u64,                   // AppState::next_ts stamp
-    pub since_ms: u64,                   // when this combined state began
+    pub state: PresenceState,
+    pub as_of_ms: u64,
+    pub since_ms: u64,
+}
+
+pub trait PresenceController: Send + Sync { ... }
+pub struct InMemoryPresenceController { ... }
+pub const TRANSITION_LOG_CAP: usize = 32;
+```
+
+Exposed to the UI via the `presence_current` Tauri command.
+
+### User attention — `UserAttentionController` / `AttentionSnapshot`
+
+`packages/l3-presence/src/attention.rs`:
+
+```rust
+pub enum UserAttention { Active, Idle, Away }
+
+pub struct AttentionThresholds {
+    pub idle_after_s: u32,  // default 120
+    pub away_after_s: u32,  // default 600; coerced to idle_after_s + 1 if invalid
+}
+
+pub struct AttentionSnapshot {
+    pub state: UserAttention,
+    pub as_of_ms: u64,
+    pub since_ms: u64,
+    pub enabled: bool,
+}
+
+pub struct AttentionEvent {
+    pub from: UserAttention,
+    pub to: UserAttention,
+    pub as_of_ms: u64,
+}
+
+pub struct UserAttentionController { ... }
+```
+
+Exposed to the UI via the `presence_status` Tauri command (see §1
+for why it is named `_status`, not `_current` — the two commands
+cover different axes and coexist).
+
+### Shell-side ring — `PresenceHistoryEntry`
+
+`apps/desktop/src-tauri/src/state.rs`:
+
+```rust
+pub struct PresenceHistoryEntry {
+    pub kind: String,         // "presence_state_changed" today
+    pub from: String,         // UserAttention.label()
+    pub to: String,
+    pub as_of_ms: u64,
+}
+
+impl PresenceHistoryEntry {
+    pub fn from_event(ev: AttentionEvent) -> Self { ... }
 }
 ```
 
-`PresenceSnapshot` is Copy + Serialize, cheap to clone across IPC,
-and contains no free-form strings, file paths, or payloads.
-
-### `PresenceEvent`
-
-Emitted on **state change only**. The controller polls at a low rate
-(default 2 Hz) but only produces an event when one of the three axes
-crosses a threshold.
-
-```
-pub enum PresenceEvent {
-    AttentionChanged { from: UserAttention, to: UserAttention, as_of_ms: u64 },
-    PostureChanged { from: Posture, to: Posture, as_of_ms: u64 },
-    SessionChanged { from: Session, to: Session, as_of_ms: u64 },
-}
-```
+Held behind `AppState.presence_history: Mutex<VecDeque<_>>` with a
+bounded `PRESENCE_HISTORY_CAPACITY` cap (see `state.rs`). Mirrors
+the shape returned by the `presence_recent_history` command.
 
 ### Thresholds
 
@@ -132,15 +203,27 @@ Defaults, all configurable via `presence.json` (§3):
 
 - `idle_after_s = 120` — seconds of OS idle before `Active → Idle`.
 - `away_after_s = 600` — seconds of OS idle before `Idle → Away`.
-- `poll_hz = 2.0` — controller poll rate.
-- `transition_log_cap = 32` — bounded in-memory ring buffer.
+- Poll rate: 1 Hz (set in `main.rs` as `PRESENCE_POLL_MS = 1_000`;
+  a single `GetLastInputInfo` call per tick on Windows, a no-op
+  elsewhere).
+
+### Future / V2 — session lifecycle axis
+
+`Foreground / Background / Closed` is reserved space in this doc.
+Not implemented. A future slice can add a sibling controller that
+wires Tauri window-focus events into a new
+`SessionLifecycleController`, emitting `session_opened` /
+`session_closed` telemetry kinds on transitions. Shape parity with
+the other two axes is deliberate: the UI and Trust drawer will
+read from a composed snapshot without reshaping.
 
 ---
 
 ## 3. `presence.json` contract
 
 Path: `<app_data>/presence.json`, alongside the existing permission
-files.
+files. Owned by `apps/desktop/src-tauri/src/presence_config.rs`
+(struct `PresenceConfig`).
 
 Shape:
 
@@ -162,16 +245,21 @@ Contract (identical to every other config in the project):
   `#[serde(deny_unknown_fields)]`.
 - **Unknown fields dropped on rewrite** — documented limitation.
 - **Malformed JSON → default + WARN naming the path.**
-- **Single-writer through `PresenceRegistry` (or equivalent).**
+- **Single-writer** via `AppState::set_presence_config` + the
+  `set_presence_config` Tauri command; both validate thresholds
+  (`10 ≤ idle_after_s ≤ 86_400`, `away > idle`) and hot-swap the
+  controller atomically.
 - **Atomic writes** — write-to-temp + rename.
+- **Boot wiring** — `AppState::attach_presence_config_file` seeds
+  the attention controller on app startup.
 
 ### `enabled = false`
 
-When the user disables presence, the controller stops polling and
-stops emitting events; `presence_current` returns a `Disabled`
-sentinel. The UI collapses the presence indicator to a small
-"paused" glyph. No state is persisted or emitted until the user
-flips it back.
+When the user disables presence, the controller stops producing
+transitions; `presence_status` reports `enabled = false`. The
+poll loop still ticks but is a cheap no-op. Flipping back to
+enabled resets `since_ms` to the current tick so the user does
+not get a spurious "you've been Away for 10 minutes" event.
 
 ---
 
@@ -184,37 +272,43 @@ application is already inherently entitled to see while it runs.
 
 What the user controls:
 
-1. **Settings toggle** — "Track presence in History". Default ON.
-   When OFF: controller still runs (the assistant still knows when
-   the user is away so it can defer notifications), but transitions
-   are not written to the History tab. Telemetry still fires so the
-   in-session UI indicator works, but the Trust drawer History
-   stays empty of presence rows.
-2. **Master off switch** — "Presence: Disabled" toggle.
-   Controller stops polling; `presence_current` returns `Disabled`.
-3. **OS-level sandbox** — the user can of course deny the app
-   access to the OS idle timer through standard OS controls.
+1. **Settings `enabled` toggle** — master on/off. When off, the
+   controller is silent; `presence_status` reports
+   `enabled = false`.
+2. **Settings `history_in_trust_drawer` toggle** — when off,
+   transitions are still computed (so a future V2 sibling that
+   suppresses notifications when `Away` can work) but they are
+   not rendered in the Trust drawer History tab.
+3. **Settings threshold editor** — the user can tune
+   `idle_after_s` and `away_after_s` at runtime; the shell
+   validates and hot-swaps the controller.
+4. **OS-level sandbox** — the user can deny the app access to the
+   OS idle timer through standard OS controls; the shell's
+   `UnsupportedIdleProbe` returns `None` and the controller
+   remains at `Active`.
 
 Rationale: presence v1 is a local, transient, explainable signal.
 Treating it as a tri-state capability would imply it's doing
 something sensitive; treating it as a free-for-all would miss that
 users sometimes want their History tab to be pure chat. One toggle
-for each concern is the right resolution.
+per concern is the right resolution.
 
 ---
 
 ## 5. Telemetry kinds (presence-related)
 
-Presence emits exactly **three** kinds. All live under the same
-`TelemetryEntry` type used by vision and voice; the TS allow-list
-(future: `apps/desktop/src/lib/presenceTurns.ts`) mirrors the list
-and is unit-tested for parity.
+Presence emits **one** telemetry kind in V1. The TS allow-list
+for this is intentionally unshipped — presence telemetry lives
+on the existing `TelemetryEntry`/`PresenceHistoryEntry` wire
+without a dedicated classifier helper. When the Memory tab or
+richer filtering lands, a `presenceTurns.ts` mirror may join the
+voice / memory ones.
 
-| kind                      | when                                                                 | in audit? |
-| ------------------------- | -------------------------------------------------------------------- | --------- |
-| `presence_state_changed`  | `PresenceEvent` on any of the three axes crosses a threshold         | **no**    |
-| `session_opened`          | Tauri window shown for the first time this session                   | **no**    |
-| `session_closed`          | Tauri window closed, app backgrounded-for-shutdown, or app exiting   | **no**    |
+| kind                      | when                                                                 | in audit? | status |
+| ------------------------- | -------------------------------------------------------------------- | --------- | ------ |
+| `presence_state_changed`  | `AttentionEvent` on the user-attention axis crosses a threshold      | **no**    | **Implemented** |
+| `session_opened`          | Tauri window shown for the first time this session                   | **no**    | Future / V2 |
+| `session_closed`          | Tauri window closed, app backgrounded-for-shutdown, or app exiting   | **no**    | Future / V2 |
 
 Rationale for **no audit rows**: presence is not a policy-gated
 action. `AuditRecordEvent` is for "the assistant decided to do X
@@ -225,51 +319,54 @@ the audit surface with signals users don't expect to see there.
 The telemetry entries carry no user content, no audio, no image
 bytes — just state labels and timestamps.
 
+### Event bus channel
+
+`presence:attention` — emitted from `run_presence_loop` on every
+`AttentionEvent` the controller produces. The webview subscribes
+to this channel to update the Trust drawer in real time.
+
 ### TrustDrawer rendering
 
-- `presence_state_changed` → neutral tier (`text-aether-muted`).
-- `session_opened` / `session_closed` → same neutral tier with a
-  dedicated left-glyph so sessions read as "chapters" in the
-  History scroll.
+- `presence_state_changed` rows render in a muted tier
+  (`text-aether-muted` equivalent) when the
+  `history_in_trust_drawer` toggle is ON. Coalescing suppresses
+  A → B → A blips within 5 s so the History surface does not
+  read as a debug log.
 
 ---
 
 ## 6. UI surfaces
 
-All read from a future source-of-truth
-(`apps/desktop/src/lib/presence.ts::presenceLabelFor`).
+V1 implements two UI surfaces against presence; the header
+`PresenceIndicator` remains a future polish.
 
-| Surface                             | What it shows                                                       |
-| ----------------------------------- | ------------------------------------------------------------------- |
-| `PresenceIndicator` (header)        | compact dot + tooltip: "You: Active · Aether: Listening"           |
-| `Transcript` timeline dividers      | dim horizontal rule when a significant presence transition occurs  |
-| `TrustDrawer` History tab           | presence rows interleaved with turn history (muted tier)           |
-| `Settings` (new row)                | "Track presence in History" toggle + "Presence: Disabled" toggle   |
-
-The PresenceIndicator is deliberately small — a 10px dot plus a
-tooltip. It is not a status bar, not a clock, not a progress meter;
-it just communicates "the system is watching itself, and here's the
-current coarse state".
+| Surface                         | What it shows                                                                  | Status |
+| ------------------------------- | ------------------------------------------------------------------------------ | ------ |
+| `SettingsDrawer`                | Enabled toggle + idle/away threshold editor + history toggle                   | Implemented |
+| `TrustDrawer` History tab       | Presence rows interleaved with turn history, gated by `history_in_trust_drawer` | Implemented |
+| Header `PresenceIndicator` dot  | Compact dot + tooltip summarising both axes                                    | Future / V2 |
+| `Transcript` timeline dividers  | Dim rule when a significant presence transition occurs                         | Future / V2 |
 
 ---
 
 ## 7. Interaction with Vision v1 and Voice v1
 
 - **Vision v1 / Voice v1 capture events do not change presence.**
-  Presence is observation of the window + idle; it does not listen
+  Presence is observation of the OS idle timer; it does not listen
   to the L1 turn-state machine's per-capture decisions. Exception:
-  `Posture` DOES reflect whether L1 is currently mid-turn, because
-  that's the whole point of the "Aether is working" affordance.
+  assistant posture DOES reflect whether L1 is currently mid-turn,
+  because that's the whole point of the "Aether is working"
+  affordance.
 - **Audio capture does not influence attention.** Pressing
   push-to-talk doesn't flip the user from `Active → Away`; mic
   activity is a direct user action, not a presence signal. The
   attention axis reads the OS idle timer only.
-- **Vision frames do not influence attention.** v1 explicitly
+- **Vision frames do not influence attention.** V1 explicitly
   forbids camera-based gaze / face tracking as a presence signal.
   Pressing the camera's Analyze button is a direct user action.
 - **A presence transition never pre-empts a turn.** If the user
   becomes `Away` mid-turn, the turn completes and the assistant
-  posture flips back to `Idle` normally; the transcript does not
+  posture flips back to `Quiet` normally; the transcript does not
   gain a "user stepped away" annotation mid-message.
 
 ---
@@ -278,9 +375,8 @@ current coarse state".
 
 1. **Local-only.** No remote presence signals, no cloud.
 2. **No camera-based signals.** No gaze tracking, no face detection,
-   no lip-sync — even though L3 already holds the avatar / viseme
-   code for rendering. Rendering the assistant's mouth is different
-   from observing the user's face; v1 does the former only.
+   no lip-sync-as-presence. Rendering the assistant's mouth is
+   different from observing the user's face; v1 does the former only.
 3. **No audio-level monitoring.** Even if push-to-talk is in use,
    presence does not read the mic stream.
 4. **No biometrics of any kind.** Heart rate, keystroke cadence,
@@ -297,18 +393,51 @@ current coarse state".
    cap; presence history is not a durable record.
 10. **No cross-session leakage.** When the app closes, the ring
     clears.
+11. **Transition-only emission.** The poll loop is silent except
+    on state changes. Holding steady through a tick must never
+    produce an `AttentionEvent`.
+12. **L3 contains no `unsafe` code.** OS-specific probes live in
+    the shell (`apps/desktop/src-tauri/src/idle_probe.rs`) so the
+    `#![deny(unsafe_code)]` at the L3 crate level is unconditional.
+
+These are **hard constraints** — spec-side invariants. Tests and
+evals enforce them under specific inputs (that's acceptance
+criteria, a separate surface). The rot guard at
+`tools/lint-presence-doc/` prevents drift between this list and
+the code that implements it; it does not replace the tests.
 
 ---
 
 ## 9. Open questions for future tracks
 
+### Session lifecycle axis (V2)
+
+The three-axis composition reserved in §2 still needs:
+
+- A `SessionLifecycleController` sibling that consumes Tauri
+  window-focus events.
+- `session_opened` / `session_closed` telemetry kinds plumbed
+  through the shell ring and the TS allow-list.
+- A composed three-axis `PresenceSnapshot` that the UI can read
+  without reshaping either of today's snapshots. Additive —
+  existing consumers of `AttentionSnapshot` and the posture
+  `PresenceSnapshot` continue to work.
+
+### Real idle probes for macOS / Linux
+
+Today's `IdleProbe` trait has a Windows implementation
+(`GetLastInputInfo`). `UnsupportedIdleProbe` returns `None` on
+macOS / Linux — truthful but unusable, and the UI shows "idle
+probe unavailable" on those platforms. Replacements (`CGEventSource…`
+for macOS, `XScreenSaverQueryInfo` for X11; Wayland is a separate
+track) are V2.
+
 ### Presence-driven behavior
 
 - Should the assistant defer non-critical notifications when the
-  user is `Away`? Likely yes — but that's **Presence v2**, not v1.
+  user is `Away`? Likely yes — Presence V2.
 - Should the assistant lower model tier when the user is `Idle`
-  for cost reasons? Possibly — requires L4 router awareness, out
-  of scope.
+  for cost reasons? Possibly — requires L4 router awareness.
 
 ### Presence + voice integration
 
@@ -326,39 +455,52 @@ current coarse state".
 ### L3 avatar rendering
 
 - L3 already contains viseme / behavior rendering code. Presence
-  v1 does **not** wire the user-attention axis into the avatar —
+  V1 does **not** wire the user-attention axis into the avatar —
   that's an avatar-polish track that also reads from the same
   snapshot.
 
 ---
 
-## 10. Implementation sequencing (recommended)
+## 10. Implementation sequencing (recap)
 
-When Presence v1 moves from design to build, land in this order.
-Each step is one session of work.
+Presence V1 shipped in four handoff-scoped steps. Earlier
+planning drafts of this doc split the work into six sub-steps;
+the four below are the canonical handoff vocabulary (see
+`HANDOFF_2026-05-14_CONTINUE_COMPANION_BUILD.md` and
+`HANDOFF_2026-05-16_PRESENCE_MEMORY_EVAL.md`).
 
-1. **`presence.json` config surface + Settings toggles.** No
-   controller wiring yet.
-2. **`PresenceController` OS idle + window focus integration.**
-   The crate already has `PresenceController` as a trait with an
-   in-memory stub; wire the real signal sources.
-3. **`PresenceEngine` snapshot composition + bounded ring.**
-4. **Shell `presence_current` / `presence_recent` Tauri
-   commands + telemetry kinds.**
-5. **UI surfaces: `PresenceIndicator` in the header, Trust drawer
-   History rendering, transcript timeline dividers.**
-6. **Rot guard.** Add `tools/lint-presence-doc/` mirroring the
-   vision lint pattern, seed the anchor manifest from this doc,
-   flip status from "design-only" to "current".
+1. **Step 1** — `presence.json` config surface + Settings
+   `enabled` / `history_in_trust_drawer` toggles. Shipped.
+2. **Step 2** — `UserAttentionController` + `WindowsIdleProbe` +
+   shell poll loop + `presence_status` + `presence_recent_history`
+   Tauri commands + threshold-editing Settings UI. Shipped.
+3. **Step 3** — Trust drawer History tab renders presence rows
+   interleaved with turn telemetry, filtered by
+   `history_in_trust_drawer`. Shipped.
+4. **Step 4** — rot guard (`tools/lint-presence-doc/check.py`)
+   and doc flip from "design-only" to "current" (this PR).
 
 ---
 
 ## 11. How this doc stays honest
 
-This is a **design** doc — nothing in it is enforced by code until
-Presence v1 actually ships. When step 6 lands the rot guard, it
-becomes authoritative and must be updated in the same PR as any
-divergent behavior change.
+This doc is **current**. The rot guard at
+`tools/lint-presence-doc/check.py` verifies that every file path,
+symbol name, and string constant this doc claims exists is
+actually present in code.
+
+When a Presence V1 PR adds, removes, or renames an anchor it MUST:
+
+1. Update `ANCHORS` in `tools/lint-presence-doc/check.py`.
+2. Update this doc in the same PR.
+3. Bump this doc's `**Status:** Current as of YYYY-MM-DD` date.
+
+The rot guard is a doc/code consistency check, not a behavioural
+test — behavioural acceptance criteria live in the L3 unit tests
+(`cargo test -p aether-l3-presence`) and the shell tests
+(`cargo test ... --features sqlite-backend,ollama-provider,
+vision-llamacpp,speech-whispercpp`). Per the glossary §6, rot
+guards and AC are deliberately distinct surfaces.
 
 ---
 
@@ -366,9 +508,19 @@ divergent behavior change.
 
 - `docs/VISION-V1-ARCHITECTURE.md` — pattern this doc mirrors.
 - `docs/VOICE-V1-ARCHITECTURE.md` — sibling architecture.
-- `packages/l3-presence/src/` — existing L3 stubs: `controller.rs`,
-  `engine.rs`, `bridge.rs`. The trait shapes there survive largely
-  intact; this doc commits to which behaviors are implemented
-  when.
-- `tools/lint-vision-doc/check.py` — rot-guard shape to copy for
-  Presence V1 step 6.
+- `docs/GLOSSARY.md` §6 — rot guards vs acceptance criteria.
+- `packages/l3-presence/src/` — L3 code:
+  - `attention.rs` — user attention axis.
+  - `controller.rs` — assistant posture axis.
+  - `engine.rs`, `bridge.rs` — rendering surfaces (avatar polish
+    track, out of scope for Presence V1 rot guarding beyond their
+    existence).
+- `apps/desktop/src-tauri/src/` — shell wiring:
+  - `presence_config.rs` — `presence.json` contract.
+  - `idle_probe.rs` — OS idle probe trait + Windows impl.
+  - `main.rs::run_presence_loop` — 1 Hz poll + emit.
+  - `commands.rs` — `presence_current`, `presence_status`,
+    `presence_recent_history`.
+  - `state.rs::PresenceHistoryEntry` — shell-side ring row.
+- `tools/lint-vision-doc/check.py`, `tools/lint-voice-doc/check.py`
+  — rot-guard shape this linter copies.
