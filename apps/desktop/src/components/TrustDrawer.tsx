@@ -17,6 +17,7 @@ import {
 import { speechRouteSummary } from "../lib/speechProviders";
 import { isVoiceTurn, VOICE_TURN_KINDS } from "../lib/voiceTurns";
 import { truncateMiddleForDisplay } from "../lib/displayString";
+import { MemoryTab } from "./MemoryTab";
 import type {
   AuditDecisionLabel,
   PresenceConfig,
@@ -30,7 +31,7 @@ import type {
  * in the row's `title` attribute so it stays recoverable on hover. */
 const MODEL_ID_DISPLAY_MAX = 28;
 
-type Tab = "audit" | "history";
+type Tab = "audit" | "history" | "memory";
 type HistoryFilter = "all" | "media" | "voice" | "presence";
 
 /** One row of the interleaved History list. Turn telemetry and
@@ -153,7 +154,9 @@ export function TrustDrawer({ open, refreshKey, onClose }: Props) {
           <div className="text-[13px] text-aether-text">
             {tab === "audit"
               ? "What Aether decided, in order"
-              : "Recent turn timing and usage"}
+              : tab === "memory"
+                ? "What Aether remembers, by domain"
+                : "Recent turn timing and usage"}
           </div>
         </div>
         <button
@@ -175,6 +178,11 @@ export function TrustDrawer({ open, refreshKey, onClose }: Props) {
           label="Audit"
         />
         <TabButton
+          active={tab === "memory"}
+          onClick={() => setTab("memory")}
+          label="Memory"
+        />
+        <TabButton
           active={tab === "history"}
           onClick={() => setTab("history")}
           label="History"
@@ -184,6 +192,9 @@ export function TrustDrawer({ open, refreshKey, onClose }: Props) {
         {err && <div className="text-aether-err">{err}</div>}
         {!err && tab === "audit" && (
           <AuditList rows={rows} />
+        )}
+        {!err && tab === "memory" && (
+          <MemoryTab open={open} refreshKey={refreshKey} />
         )}
         {!err && tab === "history" && (
           <HistoryView
@@ -203,6 +214,12 @@ export function TrustDrawer({ open, refreshKey, onClose }: Props) {
         {tab === "audit" && (
           <span>
             Every decision is sealed in an append-only hash-chained log.
+          </span>
+        )}
+        {tab === "memory" && (
+          <span>
+            Forget and edit land immediately. User-sensitive domains ask for
+            confirmation first.
           </span>
         )}
         {tab === "history" && (
