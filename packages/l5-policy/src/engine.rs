@@ -163,6 +163,44 @@ impl EngineConfig {
                 risk: RiskClass::Medium,
             },
         );
+        // Memory V2 coarse surface. Same design pattern as media:
+        // the shell's `memory.json` `risk_for(domain)` is the
+        // user-facing per-domain gate (Facts / Artifacts default
+        // Ask, standard domains default Auto). L5 records the
+        // audit row here without layering a redundant modal on
+        // top. Risk classes match `default_risk_for(Capability::*)`
+        // — Read is Low, Write/Edit/Forget are Medium. Step 1
+        // intentionally left these out of the preset so any
+        // caller got `NeedsUpgrade`; step 3 is the conscious
+        // flip that turns the Memory V2 write path live.
+        d.insert(
+            Capability::MemoryRead,
+            CapabilityPolicy {
+                mode: ApprovalMode::Auto,
+                risk: RiskClass::Low,
+            },
+        );
+        d.insert(
+            Capability::MemoryWrite,
+            CapabilityPolicy {
+                mode: ApprovalMode::Auto,
+                risk: RiskClass::Medium,
+            },
+        );
+        d.insert(
+            Capability::MemoryEdit,
+            CapabilityPolicy {
+                mode: ApprovalMode::Auto,
+                risk: RiskClass::Medium,
+            },
+        );
+        d.insert(
+            Capability::MemoryForget,
+            CapabilityPolicy {
+                mode: ApprovalMode::Auto,
+                risk: RiskClass::Medium,
+            },
+        );
         Self {
             preset: PresetId(String::from("wave3.balanced")),
             preset_version: 1,
@@ -292,7 +330,15 @@ impl EngineConfig {
         match preset {
             AutonomyPreset::Observer => {
                 for (cap, policy) in self.preset_defaults.iter_mut() {
-                    policy.mode = if matches!(cap, Capability::FilesRead) {
+                    // Observer is read-only posture. `FilesRead` and
+                    // `MemoryRead` are the only read-path capabilities
+                    // currently in the preset — both stay Auto so the
+                    // assistant can still ground itself in prior
+                    // context while observing. Everything else flips
+                    // to Deny. When more read-only capabilities land
+                    // (e.g. `NotificationRead`, `EmailReadMetadata`),
+                    // add them to this match.
+                    policy.mode = if matches!(cap, Capability::FilesRead | Capability::MemoryRead) {
                         ApprovalMode::Auto
                     } else {
                         ApprovalMode::Deny
@@ -1034,23 +1080,38 @@ mod tests {
     }
 
     #[test]
-    fn memory_v2_capabilities_have_no_preset_default_yet() {
-        // Step 1 is additive-only: no preset defaults wired. This
-        // test locks that contract so step 2 is a conscious addition
-        // (flip `None` to `Some(CapabilityPolicy { ... })` in
-        // wave3_default and update this test).
+    fn memory_v2_capabilities_are_registered_in_preset_with_design_doc_modes() {
+        // Memory V2 step 3 flipped the four coarse capabilities from
+        // "absent → NeedsUpgrade" to "present → Auto at L5". The
+        // shell's `memory.json` `risk_for(domain)` is the user-facing
+        // per-domain gate; L5 records the audit row here without
+        // layering a redundant modal. Mirrors the Media/Mic pattern
+        // (see Decision #29 in HANDOFF_2026-05-16_PRESENCE_MEMORY_EVAL.md).
         let cfg = EngineConfig::wave3_default(persona());
-        assert!(
-            cfg.preset_defaults.get(&Capability::MemoryWrite).is_none(),
-            "MemoryWrite preset default should land in Memory V2 step 2, not step 1",
-        );
-        assert!(cfg.preset_defaults.get(&Capability::MemoryForget).is_none());
-        assert!(cfg.preset_defaults.get(&Capability::MemoryEdit).is_none());
-        // MemoryRead is NOT a step-1 addition — it pre-existed. Its
-        // preset entry may or may not land in the same PR as step 2;
-        // locking "does not exist yet" for it too keeps the door
-        // open.
-        assert!(cfg.preset_defaults.get(&Capability::MemoryRead).is_none());
+        let write = cfg
+            .preset_defaults
+            .get(&Capability::MemoryWrite)
+            .expect("MemoryWrite preset default should be registered in Memory V2 step 3");
+        assert_eq!(write.mode, ApprovalMode::Auto);
+        assert_eq!(write.risk, RiskClass::Medium);
+        let read = cfg
+            .preset_defaults
+            .get(&Capability::MemoryRead)
+            .expect("MemoryRead preset default should be registered");
+        assert_eq!(read.mode, ApprovalMode::Auto);
+        assert_eq!(read.risk, RiskClass::Low);
+        let edit = cfg
+            .preset_defaults
+            .get(&Capability::MemoryEdit)
+            .expect("MemoryEdit preset default should be registered");
+        assert_eq!(edit.mode, ApprovalMode::Auto);
+        assert_eq!(edit.risk, RiskClass::Medium);
+        let forget = cfg
+            .preset_defaults
+            .get(&Capability::MemoryForget)
+            .expect("MemoryForget preset default should be registered");
+        assert_eq!(forget.mode, ApprovalMode::Auto);
+        assert_eq!(forget.risk, RiskClass::Medium);
     }
 
     #[test]
@@ -1123,6 +1184,55 @@ mod tests {
             );
         }
         assert_eq!(cfg.preset.0, "wave3.observer");
+    }
+
+    #[test]
+    fn preset_overlay_observer_allows_memory_read_denies_memory_mutations() {
+        // Observer is read-only posture. MemoryRead stays Auto so the
+        // assistant can ground itself in prior conversation. Writes /
+        // edits / forgets flip to Deny — Observer users explicitly
+        // chose to watch, not act on the memory system.
+        let cfg =
+            EngineConfig::wave3_default(persona()).with_preset_overlay(AutonomyPreset::Observer);
+        assert_eq!(
+            cfg.preset_defaults[&Capability::MemoryRead].mode,
+            ApprovalMode::Auto,
+            "Observer must still allow MemoryRead",
+        );
+        for cap in [
+            Capability::MemoryWrite,
+            Capability::MemoryEdit,
+            Capability::MemoryForget,
+        ] {
+            assert_eq!(
+                cfg.preset_defaults[&cap].mode,
+                ApprovalMode::Deny,
+                "Observer must deny {cap:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn preset_overlay_operator_keeps_memory_capabilities_auto() {
+        // Operator is already the liberal preset — leaving Memory V2
+        // caps at their baseline Auto is correct. This test locks
+        // that a future overlay tweak doesn't silently escalate
+        // memory mutations on the operator preset without a
+        // corresponding design update.
+        let cfg =
+            EngineConfig::wave3_default(persona()).with_preset_overlay(AutonomyPreset::Operator);
+        for cap in [
+            Capability::MemoryRead,
+            Capability::MemoryWrite,
+            Capability::MemoryEdit,
+            Capability::MemoryForget,
+        ] {
+            assert_eq!(
+                cfg.preset_defaults[&cap].mode,
+                ApprovalMode::Auto,
+                "Operator must keep {cap:?} as Auto",
+            );
+        }
     }
 
     #[test]
