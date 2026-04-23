@@ -103,6 +103,14 @@ export interface TelemetryEntry {
   latency_ms?: number;
   prompt_tokens?: number;
   completion_tokens?: number;
+  /** Memory V2 domain label (wire form: `"session"`, `"durable"`,
+   * `"facts"`, `"projects"`, `"preferences"`, `"artifacts"`).
+   * Populated only on memory-scoped telemetry kinds; see
+   * `memoryTurns.ts` for the full list. */
+  memory_domain?: string;
+  /** Memory V2 per-item id. Stable per write; absent on
+   * domain-scoped events (forget-all, sampled retrieval). */
+  memory_id?: string;
 }
 
 export async function telemetryRecent(
