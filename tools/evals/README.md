@@ -5,11 +5,12 @@ Quality + evaluation harness for Aether.
 See [docs/QUALITY-EVAL-V1-ARCHITECTURE.md](../../docs/QUALITY-EVAL-V1-ARCHITECTURE.md)
 for the full design.
 
-This is the **v1.1 harness**: Python runner, small expectation DSL,
+This is the **v1.2 harness**: Python runner, small expectation DSL,
 one seed scenario per domain, one adversarial probe per domain, a
-markdown baseline report, and a minimal live Ollama backend hook.
-Nothing ambitious. The goal is to start *measuring* quality on a
-repeatable, replayable surface — not to finish the entire eval stack.
+markdown baseline report, a live Ollama backend hook (v1.1), and
+structured capture + replay (v1.2). Nothing ambitious. The goal is
+to start *measuring* quality on a repeatable, replayable surface —
+not to finish the entire eval stack.
 
 ## Run
 
@@ -19,6 +20,8 @@ python tools/evals/__main__.py --dry-run
 python tools/evals/__main__.py --report-md out/eval_report.md
 # Live Ollama (v1.1):
 python tools/evals/__main__.py --backend ollama --capture-into out/captured
+# Replay a capture directory (v1.2, no backend required):
+python tools/evals/__main__.py --replay-from out/captured
 ```
 
 `--dry-run` does not invoke any backend — it replays expectations
@@ -33,12 +36,36 @@ local Ollama instance and evaluates the response. Controlled by:
 - `AETHER_EVAL_OLLAMA_MODEL`    — default `gemma4`
 - `AETHER_EVAL_OLLAMA_TIMEOUT_S` — default `30`
 
-`--capture-into <dir>` writes one markdown file per scenario with the
-captured prompt + response — useful for diffing between runs.
+`--capture-into <dir>` writes two files per scenario:
+- `<scenario_id>.md`   — human-readable prompt + response (v1.1).
+- `<scenario_id>.json` — structured, machine-replayable payload
+  with `scenario_id`, `domain`, `backend`, `captured_at` (UTC
+  ISO-8601), `prompt`, `response`, and `metadata` (model id,
+  base URL, timeout). Unknown top-level fields are ignored on
+  replay so the schema stays additive.
+
+`--replay-from <dir>` reads those JSON captures back and evaluates
+the same expectations against the captured responses. No backend
+is contacted; scenarios without a matching capture are skipped
+with an explanatory note. Mutually exclusive with
+`--backend ollama` and `--capture-into` — captures already exist
+by the time you are replaying.
 
 Live-backend mode is deliberately minimal: single-turn, no persona
 prompt compilation, no memory context injection. Richer wiring lands
 in later slices.
+
+## Tests
+
+Stdlib-only unit tests for the capture / replay machinery live
+next to the runner:
+
+```bash
+python tools/evals/test_capture_replay.py
+```
+
+13 tests cover filename stability, JSON shape, round-trip
+fidelity, and graceful handling of missing / malformed captures.
 
 Exit codes:
 
@@ -115,7 +142,9 @@ Sequencing from the design doc §6:
    (`tools/evals/baseline/`).
 3. ✅ Adversarial scenarios (one per domain, v1.1).
 4. ✅ Live Ollama backend hook (v1.1).
-5. ⏳ Session-log replay importer.
-6. ⏳ `tools/lint-quality-doc/` rot guard (doc stays design-only
+5. ✅ Structured capture + replay (v1.2).
+6. ⏳ Session-log replay importer (bridge a real Aether session
+   log into a capture dir).
+7. ⏳ `tools/lint-quality-doc/` rot guard (doc stays design-only
    until this lands).
-7. ⏳ Regression harness + `pnpm eval` wiring.
+8. ⏳ Regression harness + `pnpm eval` wiring.
