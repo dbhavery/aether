@@ -1,29 +1,32 @@
 //! # aether-l2-memory
 //!
-//! **Status:** Wave 4 stub.
+//! L2 owns the companion memory kernel: the six memory domains and
+//! the session-memory store used by the runtime for short-range
+//! conversational continuity.
 //!
-//! L2 owns the companion memory kernel: the 6 memory domains, memory-item
-//! storage, embedding references, and provenance tags consumed by L5.
-//! Source: `planning/plans/L2_memory_kernel_system_design.md`,
-//! `planning/plans/implementation_prep/L2_interface_pack.md`,
-//! `planning/plans/implementation_prep/sqlite_schema_pack.md` §3e.
+//! ADR-0001 (2026-04-23) retired the pre-V2 kernel stub
+//! (`MemoryKernel`, `MemoryItem`, `PrivacyClass`, `RetentionKind`,
+//! `EmbeddingStore`, `EmbeddingRef`, and the old six-variant
+//! Personal/Work/... `MemoryDomain`). The six-domain V2 taxonomy
+//! (Session / Durable / Facts / Projects / Preferences / Artifacts)
+//! is now hosted here in `domain.rs` and `SessionMemoryStore` is the
+//! shared storage contract.
+//!
+//! Source: `docs/MEMORY-V2-ARCHITECTURE.md`,
+//! `docs/adr/ADR-0001-memory-domain-reconciliation.md`.
 
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
-#![allow(dead_code)]
 
+pub mod domain;
 pub mod error;
-pub mod kernel;
 pub mod session;
 
 #[cfg(feature = "sqlite-backend")]
 pub mod sqlite_session;
 
+pub use domain::MemoryDomain;
 pub use error::L2Error;
-pub use kernel::{
-    EmbeddingRef, EmbeddingStore, MemoryDomain, MemoryId, MemoryItem, MemoryKernel, PrivacyClass,
-    ProvenanceTag, RetentionKind,
-};
 pub use session::{
     render_transcript, InMemorySessionMemoryStore, MemoryRole, RecentMemoryConfig,
     RecentMemoryWindow, SessionMemoryStore, TurnMemoryRecord,

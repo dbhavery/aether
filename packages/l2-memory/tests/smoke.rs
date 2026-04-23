@@ -2,29 +2,19 @@ use aether_l2_memory::*;
 
 #[test]
 fn six_memory_domains_named() {
-    let _all = [
-        MemoryDomain::Personal,
-        MemoryDomain::Work,
-        MemoryDomain::Health,
-        MemoryDomain::Finance,
-        MemoryDomain::Creative,
-        MemoryDomain::System,
+    // Memory V2 §1 — six domains. ADR-0001 relocated this enum from
+    // the shell to L2; the variant set is frozen.
+    let all = [
+        MemoryDomain::Session,
+        MemoryDomain::Durable,
+        MemoryDomain::Facts,
+        MemoryDomain::Projects,
+        MemoryDomain::Preferences,
+        MemoryDomain::Artifacts,
     ];
-    assert_eq!(_all.len(), 6);
-}
-
-#[test]
-fn provenance_tag_set_matches_l5_contract() {
-    // These tags must match the L5 ProvenanceTag surface 1:1 — L5 consumes
-    // them on every ActionRequest. Regenerate ts-rs bindings if this changes.
-    let _all = [
-        ProvenanceTag::Public,
-        ProvenanceTag::Session,
-        ProvenanceTag::Durable,
-        ProvenanceTag::Private,
-        ProvenanceTag::UntrustedInput,
-        ProvenanceTag::ScrapedContent,
-        ProvenanceTag::ExtractedPreference,
-    ];
-    assert_eq!(_all.len(), 7);
+    assert_eq!(all.len(), 6);
+    assert_eq!(MemoryDomain::ALL.len(), 6);
+    for (a, b) in all.iter().zip(MemoryDomain::ALL.iter()) {
+        assert_eq!(a, b);
+    }
 }

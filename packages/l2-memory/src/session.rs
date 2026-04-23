@@ -11,10 +11,11 @@
 //! - per-session isolation,
 //! - no embeddings, no summarisation, no durable storage, no LLM calls.
 //!
-//! The richer [`MemoryKernel`](crate::MemoryKernel) surface — domains,
-//! provenance tags, privacy classes, embeddings — is a separate concern that
-//! will grow in later waves. This module does **not** try to be the final
-//! memory system; it closes the immediate amnesia gap only.
+//! The richer durable-memory surface — retention sweep, embeddings,
+//! cross-session recall — is a separate concern that grows through
+//! Memory V2 steps 5+ (see `docs/MEMORY-V2-ARCHITECTURE.md`). This
+//! module does **not** try to be the final memory system; it closes
+//! the immediate amnesia gap only.
 //!
 //! ## Integration
 //!

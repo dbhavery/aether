@@ -36,52 +36,12 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-/// Memory domains as frozen by design §1. Six, stable, additive-only
-/// for future builds. Serde wire format is the lowercase id so the
-/// JSON file reads naturally.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum MemoryDomain {
-    /// Turn-by-turn conversation within one session.
-    Session,
-    /// Recent conversation across sessions (rolling window, 30-day
-    /// default).
-    Durable,
-    /// Explicit user-provided facts — user-sensitive.
-    Facts,
-    /// Named project scopes + associated notes / references.
-    Projects,
-    /// Per-user tuning (timezone, style, interaction defaults).
-    Preferences,
-    /// References to files, URLs, code snippets the user pinned —
-    /// user-sensitive.
-    Artifacts,
-}
-
-impl MemoryDomain {
-    /// Every domain, in stable order. Used by the Settings UI to
-    /// render rows and by tests to lock the set.
-    pub const ALL: [MemoryDomain; 6] = [
-        MemoryDomain::Session,
-        MemoryDomain::Durable,
-        MemoryDomain::Facts,
-        MemoryDomain::Projects,
-        MemoryDomain::Preferences,
-        MemoryDomain::Artifacts,
-    ];
-
-    /// Lowercase wire / UI label.
-    pub fn label(self) -> &'static str {
-        match self {
-            MemoryDomain::Session => "session",
-            MemoryDomain::Durable => "durable",
-            MemoryDomain::Facts => "facts",
-            MemoryDomain::Projects => "projects",
-            MemoryDomain::Preferences => "preferences",
-            MemoryDomain::Artifacts => "artifacts",
-        }
-    }
-}
+// ADR-0001 (2026-04-23): `MemoryDomain` is hosted in `aether-l2-memory`
+// so background jobs (retention sweep, embeddings worker) can speak
+// the taxonomy without coupling to the desktop binary. Re-exported
+// here so existing `memory_config::MemoryDomain` callsites continue to
+// compile unchanged.
+pub use aether_l2_memory::MemoryDomain;
 
 /// Policy risk posture per domain. Mirrors the tri-state the media
 /// and mic permissions already use, so the Settings UI can share
