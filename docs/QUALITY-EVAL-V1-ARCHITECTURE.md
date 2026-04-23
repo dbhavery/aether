@@ -1,6 +1,6 @@
 # Quality & Eval v1 — architecture reference
 
-> **Status:** Design-only as of 2026-05-14.
+> **Status:** Current as of 2026-04-23.
 > **Scope:** The internal infrastructure that measures — and
 > starts to improve — Aether's quality along the axes that matter
 > for a companion that must feel **indistinguishable from a real
@@ -15,9 +15,10 @@ real person" standard for a target surface, we do **not** lower
 the bar. We build the quality layers — evals, routing, memory
 control, and, later, fine-tuning infrastructure — ourselves.
 
-This document is the first slice of that. Nothing in it is
-enforced by code until §6's rot guard lands; treat it as a
-coherent proposal until then.
+This document describes the v1.x harness as it ships today
+(scaffold → adversarial → live Ollama → capture/replay →
+session-log importer). Doc/code consistency is enforced by
+`tools/lint-quality-doc/check.py`.
 
 ---
 
@@ -140,27 +141,71 @@ code non-zero when regressions fire.
 
 ---
 
-## 3. Minimum viable harness (v1)
+## 3. Harness (v1.x — shipped)
 
-The smallest thing that measures something real:
+### 3.1 Layout
 
-1. `tools/evals/` Python package:
-   - `tools/evals/__main__.py` — CLI entry point.
-   - `tools/evals/runner.py` — loads JSONL scenarios, runs them
-     against a configurable backend (local Ollama by default;
-     mock for unit tests).
-   - `tools/evals/expectations.py` — the small DSL interpreter.
-   - `tools/evals/report.py` — emits markdown + JSON reports.
-2. `tools/evals/scenarios/<domain>/*.jsonl` — seed scenarios,
-   one per domain, proving the runner wiring.
-3. `tools/evals/README.md` — how to add a scenario, run the
-   suite, read the report.
-4. Optional thin Rust glue later: `packages/aether-eval/` if the
-   runner needs direct access to the L1 / L4 surfaces rather
-   than going through a public API.
+The harness lives entirely under `tools/evals/`:
 
-No CI wiring yet — v1 is local-first. A future slice adds
-`pnpm eval` or equivalent.
+- `tools/evals/__main__.py` — CLI entry point. Loads scenarios,
+  resolves an `actual` response (dry-run, live Ollama, or replay
+  from a capture directory), evaluates expectations, emits a
+  markdown and/or JSON report. Core types: `Scenario`,
+  `ScenarioResult`. Core functions: `_iter_scenarios`,
+  `_last_user_prompt`, `_ollama_env`, `_ollama_generate`,
+  `_capture_filename`, `_write_capture_json`,
+  `_load_replay_capture`, `_resolve_actual`, `_run_scenario`,
+  `main`.
+- `tools/evals/expectations.py` — the small DSL interpreter.
+  `EVALUATED_KINDS` is the registry of implemented kinds
+  (`forbids`, `requires`, `length`, `tone`). `evaluate_expectation`
+  dispatches to the per-kind evaluator and returns an
+  `ExpectationResult`.
+- `tools/evals/report.py` — `build_markdown_report` renders one
+  section per scenario, grouped by domain, with status badges
+  and an expectations table.
+- `tools/evals/session_log_import.py` — v1.3 session-log replay
+  importer (see §6 step 5 below).
+- `tools/evals/test_capture_replay.py` — stdlib-only unit tests
+  for capture/replay machinery.
+- `tools/evals/test_session_log_import.py` — stdlib-only unit
+  tests for the session-log importer.
+- `tools/evals/scenarios/<domain>/*.jsonl` — seed scenarios
+  (one per domain) and adversarial probes under
+  `tools/evals/adversarial/<domain>/*.jsonl`.
+- `tools/evals/README.md` — user-facing usage.
+
+Backend modes are tracked by a `backend` token inside the runner:
+`"dry-run"`, `"ollama"`, `"replay"` (plus `"session-log"` which
+the importer stamps into capture metadata so replay consumers can
+tell the source apart).
+
+### 3.2 Live-backend config (v1.1) + capture/replay (v1.2)
+
+Live Ollama is controlled by three env vars, read and snapshotted
+together by `_ollama_env` so capture metadata and the outbound
+POST agree on exactly which values were in effect:
+
+- `AETHER_EVAL_OLLAMA_BASE_URL` — default `http://127.0.0.1:11434`.
+- `AETHER_EVAL_OLLAMA_MODEL` — default `gemma4`.
+- `AETHER_EVAL_OLLAMA_TIMEOUT_S` — default `30`.
+
+Capture flow (v1.2):
+
+- `--capture-into <dir>` pairs each scenario with `<id>.md`
+  (human-readable) and `<id>.json` (machine-replayable, written
+  by `_write_capture_json`). Schema: `scenario_id`, `domain`,
+  `backend`, `captured_at` (UTC ISO-8601 with `Z` suffix),
+  `prompt`, `response`, `metadata`. Unknown top-level fields are
+  ignored on replay so the schema stays additive.
+- `--replay-from <dir>` reads the JSON captures back via
+  `_load_replay_capture` and evaluates expectations against the
+  captured responses. Mutually exclusive with `--backend ollama`
+  and `--capture-into` — captures already exist by the time you
+  are replaying.
+
+No CI wiring yet — v1.x is local-first. A future slice adds
+`pnpm eval` or equivalent (§6 step 7).
 
 ---
 
@@ -250,35 +295,48 @@ compensation working.
 
 ## 6. Implementation sequencing
 
-1. **This doc.** Land `docs/QUALITY-EVAL-V1-ARCHITECTURE.md`.
-2. **Scaffold `tools/evals/`.** Minimal Python runner, one
+1. ✅ **This doc.** `docs/QUALITY-EVAL-V1-ARCHITECTURE.md`.
+2. ✅ **Scaffold `tools/evals/`.** Minimal Python runner, one
    scenario per domain, README.
-3. **Baseline report.** Run the suite against current provider
+3. ✅ **Baseline report.** Run the suite against current provider
    config, capture the markdown, commit alongside the session
-   handoff. This is the "where we are right now" snapshot that
-   future changes get measured against.
-4. **Adversarial probes.** First adversarial scenario per
-   domain.
-5. **Replay harness.** Import-from-session-log command.
-6. **Rot guard.** `tools/lint-quality-doc/` mirroring the
-   vision / voice rot guards; flip this doc to "current".
-7. **Regression harness.** Single CLI command that exits non-
-   zero on regression; eventually wired to a `pnpm eval`
+   handoff. (`tools/evals/baseline/`.)
+4. ✅ **Adversarial probes.** First adversarial scenario per
+   domain (v1.1).
+5. ✅ **Session-log replay importer (v1.3).** Bridge a real
+   Aether session log into the v1.2 capture directory format so
+   replay can cover actual conversations. Implementation:
+   `tools/evals/session_log_import.py`. Core symbols:
+   `SessionTurn`, `ImportReport`, `_parse_session_log`,
+   `_pair_user_assistant`, `_extract_scenarios`, `match_scenario`,
+   `import_session_log`, `main`. Unit tests live in
+   `tools/evals/test_session_log_import.py`. Captures emitted
+   with `backend="session-log"` so replay consumers can tell
+   them apart from live Ollama captures.
+6. ✅ **Rot guard (Tier 2B).** `tools/lint-quality-doc/`
+   mirroring the vision / voice / presence rot guards. This
+   doc flipped to "current" in the same change.
+7. ⏳ **Regression harness.** Single CLI command that exits
+   non-zero on regression; eventually wired to a `pnpm eval`
    command.
-
-Steps 1 and 2 land in this session. The rest seed the backlog.
 
 ---
 
 ## 7. How this doc stays honest
 
-Until step 6 lands the rot guard, this is a design doc — nothing
-in it is enforced by code. The status flip happens when the
-tooling under `tools/evals/` actually corresponds to the shape
-described above.
+`tools/lint-quality-doc/check.py` carries an anchor manifest
+tying this doc to concrete files, symbols, and string constants
+under `tools/evals/`. When code and doc diverge — a rename, a
+deletion, a typo — the linter fails. The manifest and this doc
+MUST be updated in the same PR when anchors change.
 
-When the code and the doc diverge after that, the rot guard
-catches it on the next eval run.
+Rot guards verify doc/code consistency only. Behavioural
+correctness lives in the eval runner itself (`--dry-run`
+produces 6/6 pass, adversarial produces 6/6 fail by design) and
+in the stdlib-only unit tests (`test_capture_replay.py`,
+`test_session_log_import.py`). Per `docs/GLOSSARY.md` §6, rot
+guards and acceptance criteria are deliberately distinct
+surfaces.
 
 ---
 

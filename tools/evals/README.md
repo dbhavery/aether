@@ -143,8 +143,7 @@ Sequencing from the design doc §6:
 3. ✅ Adversarial scenarios (one per domain, v1.1).
 4. ✅ Live Ollama backend hook (v1.1).
 5. ✅ Structured capture + replay (v1.2).
-6. ⏳ Session-log replay importer (bridge a real Aether session
-   log into a capture dir).
-7. ⏳ `tools/lint-quality-doc/` rot guard (doc stays design-only
-   until this lands).
+6. ✅ Session-log replay importer — `session_log_import.py` (v1.3).
+7. ✅ `tools/lint-quality-doc/` rot guard + doc flipped to
+   "Current" (Tier 2B).
 8. ⏳ Regression harness + `pnpm eval` wiring.
