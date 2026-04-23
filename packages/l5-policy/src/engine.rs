@@ -1022,9 +1022,15 @@ mod tests {
         // Read is Low; write/edit/forget are Medium. Mirrors the
         // reasoning in `default_risk_for`.
         assert_eq!(default_risk_for(&Capability::MemoryRead), RiskClass::Low);
-        assert_eq!(default_risk_for(&Capability::MemoryWrite), RiskClass::Medium);
+        assert_eq!(
+            default_risk_for(&Capability::MemoryWrite),
+            RiskClass::Medium
+        );
         assert_eq!(default_risk_for(&Capability::MemoryEdit), RiskClass::Medium);
-        assert_eq!(default_risk_for(&Capability::MemoryForget), RiskClass::Medium);
+        assert_eq!(
+            default_risk_for(&Capability::MemoryForget),
+            RiskClass::Medium
+        );
     }
 
     #[test]

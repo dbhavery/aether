@@ -232,10 +232,8 @@ fn build_multipart_body(
     // File part
     body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
     body.extend_from_slice(
-        format!(
-            "Content-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\n"
-        )
-        .as_bytes(),
+        format!("Content-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\n")
+            .as_bytes(),
     );
     body.extend_from_slice(format!("Content-Type: {mime}\r\n\r\n").as_bytes());
     body.extend_from_slice(audio);
@@ -244,9 +242,7 @@ fn build_multipart_body(
     // Optional language hint
     if let Some(lang) = language {
         body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
-        body.extend_from_slice(
-            b"Content-Disposition: form-data; name=\"language\"\r\n\r\n",
-        );
+        body.extend_from_slice(b"Content-Disposition: form-data; name=\"language\"\r\n\r\n");
         body.extend_from_slice(lang.as_bytes());
         body.extend_from_slice(b"\r\n");
     }
@@ -264,10 +260,7 @@ fn build_multipart_body(
 fn decode_base64(input: &str) -> Result<Vec<u8>, String> {
     // Strip whitespace (newlines, spaces, tabs). Case-sensitive
     // alphabet: A-Z, a-z, 0-9, +, /. Padding is `=`.
-    let cleaned: Vec<u8> = input
-        .bytes()
-        .filter(|b| !b.is_ascii_whitespace())
-        .collect();
+    let cleaned: Vec<u8> = input.bytes().filter(|b| !b.is_ascii_whitespace()).collect();
     if cleaned.len() % 4 != 0 {
         return Err(format!(
             "base64 input length {} is not a multiple of 4",
@@ -280,22 +273,35 @@ fn decode_base64(input: &str) -> Result<Vec<u8>, String> {
         let chunk = &cleaned[i..i + 4];
         let v0 = decode_base64_char(chunk[0])
             .ok_or_else(|| format!("invalid base64 char at offset {i}: {:?}", chunk[0] as char))?;
-        let v1 = decode_base64_char(chunk[1])
-            .ok_or_else(|| format!("invalid base64 char at offset {}: {:?}", i + 1, chunk[1] as char))?;
+        let v1 = decode_base64_char(chunk[1]).ok_or_else(|| {
+            format!(
+                "invalid base64 char at offset {}: {:?}",
+                i + 1,
+                chunk[1] as char
+            )
+        })?;
         let pad2 = chunk[2] == b'=';
         let pad3 = chunk[3] == b'=';
         let v2 = if pad2 {
             0u8
         } else {
             decode_base64_char(chunk[2]).ok_or_else(|| {
-                format!("invalid base64 char at offset {}: {:?}", i + 2, chunk[2] as char)
+                format!(
+                    "invalid base64 char at offset {}: {:?}",
+                    i + 2,
+                    chunk[2] as char
+                )
             })?
         };
         let v3 = if pad3 {
             0u8
         } else {
             decode_base64_char(chunk[3]).ok_or_else(|| {
-                format!("invalid base64 char at offset {}: {:?}", i + 3, chunk[3] as char)
+                format!(
+                    "invalid base64 char at offset {}: {:?}",
+                    i + 3,
+                    chunk[3] as char
+                )
             })?
         };
 
@@ -353,11 +359,10 @@ impl SpeechProvider for WhisperCppSpeechProvider {
         // one new dependency (base64 crate) avoided; the payload is
         // ~< a few hundred KB for a single utterance so the allocator
         // cost is trivial.
-        let audio = decode_base64(&req.audio_b64).map_err(|detail| {
-            L4Error::ProviderBadResponse {
+        let audio =
+            decode_base64(&req.audio_b64).map_err(|detail| L4Error::ProviderBadResponse {
                 detail: format!("whispercpp-speech: audio base64 decode failed: {detail}"),
-            }
-        })?;
+            })?;
         if audio.is_empty() {
             return Err(L4Error::ProviderBadResponse {
                 detail: "whispercpp-speech: decoded audio payload was empty".to_string(),
@@ -376,13 +381,8 @@ impl SpeechProvider for WhisperCppSpeechProvider {
 
         let filename = derive_filename(&req.mime);
         let boundary = multipart_boundary();
-        let body = build_multipart_body(
-            &boundary,
-            &filename,
-            &req.mime,
-            &audio,
-            language.as_deref(),
-        );
+        let body =
+            build_multipart_body(&boundary, &filename, &req.mime, &audio, language.as_deref());
 
         let url = format!("{}/inference", self.base_url.trim_end_matches('/'));
         let content_type = format!("multipart/form-data; boundary={boundary}");
@@ -401,9 +401,10 @@ impl SpeechProvider for WhisperCppSpeechProvider {
         // may widen it; we only depend on `text`. `into_json` returns
         // `Err` if the server returned non-JSON (e.g. HTML error
         // page) — surface as a provider error.
-        let parsed: WhisperResponse = resp.into_json().map_err(|e| L4Error::ProviderBadResponse {
-            detail: format!("whispercpp-speech JSON decode failed: {e}"),
-        })?;
+        let parsed: WhisperResponse =
+            resp.into_json().map_err(|e| L4Error::ProviderBadResponse {
+                detail: format!("whispercpp-speech JSON decode failed: {e}"),
+            })?;
         let text = parsed.text.unwrap_or_default();
 
         Ok(SpeechResponse {
@@ -687,15 +688,15 @@ mod tests {
         // "M" = TQ==
         assert_eq!(decode_base64("TQ==").unwrap(), b"M".to_vec());
         // Binary bytes 0x00 0x80 0xff 0x7f = AID/fw==
-        assert_eq!(decode_base64("AID/fw==").unwrap(), vec![0x00, 0x80, 0xff, 0x7f]);
+        assert_eq!(
+            decode_base64("AID/fw==").unwrap(),
+            vec![0x00, 0x80, 0xff, 0x7f]
+        );
     }
 
     #[test]
     fn decode_base64_tolerates_whitespace() {
-        assert_eq!(
-            decode_base64("TW\nFu").unwrap(),
-            b"Man".to_vec()
-        );
+        assert_eq!(decode_base64("TW\nFu").unwrap(), b"Man".to_vec());
         assert_eq!(decode_base64("TW Fu").unwrap(), b"Man".to_vec());
     }
 
@@ -722,9 +723,8 @@ mod tests {
         );
         let as_str = String::from_utf8_lossy(&body).to_string();
         assert!(as_str.contains("--bnd\r\n"));
-        assert!(as_str.contains(
-            "Content-Disposition: form-data; name=\"file\"; filename=\"utterance.wav\""
-        ));
+        assert!(as_str
+            .contains("Content-Disposition: form-data; name=\"file\"; filename=\"utterance.wav\""));
         assert!(as_str.contains("Content-Type: audio/wav\r\n\r\n"));
         assert!(as_str.ends_with("--bnd--\r\n"));
         // Raw bytes survived verbatim in the middle.
