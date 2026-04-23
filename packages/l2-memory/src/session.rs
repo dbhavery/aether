@@ -138,6 +138,31 @@ pub trait SessionMemoryStore: Send + Sync {
 
     /// Remove all records for `session_id`. No-op if unknown.
     fn clear_session(&self, session_id: &str) -> Result<(), L2Error>;
+
+    /// Remove one record by `(session_id, sequence)`. Returns `Ok(true)`
+    /// when a matching row was removed, `Ok(false)` when no such row
+    /// existed — either because the session is unknown or the sequence
+    /// was never appended / has already been evicted. This silent
+    /// no-op shape keeps the Memory V2 "forget item" UX honest: the
+    /// Trust drawer can issue a forget against a row the retention
+    /// sweep has already claimed without the call failing.
+    ///
+    /// `max_turns` / `max_chars` are NOT re-enforced after a remove —
+    /// removal only ever shrinks the window.
+    fn remove(&self, session_id: &str, sequence: u64) -> Result<bool, L2Error>;
+
+    /// Replace the `content` of one record addressed by
+    /// `(session_id, sequence)`. Returns `Ok(true)` when the target
+    /// existed and was updated, `Ok(false)` otherwise. `role`,
+    /// `timestamp_ms`, and `sequence` are preserved — callers expressing
+    /// "the user edited this fact" should not rewrite provenance.
+    ///
+    /// `max_chars` IS re-enforced after an update so an overlong edit
+    /// cannot sidestep the bound; the edited row itself is never
+    /// evicted — only older rows if the new total exceeds the budget
+    /// and there is still more than one row.
+    fn update(&self, session_id: &str, sequence: u64, new_content: String)
+        -> Result<bool, L2Error>;
 }
 
 /// In-process implementation of [`SessionMemoryStore`]. Backed by a
@@ -234,6 +259,75 @@ impl SessionMemoryStore for InMemorySessionMemoryStore {
             .map_err(|e| L2Error::Internal(format!("session memory lock poisoned: {e}")))?;
         guard.remove(session_id);
         Ok(())
+    }
+
+    fn remove(&self, session_id: &str, sequence: u64) -> Result<bool, L2Error> {
+        let mut guard = self
+            .inner
+            .lock()
+            .map_err(|e| L2Error::Internal(format!("session memory lock poisoned: {e}")))?;
+        let Some(state) = guard.get_mut(session_id) else {
+            return Ok(false);
+        };
+        // Linear scan is fine: session windows are bounded to tens of
+        // records, and `VecDeque` has no indexed removal by predicate.
+        let pos = state.records.iter().position(|r| r.sequence == sequence);
+        match pos {
+            Some(i) => {
+                if let Some(rec) = state.records.remove(i) {
+                    state.total_chars = state.total_chars.saturating_sub(rec.content.len());
+                }
+                Ok(true)
+            }
+            None => Ok(false),
+        }
+    }
+
+    fn update(
+        &self,
+        session_id: &str,
+        sequence: u64,
+        new_content: String,
+    ) -> Result<bool, L2Error> {
+        let mut guard = self
+            .inner
+            .lock()
+            .map_err(|e| L2Error::Internal(format!("session memory lock poisoned: {e}")))?;
+        let Some(state) = guard.get_mut(session_id) else {
+            return Ok(false);
+        };
+        let Some(rec) = state.records.iter_mut().find(|r| r.sequence == sequence) else {
+            return Ok(false);
+        };
+        let old_len = rec.content.len();
+        let new_len = new_content.len();
+        rec.content = new_content;
+        state.total_chars = state
+            .total_chars
+            .saturating_sub(old_len)
+            .saturating_add(new_len);
+        // Re-enforce max_chars only. We intentionally do NOT call
+        // `Self::trim` because `trim` also enforces max_turns, and a
+        // same-length edit must never evict neighbours. Evict older
+        // rows only while the edited row is not the front, so an
+        // oversized edit can never evict itself.
+        let cfg = &self.config;
+        while state.total_chars > cfg.max_chars && state.records.len() > 1 {
+            // Only evict from the front if the front is not the
+            // edited row itself.
+            let front_is_target = state
+                .records
+                .front()
+                .map(|r| r.sequence == sequence)
+                .unwrap_or(false);
+            if front_is_target {
+                break;
+            }
+            if let Some(dropped) = state.records.pop_front() {
+                state.total_chars = state.total_chars.saturating_sub(dropped.content.len());
+            }
+        }
+        Ok(true)
     }
 }
 
@@ -363,6 +457,106 @@ mod tests {
         let w = store.recent("never-seen").unwrap();
         assert!(w.is_empty());
         assert_eq!(w.session_id, "never-seen");
+    }
+
+    // ----- remove / update (Memory V2 step 4 surface) -----
+
+    #[test]
+    fn remove_deletes_single_record_and_returns_true() {
+        let store = InMemorySessionMemoryStore::new_default();
+        store
+            .append(rec("s1", MemoryRole::User, "keep-a", 1))
+            .unwrap();
+        store
+            .append(rec("s1", MemoryRole::User, "drop-me", 2))
+            .unwrap();
+        store
+            .append(rec("s1", MemoryRole::User, "keep-b", 3))
+            .unwrap();
+        let removed = store.remove("s1", 2).unwrap();
+        assert!(removed);
+        let w = store.recent("s1").unwrap();
+        assert_eq!(w.records.len(), 2);
+        assert_eq!(w.records[0].content, "keep-a");
+        assert_eq!(w.records[1].content, "keep-b");
+    }
+
+    #[test]
+    fn remove_unknown_sequence_is_false_not_error() {
+        let store = InMemorySessionMemoryStore::new_default();
+        store.append(rec("s1", MemoryRole::User, "x", 1)).unwrap();
+        assert!(!store.remove("s1", 999).unwrap());
+        assert!(!store.remove("unknown-session", 1).unwrap());
+        // Existing row is untouched.
+        assert_eq!(store.recent("s1").unwrap().records.len(), 1);
+    }
+
+    #[test]
+    fn remove_adjusts_total_chars_for_future_inserts() {
+        // Tight budget so char accounting matters.
+        let cfg = RecentMemoryConfig {
+            max_turns: 100,
+            max_chars: 10,
+        };
+        let store = InMemorySessionMemoryStore::new(cfg);
+        store
+            .append(rec("s1", MemoryRole::User, "aaaa", 1))
+            .unwrap(); // seq 1, 4 chars
+        store
+            .append(rec("s1", MemoryRole::User, "bbbb", 2))
+            .unwrap(); // seq 2, 4 chars; total=8
+        assert!(store.remove("s1", 1).unwrap());
+        // Budget freed — a 4-char append should not evict seq 2.
+        store
+            .append(rec("s1", MemoryRole::User, "cccc", 3))
+            .unwrap();
+        let w = store.recent("s1").unwrap();
+        assert_eq!(w.records.len(), 2);
+        assert_eq!(w.records[0].content, "bbbb");
+        assert_eq!(w.records[1].content, "cccc");
+    }
+
+    #[test]
+    fn update_replaces_content_preserves_role_and_timestamp() {
+        let store = InMemorySessionMemoryStore::new_default();
+        store
+            .append(rec("s1", MemoryRole::User, "original", 42))
+            .unwrap();
+        let updated = store.update("s1", 1, "edited".into()).unwrap();
+        assert!(updated);
+        let w = store.recent("s1").unwrap();
+        assert_eq!(w.records.len(), 1);
+        assert_eq!(w.records[0].content, "edited");
+        assert_eq!(w.records[0].sequence, 1);
+        assert_eq!(w.records[0].role, MemoryRole::User);
+        assert_eq!(w.records[0].timestamp_ms, 42);
+    }
+
+    #[test]
+    fn update_unknown_returns_false() {
+        let store = InMemorySessionMemoryStore::new_default();
+        assert!(!store.update("never", 1, "x".into()).unwrap());
+        store.append(rec("s1", MemoryRole::User, "a", 1)).unwrap();
+        assert!(!store.update("s1", 999, "x".into()).unwrap());
+        assert_eq!(store.recent("s1").unwrap().records[0].content, "a");
+    }
+
+    #[test]
+    fn update_enforces_max_chars_but_never_evicts_edited_row() {
+        let cfg = RecentMemoryConfig {
+            max_turns: 100,
+            max_chars: 10,
+        };
+        let store = InMemorySessionMemoryStore::new(cfg);
+        store.append(rec("s1", MemoryRole::User, "aa", 1)).unwrap(); // 2 chars
+        store.append(rec("s1", MemoryRole::User, "bb", 2)).unwrap(); // 4 total
+        store.append(rec("s1", MemoryRole::User, "cc", 3)).unwrap(); // 6 total
+                                                                     // Grow seq 3 to 20 chars. Budget is 10. Oldest rows (seq 1, 2)
+                                                                     // must be evicted to fit — but seq 3 itself must remain.
+        assert!(store.update("s1", 3, "x".repeat(20)).unwrap());
+        let w = store.recent("s1").unwrap();
+        assert!(w.records.iter().any(|r| r.sequence == 3));
+        assert_eq!(w.records.last().unwrap().content.len(), 20);
     }
 
     #[test]

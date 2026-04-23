@@ -380,3 +380,90 @@ fn unbounded_retention_leaves_all_rows_on_disk() {
         .unwrap();
     assert_eq!(n, 20);
 }
+
+// ----- remove / update (Memory V2 step 4 surface) -----
+
+#[test]
+fn remove_deletes_row_and_survives_reopen() {
+    let tmp = TempDir::new().unwrap();
+    let path = tmp.path().join("aether.db");
+    {
+        let db = DurableSessionStore::open(&path).unwrap();
+        let store = db.store.clone();
+        store.append(rec("s1", MemoryRole::User, "a", 1)).unwrap();
+        store.append(rec("s1", MemoryRole::User, "b", 2)).unwrap();
+        store.append(rec("s1", MemoryRole::User, "c", 3)).unwrap();
+        assert!(store.remove("s1", 2).unwrap());
+    }
+    // Reopen and verify the row is actually gone from disk.
+    let db = DurableSessionStore::open(&path).unwrap();
+    let w = db.store.recent("s1").unwrap();
+    assert_eq!(w.records.len(), 2);
+    assert!(w.records.iter().all(|r| r.sequence != 2));
+    assert_eq!(w.records[0].content, "a");
+    assert_eq!(w.records[1].content, "c");
+}
+
+#[test]
+fn remove_unknown_row_returns_false_not_error() {
+    let tmp = TempDir::new().unwrap();
+    let db = DurableSessionStore::open(tmp.path().join("aether.db")).unwrap();
+    let store = db.store.clone();
+    // No rows at all.
+    assert!(!store.remove("s1", 1).unwrap());
+    store.append(rec("s1", MemoryRole::User, "x", 1)).unwrap();
+    // Wrong sequence.
+    assert!(!store.remove("s1", 99).unwrap());
+    // Wrong session.
+    assert!(!store.remove("other", 1).unwrap());
+    assert_eq!(store.recent("s1").unwrap().records.len(), 1);
+}
+
+#[test]
+fn update_replaces_content_preserves_role_timestamp_and_sequence() {
+    let tmp = TempDir::new().unwrap();
+    let db = DurableSessionStore::open(tmp.path().join("aether.db")).unwrap();
+    let store = db.store.clone();
+
+    store
+        .append(rec("s1", MemoryRole::Assistant, "original", 42))
+        .unwrap();
+    assert!(store.update("s1", 1, "edited".to_string()).unwrap());
+
+    let w = store.recent("s1").unwrap();
+    assert_eq!(w.records.len(), 1);
+    assert_eq!(w.records[0].content, "edited");
+    assert_eq!(w.records[0].sequence, 1);
+    assert_eq!(w.records[0].role, MemoryRole::Assistant);
+    assert_eq!(w.records[0].timestamp_ms, 42);
+}
+
+#[test]
+fn update_unknown_row_returns_false_not_error() {
+    let tmp = TempDir::new().unwrap();
+    let db = DurableSessionStore::open(tmp.path().join("aether.db")).unwrap();
+    let store = db.store.clone();
+
+    assert!(!store.update("never", 1, "x".into()).unwrap());
+    store
+        .append(rec("s1", MemoryRole::User, "orig", 1))
+        .unwrap();
+    assert!(!store.update("s1", 999, "x".into()).unwrap());
+    assert_eq!(store.recent("s1").unwrap().records[0].content, "orig");
+}
+
+#[test]
+fn update_survives_reopen() {
+    let tmp = TempDir::new().unwrap();
+    let path = tmp.path().join("aether.db");
+    {
+        let db = DurableSessionStore::open(&path).unwrap();
+        let store = db.store.clone();
+        store.append(rec("s1", MemoryRole::User, "v1", 1)).unwrap();
+        assert!(store.update("s1", 1, "v2".to_string()).unwrap());
+    }
+    let db = DurableSessionStore::open(&path).unwrap();
+    let w = db.store.recent("s1").unwrap();
+    assert_eq!(w.records.len(), 1);
+    assert_eq!(w.records[0].content, "v2");
+}

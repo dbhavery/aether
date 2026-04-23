@@ -378,6 +378,45 @@ impl SessionMemoryStore for SqliteSessionMemoryStore {
         .map_err(|e| L2Error::Storage(format!("clear_session: {e}")))?;
         Ok(())
     }
+
+    fn remove(&self, session_id: &str, sequence: u64) -> Result<bool, L2Error> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| L2Error::Internal(format!("sqlite memory lock poisoned: {e}")))?;
+        let affected = conn
+            .execute(
+                "DELETE FROM conversation_log \
+                 WHERE session_id = ?1 AND sequence = ?2",
+                params![session_id, sequence as i64],
+            )
+            .map_err(|e| L2Error::Storage(format!("remove: {e}")))?;
+        Ok(affected > 0)
+    }
+
+    fn update(
+        &self,
+        session_id: &str,
+        sequence: u64,
+        new_content: String,
+    ) -> Result<bool, L2Error> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| L2Error::Internal(format!("sqlite memory lock poisoned: {e}")))?;
+        // Only `content` is rewritten. `role`, `timestamp_ms`, and
+        // `sequence` are preserved — Memory V2 treats an "edited fact"
+        // as the same item with revised text, not a new turn.
+        let affected = conn
+            .execute(
+                "UPDATE conversation_log \
+                 SET content = ?3 \
+                 WHERE session_id = ?1 AND sequence = ?2",
+                params![session_id, sequence as i64, new_content],
+            )
+            .map_err(|e| L2Error::Storage(format!("update: {e}")))?;
+        Ok(affected > 0)
+    }
 }
 
 /// Convenience builder that mirrors L5's `DurableBackends::open`: open
