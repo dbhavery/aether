@@ -22,7 +22,7 @@ Env vars (all optional, all have defaults):
 
 | Var | Default | Notes |
 |---|---|---|
-| `AETHER_OLLAMA_MODEL` | `llama3` | Setting **any** Ollama env var counts as opt-in. |
+| `AETHER_OLLAMA_MODEL` | `gemma4` | Setting **any** Ollama env var counts as opt-in. |
 | `AETHER_OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | |
 | `AETHER_OLLAMA_TIMEOUT_MS` | `60000` | Per-request ureq timeout. |
 
@@ -32,7 +32,7 @@ At startup the CLI runs a cheap `GET /api/tags` healthcheck; if it fails the dem
 
 1. Install Ollama: <https://ollama.com>
 2. Start the daemon: `ollama serve`
-3. Pull a model: `ollama pull llama3` (or whatever you set `AETHER_OLLAMA_MODEL` to)
+3. Pull a model: `ollama pull gemma4` (or whatever you set `AETHER_OLLAMA_MODEL` to)
 
 ### Scope of L4.1
 

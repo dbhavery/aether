@@ -41,15 +41,15 @@ On launch you'll see:
 ```bash
 # In a separate shell — install Ollama (https://ollama.com) first
 ollama serve
-ollama pull gemma3        # or llama3, phi3, anything your VRAM supports
+ollama pull gemma4        # or llama3, phi3, anything your VRAM supports
 
-export AETHER_OLLAMA_MODEL=gemma3
+export AETHER_OLLAMA_MODEL=gemma4
 cd apps/desktop
 pnpm tauri dev -- --features ollama-provider
 ```
 
 The provider badge in the header turns from a muted dot to green, the
-label reads `Ollama · gemma3 · http://127.0.0.1:11434`, and each
+label reads `Ollama · gemma4 · http://127.0.0.1:11434`, and each
 assistant reply carries its tier/provider footer.
 
 If the daemon is unreachable, the shell falls back silently to the

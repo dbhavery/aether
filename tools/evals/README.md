@@ -30,7 +30,7 @@ model.
 local Ollama instance and evaluates the response. Controlled by:
 
 - `AETHER_EVAL_OLLAMA_BASE_URL` — default `http://127.0.0.1:11434`
-- `AETHER_EVAL_OLLAMA_MODEL`    — default `llama3.2`
+- `AETHER_EVAL_OLLAMA_MODEL`    — default `gemma4`
 - `AETHER_EVAL_OLLAMA_TIMEOUT_S` — default `30`
 
 `--capture-into <dir>` writes one markdown file per scenario with the
