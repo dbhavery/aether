@@ -616,6 +616,8 @@ fn provider_error_payload(
         latency_ms: None,
         prompt_tokens: None,
         completion_tokens: None,
+            memory_domain: None,
+        memory_id: None,
     });
     transition_presence(
         app,
@@ -754,6 +756,8 @@ fn finalize_turn(
             .route
             .as_ref()
             .and_then(|r| r.tokens.map(|t| t.completion)),
+            memory_domain: None,
+        memory_id: None,
     };
     state.record_telemetry(telemetry_entry);
 
@@ -1142,6 +1146,8 @@ fn record_frame_early_exit_telemetry(state: &State<'_, AppState>, kind: &str) {
         latency_ms: None,
         prompt_tokens: None,
         completion_tokens: None,
+            memory_domain: None,
+        memory_id: None,
     });
 }
 
@@ -1402,6 +1408,8 @@ pub fn analyze_frame(
             .route
             .as_ref()
             .and_then(|r| r.tokens.map(|t| t.completion)),
+            memory_domain: None,
+        memory_id: None,
     });
 
     transition_presence(
@@ -1642,6 +1650,8 @@ fn record_utterance_early_exit_telemetry(state: &State<'_, AppState>, kind: &str
         latency_ms: None,
         prompt_tokens: None,
         completion_tokens: None,
+            memory_domain: None,
+        memory_id: None,
     });
 }
 
@@ -1963,6 +1973,8 @@ pub fn transcribe_utterance(
             .route
             .as_ref()
             .and_then(|r| r.tokens.map(|t| t.completion)),
+            memory_domain: None,
+        memory_id: None,
     });
 
     // Hush duration_ms — reserved for future telemetry fields; today
@@ -2637,6 +2649,8 @@ mod tests {
             latency_ms: None,
             prompt_tokens: None,
             completion_tokens: None,
+                    memory_domain: None,
+            memory_id: None,
         });
 
         let entries = state.telemetry_recent(10);
@@ -2673,6 +2687,8 @@ mod tests {
             latency_ms: None,
             prompt_tokens: None,
             completion_tokens: None,
+                    memory_domain: None,
+            memory_id: None,
         });
 
         let entries = state.telemetry_recent(10);

@@ -7,6 +7,7 @@ mod idle_probe;
 mod media_permissions;
 mod memory_config;
 mod memory_router;
+mod memory_service;
 mod mic_permissions;
 mod presence_config;
 mod provider;

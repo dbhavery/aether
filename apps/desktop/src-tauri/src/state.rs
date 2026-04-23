@@ -38,7 +38,7 @@ use serde::Serialize;
 
 use crate::adapter::{ModelRouterAdapter, ReflexModelRouter};
 use crate::media_permissions::{self, CaptureGate, MediaKind, MediaPermissions, PermissionState};
-use crate::memory_config::{self, MemoryConfig};
+use crate::memory_config::{self, MemoryConfig, MemoryDomain};
 use crate::memory_router::MemoryAwareRouter;
 use crate::mic_permissions::{self, MicPermission};
 use crate::presence_config::{self, PresenceConfig};
@@ -155,6 +155,12 @@ pub struct AppState {
     /// the in-memory copy still works but changes do not survive
     /// restarts.
     memory_config_path: Option<PathBuf>,
+    /// Per-domain read counters for the Memory V2 sampled-read audit
+    /// (design §4 — 1 sample per ~100 reads per domain per session).
+    /// Populated with all six domains at `build()` time and never
+    /// mutated in shape again; the AtomicU64 values are bumped
+    /// lock-free. See `memory_service::memory_read_audit_tick`.
+    memory_read_counters: HashMap<MemoryDomain, AtomicU64>,
     /// Registry of zero or more vision-capable providers + the active
     /// selection. Replaces the v0 single-`Option` model so the user
     /// can swap providers at runtime (Ollama vision ↔ llama.cpp
@@ -267,6 +273,19 @@ pub struct TelemetryEntry {
     /// Completion-side token count, if reported.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub completion_tokens: Option<u32>,
+    /// Memory V2 domain label (wire form — `"facts"`, `"durable"`,
+    /// etc.). Populated only by memory-scoped telemetry kinds
+    /// (`memory_written`, `memory_forgotten`, `memory_edited`,
+    /// `memory_write_asked`, `memory_write_denied`,
+    /// `memory_retrieval`); `None` everywhere else. Additive field;
+    /// pre-V2 telemetry consumers ignore it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub memory_domain: Option<String>,
+    /// Memory V2 per-item id (stable across this shell process).
+    /// `None` for domain-scoped events (forget-all, sampled
+    /// retrieval) that don't target a single item.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub memory_id: Option<String>,
 }
 
 /// Which backend is behind `AppState::memory`. Used for diagnostics and
@@ -383,6 +402,10 @@ impl AppState {
             presence_history: Mutex::new(VecDeque::with_capacity(PRESENCE_HISTORY_CAPACITY)),
             memory_config: RwLock::new(MemoryConfig::defaults()),
             memory_config_path: None,
+            memory_read_counters: MemoryDomain::ALL
+                .iter()
+                .map(|d| (*d, AtomicU64::new(0)))
+                .collect(),
             vision: RwLock::new(VisionRegistry::empty()),
             vision_model_cache: ModelListCache::from_env(),
             voice: RwLock::new(VoiceRegistry::empty()),
@@ -915,6 +938,18 @@ impl AppState {
                 .map_err(|e| format!("persist memory config: {e}"))?;
         }
         Ok(snapshot)
+    }
+
+    /// Access the per-domain read counter for the Memory V2 sampled
+    /// audit path. Every domain is populated at `build()` time so the
+    /// `get` is infallible; an unknown domain would indicate a
+    /// contract drift (`MemoryDomain::ALL` out of sync with the
+    /// field init) and panics loudly rather than silently skipping
+    /// the audit sample.
+    pub fn memory_read_counter(&self, domain: MemoryDomain) -> &AtomicU64 {
+        self.memory_read_counters
+            .get(&domain)
+            .expect("memory_read_counters must contain every MemoryDomain — see build()")
     }
 
     /// Record a telemetry entry. Evicts the oldest entry if the buffer
@@ -1491,6 +1526,8 @@ mod tests {
                 latency_ms: Some(100 + i as u64),
                 prompt_tokens: None,
                 completion_tokens: None,
+                            memory_domain: None,
+                memory_id: None,
             });
         }
         let all = state.telemetry_recent(TELEMETRY_BUFFER_CAPACITY);
@@ -1598,6 +1635,8 @@ humor: "playful"
             latency_ms: None,
             prompt_tokens: None,
             completion_tokens: None,
+                    memory_domain: None,
+            memory_id: None,
         });
         assert_eq!(state.telemetry_recent(10).len(), 1);
         state.clear_telemetry();
