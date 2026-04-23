@@ -36,6 +36,7 @@ use serde::Serialize;
 use crate::adapter::{ModelRouterAdapter, ReflexModelRouter};
 use crate::media_permissions::{self, CaptureGate, MediaKind, MediaPermissions, PermissionState};
 use crate::mic_permissions::{self, MicPermission};
+use crate::presence_config::{self, PresenceConfig};
 use crate::memory_router::MemoryAwareRouter;
 use crate::provider::ProviderMode;
 
@@ -120,6 +121,14 @@ pub struct AppState {
     /// sandboxes) — the in-memory copy still works, but changes do
     /// not survive restarts.
     mic_permission_path: Option<PathBuf>,
+    /// Presence V1 configuration snapshot — enabled, idle/away
+    /// thresholds, Trust drawer history toggle. Observational only
+    /// (no L5 capability gate, no audit rows), per
+    /// docs/PRESENCE-V1-ARCHITECTURE.md §4.
+    presence_config: RwLock<PresenceConfig>,
+    /// Disk-backed location for `presence_config`. `None` in
+    /// sandboxes; in-memory copy still works.
+    presence_config_path: Option<PathBuf>,
     /// Registry of zero or more vision-capable providers + the active
     /// selection. Replaces the v0 single-`Option` model so the user
     /// can swap providers at runtime (Ollama vision ↔ llama.cpp
@@ -293,6 +302,8 @@ impl AppState {
             media_permissions_path: None,
             mic_permission: RwLock::new(MicPermission::defaults()),
             mic_permission_path: None,
+            presence_config: RwLock::new(PresenceConfig::defaults()),
+            presence_config_path: None,
             vision: RwLock::new(VisionRegistry::empty()),
             vision_model_cache: ModelListCache::from_env(),
             voice: RwLock::new(VoiceRegistry::empty()),
@@ -647,6 +658,43 @@ impl AppState {
     #[allow(dead_code)] // Consumed by `transcribe_utterance` in Voice V1 step 4.
     pub fn evaluate_mic_permission(&self) -> CaptureGate {
         self.mic_permission().evaluate()
+    }
+
+    /// Wire a disk-backed presence config into this state. Loads
+    /// current contents (falling back to defaults for
+    /// missing/malformed files) and remembers the path so
+    /// subsequent writes persist atomically.
+    pub fn attach_presence_config_file(&mut self, path: PathBuf) {
+        let loaded = presence_config::load_or_default(&path);
+        *self.presence_config.write().expect("presence cfg write lock") = loaded;
+        self.presence_config_path = Some(path);
+    }
+
+    /// Snapshot the current presence config. Cheap clone; safe to
+    /// hand to a Tauri command response.
+    pub fn presence_config(&self) -> PresenceConfig {
+        *self.presence_config.read().expect("presence cfg read lock")
+    }
+
+    /// Replace the presence config and persist atomically when a
+    /// path is wired. Returns the resulting snapshot so the caller
+    /// can echo it back to the UI in one round trip. Persistence
+    /// failures are surfaced as `Err` so the UI can show the change
+    /// did not stick.
+    pub fn set_presence_config(
+        &self,
+        cfg: PresenceConfig,
+    ) -> Result<PresenceConfig, String> {
+        let snapshot = {
+            let mut w = self.presence_config.write().expect("presence cfg write lock");
+            *w = cfg;
+            *w
+        };
+        if let Some(path) = &self.presence_config_path {
+            presence_config::save(path, &snapshot)
+                .map_err(|e| format!("persist presence config: {e}"))?;
+        }
+        Ok(snapshot)
     }
 
     /// Record a telemetry entry. Evicts the oldest entry if the buffer

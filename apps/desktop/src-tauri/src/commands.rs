@@ -2004,6 +2004,33 @@ pub fn transcribe_utterance(
 }
 
 // ---------------------------------------------------------------------
+// Presence V1 step 1 — presence.json read/write surface.
+// ---------------------------------------------------------------------
+
+/// Snapshot the current presence config. Returned to the Settings
+/// UI so it can render the enabled toggle + retention pills. The
+/// shape is an opaque re-export of `PresenceConfig`; the TS side
+/// mirrors the same fields.
+#[tauri::command]
+pub fn get_presence_config(
+    state: State<'_, AppState>,
+) -> crate::presence_config::PresenceConfig {
+    state.presence_config()
+}
+
+/// Replace the presence config and persist atomically. The caller
+/// supplies the full snapshot (no partial-patch semantics) — keeps
+/// the wire contract predictable and the Rust side trivial.
+/// Persistence failures surface as a user-visible error.
+#[tauri::command]
+pub fn set_presence_config(
+    config: crate::presence_config::PresenceConfig,
+    state: State<'_, AppState>,
+) -> Result<crate::presence_config::PresenceConfig, String> {
+    state.set_presence_config(config)
+}
+
+// ---------------------------------------------------------------------
 // Voice status + runtime swap (Voice V1 step 5).
 // ---------------------------------------------------------------------
 

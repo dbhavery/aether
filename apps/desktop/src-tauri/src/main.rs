@@ -6,6 +6,7 @@ mod commands;
 mod media_permissions;
 mod memory_router;
 mod mic_permissions;
+mod presence_config;
 mod provider;
 mod state;
 mod vision_cache;
@@ -52,6 +53,8 @@ fn main() {
             commands::set_media_permission,
             commands::get_mic_permission,
             commands::set_mic_permission,
+            commands::get_presence_config,
+            commands::set_presence_config,
             commands::analyze_frame,
             commands::transcribe_utterance,
             commands::voice_status,
@@ -105,6 +108,9 @@ fn build_app_state(app: &tauri::AppHandle) -> Result<AppState, Box<dyn std::erro
                 let mic_path = mic_permissions::permission_path_for(&dir);
                 tracing::info!("mic permission file at {}", mic_path.display());
                 state.attach_mic_permission_file(mic_path);
+                let presence_path = presence_config::config_path_for(&dir);
+                tracing::info!("presence config file at {}", presence_path.display());
+                state.attach_presence_config_file(presence_path);
                 wire_vision_registry(&state, Some(&dir));
                 wire_voice_registry(&state, Some(&dir));
                 return Ok(state);

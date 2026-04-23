@@ -3,14 +3,17 @@ import { useEffect, useState } from "react";
 import {
   getMediaPermissions,
   getMicPermission,
+  getPresenceConfig,
   setMediaPermission,
   setMicPermission,
+  setPresenceConfig,
 } from "../lib/api";
 import type {
   MediaKind,
   MediaPermissions,
   MediaPermissionState,
   MicPermission,
+  PresenceConfig,
 } from "../lib/types";
 
 interface Props {
@@ -61,9 +64,11 @@ const DEVICE_COPY: Record<MediaKind, { title: string; body: string }> = {
 export function SettingsDrawer({ open, onClose }: Props) {
   const [perms, setPerms] = useState<MediaPermissions | null>(null);
   const [mic, setMic] = useState<MicPermission | null>(null);
+  const [presence, setPresence] = useState<PresenceConfig | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busyKind, setBusyKind] = useState<MediaKind | null>(null);
   const [busyMic, setBusyMic] = useState(false);
+  const [busyPresence, setBusyPresence] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -79,6 +84,13 @@ export function SettingsDrawer({ open, onClose }: Props) {
     getMicPermission()
       .then((m) => {
         if (!cancelled) setMic(m);
+      })
+      .catch((e) => {
+        if (!cancelled) setErr(String(e));
+      });
+    getPresenceConfig()
+      .then((p) => {
+        if (!cancelled) setPresence(p);
       })
       .catch((e) => {
         if (!cancelled) setErr(String(e));
@@ -113,6 +125,21 @@ export function SettingsDrawer({ open, onClose }: Props) {
       setErr(String(e));
     } finally {
       setBusyMic(false);
+    }
+  };
+
+  const updatePresence = async (patch: Partial<PresenceConfig>) => {
+    if (!presence) return;
+    const next: PresenceConfig = { ...presence, ...patch };
+    setBusyPresence(true);
+    setErr(null);
+    try {
+      const updated = await setPresenceConfig(next);
+      setPresence(updated);
+    } catch (e) {
+      setErr(String(e));
+    } finally {
+      setBusyPresence(false);
     }
   };
 
@@ -197,11 +224,53 @@ export function SettingsDrawer({ open, onClose }: Props) {
           <div className="mt-4">
             <PermissionRow
               title="Microphone"
-              body="Short push-to-talk utterances Aether may transcribe for voice input. Voice capture is scaffolded and not yet wired to a capture surface."
+              body="Short push-to-talk utterances Aether may transcribe for voice input. Capture happens only while you hold the Record button on the Voice panel."
               value={mic?.state ?? "ask"}
               busy={busyMic}
               onChange={(next) => handleMicChange(next)}
             />
+          </div>
+        </section>
+
+        <section
+          aria-labelledby="settings-presence-heading"
+          className="mt-6 border-t border-aether-border pt-4"
+        >
+          <h2
+            id="settings-presence-heading"
+            className="text-[11px] uppercase tracking-[0.18em] text-aether-dim"
+          >
+            Presence
+          </h2>
+          <p className="mt-1 text-[12px] text-aether-muted">
+            Aether tracks presence (Active / Idle / Away) to pace its
+            responses. Presence signals are observational only — they
+            do not trigger a capability gate or an audit row.
+          </p>
+
+          <div className="mt-4 flex flex-col gap-3">
+            <ToggleRow
+              title="Track presence"
+              body="When off, Aether pauses the presence controller entirely. No state is emitted until you flip it back."
+              checked={presence?.enabled ?? true}
+              busy={busyPresence || presence === null}
+              onChange={(v) => updatePresence({ enabled: v })}
+            />
+            <ToggleRow
+              title="Show presence in Trust history"
+              body="Include presence transitions in the Trust drawer's History tab. Off hides them from the list but does not disable tracking."
+              checked={presence?.history_in_trust_drawer ?? true}
+              busy={busyPresence || presence === null}
+              onChange={(v) => updatePresence({ history_in_trust_drawer: v })}
+            />
+            {presence && (
+              <p className="text-[11px] text-aether-dim">
+                Thresholds: Active → Idle after{" "}
+                <span className="font-mono">{presence.idle_after_s}s</span>, Idle → Away after{" "}
+                <span className="font-mono">{presence.away_after_s}s</span>.
+                Threshold editing is deferred to Presence V1 step 2.
+              </p>
+            )}
           </div>
         </section>
       </div>
@@ -210,12 +279,59 @@ export function SettingsDrawer({ open, onClose }: Props) {
         Stored locally at{" "}
         <code className="font-mono text-aether-dim">
           %APPDATA%/Aether/media_permissions.json
-        </code>{" "}
-        and{" "}
+        </code>
+        ,{" "}
         <code className="font-mono text-aether-dim">
           %APPDATA%/Aether/mic_permissions.json
         </code>
+        , and{" "}
+        <code className="font-mono text-aether-dim">
+          %APPDATA%/Aether/presence.json
+        </code>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Compact two-state toggle row for observational settings (e.g.
+ * Presence). Visually lighter than `PermissionRow` because there is
+ * no tri-state / approval semantic — a simple yes/no.
+ */
+function ToggleRow({
+  title,
+  body,
+  checked,
+  busy,
+  onChange,
+}: {
+  title: string;
+  body: string;
+  checked: boolean;
+  busy: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <div className="rounded-md border border-aether-border bg-aether-elevated/40 px-3 py-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="text-[13px] font-medium text-aether-text">{title}</div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={checked}
+          aria-label={title}
+          disabled={busy}
+          onClick={() => onChange(!checked)}
+          className={`rounded-md border px-2.5 py-1 text-[11px] transition-colors ${
+            checked
+              ? "border-aether-ok/60 bg-aether-ok/10 text-aether-ok"
+              : "border-aether-border bg-transparent text-aether-muted hover:border-aether-borderHi hover:text-aether-text"
+          } ${busy ? "opacity-60" : ""}`}
+        >
+          {checked ? "On" : "Off"}
+        </button>
+      </div>
+      <p className="mt-1 text-[11.5px] text-aether-muted">{body}</p>
     </div>
   );
 }

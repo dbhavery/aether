@@ -13,6 +13,7 @@ import type {
   MediaPermissionState,
   MicPermission,
   PersonaCatalogEntry,
+  PresenceConfig,
   PresencePayload,
   SpeechModelList,
   TranscribeUtteranceRequest,
@@ -230,4 +231,16 @@ export async function setActiveSpeechModel(
   id: string,
 ): Promise<VoiceStatus> {
   return invoke<VoiceStatus>("set_active_speech_model", { id });
+}
+
+// --- Presence V1 step 1 ---------------------------------------------------
+
+export async function getPresenceConfig(): Promise<PresenceConfig> {
+  return invoke<PresenceConfig>("get_presence_config");
+}
+
+export async function setPresenceConfig(
+  config: PresenceConfig,
+): Promise<PresenceConfig> {
+  return invoke<PresenceConfig>("set_presence_config", { config });
 }

@@ -234,3 +234,16 @@ export interface SpeechModelList {
   models: string[];
   error: string | null;
 }
+
+// --- Presence V1 step 1 ---------------------------------------------------
+
+/** Snapshot of the local presence configuration. Observational
+ * only — no L5 capability gate, no audit rows. Mirrors the Rust
+ * `PresenceConfig` struct in apps/desktop/src-tauri/src/presence_config.rs.
+ */
+export interface PresenceConfig {
+  enabled: boolean;
+  idle_after_s: number;
+  away_after_s: number;
+  history_in_trust_drawer: boolean;
+}
