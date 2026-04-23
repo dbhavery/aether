@@ -247,3 +247,109 @@ export interface PresenceConfig {
   away_after_s: number;
   history_in_trust_drawer: boolean;
 }
+
+// --- Presence V1 step 2 ---------------------------------------------------
+
+/** User-attention state from the OS-idle controller. */
+export type UserAttentionLabel = "active" | "idle" | "away";
+
+/** Status payload from `presence_status`. `state` is meaningless when
+ * `enabled = false` — branch on the flag first. `probe_supported = false`
+ * means the platform idle probe (macOS / Linux today) has not shipped
+ * a real implementation yet; the UI should surface this truthfully. */
+export interface PresenceStatusPayload {
+  state: UserAttentionLabel;
+  since_ms: number;
+  idle_seconds: number;
+  enabled: boolean;
+  probe_supported: boolean;
+  idle_after_s: number;
+  away_after_s: number;
+}
+
+/** One row of presence history. `kind = "presence_state_changed"` is
+ * the only value surfaced in step 2. */
+export interface PresenceHistoryEntry {
+  kind: "presence_state_changed";
+  from: UserAttentionLabel;
+  to: UserAttentionLabel;
+  idle_seconds: number;
+  at_ms: number;
+}
+
+/** Payload emitted on the `presence:attention` event bus on every
+ * transition. Same shape as `PresenceHistoryEntry`. */
+export type AttentionEventPayload = PresenceHistoryEntry;
+
+/** Inclusive bounds enforced by `set_presence_config` on the Rust
+ * side. The Settings UI mirrors these to reject bad input before the
+ * round trip. */
+export const PRESENCE_THRESHOLD_MIN_S = 10;
+export const PRESENCE_THRESHOLD_MAX_S = 86_400;
+
+// --- Memory V2 step 2 ----------------------------------------------------
+
+/** Six memory domains per `docs/MEMORY-V2-ARCHITECTURE.md` §1. */
+export type MemoryDomain =
+  | "session"
+  | "durable"
+  | "facts"
+  | "projects"
+  | "preferences"
+  | "artifacts";
+
+export const MEMORY_DOMAINS: MemoryDomain[] = [
+  "session",
+  "durable",
+  "facts",
+  "projects",
+  "preferences",
+  "artifacts",
+];
+
+/** Per-domain write risk posture. Mirrors the tri-state the media /
+ * mic permissions use. Design §4. */
+export type MemoryRisk = "auto" | "ask" | "deny";
+
+/** Shape of `memory.json` — matches the Rust `MemoryConfig` struct
+ * in apps/desktop/src-tauri/src/memory_config.rs. All maps are
+ * partial — missing entries fall back to design defaults on the
+ * backend, so the UI can render a consistent row count either way.
+ */
+export interface MemoryConfig {
+  /** Per-domain retention in days. `null` = keep forever. */
+  retention_days: Partial<Record<MemoryDomain, number | null>>;
+  /** Per-domain default risk posture for writes. */
+  default_risk: Partial<Record<MemoryDomain, MemoryRisk>>;
+  /** Embeddings opt-in block. Default: disabled, no provider. */
+  embeddings: {
+    enabled: boolean;
+    provider: string | null;
+  };
+}
+
+/** Design defaults mirrored client-side so the UI renders sensible
+ * values before the first round trip completes, and so the Settings
+ * "reset to defaults" button can work without a backend fetch. */
+export const MEMORY_CONFIG_DEFAULTS: Readonly<MemoryConfig> = {
+  retention_days: {
+    session: null,
+    durable: 30,
+    facts: null,
+    projects: null,
+    preferences: null,
+    artifacts: null,
+  },
+  default_risk: {
+    session: "auto",
+    durable: "auto",
+    facts: "ask",
+    projects: "auto",
+    preferences: "auto",
+    artifacts: "ask",
+  },
+  embeddings: {
+    enabled: false,
+    provider: null,
+  },
+};

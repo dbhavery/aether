@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 
 import {
   auditRecent,
+  getPresenceConfig,
+  onAttention,
+  presenceRecentHistory,
   telemetryClear,
   telemetryRecent,
   type TelemetryEntry,
@@ -14,7 +17,13 @@ import {
 import { speechRouteSummary } from "../lib/speechProviders";
 import { isVoiceTurn, VOICE_TURN_KINDS } from "../lib/voiceTurns";
 import { truncateMiddleForDisplay } from "../lib/displayString";
-import type { AuditDecisionLabel, TrustAuditRow } from "../lib/types";
+import type {
+  AuditDecisionLabel,
+  PresenceConfig,
+  PresenceHistoryEntry,
+  TrustAuditRow,
+  UserAttentionLabel,
+} from "../lib/types";
 
 /** Max characters of a model id we render inline on the Trust drawer
  * body line before truncating with an ellipsis. The full id is kept
@@ -22,7 +31,15 @@ import type { AuditDecisionLabel, TrustAuditRow } from "../lib/types";
 const MODEL_ID_DISPLAY_MAX = 28;
 
 type Tab = "audit" | "history";
-type HistoryFilter = "all" | "media" | "voice";
+type HistoryFilter = "all" | "media" | "voice" | "presence";
+
+/** One row of the interleaved History list. Turn telemetry and
+ * presence transitions share the same timeline so the user can see
+ * "you stepped away, then two minutes later sent a message" as one
+ * story. Narrowed via `kind === ...` at the render site. */
+type HistoryRow =
+  | { kind: "telemetry"; entry: TelemetryEntry; at_ms: number }
+  | { kind: "presence"; entry: PresenceHistoryEntry; at_ms: number };
 
 // MEDIA_TURN_KINDS / isMediaTurn moved to ../lib/mediaTurns so the
 // constant can be unit-tested without dragging React in. Re-export
@@ -60,17 +77,28 @@ export function TrustDrawer({ open, refreshKey, onClose }: Props) {
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("all");
   const [rows, setRows] = useState<TrustAuditRow[]>([]);
   const [telemetry, setTelemetry] = useState<TelemetryEntry[]>([]);
+  const [presenceHistory, setPresenceHistory] = useState<PresenceHistoryEntry[]>(
+    [],
+  );
+  const [presenceCfg, setPresenceCfg] = useState<PresenceConfig | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     setErr(null);
-    Promise.all([auditRecent(100), telemetryRecent(50)])
-      .then(([a, t]) => {
+    Promise.all([
+      auditRecent(100),
+      telemetryRecent(50),
+      presenceRecentHistory(50),
+      getPresenceConfig(),
+    ])
+      .then(([a, t, p, cfg]) => {
         if (cancelled) return;
         setRows(a);
         setTelemetry(t);
+        setPresenceHistory(p);
+        setPresenceCfg(cfg);
       })
       .catch((e) => {
         if (!cancelled) setErr(String(e));
@@ -79,6 +107,26 @@ export function TrustDrawer({ open, refreshKey, onClose }: Props) {
       cancelled = true;
     };
   }, [open, refreshKey]);
+
+  // Live-update presence history while the drawer is open. New
+  // transitions are pushed via the `presence:attention` event bus from
+  // the shell's poll loop. Unsubscribe on close or unmount.
+  useEffect(() => {
+    if (!open) return;
+    let unlisten: (() => void) | null = null;
+    onAttention((payload) => {
+      setPresenceHistory((prev) => [payload, ...prev].slice(0, 50));
+    })
+      .then((u) => {
+        unlisten = u;
+      })
+      .catch((e) => {
+        setErr(String(e));
+      });
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, [open]);
 
   if (!open) return null;
 
@@ -140,8 +188,14 @@ export function TrustDrawer({ open, refreshKey, onClose }: Props) {
         {!err && tab === "history" && (
           <HistoryView
             entries={telemetry}
+            presence={
+              presenceCfg?.history_in_trust_drawer === false
+                ? []
+                : presenceHistory
+            }
             filter={historyFilter}
             onFilterChange={setHistoryFilter}
+            presenceHidden={presenceCfg?.history_in_trust_drawer === false}
           />
         )}
       </div>
@@ -237,32 +291,68 @@ function AuditList({ rows }: { rows: TrustAuditRow[] }) {
 
 function HistoryView({
   entries,
+  presence,
   filter,
   onFilterChange,
+  presenceHidden,
 }: {
   entries: TelemetryEntry[];
+  presence: PresenceHistoryEntry[];
   filter: HistoryFilter;
   onFilterChange: (f: HistoryFilter) => void;
+  presenceHidden: boolean;
 }) {
-  const filtered =
+  // Coalesce adjacent presence transitions through a bucket the user
+  // probably doesn't care about individually — see `coalescePresence`
+  // below. Trust-drawer history should read as "what happened",
+  // not a debug log.
+  const coalescedPresence = coalescePresence(presence);
+
+  // Build the interleaved list. Sort by timestamp descending so the
+  // newest row is at the top, matching the existing turn-history
+  // ordering.
+  const telemetryRows: HistoryRow[] = entries.map((e) => ({
+    kind: "telemetry" as const,
+    entry: e,
+    at_ms: e.timestamp_ms,
+  }));
+  const presenceRows: HistoryRow[] = coalescedPresence.map((p) => ({
+    kind: "presence" as const,
+    entry: p,
+    at_ms: p.at_ms,
+  }));
+  const allRows: HistoryRow[] = [...telemetryRows, ...presenceRows].sort(
+    (a, b) => b.at_ms - a.at_ms,
+  );
+
+  const filteredRows: HistoryRow[] =
     filter === "media"
-      ? entries.filter((e) => isMediaTurn(e.kind))
+      ? allRows.filter(
+          (r) => r.kind === "telemetry" && isMediaTurn(r.entry.kind),
+        )
       : filter === "voice"
-        ? entries.filter((e) => isVoiceTurn(e.kind))
-        : entries;
+        ? allRows.filter(
+            (r) => r.kind === "telemetry" && isVoiceTurn(r.entry.kind),
+          )
+        : filter === "presence"
+          ? allRows.filter((r) => r.kind === "presence")
+          : allRows;
+
   const mediaCount = entries.filter((e) => isMediaTurn(e.kind)).length;
   const voiceCount = entries.filter((e) => isVoiceTurn(e.kind)).length;
+  const presenceCount = coalescedPresence.length;
+
   return (
     <div className="flex flex-col gap-3">
       <div
         role="radiogroup"
         aria-label="History filter"
-        className="flex gap-2"
+        className="flex flex-wrap gap-2"
       >
         <FilterPill
           active={filter === "all"}
           onClick={() => onFilterChange("all")}
-          label={`All (${entries.length})`}
+          label={`All (${allRows.length})`}
         />
         <FilterPill
           active={filter === "media"}
@@ -274,10 +364,59 @@ function HistoryView({
           onClick={() => onFilterChange("voice")}
           label={`Voice only (${voiceCount})`}
         />
+        <FilterPill
+          active={filter === "presence"}
+          onClick={() => onFilterChange("presence")}
+          label={`Presence (${presenceCount})`}
+        />
       </div>
-      <HistoryList entries={filtered} filterApplied={filter} />
+      {presenceHidden && (
+        <p className="text-[11px] text-aether-dim">
+          Presence rows are hidden by the &ldquo;Show presence in Trust
+          history&rdquo; toggle in Settings.
+        </p>
+      )}
+      <HistoryList rows={filteredRows} filterApplied={filter} />
     </div>
   );
+}
+
+/**
+ * Coalesce a rapid sequence of presence transitions into the single
+ * net move. A user tapping the mouse in an Idle state might briefly
+ * flip Idle → Active → Idle inside the same second; surfacing the
+ * three-row noise drowns out more interesting rows. Rule: a pair of
+ * transitions A → B → A within `COALESCE_WINDOW_MS` of each other
+ * collapses to nothing. Longer-lived transitions survive.
+ *
+ * Input is newest-first (from the backend's `presence_recent_history`
+ * command), so we reverse, pass forward, then reverse again.
+ *
+ * Presence V1 step 3.
+ */
+const COALESCE_WINDOW_MS = 5_000;
+export function coalescePresence(
+  rows: PresenceHistoryEntry[],
+): PresenceHistoryEntry[] {
+  if (rows.length < 2) return rows;
+  // Process oldest-first so `to` matches the next row's `from`.
+  const oldestFirst = [...rows].reverse();
+  const out: PresenceHistoryEntry[] = [];
+  for (const ev of oldestFirst) {
+    const prev = out[out.length - 1];
+    // A → B → A within window → drop both prev and ev.
+    if (
+      prev &&
+      prev.to === ev.from &&
+      prev.from === ev.to &&
+      ev.at_ms - prev.at_ms < COALESCE_WINDOW_MS
+    ) {
+      out.pop();
+      continue;
+    }
+    out.push(ev);
+  }
+  return out.reverse();
 }
 
 function FilterPill({
@@ -307,24 +446,32 @@ function FilterPill({
 }
 
 function HistoryList({
-  entries,
+  rows,
   filterApplied,
 }: {
-  entries: TelemetryEntry[];
+  rows: HistoryRow[];
   filterApplied?: HistoryFilter | false;
 }) {
-  if (entries.length === 0) {
+  if (rows.length === 0) {
     const empty =
       filterApplied === "media"
         ? "No media turns yet. Open the Camera or Screen panel and analyze a frame."
         : filterApplied === "voice"
           ? "No voice turns yet. Open the Voice panel and record an utterance."
-          : "No turns logged yet. Send a message and timing will appear here.";
+          : filterApplied === "presence"
+            ? "No presence transitions yet. Step away for a moment and come back."
+            : "No turns logged yet. Send a message and timing will appear here.";
     return <div className="mt-6 text-center text-aether-muted">{empty}</div>;
   }
   return (
     <div className="flex flex-col gap-2">
-      {entries.map((e) => {
+      {rows.map((r) => {
+        if (r.kind === "presence") {
+          return (
+            <PresenceHistoryRow key={`presence-${r.entry.at_ms}`} entry={r.entry} />
+          );
+        }
+        const e = r.entry;
         // Voice route summary takes priority when the provider is a
         // known speech adapter; otherwise fall back to vision. The
         // two routes are disjoint because their provider id sets are.
@@ -384,6 +531,56 @@ function HistoryList({
       })}
     </div>
   );
+}
+
+/**
+ * Single presence-transition row. Deliberately muted — presence is
+ * context, not action. "You became Idle" doesn't need the same
+ * visual weight as "Aether routed a turn to a model that took 3.2 s".
+ *
+ * Presence V1 step 3.
+ */
+function PresenceHistoryRow({ entry }: { entry: PresenceHistoryEntry }) {
+  const arrow = `${labelForAttention(entry.from)} → ${labelForAttention(entry.to)}`;
+  const glyph = entry.to === "away" ? "◦" : entry.to === "idle" ? "·" : "●";
+  return (
+    <div
+      className="rounded-md border border-aether-border/60 bg-aether-bg/30 px-3 py-2"
+      title={`Idle ${entry.idle_seconds}s at transition`}
+    >
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[11px] font-mono uppercase tracking-wider text-aether-dim">
+          <span aria-hidden className="mr-1.5 text-aether-muted">
+            {glyph}
+          </span>
+          presence
+        </span>
+        <span className="text-[10px] font-mono text-aether-dim">
+          {formatIdleSeconds(entry.idle_seconds)}
+        </span>
+      </div>
+      <div className="mt-0.5 font-mono text-[12px] text-aether-muted">
+        {arrow}
+      </div>
+    </div>
+  );
+}
+
+function labelForAttention(s: UserAttentionLabel): string {
+  switch (s) {
+    case "active":
+      return "Active";
+    case "idle":
+      return "Idle";
+    case "away":
+      return "Away";
+  }
+}
+
+function formatIdleSeconds(s: number): string {
+  if (s < 60) return `${s}s idle`;
+  if (s < 3600) return `${Math.floor(s / 60)}m idle`;
+  return `${Math.floor(s / 3600)}h idle`;
 }
 
 /**

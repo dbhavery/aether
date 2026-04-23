@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 
 import {
   getMediaPermissions,
+  getMemoryConfig,
   getMicPermission,
   getPresenceConfig,
   setMediaPermission,
+  setMemoryConfig,
   setMicPermission,
   setPresenceConfig,
 } from "../lib/api";
@@ -12,8 +14,16 @@ import type {
   MediaKind,
   MediaPermissions,
   MediaPermissionState,
+  MemoryConfig,
+  MemoryDomain,
+  MemoryRisk,
   MicPermission,
   PresenceConfig,
+} from "../lib/types";
+import {
+  MEMORY_DOMAINS,
+  PRESENCE_THRESHOLD_MAX_S,
+  PRESENCE_THRESHOLD_MIN_S,
 } from "../lib/types";
 
 interface Props {
@@ -65,10 +75,12 @@ export function SettingsDrawer({ open, onClose }: Props) {
   const [perms, setPerms] = useState<MediaPermissions | null>(null);
   const [mic, setMic] = useState<MicPermission | null>(null);
   const [presence, setPresence] = useState<PresenceConfig | null>(null);
+  const [memory, setMemory] = useState<MemoryConfig | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busyKind, setBusyKind] = useState<MediaKind | null>(null);
   const [busyMic, setBusyMic] = useState(false);
   const [busyPresence, setBusyPresence] = useState(false);
+  const [busyMemory, setBusyMemory] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -91,6 +103,13 @@ export function SettingsDrawer({ open, onClose }: Props) {
     getPresenceConfig()
       .then((p) => {
         if (!cancelled) setPresence(p);
+      })
+      .catch((e) => {
+        if (!cancelled) setErr(String(e));
+      });
+    getMemoryConfig()
+      .then((m) => {
+        if (!cancelled) setMemory(m);
       })
       .catch((e) => {
         if (!cancelled) setErr(String(e));
@@ -140,6 +159,24 @@ export function SettingsDrawer({ open, onClose }: Props) {
       setErr(String(e));
     } finally {
       setBusyPresence(false);
+    }
+  };
+
+  const updateMemoryRisk = async (domain: MemoryDomain, risk: MemoryRisk) => {
+    if (!memory) return;
+    const next: MemoryConfig = {
+      ...memory,
+      default_risk: { ...memory.default_risk, [domain]: risk },
+    };
+    setBusyMemory(true);
+    setErr(null);
+    try {
+      const updated = await setMemoryConfig(next);
+      setMemory(updated);
+    } catch (e) {
+      setErr(String(e));
+    } finally {
+      setBusyMemory(false);
     }
   };
 
@@ -264,14 +301,50 @@ export function SettingsDrawer({ open, onClose }: Props) {
               onChange={(v) => updatePresence({ history_in_trust_drawer: v })}
             />
             {presence && (
-              <p className="text-[11px] text-aether-dim">
-                Thresholds: Active → Idle after{" "}
-                <span className="font-mono">{presence.idle_after_s}s</span>, Idle → Away after{" "}
-                <span className="font-mono">{presence.away_after_s}s</span>.
-                Threshold editing is deferred to Presence V1 step 2.
-              </p>
+              <ThresholdEditor
+                presence={presence}
+                busy={busyPresence}
+                onCommit={updatePresence}
+                onError={setErr}
+              />
             )}
           </div>
+        </section>
+
+        <section
+          aria-labelledby="settings-memory-heading"
+          className="mt-6 border-t border-aether-border pt-4"
+        >
+          <h2
+            id="settings-memory-heading"
+            className="text-[11px] uppercase tracking-[0.18em] text-aether-dim"
+          >
+            Memory
+          </h2>
+          <p className="mt-1 text-[12px] text-aether-muted">
+            What Aether remembers, and whether each domain writes
+            automatically or asks first. User-sensitive domains
+            (Facts, Artifacts) default to Ask. See the Memory
+            architecture doc for the full rules.
+          </p>
+          {memory && (
+            <div className="mt-4 flex flex-col gap-2">
+              {MEMORY_DOMAINS.map((d) => (
+                <MemoryRiskRow
+                  key={d}
+                  domain={d}
+                  risk={memory.default_risk[d] ?? MEMORY_RISK_DEFAULT[d]}
+                  retention={
+                    memory.retention_days[d] ??
+                    MEMORY_RETENTION_DEFAULT[d] ??
+                    null
+                  }
+                  busy={busyMemory}
+                  onChange={(risk) => updateMemoryRisk(d, risk)}
+                />
+              ))}
+            </div>
+          )}
         </section>
       </div>
 
@@ -284,11 +357,142 @@ export function SettingsDrawer({ open, onClose }: Props) {
         <code className="font-mono text-aether-dim">
           %APPDATA%/Aether/mic_permissions.json
         </code>
-        , and{" "}
+        ,{" "}
         <code className="font-mono text-aether-dim">
           %APPDATA%/Aether/presence.json
         </code>
+        , and{" "}
+        <code className="font-mono text-aether-dim">
+          %APPDATA%/Aether/memory.json
+        </code>
       </div>
+    </div>
+  );
+}
+
+// Memory V2 step 2 — client-side copies of the design-doc defaults
+// so the Settings UI renders sensible values even when a domain has
+// been dropped from the persisted map.
+const MEMORY_RISK_DEFAULT: Record<MemoryDomain, MemoryRisk> = {
+  session: "auto",
+  durable: "auto",
+  facts: "ask",
+  projects: "auto",
+  preferences: "auto",
+  artifacts: "ask",
+};
+const MEMORY_RETENTION_DEFAULT: Record<MemoryDomain, number | null> = {
+  session: null,
+  durable: 30,
+  facts: null,
+  projects: null,
+  preferences: null,
+  artifacts: null,
+};
+const MEMORY_DOMAIN_COPY: Record<
+  MemoryDomain,
+  { title: string; hint: string }
+> = {
+  session: {
+    title: "Session",
+    hint: "Turn-by-turn within one session. Cleared on session end.",
+  },
+  durable: {
+    title: "Durable",
+    hint: "Recent conversation across sessions. Rolling 30-day window by default.",
+  },
+  facts: {
+    title: "Facts",
+    hint: "User-provided facts (name, preferences, domain vocab). User-sensitive.",
+  },
+  projects: {
+    title: "Projects",
+    hint: "Named project scopes + notes the user pinned.",
+  },
+  preferences: {
+    title: "Preferences",
+    hint: "Per-user tuning (timezone, style, interaction defaults).",
+  },
+  artifacts: {
+    title: "Artifacts",
+    hint: "Files, URLs, and code snippets the user pinned. User-sensitive.",
+  },
+};
+
+const MEMORY_RISKS: MemoryRisk[] = ["auto", "ask", "deny"];
+const MEMORY_RISK_COPY: Record<
+  MemoryRisk,
+  { label: string; color: string }
+> = {
+  auto: { label: "Auto", color: "text-aether-ok" },
+  ask: { label: "Ask", color: "text-aether-warn" },
+  deny: { label: "Deny", color: "text-aether-err" },
+};
+
+/**
+ * One row of the Memory domain policy list. Mirrors `PermissionRow`
+ * visually so the two surfaces read as siblings. Retention appears
+ * as a read-only hint in v1 — editing retention days lands in a
+ * later Memory V2 slice along with the sweep.
+ *
+ * Memory V2 step 2.
+ */
+function MemoryRiskRow({
+  domain,
+  risk,
+  retention,
+  busy,
+  onChange,
+}: {
+  domain: MemoryDomain;
+  risk: MemoryRisk;
+  retention: number | null;
+  busy: boolean;
+  onChange: (next: MemoryRisk) => void;
+}) {
+  const meta = MEMORY_DOMAIN_COPY[domain];
+  const retentionLabel =
+    retention === null || retention === 0
+      ? "kept until forgotten"
+      : `retained ${retention} day${retention === 1 ? "" : "s"}`;
+  return (
+    <div className="rounded-md border border-aether-border bg-aether-elevated/40 px-3 py-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="text-[13px] font-medium text-aether-text">
+          {meta.title}
+        </div>
+        <div className={`text-[11px] ${MEMORY_RISK_COPY[risk].color}`}>
+          {MEMORY_RISK_COPY[risk].label}
+        </div>
+      </div>
+      <p className="mt-1 text-[11.5px] text-aether-muted">{meta.hint}</p>
+      <div
+        role="radiogroup"
+        aria-label={`${meta.title} write policy`}
+        className="mt-3 flex gap-2"
+      >
+        {MEMORY_RISKS.map((r) => {
+          const active = r === risk;
+          return (
+            <button
+              key={r}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              onClick={() => onChange(r)}
+              disabled={busy}
+              className={`flex-1 rounded-md px-2 py-1.5 text-[11.5px] transition-colors ${
+                active
+                  ? "border border-aether-borderHi bg-aether-elevated text-aether-text"
+                  : "border border-aether-border bg-transparent text-aether-muted hover:border-aether-borderHi hover:text-aether-text"
+              } ${busy ? "opacity-60" : ""}`}
+            >
+              {MEMORY_RISK_COPY[r].label}
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-2 text-[11px] text-aether-dim">{retentionLabel}</p>
     </div>
   );
 }
@@ -332,6 +536,165 @@ function ToggleRow({
         </button>
       </div>
       <p className="mt-1 text-[11.5px] text-aether-muted">{body}</p>
+    </div>
+  );
+}
+
+/**
+ * Editable threshold row — replaces the Presence V1 step 1 read-only
+ * line. Two inputs with inline validation against the same bounds the
+ * Rust `set_presence_config` enforces (10–86400 s, away > idle). Only
+ * commits to the backend when Apply is pressed — avoids a round trip
+ * per keystroke and lets the user type freely through transient
+ * invalid states (e.g. typing "30" on the way to "300").
+ *
+ * Presence V1 step 2.
+ */
+function ThresholdEditor({
+  presence,
+  busy,
+  onCommit,
+  onError,
+}: {
+  presence: PresenceConfig;
+  busy: boolean;
+  onCommit: (patch: Partial<PresenceConfig>) => Promise<void>;
+  onError: (msg: string | null) => void;
+}) {
+  const [idle, setIdle] = useState<string>(String(presence.idle_after_s));
+  const [away, setAway] = useState<string>(String(presence.away_after_s));
+  const [localErr, setLocalErr] = useState<string | null>(null);
+
+  // Keep the text inputs in sync when presence comes back from the
+  // backend (e.g. after a successful Apply the Rust side may have
+  // sanitised our numbers). Only re-seed when the persisted values
+  // actually changed so we don't trample mid-edit typing.
+  useEffect(() => {
+    setIdle(String(presence.idle_after_s));
+    setAway(String(presence.away_after_s));
+  }, [presence.idle_after_s, presence.away_after_s]);
+
+  const idleNum = Number(idle);
+  const awayNum = Number(away);
+  const idleValid =
+    Number.isInteger(idleNum) &&
+    idleNum >= PRESENCE_THRESHOLD_MIN_S &&
+    idleNum <= PRESENCE_THRESHOLD_MAX_S;
+  const awayValid =
+    Number.isInteger(awayNum) &&
+    awayNum >= PRESENCE_THRESHOLD_MIN_S &&
+    awayNum <= PRESENCE_THRESHOLD_MAX_S;
+  const orderValid = awayNum > idleNum;
+  const allValid = idleValid && awayValid && orderValid;
+  const dirty =
+    idleNum !== presence.idle_after_s || awayNum !== presence.away_after_s;
+
+  const validationMessage = (() => {
+    if (!idleValid)
+      return `Active → Idle must be an integer between ${PRESENCE_THRESHOLD_MIN_S} and ${PRESENCE_THRESHOLD_MAX_S} seconds.`;
+    if (!awayValid)
+      return `Idle → Away must be an integer between ${PRESENCE_THRESHOLD_MIN_S} and ${PRESENCE_THRESHOLD_MAX_S} seconds.`;
+    if (!orderValid)
+      return "Idle → Away must be greater than Active → Idle.";
+    return null;
+  })();
+
+  const apply = async () => {
+    if (!allValid) {
+      setLocalErr(validationMessage);
+      return;
+    }
+    setLocalErr(null);
+    onError(null);
+    await onCommit({ idle_after_s: idleNum, away_after_s: awayNum });
+  };
+
+  const reset = () => {
+    setIdle(String(presence.idle_after_s));
+    setAway(String(presence.away_after_s));
+    setLocalErr(null);
+  };
+
+  return (
+    <div className="rounded-md border border-aether-border bg-aether-elevated/40 px-3 py-3">
+      <div className="text-[12px] font-medium text-aether-text">
+        Thresholds
+      </div>
+      <p className="mt-1 text-[11.5px] text-aether-muted">
+        How long of no keyboard / mouse activity before Aether considers
+        you Idle, then Away. Seconds; {PRESENCE_THRESHOLD_MIN_S}–
+        {PRESENCE_THRESHOLD_MAX_S}.
+      </p>
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <label className="flex flex-col gap-1 text-[11.5px] text-aether-muted">
+          <span>Active → Idle (s)</span>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={PRESENCE_THRESHOLD_MIN_S}
+            max={PRESENCE_THRESHOLD_MAX_S}
+            step={1}
+            value={idle}
+            onChange={(e) => setIdle(e.target.value)}
+            disabled={busy}
+            aria-invalid={!idleValid}
+            className={`rounded-md border bg-aether-surface px-2 py-1.5 font-mono text-[12px] text-aether-text focus:border-aether-borderHi focus:outline-none ${
+              idleValid
+                ? "border-aether-border"
+                : "border-aether-err/60"
+            }`}
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-[11.5px] text-aether-muted">
+          <span>Idle → Away (s)</span>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={PRESENCE_THRESHOLD_MIN_S}
+            max={PRESENCE_THRESHOLD_MAX_S}
+            step={1}
+            value={away}
+            onChange={(e) => setAway(e.target.value)}
+            disabled={busy}
+            aria-invalid={!awayValid || !orderValid}
+            className={`rounded-md border bg-aether-surface px-2 py-1.5 font-mono text-[12px] text-aether-text focus:border-aether-borderHi focus:outline-none ${
+              awayValid && orderValid
+                ? "border-aether-border"
+                : "border-aether-err/60"
+            }`}
+          />
+        </label>
+      </div>
+      {(validationMessage || localErr) && (
+        <p className="mt-2 text-[11px] text-aether-err">
+          {localErr ?? validationMessage}
+        </p>
+      )}
+      <div className="mt-3 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={apply}
+          disabled={!allValid || !dirty || busy}
+          className={`rounded-md border px-2.5 py-1 text-[11px] transition-colors ${
+            !allValid || !dirty || busy
+              ? "border-aether-border bg-transparent text-aether-muted opacity-60"
+              : "border-aether-ok/60 bg-aether-ok/10 text-aether-ok hover:border-aether-ok"
+          }`}
+        >
+          Apply
+        </button>
+        <button
+          type="button"
+          onClick={reset}
+          disabled={!dirty || busy}
+          className="rounded-md border border-aether-border bg-transparent px-2.5 py-1 text-[11px] text-aether-muted hover:border-aether-borderHi hover:text-aether-text disabled:opacity-60"
+        >
+          Reset
+        </button>
+        <span className="ml-auto text-[11px] text-aether-dim">
+          Saved: {presence.idle_after_s}s / {presence.away_after_s}s
+        </span>
+      </div>
     </div>
   );
 }

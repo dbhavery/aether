@@ -371,11 +371,7 @@ impl VoiceRegistry {
             return Ok(());
         };
         let state = VoicePersistedState {
-            active: self
-                .active
-                .read()
-                .expect("voice active read lock")
-                .clone(),
+            active: self.active.read().expect("voice active read lock").clone(),
             model_per_provider: self
                 .model_per_provider
                 .read()
@@ -625,7 +621,8 @@ mod tests {
         r.set_active(Some("alpha".into())).unwrap();
 
         assert_eq!(r.active_model().as_deref(), Some("default-model"));
-        r.set_active_model("ggml-base.en").expect("set_active_model");
+        r.set_active_model("ggml-base.en")
+            .expect("set_active_model");
         assert_eq!(r.active_model().as_deref(), Some("ggml-base.en"));
         assert_eq!(r.model_for("alpha").as_deref(), Some("ggml-base.en"));
         assert!(r.model_for("beta").is_none());

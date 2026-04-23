@@ -6,15 +6,19 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import type {
+  AttentionEventPayload,
   CompanionBanner,
   FrameAnalysisOutcome,
   MediaKind,
   MediaPermissions,
   MediaPermissionState,
+  MemoryConfig,
   MicPermission,
   PersonaCatalogEntry,
   PresenceConfig,
+  PresenceHistoryEntry,
   PresencePayload,
+  PresenceStatusPayload,
   SpeechModelList,
   TranscribeUtteranceRequest,
   TranscriptMessage,
@@ -243,4 +247,43 @@ export async function setPresenceConfig(
   config: PresenceConfig,
 ): Promise<PresenceConfig> {
   return invoke<PresenceConfig>("set_presence_config", { config });
+}
+
+// --- Presence V1 step 2 ---------------------------------------------------
+
+/** Current user-attention snapshot. Complementary to `presenceCurrent`
+ * which returns the assistant-posture axis — the two commands are
+ * orthogonal per `docs/PRESENCE-V1-ARCHITECTURE.md` §2. */
+export async function presenceStatus(): Promise<PresenceStatusPayload> {
+  return invoke<PresenceStatusPayload>("presence_status");
+}
+
+/** Recent user-attention transitions, newest-first. Used by the Trust
+ * drawer's History tab (step 3). */
+export async function presenceRecentHistory(
+  limit: number | null = null,
+): Promise<PresenceHistoryEntry[]> {
+  return invoke<PresenceHistoryEntry[]>("presence_recent_history", { limit });
+}
+
+/** Subscribe to live attention transitions. Emitted only on state
+ * change, never on every poll tick. */
+export function onAttention(
+  handler: (p: AttentionEventPayload) => void,
+): Promise<UnlistenFn> {
+  return listen<AttentionEventPayload>("presence:attention", (e) =>
+    handler(e.payload),
+  );
+}
+
+// --- Memory V2 step 2 ----------------------------------------------------
+
+export async function getMemoryConfig(): Promise<MemoryConfig> {
+  return invoke<MemoryConfig>("get_memory_config");
+}
+
+export async function setMemoryConfig(
+  config: MemoryConfig,
+): Promise<MemoryConfig> {
+  return invoke<MemoryConfig>("set_memory_config", { config });
 }

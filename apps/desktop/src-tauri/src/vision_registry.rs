@@ -345,11 +345,7 @@ impl VisionRegistry {
             return Ok(());
         };
         let state = VisionPersistedState {
-            active: self
-                .active
-                .read()
-                .expect("vision active read lock")
-                .clone(),
+            active: self.active.read().expect("vision active read lock").clone(),
             model_per_provider: self
                 .model_per_provider
                 .read()
