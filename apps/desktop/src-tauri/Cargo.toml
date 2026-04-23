@@ -35,7 +35,7 @@ tokio = { version = "1", features = ["time"] }
 # CLAUDE.md §1.4 regulates packages/l*-* siblings; apps/* are allowed to
 # compose multiple engine layers.
 aether-l1-interaction = { path = "../../../packages/l1-interaction" }
-aether-l2-memory      = { path = "../../../packages/l2-memory", features = ["sqlite-backend"] }
+aether-l2-memory      = { path = "../../../packages/l2-memory", features = ["sqlite-backend", "embeddings"] }
 aether-l3-presence    = { path = "../../../packages/l3-presence" }
 aether-l4-router      = { path = "../../../packages/l4-router" }
 aether-l5-policy      = { path = "../../../packages/l5-policy" }

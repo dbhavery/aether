@@ -25,8 +25,18 @@ pub mod session;
 #[cfg(feature = "sqlite-backend")]
 pub mod sqlite_session;
 
+#[cfg(feature = "embeddings")]
+pub mod embeddings;
+
 pub use domain::MemoryDomain;
 pub use error::L2Error;
+
+#[cfg(feature = "embeddings")]
+pub use embeddings::{
+    EmbeddingProvider, EmbeddingRow, EmbeddingStore, FlatFileEmbeddingStore, MemoryId,
+    OllamaEmbeddingProvider, SimilarityHit, StubEmbedder, DEFAULT_OLLAMA_BASE_URL,
+    DEFAULT_OLLAMA_EMBED_MODEL, EMBED_ELIGIBLE_DOMAINS,
+};
 pub use session::{
     render_transcript, InMemorySessionMemoryStore, MemoryRole, RecentMemoryConfig,
     RecentMemoryWindow, SessionMemoryStore, TurnMemoryRecord,

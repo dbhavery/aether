@@ -24,7 +24,10 @@ use crate::vision_registry::{VisionProviderInfo, VisionRegistry};
 use crate::voice_registry::{SpeechProviderInfo, VoiceRegistry};
 #[cfg(feature = "sqlite-backend")]
 use aether_l2_memory::{DurableSessionStore, SqliteSessionMemoryStore};
-use aether_l2_memory::{InMemorySessionMemoryStore, SessionMemoryStore};
+use aether_l2_memory::{
+    EmbeddingProvider, EmbeddingStore, FlatFileEmbeddingStore, InMemorySessionMemoryStore,
+    OllamaEmbeddingProvider, SessionMemoryStore,
+};
 use aether_l3_presence::{
     AttentionEvent, AttentionSnapshot, AttentionThresholds, InMemoryPresenceController,
     PresenceController, UserAttentionController,
@@ -85,6 +88,17 @@ pub struct AppState {
     pub catalog: Vec<PersonaProfile>,
     pub presence: Arc<dyn PresenceController>,
     pub memory: Arc<dyn SessionMemoryStore>,
+    /// Memory V2 step 6 (ADR-0002) — embeddings store. Owned by the
+    /// shell so the Memory tab can query, count, and forget without
+    /// downcasting. Trait object so tests can inject an in-memory
+    /// store. Always constructed today (the shell's `aether-l2-memory`
+    /// feature set includes `embeddings`); consumption is gated by
+    /// `memory_config.embeddings.enabled`, not by compile-time.
+    pub embedding_store: Arc<dyn EmbeddingStore>,
+    /// Memory V2 step 6 — embedding provider. Wrapped in an `RwLock`
+    /// so Settings changes to the provider id can swap the live
+    /// provider without rebuilding the whole `AppState`.
+    pub embedding_provider: RwLock<Arc<dyn EmbeddingProvider>>,
     pub active: RwLock<ActiveEngine>,
     ts: AtomicU64,
     pending: Mutex<HashMap<String, PendingTurn>>,
@@ -380,10 +394,16 @@ impl AppState {
         ));
         let active = build_active(&pick_default(&catalog), memory.clone(), None)?;
 
+        let embedding_store: Arc<dyn EmbeddingStore> =
+            Arc::new(FlatFileEmbeddingStore::in_memory());
+        let embedding_provider: Arc<dyn EmbeddingProvider> =
+            Arc::new(OllamaEmbeddingProvider::from_env());
         Ok(Self {
             catalog,
             presence,
             memory,
+            embedding_store,
+            embedding_provider: RwLock::new(embedding_provider),
             active: RwLock::new(active),
             ts: AtomicU64::new(1_000),
             pending: Mutex::new(HashMap::new()),

@@ -53,7 +53,10 @@
 
 use std::sync::atomic::Ordering;
 
-use aether_l2_memory::{MemoryRole, TurnMemoryRecord};
+use aether_l2_memory::{
+    embeddings::{EmbeddingRow, MemoryId as EmbedMemoryId, EMBED_ELIGIBLE_DOMAINS},
+    MemoryRole, TurnMemoryRecord,
+};
 use aether_l5_policy::{
     capability::{Capability, ResourceScope},
     common::{MonotonicTimestamp, RequestId, TurnId},
@@ -84,6 +87,11 @@ pub mod telemetry_kind {
     /// Sampled read audit — one tick per ~100 reads per domain per
     /// session (plus on retrieval-burst flush).
     pub const RETRIEVAL: &str = "memory_retrieval";
+    /// Memory V2 step 6 (ADR-0002) — an embedding was produced + stored
+    /// for an already-persisted memory item. Emitted only when
+    /// `memory.json::embeddings.enabled` is true and the domain is
+    /// embed-eligible (Durable / Projects / Artifacts).
+    pub const EMBEDDED: &str = "memory_embedded";
 }
 
 /// The per-domain gate resolved from `MemoryConfig::risk_for(domain)`.
@@ -384,6 +392,9 @@ impl AppState {
                         return Err(MemoryServiceError::Store(format!("pre-recall: {e}")));
                     }
                 };
+                // Snapshot the content for the optional embed path —
+                // `record.content` is moved into the append below.
+                let rec_content_snapshot = content.clone();
                 let record = TurnMemoryRecord {
                     session_id: session_id.to_string(),
                     sequence: 0,
@@ -412,6 +423,11 @@ impl AppState {
                     domain,
                     Some(&memory_id),
                 );
+                // Memory V2 step 6 (ADR-0002): best-effort embed.
+                // Runs only when the user has opted in AND the
+                // domain is embed-eligible. Failure never impacts
+                // the primary write outcome.
+                self.maybe_embed_on_write(domain, &memory_id, &rec_content_snapshot, ts_ms);
                 Ok(MemoryWriteOutcome::Allowed {
                     memory_id,
                     turn_sequence: seq,
@@ -559,6 +575,9 @@ impl AppState {
                     domain,
                     Some(&memory_id),
                 );
+                // Memory V2 step 6: paired embedding delete. Silent
+                // no-op if embeddings were never stored for this id.
+                self.delete_embedding(domain, &memory_id);
                 Ok(MemoryForgetOutcome::Allowed {
                     removed_count: 1,
                     audit_id: audit_id.0,
@@ -782,6 +801,117 @@ impl AppState {
             sessions.len()
         );
         Ok(total_evicted)
+    }
+
+    // ---------------------------------------------------------------
+    // Memory V2 step 6 (ADR-0002) — embeddings opt-in wiring
+    // ---------------------------------------------------------------
+
+    /// Best-effort embed + store for an already-persisted memory
+    /// item. Runs only when:
+    /// 1. `memory_config().embeddings.enabled == true`.
+    /// 2. `domain` is one of `EMBED_ELIGIBLE_DOMAINS`
+    ///    (Durable / Projects / Artifacts).
+    ///
+    /// On success: emits one L5 audit row via `MemoryEmbed` (via
+    /// `build_action_request`), writes the vector to
+    /// `self.embedding_store`, and emits one
+    /// `memory_embedded` telemetry entry keyed to the same
+    /// `memory_id` the primary write returned.
+    ///
+    /// On failure (provider unreachable, capability denied, store
+    /// error): traces `warn!` and returns. The primary memory write
+    /// has already landed; embeddings are additive signal, not
+    /// required state.
+    pub(crate) fn maybe_embed_on_write(
+        &self,
+        domain: MemoryDomain,
+        memory_id: &str,
+        content: &str,
+        ts_ms: u64,
+    ) {
+        let cfg = self.memory_config();
+        if !cfg.embeddings.enabled {
+            return;
+        }
+        if !EMBED_ELIGIBLE_DOMAINS.contains(&domain) {
+            return;
+        }
+        // L5 gate the embed path. A denying policy warns and skips;
+        // no partial state is written.
+        let (request, _) = build_action_request(self, Capability::MemoryEmbed);
+        let decision = {
+            let active = self.active.read().expect("active read lock");
+            match active.policy.evaluate(request) {
+                Ok(d) => d,
+                Err(e) => {
+                    tracing::warn!("embed policy evaluate: {e}");
+                    return;
+                }
+            }
+        };
+        if !matches!(decision, Decision::Allow { .. }) {
+            tracing::debug!(
+                "embed skipped: policy decision {}",
+                deny_reason(&decision)
+            );
+            return;
+        }
+        let provider = {
+            let guard = self
+                .embedding_provider
+                .read()
+                .expect("embedding provider read lock");
+            guard.clone()
+        };
+        let vector = match provider.embed(content) {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::warn!("embed provider ({}): {e}", provider.label());
+                return;
+            }
+        };
+        let row = EmbeddingRow {
+            memory_id: EmbedMemoryId::new(memory_id),
+            domain,
+            vector,
+        };
+        if let Err(e) = self.embedding_store.upsert(row) {
+            tracing::warn!("embed store upsert: {e}");
+            return;
+        }
+        emit_memory_telemetry(
+            self,
+            ts_ms,
+            telemetry_kind::EMBEDDED,
+            domain,
+            Some(memory_id),
+        );
+    }
+
+    /// Best-effort embedding deletion paired with any primary
+    /// forget. Called from `memory_forget_item` paths. Unknown
+    /// embeddings are a silent no-op — a row may have been evicted
+    /// already, or the user may never have had embeddings enabled
+    /// when the memory row was written.
+    pub(crate) fn delete_embedding(&self, domain: MemoryDomain, memory_id: &str) {
+        if !EMBED_ELIGIBLE_DOMAINS.contains(&domain) {
+            return;
+        }
+        match self
+            .embedding_store
+            .delete(domain, &EmbedMemoryId::new(memory_id))
+        {
+            Ok(_) => {}
+            Err(e) => tracing::warn!("embed store delete: {e}"),
+        }
+    }
+
+    /// Read-only accessor for the embedding store — used by UI
+    /// surfaces (Memory tab) and tests that need to assert on
+    /// counts or run queries without touching the write path.
+    pub fn embedding_store(&self) -> &dyn aether_l2_memory::EmbeddingStore {
+        self.embedding_store.as_ref()
     }
 }
 
@@ -1394,5 +1524,204 @@ mod tests {
         let evicted = state.run_retention_sweep(9_999_999).expect("sweep");
         assert_eq!(evicted, 0);
         assert_eq!(state.memory.recent("s1").unwrap().records.len(), 1);
+    }
+
+    // ---------- Embeddings (Memory V2 step 6, ADR-0002) ----------
+
+    use aether_l2_memory::embeddings::StubEmbedder;
+    use std::sync::Arc as StdArc;
+
+    fn swap_stub_embedder(state: &AppState) {
+        let stub: StdArc<dyn aether_l2_memory::EmbeddingProvider> =
+            StdArc::new(StubEmbedder::new(16));
+        *state
+            .embedding_provider
+            .write()
+            .expect("embedding provider write lock") = stub;
+    }
+
+    fn enable_embeddings(state: &AppState) {
+        let mut cfg = state.memory_config();
+        cfg.embeddings.enabled = true;
+        cfg.embeddings.provider = Some("stub:16".into());
+        state.set_memory_config(cfg).expect("enable embeddings");
+    }
+
+    #[test]
+    fn embed_disabled_produces_no_rows_and_no_telemetry() {
+        let state = setup_state();
+        swap_stub_embedder(&state);
+        // Default memory_config has embeddings.enabled = false.
+        state
+            .memory_write(
+                MemoryDomain::Durable,
+                "s1",
+                "the quick brown fox".into(),
+                MemoryRole::User,
+            )
+            .expect("write");
+        assert_eq!(
+            state.embedding_store().count(MemoryDomain::Durable).unwrap(),
+            0
+        );
+        let tel = state.telemetry_recent(200);
+        assert_eq!(
+            tel.iter().filter(|e| e.kind == telemetry_kind::EMBEDDED).count(),
+            0
+        );
+    }
+
+    #[test]
+    fn embed_enabled_writes_a_row_and_emits_telemetry_for_durable() {
+        let state = setup_state();
+        swap_stub_embedder(&state);
+        enable_embeddings(&state);
+        state
+            .memory_write(
+                MemoryDomain::Durable,
+                "s1",
+                "remember this please".into(),
+                MemoryRole::User,
+            )
+            .expect("write");
+        assert_eq!(
+            state.embedding_store().count(MemoryDomain::Durable).unwrap(),
+            1
+        );
+        let tel = state.telemetry_recent(200);
+        let embedded = tel
+            .iter()
+            .filter(|e| e.kind == telemetry_kind::EMBEDDED)
+            .count();
+        assert_eq!(embedded, 1);
+    }
+
+    #[test]
+    fn embed_skipped_for_ineligible_domain_session() {
+        let state = setup_state();
+        swap_stub_embedder(&state);
+        enable_embeddings(&state);
+        state
+            .memory_write(
+                MemoryDomain::Session,
+                "s1",
+                "chat chat chat".into(),
+                MemoryRole::User,
+            )
+            .expect("write");
+        // Session is not embed-eligible.
+        assert_eq!(
+            state.embedding_store().count(MemoryDomain::Durable).unwrap(),
+            0
+        );
+        // Ineligible domain still gets a memory_written row — just no
+        // memory_embedded row.
+        let tel = state.telemetry_recent(200);
+        assert_eq!(
+            tel.iter().filter(|e| e.kind == telemetry_kind::EMBEDDED).count(),
+            0
+        );
+        assert!(tel.iter().any(|e| e.kind == telemetry_kind::WRITTEN));
+    }
+
+    #[test]
+    fn embed_written_only_for_embed_eligible_domains() {
+        let state = setup_state();
+        swap_stub_embedder(&state);
+        enable_embeddings(&state);
+        // Write into each embed-eligible domain. Facts is Ask so we
+        // use the post-approval path for it.
+        state
+            .memory_write(MemoryDomain::Durable, "s1", "a".into(), MemoryRole::User)
+            .unwrap();
+        state
+            .memory_write(MemoryDomain::Projects, "s1", "b".into(), MemoryRole::User)
+            .unwrap();
+        state
+            .memory_write_after_approval(
+                MemoryDomain::Artifacts,
+                "s1",
+                "c".into(),
+                MemoryRole::User,
+            )
+            .unwrap();
+        assert_eq!(
+            state.embedding_store().count(MemoryDomain::Durable).unwrap(),
+            1
+        );
+        assert_eq!(
+            state.embedding_store().count(MemoryDomain::Projects).unwrap(),
+            1
+        );
+        assert_eq!(
+            state.embedding_store().count(MemoryDomain::Artifacts).unwrap(),
+            1
+        );
+    }
+
+    #[test]
+    fn forget_item_removes_paired_embedding_row() {
+        let state = setup_state();
+        swap_stub_embedder(&state);
+        enable_embeddings(&state);
+        // Durable auto-flow — single write lands row at sequence 1.
+        state
+            .memory_write(
+                MemoryDomain::Durable,
+                "s1",
+                "forget-me".into(),
+                MemoryRole::User,
+            )
+            .expect("write");
+        assert_eq!(
+            state.embedding_store().count(MemoryDomain::Durable).unwrap(),
+            1
+        );
+        // Durable domain defaults to Auto posture.
+        state
+            .memory_forget_item(MemoryDomain::Durable, "s1", 1)
+            .expect("forget item");
+        assert_eq!(
+            state.embedding_store().count(MemoryDomain::Durable).unwrap(),
+            0
+        );
+    }
+
+    #[test]
+    fn embed_provider_failure_does_not_block_primary_write() {
+        // Default OllamaEmbeddingProvider will fail when no daemon is
+        // running — use that as a natural "provider unreachable" test.
+        // Memory write must still succeed, just without an embedding.
+        let state = setup_state();
+        // NOTE: no swap_stub_embedder — keep the default Ollama provider.
+        // Point it at a definitely-unreachable port so transport fails
+        // fast rather than attempting a 30s connect.
+        std::env::set_var("AETHER_EMBED_OLLAMA_BASE_URL", "http://127.0.0.1:1");
+        let provider: StdArc<dyn aether_l2_memory::EmbeddingProvider> = StdArc::new(
+            aether_l2_memory::OllamaEmbeddingProvider::from_env(),
+        );
+        *state
+            .embedding_provider
+            .write()
+            .expect("embedding provider write lock") = provider;
+        std::env::remove_var("AETHER_EMBED_OLLAMA_BASE_URL");
+        enable_embeddings(&state);
+        let outcome = state
+            .memory_write(
+                MemoryDomain::Durable,
+                "s1",
+                "primary write must succeed".into(),
+                MemoryRole::User,
+            )
+            .expect("write");
+        match outcome {
+            MemoryWriteOutcome::Allowed { .. } => {}
+            other => panic!("primary write must succeed, got {other:?}"),
+        }
+        // No embedding row landed — provider failed.
+        assert_eq!(
+            state.embedding_store().count(MemoryDomain::Durable).unwrap(),
+            0
+        );
     }
 }

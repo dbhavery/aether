@@ -129,6 +129,14 @@ pub enum Capability {
     /// Memory V2: edit an existing memory item. Step 2 wires the
     /// `Ask` flow on user-sensitive domains.
     MemoryEdit,
+    /// Memory V2: produce and persist an embedding vector for a
+    /// memory item. Added by step 6 (ADR-0002); opt-in per
+    /// `memory.json::embeddings.enabled`. Each embedding write
+    /// produces one audit row via this capability. Not routed
+    /// through the Ask flow — the embedding is a side effect of an
+    /// already-allowed MemoryWrite, so the primary capability gates
+    /// the user-visible decision.
+    MemoryEmbed,
 
     // ----- Media -----
     /// Access microphone.

@@ -201,6 +201,18 @@ impl EngineConfig {
                 risk: RiskClass::Medium,
             },
         );
+        // Memory V2 step 6 (ADR-0002): embeddings opt-in. Risk Low —
+        // embedding is a side effect of an already-allowed MemoryWrite
+        // and does not persist user-facing content on its own. Auto
+        // mode so the per-domain gate on MemoryWrite is the user-
+        // visible decision.
+        d.insert(
+            Capability::MemoryEmbed,
+            CapabilityPolicy {
+                mode: ApprovalMode::Auto,
+                risk: RiskClass::Low,
+            },
+        );
         Self {
             preset: PresetId(String::from("wave3.balanced")),
             preset_version: 1,
@@ -387,6 +399,12 @@ fn default_risk_for(cap: &Capability) -> RiskClass {
         // on the pre-V2 `MemoryDelete` variant.
         MemoryRead => RiskClass::Low,
         MemoryWrite | MemoryEdit | MemoryForget => RiskClass::Medium,
+        // Memory V2 step 6 (ADR-0002): embedding is a side effect of
+        // an already-allowed MemoryWrite — the primary capability
+        // gates the user-visible decision. Low risk: no new user-
+        // facing content is persisted, only a vector derived from
+        // the already-persisted memory row.
+        MemoryEmbed => RiskClass::Low,
         _ => RiskClass::Medium,
     }
 }
@@ -1125,11 +1143,31 @@ mod tests {
             Capability::MemoryWrite,
             Capability::MemoryForget,
             Capability::MemoryEdit,
+            Capability::MemoryEmbed,
         ] {
             let s = serde_json::to_string(&cap).unwrap();
             let back: Capability = serde_json::from_str(&s).unwrap();
             assert_eq!(back, cap, "round-trip failed for {:?}", cap);
         }
+    }
+
+    // ---- Memory V2 step 6 (ADR-0002): MemoryEmbed preset policy ----
+
+    #[test]
+    fn memory_embed_default_risk_is_low() {
+        // Embedding is a side effect of an already-allowed MemoryWrite.
+        assert_eq!(default_risk_for(&Capability::MemoryEmbed), RiskClass::Low);
+    }
+
+    #[test]
+    fn memory_embed_registered_in_wave3_default_as_auto_low() {
+        let cfg = EngineConfig::wave3_default(persona());
+        let embed = cfg
+            .preset_defaults
+            .get(&Capability::MemoryEmbed)
+            .expect("MemoryEmbed preset default should be registered");
+        assert_eq!(embed.mode, ApprovalMode::Auto);
+        assert_eq!(embed.risk, RiskClass::Low);
     }
 
     #[test]

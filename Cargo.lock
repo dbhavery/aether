@@ -45,9 +45,11 @@ dependencies = [
  "aether-l5-policy",
  "aether-storage",
  "serde",
+ "serde_json",
  "tempfile",
  "thiserror",
  "tracing",
+ "ureq",
 ]
 
 [[package]]
