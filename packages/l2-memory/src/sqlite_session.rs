@@ -417,6 +417,31 @@ impl SessionMemoryStore for SqliteSessionMemoryStore {
             .map_err(|e| L2Error::Storage(format!("update: {e}")))?;
         Ok(affected > 0)
     }
+
+    fn prune_before(&self, session_id: &str, cutoff_ms: u64) -> Result<usize, L2Error> {
+        // Delegates to the existing `prune_older_than` helper so the
+        // trait call path and the explicit "forget older than N days"
+        // UI call path share one implementation.
+        self.prune_older_than(session_id, cutoff_ms)
+    }
+
+    fn list_sessions(&self) -> Result<Vec<String>, L2Error> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| L2Error::Internal(format!("sqlite memory lock poisoned: {e}")))?;
+        let mut stmt = conn
+            .prepare("SELECT DISTINCT session_id FROM conversation_log")
+            .map_err(|e| L2Error::Storage(format!("list_sessions prepare: {e}")))?;
+        let rows = stmt
+            .query_map([], |r| r.get::<_, String>(0))
+            .map_err(|e| L2Error::Storage(format!("list_sessions query: {e}")))?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r.map_err(|e| L2Error::Storage(format!("list_sessions row: {e}")))?);
+        }
+        Ok(out)
+    }
 }
 
 /// Convenience builder that mirrors L5's `DurableBackends::open`: open

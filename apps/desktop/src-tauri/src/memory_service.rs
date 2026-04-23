@@ -678,6 +678,111 @@ impl AppState {
         drop(active);
         emit_memory_telemetry(self, emitted_at.0, telemetry_kind::RETRIEVAL, domain, None);
     }
+
+    /// Memory V2 step 5 — the retention sweep.
+    ///
+    /// Walks every known session, applies the per-domain
+    /// `retention_days` from the persisted `MemoryConfig`, and prunes
+    /// rows whose `timestamp_ms` predates the cutoff. Emits:
+    ///
+    /// - one `memory_forgotten` telemetry row per domain that actually
+    ///   evicted ≥1 rows (aggregated per sweep to avoid flooding the
+    ///   History tab; `memory_id` is left `None` because the sweep
+    ///   operates on a set, not a single item),
+    /// - one L5 audit row per sweep *invocation* (via the existing
+    ///   `MemoryForget` capability), regardless of whether anything was
+    ///   evicted. One row per sweep keeps the audit trail symmetric
+    ///   with scheduled maintenance tasks like the presence tick.
+    ///
+    /// Today only the Session domain has a backing store
+    /// (`SessionMemoryStore`). The other five domains are skipped with
+    /// a trace note; a future domain-typed durable store will reuse
+    /// this entry point. `retention_days = None` means "keep until
+    /// forgotten" and also skips the domain.
+    ///
+    /// `now_ms` is supplied by the caller so the sweep stays pure and
+    /// testable (no implicit clock). The boot sweep in `main.rs` uses
+    /// `AppState::next_ts()`; the hourly tick uses the same.
+    ///
+    /// Returns the total number of rows evicted across all domains.
+    pub fn run_retention_sweep(&self, now_ms: u64) -> Result<usize, MemoryServiceError> {
+        // One L5 audit row per invocation. Use the MemoryForget
+        // capability; the sweep is the automated counterpart to the
+        // user-initiated per-item forget surface.
+        let (request, emitted_at) = build_action_request(self, Capability::MemoryForget);
+        let decision = {
+            let active = self.active.read().expect("active read lock");
+            active
+                .policy
+                .evaluate(request)
+                .map_err(|e| MemoryServiceError::Internal(format!("policy evaluate: {e}")))?
+        };
+        // Policy denying a retention sweep is possible in principle
+        // (a future Observer-like posture could refuse all
+        // MemoryForget). Today no shipped posture does; when it does,
+        // we trace and skip the evictions rather than override — the
+        // user owns their memory.
+        let proceed = matches!(decision, Decision::Allow { .. });
+        if !proceed {
+            tracing::warn!(
+                "retention sweep skipped: policy returned non-Allow decision ({})",
+                deny_reason(&decision)
+            );
+            return Ok(0);
+        }
+
+        let cfg = self.memory_config();
+        let sessions = self
+            .memory
+            .list_sessions()
+            .map_err(|e| MemoryServiceError::Store(format!("list_sessions: {e}")))?;
+        let mut total_evicted: usize = 0;
+        for domain in MemoryDomain::ALL {
+            let Some(days) = cfg.retention_for(domain) else {
+                // `None` = keep until forgotten — skip.
+                continue;
+            };
+            if domain != MemoryDomain::Session {
+                // Only the Session domain has a backing store today;
+                // other domains' retention policies are recorded in
+                // `memory.json` for the future domain-typed durable
+                // store (Memory V2 step 6+).
+                tracing::trace!(
+                    "retention sweep: domain {} has retention but no backing store yet; skipping",
+                    domain.label()
+                );
+                continue;
+            }
+            let cutoff_ms = now_ms.saturating_sub((days as u64) * 86_400_000);
+            let mut domain_evicted: usize = 0;
+            for session_id in &sessions {
+                match self.memory.prune_before(session_id, cutoff_ms) {
+                    Ok(n) => domain_evicted = domain_evicted.saturating_add(n),
+                    Err(e) => {
+                        tracing::warn!(
+                            "retention sweep: prune_before({session_id}) failed: {e}"
+                        );
+                    }
+                }
+            }
+            if domain_evicted > 0 {
+                emit_memory_telemetry(
+                    self,
+                    emitted_at.0,
+                    telemetry_kind::FORGOTTEN,
+                    domain,
+                    None,
+                );
+                total_evicted = total_evicted.saturating_add(domain_evicted);
+            }
+        }
+        tracing::debug!(
+            "retention sweep: evicted {} row(s) across {} session(s)",
+            total_evicted,
+            sessions.len()
+        );
+        Ok(total_evicted)
+    }
 }
 
 #[cfg(test)]
@@ -1167,5 +1272,127 @@ mod tests {
             count, 6,
             "each domain samples independently on its first tick"
         );
+    }
+
+    // ---------- Retention sweep (Memory V2 step 5) ----------
+
+    fn seed_row(state: &AppState, sid: &str, content: &str, ts_ms: u64) {
+        state
+            .memory
+            .append(TurnMemoryRecord {
+                session_id: sid.into(),
+                sequence: 0,
+                role: MemoryRole::User,
+                content: content.into(),
+                timestamp_ms: ts_ms,
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn sweep_no_retention_config_is_noop() {
+        let state = setup_state();
+        // Default config: Session retention = None → domain skipped.
+        seed_row(&state, "s1", "keep-me", 1_000);
+        let evicted = state.run_retention_sweep(9_999_999).expect("sweep");
+        assert_eq!(evicted, 0);
+        assert_eq!(state.memory.recent("s1").unwrap().records.len(), 1);
+    }
+
+    #[test]
+    fn sweep_evicts_session_domain_when_retention_set() {
+        let state = setup_state();
+        // 1-day retention on Session.
+        let mut cfg = MemoryConfig::defaults();
+        cfg.retention_days.insert(MemoryDomain::Session, Some(1));
+        state.set_memory_config(cfg).unwrap();
+        // Row at ts=100 (ancient), row at ts= now - 1h (fresh).
+        let day_ms: u64 = 86_400_000;
+        let now_ms: u64 = 10 * day_ms;
+        seed_row(&state, "s1", "ancient", 100);
+        seed_row(&state, "s1", "fresh", now_ms - 3_600_000);
+        let evicted = state.run_retention_sweep(now_ms).expect("sweep");
+        assert_eq!(evicted, 1);
+        let w = state.memory.recent("s1").unwrap();
+        assert_eq!(w.records.len(), 1);
+        assert_eq!(w.records[0].content, "fresh");
+    }
+
+    #[test]
+    fn sweep_emits_memory_forgotten_telemetry_when_evicting() {
+        let state = setup_state();
+        let mut cfg = MemoryConfig::defaults();
+        cfg.retention_days.insert(MemoryDomain::Session, Some(1));
+        state.set_memory_config(cfg).unwrap();
+        let day_ms: u64 = 86_400_000;
+        let now_ms: u64 = 10 * day_ms;
+        seed_row(&state, "s1", "old-a", 1);
+        seed_row(&state, "s1", "old-b", 2);
+        state.run_retention_sweep(now_ms).unwrap();
+        let tel = state.telemetry_recent(200);
+        let forgotten: Vec<_> = tel
+            .iter()
+            .filter(|e| e.kind == telemetry_kind::FORGOTTEN)
+            .collect();
+        // One aggregated telemetry row per domain per sweep.
+        assert_eq!(forgotten.len(), 1);
+        assert_eq!(
+            forgotten[0].memory_domain.as_deref(),
+            Some(MemoryDomain::Session.label())
+        );
+    }
+
+    #[test]
+    fn sweep_does_not_emit_telemetry_when_nothing_evicted() {
+        let state = setup_state();
+        let mut cfg = MemoryConfig::defaults();
+        cfg.retention_days.insert(MemoryDomain::Session, Some(30));
+        state.set_memory_config(cfg).unwrap();
+        let day_ms: u64 = 86_400_000;
+        let now_ms: u64 = 10 * day_ms;
+        // Fresh row inside the 30-day window.
+        seed_row(&state, "s1", "recent", now_ms - day_ms);
+        state.run_retention_sweep(now_ms).unwrap();
+        let tel = state.telemetry_recent(200);
+        let forgotten = tel
+            .iter()
+            .filter(|e| e.kind == telemetry_kind::FORGOTTEN)
+            .count();
+        assert_eq!(forgotten, 0);
+        assert_eq!(state.memory.recent("s1").unwrap().records.len(), 1);
+    }
+
+    #[test]
+    fn sweep_walks_every_session() {
+        let state = setup_state();
+        let mut cfg = MemoryConfig::defaults();
+        cfg.retention_days.insert(MemoryDomain::Session, Some(1));
+        state.set_memory_config(cfg).unwrap();
+        let day_ms: u64 = 86_400_000;
+        let now_ms: u64 = 10 * day_ms;
+        seed_row(&state, "s1", "old-a", 1);
+        seed_row(&state, "s2", "old-b", 1);
+        seed_row(&state, "s3", "fresh", now_ms - 1_000);
+        let evicted = state.run_retention_sweep(now_ms).expect("sweep");
+        assert_eq!(evicted, 2);
+        assert!(state.memory.recent("s1").unwrap().is_empty());
+        assert!(state.memory.recent("s2").unwrap().is_empty());
+        assert_eq!(state.memory.recent("s3").unwrap().records.len(), 1);
+    }
+
+    #[test]
+    fn sweep_skips_non_session_domains_without_backing_store() {
+        // Set retention on a non-Session domain; sweep must not touch
+        // the Session-domain rows today (no domain-typed store yet).
+        let state = setup_state();
+        let mut cfg = MemoryConfig::defaults();
+        cfg.retention_days.insert(MemoryDomain::Durable, Some(1));
+        // Explicitly null out Session so only Durable has a TTL.
+        cfg.retention_days.insert(MemoryDomain::Session, None);
+        state.set_memory_config(cfg).unwrap();
+        seed_row(&state, "s1", "ancient", 1);
+        let evicted = state.run_retention_sweep(9_999_999).expect("sweep");
+        assert_eq!(evicted, 0);
+        assert_eq!(state.memory.recent("s1").unwrap().records.len(), 1);
     }
 }

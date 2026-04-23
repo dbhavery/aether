@@ -354,23 +354,32 @@ in a form that reads like notes, not logs.
 When Memory v2 moves from design to build, land in this order.
 Each step is a session of work.
 
-1. **L5 capability additions.** Add `MemoryWrite`, `MemoryRead`,
+1. ✅ **L5 capability additions.** Added `MemoryWrite`, `MemoryRead`,
    `MemoryForget`, `MemoryEdit` to the `Capability` enum behind
    additive, L5-first tests. No L2 consumers yet.
-2. **Memory policy surface.** `memory.json`, `MemoryPolicyRegistry`,
+2. ✅ **Memory policy surface.** `memory.json`, `MemoryPolicyRegistry`,
    Settings UI section, Tauri commands for policy read/write.
-3. **Per-domain write/read plumbing.** Wire the new capabilities
-   into L2's existing write/read paths; route user-sensitive
-   domains through the Ask flow.
-4. **Memory tab in Trust drawer.** Read + forget + edit UI. Per-
+3. ✅ **Per-domain write/read plumbing.** Wired the new capabilities
+   into L2's existing write/read paths; user-sensitive domains
+   route through the Ask flow.
+4. ✅ **Memory tab in Trust drawer.** Read + forget + edit UI. Per-
    item retention indicators. Forget-all-in-domain action.
-5. **Retention sweep.** Boot-time pass + low-rate background
-   tick. Emits `memory_forgotten` telemetry and audit rows for
-   every sweep-eviction.
-6. **Embeddings (opt-in).** Behind a feature flag; default
+5. ✅ **Retention sweep.** Boot-time pass + hourly background tick
+   (`RETENTION_SWEEP_INTERVAL_MS` = 1 hour, `apps/desktop/src-tauri/src/main.rs`).
+   Iterates every known session via `SessionMemoryStore::list_sessions`
+   and evicts rows older than `MemoryConfig::retention_for(domain)`
+   via `SessionMemoryStore::prune_before`. Emits one aggregated
+   `memory_forgotten` telemetry row per domain that evicted ≥1
+   row, and one L5 audit row per sweep invocation via
+   `MemoryForget`. Today only the Session domain has a backing
+   store; other domains' retention policies persist in
+   `memory.json` for the future domain-typed durable store and
+   are skipped with a trace note. `run_retention_sweep` is in
+   `memory_service.rs`.
+6. ⏳ **Embeddings (opt-in).** Behind a feature flag; default
    provider candidate is Ollama's embedding model. No automatic
    embedding enablement.
-7. **Rot guard.** Add `tools/lint-memory-doc/` mirroring the
+7. ⏳ **Rot guard.** Add `tools/lint-memory-doc/` mirroring the
    vision lint pattern, seed the anchor manifest from this doc,
    flip status from "design-only" to "current".
 

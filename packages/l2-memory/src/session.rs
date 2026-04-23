@@ -164,6 +164,20 @@ pub trait SessionMemoryStore: Send + Sync {
     /// and there is still more than one row.
     fn update(&self, session_id: &str, sequence: u64, new_content: String)
         -> Result<bool, L2Error>;
+
+    /// Delete every record in `session_id` whose `timestamp_ms` is
+    /// strictly less than `cutoff_ms`. Returns the number of rows
+    /// evicted. Memory V2 step 5 — the retention sweep calls this per
+    /// session once a domain's `retention_days` cutoff is known.
+    /// `cutoff_ms == 0` is a no-op (nothing is older than epoch);
+    /// unknown sessions return `Ok(0)`.
+    fn prune_before(&self, session_id: &str, cutoff_ms: u64) -> Result<usize, L2Error>;
+
+    /// Enumerate every session that currently has at least one row in
+    /// the store. Order is unspecified. Used by the retention sweep to
+    /// walk the set without needing to know which sessions the shell
+    /// has ever opened. Empty vec for an empty store.
+    fn list_sessions(&self) -> Result<Vec<String>, L2Error>;
 }
 
 /// In-process implementation of [`SessionMemoryStore`]. Backed by a
@@ -329,6 +343,38 @@ impl SessionMemoryStore for InMemorySessionMemoryStore {
             }
         }
         Ok(true)
+    }
+
+    fn prune_before(&self, session_id: &str, cutoff_ms: u64) -> Result<usize, L2Error> {
+        let mut guard = self
+            .inner
+            .lock()
+            .map_err(|e| L2Error::Internal(format!("session memory lock poisoned: {e}")))?;
+        let Some(state) = guard.get_mut(session_id) else {
+            return Ok(0);
+        };
+        let before = state.records.len();
+        // `VecDeque::retain` preserves relative order. Each evicted row
+        // reduces `total_chars` by its content length.
+        let mut freed = 0usize;
+        state.records.retain(|r| {
+            if r.timestamp_ms < cutoff_ms {
+                freed = freed.saturating_add(r.content.len());
+                false
+            } else {
+                true
+            }
+        });
+        state.total_chars = state.total_chars.saturating_sub(freed);
+        Ok(before - state.records.len())
+    }
+
+    fn list_sessions(&self) -> Result<Vec<String>, L2Error> {
+        let guard = self
+            .inner
+            .lock()
+            .map_err(|e| L2Error::Internal(format!("session memory lock poisoned: {e}")))?;
+        Ok(guard.keys().cloned().collect())
     }
 }
 
@@ -558,6 +604,89 @@ mod tests {
         let w = store.recent("s1").unwrap();
         assert!(w.records.iter().any(|r| r.sequence == 3));
         assert_eq!(w.records.last().unwrap().content.len(), 20);
+    }
+
+    // ----- prune_before / list_sessions (Memory V2 step 5 surface) -----
+
+    #[test]
+    fn prune_before_drops_rows_older_than_cutoff() {
+        let store = InMemorySessionMemoryStore::new_default();
+        // timestamps: 100, 200, 300; cutoff 250 → keep 300, drop 100+200.
+        store
+            .append(rec("s1", MemoryRole::User, "old-a", 100))
+            .unwrap();
+        store
+            .append(rec("s1", MemoryRole::User, "old-b", 200))
+            .unwrap();
+        store
+            .append(rec("s1", MemoryRole::User, "fresh", 300))
+            .unwrap();
+        let removed = store.prune_before("s1", 250).unwrap();
+        assert_eq!(removed, 2);
+        let w = store.recent("s1").unwrap();
+        assert_eq!(w.records.len(), 1);
+        assert_eq!(w.records[0].content, "fresh");
+    }
+
+    #[test]
+    fn prune_before_leaves_rows_at_or_after_cutoff() {
+        let store = InMemorySessionMemoryStore::new_default();
+        store.append(rec("s1", MemoryRole::User, "a", 100)).unwrap();
+        // Cutoff equal to timestamp — strict "<" keeps the boundary row.
+        let removed = store.prune_before("s1", 100).unwrap();
+        assert_eq!(removed, 0);
+        assert_eq!(store.recent("s1").unwrap().records.len(), 1);
+    }
+
+    #[test]
+    fn prune_before_unknown_session_is_zero_not_error() {
+        let store = InMemorySessionMemoryStore::new_default();
+        assert_eq!(store.prune_before("never-seen", 9_999).unwrap(), 0);
+    }
+
+    #[test]
+    fn prune_before_isolates_sessions() {
+        let store = InMemorySessionMemoryStore::new_default();
+        store.append(rec("s1", MemoryRole::User, "x", 100)).unwrap();
+        store.append(rec("s2", MemoryRole::User, "y", 100)).unwrap();
+        assert_eq!(store.prune_before("s1", 9_999).unwrap(), 1);
+        assert!(store.recent("s1").unwrap().is_empty());
+        assert_eq!(store.recent("s2").unwrap().records.len(), 1);
+    }
+
+    #[test]
+    fn prune_before_frees_total_chars_budget() {
+        let cfg = RecentMemoryConfig {
+            max_turns: 100,
+            max_chars: 10,
+        };
+        let store = InMemorySessionMemoryStore::new(cfg);
+        store
+            .append(rec("s1", MemoryRole::User, "aaaa", 100))
+            .unwrap(); // 4 chars
+        store
+            .append(rec("s1", MemoryRole::User, "bbbb", 500))
+            .unwrap(); // 8 chars total
+        assert_eq!(store.prune_before("s1", 200).unwrap(), 1); // evicts "aaaa"
+                                                               // Budget freed — a 4-char append should not evict bbbb.
+        store
+            .append(rec("s1", MemoryRole::User, "cccc", 600))
+            .unwrap();
+        let w = store.recent("s1").unwrap();
+        assert_eq!(w.records.len(), 2);
+        assert_eq!(w.records[0].content, "bbbb");
+        assert_eq!(w.records[1].content, "cccc");
+    }
+
+    #[test]
+    fn list_sessions_enumerates_active_sessions() {
+        let store = InMemorySessionMemoryStore::new_default();
+        assert!(store.list_sessions().unwrap().is_empty());
+        store.append(rec("s1", MemoryRole::User, "a", 1)).unwrap();
+        store.append(rec("s2", MemoryRole::User, "b", 1)).unwrap();
+        let mut sessions = store.list_sessions().unwrap();
+        sessions.sort();
+        assert_eq!(sessions, vec!["s1".to_string(), "s2".to_string()]);
     }
 
     #[test]

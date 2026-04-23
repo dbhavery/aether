@@ -27,6 +27,14 @@ use tauri::Manager;
 /// threshold resolution is in seconds, not milliseconds.
 const PRESENCE_POLL_MS: u64 = 1_000;
 
+/// Interval between Memory V2 retention sweep ticks once the shell
+/// is running. One hour is deliberate: retention TTLs are measured
+/// in days, so anything sub-hourly is noise; anything supra-hourly
+/// leaves the "Durable = 30 days" policy visibly stale near a day
+/// boundary. Not user-configurable in this phase (see design §10
+/// item 5 and ADR-0001's follow-up notes).
+const RETENTION_SWEEP_INTERVAL_MS: u64 = 60 * 60 * 1_000;
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|_app, _argv, _cwd| {
@@ -43,6 +51,20 @@ fn main() {
             // data dir (e.g. %APPDATA%/Aether on Windows).
             let app_state = build_app_state(app.handle())?;
             app.manage(app_state);
+            // Memory V2 step 5: run the retention sweep once at boot,
+            // before the first command is served. Evicting expired
+            // rows up front means the first `memory_recent` the UI
+            // asks for will not surface anything the user's
+            // `memory.json` policy said should already be gone.
+            // Failures trace and are ignored — a sweep that can't run
+            // must not take the shell offline.
+            if let Some(state) = app.try_state::<AppState>() {
+                let now_ms = state.next_ts();
+                match state.run_retention_sweep(now_ms) {
+                    Ok(n) => tracing::info!("retention sweep (boot): evicted {n} row(s)"),
+                    Err(e) => tracing::warn!("retention sweep (boot) failed: {e}"),
+                }
+            }
             // Presence V1 step 2: spawn the attention poll loop. Uses
             // `tauri::async_runtime::spawn` to run on Tauri's own tokio
             // runtime so we don't stand up a second one. The loop is
@@ -52,6 +74,12 @@ fn main() {
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 run_presence_loop(handle).await;
+            });
+            // Memory V2 step 5: hourly retention sweep tick. Runs on
+            // the same Tauri tokio runtime as the presence loop.
+            let sweep_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                run_retention_sweep_loop(sweep_handle).await;
             });
             Ok(())
         })
@@ -361,5 +389,31 @@ async fn run_presence_loop(app: tauri::AppHandle) {
         let now_ms = state.next_ts();
         let idle = probe.idle_seconds();
         commands::drive_attention_tick(&app, &state, now_ms, idle);
+    }
+}
+
+/// Memory V2 step 5 — hourly retention-sweep tick.
+///
+/// Boot-time eviction happens in `setup` before this loop spawns.
+/// `tokio::time::interval` fires immediately on the first `.tick()`,
+/// so we consume-and-skip that tick to avoid a second sweep right
+/// after boot; subsequent ticks are spaced by
+/// `RETENTION_SWEEP_INTERVAL_MS`.
+async fn run_retention_sweep_loop(app: tauri::AppHandle) {
+    let mut interval = tokio::time::interval(Duration::from_millis(RETENTION_SWEEP_INTERVAL_MS));
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    // Swallow the immediate first tick — boot sweep already ran.
+    interval.tick().await;
+    loop {
+        interval.tick().await;
+        let Some(state) = app.try_state::<AppState>() else {
+            continue;
+        };
+        let now_ms = state.next_ts();
+        match state.run_retention_sweep(now_ms) {
+            Ok(0) => tracing::trace!("retention sweep (tick): no evictions"),
+            Ok(n) => tracing::info!("retention sweep (tick): evicted {n} row(s)"),
+            Err(e) => tracing::warn!("retention sweep (tick) failed: {e}"),
+        }
     }
 }
