@@ -1,6 +1,6 @@
-# Memory v2 — architecture reference (design only)
+# Memory v2 — architecture reference
 
-> **Status:** Design-only as of 2026-05-11.
+> **Status:** Current as of 2026-04-23.
 > **Scope:** Evolution of the current session-memory kernel into a
 > structured, user-visible memory system with clear retention rules,
 > per-item trust provenance, and a UX that lets the user see and
@@ -387,9 +387,20 @@ Each step is a session of work.
 
 ## 11. How this doc stays honest
 
-This is a **design** doc — nothing in it is enforced by code until
-Memory v2 ships. When step 7 lands the rot guard, it becomes
-authoritative.
+`tools/lint-memory-doc/check.py` carries an anchor manifest tying
+this doc to concrete files, symbols, and string constants across
+`packages/l2-memory`, `packages/l5-policy`,
+`apps/desktop/src-tauri`, and the frontend Trust / Settings
+drawers. When code and doc diverge — a rename, a deletion, a typo
+— the linter fails. The manifest and this doc MUST be updated in
+the same PR when anchors change.
+
+Rot guards verify doc/code consistency only. Behavioural
+correctness lives in the Rust unit tests (`cargo test -p
+aether-l2-memory --features embeddings`, `-p aether-l5-policy`,
+shell `cargo test --all-features`) and the Vitest component
+tests. Per `docs/GLOSSARY.md` §6, rot guards and acceptance
+criteria are deliberately distinct surfaces.
 
 ---
 
