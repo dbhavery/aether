@@ -1352,7 +1352,12 @@ pub fn analyze_frame(
                         latency_ms: r.latency_ms,
                         prompt_tokens: r.tokens.map(|t| t.prompt),
                         completion_tokens: r.tokens.map(|t| t.completion),
-                        origin: None,
+                        // Voice V1 step 5 symmetry — the voice path
+                        // stamps `origin: "voice"`; vision's analyze_frame
+                        // stamps `origin: "vision"` so the transcript chip
+                        // can render a modality badge either way. Text
+                        // turns keep `origin: None`.
+                        origin: Some("vision".into()),
                     }),
                 }),
             )
@@ -1996,6 +2001,172 @@ pub fn transcribe_utterance(
         message,
         error_note: None,
     })
+}
+
+// ---------------------------------------------------------------------
+// Voice status + runtime swap (Voice V1 step 5).
+// ---------------------------------------------------------------------
+
+/// Shell-side snapshot of the speech provider registry — mirrors
+/// [`VisionStatus`]. Surfaced to the `VoiceBadge` / `ActiveVoiceRoute`
+/// UI so the user can see at a glance which STT route the next
+/// `transcribe_utterance` call will hit, plus a runtime-swap dropdown
+/// to pick a different registered adapter. `None` fields mean "voice
+/// disabled" — unlike vision there is no text-only fallback; without
+/// an active speech provider the user sees a visible error when they
+/// try to record.
+#[derive(Debug, Clone, Serialize)]
+pub struct VoiceStatus {
+    /// `true` when a speech provider is currently active.
+    pub enabled: bool,
+    /// Active provider id (e.g. `"whispercpp-speech"`), `None` when
+    /// voice is disabled.
+    pub active_id: Option<String>,
+    /// Human-readable label of the active provider
+    /// (e.g. `"whisper.cpp · ggml-base.en · http://..."`). `None`
+    /// when disabled.
+    pub label: Option<String>,
+    /// Active provider's current model id, if the adapter exposes
+    /// one. Drives the "Active" indicator in the model strip.
+    pub active_model: Option<String>,
+    /// Every registered speech provider with an `active` flag —
+    /// drives the runtime-swap UI.
+    pub providers: Vec<crate::voice_registry::SpeechProviderInfo>,
+}
+
+#[tauri::command]
+pub fn voice_status(state: State<'_, AppState>) -> VoiceStatus {
+    let label = state.speech_provider_label();
+    let active_id = state.speech_active_id();
+    let active_model = state.speech_active_model();
+    let providers = state.speech_provider_list();
+    VoiceStatus {
+        enabled: label.is_some(),
+        active_id,
+        label,
+        active_model,
+        providers,
+    }
+}
+
+/// Snapshot of registered speech providers — same list shipped
+/// inside `VoiceStatus` but exposed as its own command for callers
+/// that only want the inventory.
+#[tauri::command]
+pub fn list_speech_providers(
+    state: State<'_, AppState>,
+) -> Vec<crate::voice_registry::SpeechProviderInfo> {
+    state.speech_provider_list()
+}
+
+/// Models the active speech provider's daemon currently has
+/// available. Shape mirrors `VisionModelList`. The adapter's
+/// `list_models` default is an empty vec (whisper.cpp scaffold
+/// today doesn't expose discovery); failures + empty lists fold to
+/// a plain-language "models unavailable" hint the dropdown can
+/// render quietly.
+#[derive(Debug, Clone, Serialize)]
+pub struct SpeechModelList {
+    /// Provider id the listing was fetched for. `None` when no
+    /// provider is currently active.
+    pub provider_id: Option<String>,
+    /// Discovered model ids. Empty when discovery failed, the
+    /// adapter doesn't implement `list_models`, or the daemon
+    /// reports no models.
+    pub models: Vec<String>,
+    /// Short, plain-language explanation when discovery did not
+    /// produce a usable list. `None` on success.
+    pub error: Option<String>,
+}
+
+fn collect_speech_models(state: &State<'_, AppState>) -> SpeechModelList {
+    let Some(provider) = state.speech_provider() else {
+        return SpeechModelList {
+            provider_id: None,
+            models: Vec::new(),
+            error: Some("No speech provider is active.".into()),
+        };
+    };
+    let id = provider.id().to_string();
+    match provider.list_models() {
+        Ok(models) if models.is_empty() => SpeechModelList {
+            provider_id: Some(id),
+            models,
+            error: Some("Models unavailable for this provider.".into()),
+        },
+        Ok(models) => SpeechModelList {
+            provider_id: Some(id),
+            models,
+            error: None,
+        },
+        Err(_) => SpeechModelList {
+            provider_id: Some(id),
+            models: Vec::new(),
+            error: Some("Models unavailable for this provider.".into()),
+        },
+    }
+}
+
+#[tauri::command]
+pub fn list_speech_models(state: State<'_, AppState>) -> SpeechModelList {
+    collect_speech_models(&state)
+}
+
+/// Force a fresh discovery (no TTL cache in step 5 — whisper.cpp
+/// scaffold doesn't expose model listing yet; when it does, add a
+/// cache mirror of `vision_cache.rs`). For now this is equivalent
+/// to `list_speech_models` but named so the UI can wire a `↻`
+/// affordance the same way VisionBadge does.
+#[tauri::command]
+pub fn refresh_speech_models(state: State<'_, AppState>) -> SpeechModelList {
+    collect_speech_models(&state)
+}
+
+/// Switch the active speech provider. `None` (or the wire
+/// sentinel `""` / `"none"`) disables voice — the next
+/// `transcribe_utterance` will surface a clear error rather than
+/// silently falling back. Unknown ids are rejected so UI bugs
+/// surface instead of silently flipping to the wrong route.
+#[tauri::command]
+pub fn set_active_speech_provider(
+    id: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<VoiceStatus, String> {
+    let normalized = match id.as_deref() {
+        None | Some("") | Some("none") => None,
+        Some(other) => Some(other.to_string()),
+    };
+    state.set_active_speech_provider(normalized)?;
+    Ok(voice_status(state))
+}
+
+/// Switch the model used by the currently-active speech provider.
+/// Validates against the fresh model list when the adapter exposes
+/// one; accepts optimistically when discovery is unavailable (same
+/// pattern `set_active_vision_model` uses).
+#[tauri::command]
+pub fn set_active_speech_model(
+    id: String,
+    state: State<'_, AppState>,
+) -> Result<VoiceStatus, String> {
+    let trimmed = id.trim();
+    if trimmed.is_empty() {
+        return Err("model id must not be empty".into());
+    }
+    if state.speech_provider().is_none() {
+        return Err("no active speech provider".into());
+    }
+    let list = collect_speech_models(&state);
+    if list.error.is_none() && !list.models.is_empty() {
+        if !list.models.iter().any(|m| m == trimmed) {
+            return Err(format!("unknown model for active provider: {trimmed}"));
+        }
+    }
+    // Discovery unavailable → accept optimistically; the next
+    // transcribe_utterance will surface a real "model not found"
+    // error through the provider error path.
+    state.set_active_speech_model(trimmed)?;
+    Ok(voice_status(state))
 }
 
 fn parse_command(line: &str) -> (Capability, ResourceScope) {
