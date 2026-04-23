@@ -1,14 +1,27 @@
 #!/usr/bin/env python3
-"""Aether quality / eval harness — v1 scaffold.
+"""Aether quality / eval harness — v1.1.
 
 See `docs/QUALITY-EVAL-V1-ARCHITECTURE.md`. This entry point:
 
   - loads every JSONL scenario under `tools/evals/scenarios/`,
-  - either replays expectations against a scenario's pre-recorded
-    `actual` field (`--dry-run`) or errors out if no backend is
-    available (live backend wiring is a later slice),
+  - produces an `actual` response via one of:
+      * `--dry-run` — replay the scenario's pre-recorded `actual`,
+      * `--backend ollama` — POST the last user turn to a local
+        Ollama instance and capture the response (v1.1),
   - evaluates each expectation against the response,
   - emits a markdown report and/or a JSON report.
+
+Live backend config (Ollama):
+
+  env AETHER_EVAL_OLLAMA_BASE_URL  default `http://127.0.0.1:11434`
+  env AETHER_EVAL_OLLAMA_MODEL     default `llama3.2`
+  env AETHER_EVAL_OLLAMA_TIMEOUT_S default `30`
+
+Live-backend mode is deliberately minimal: single-turn, no persona
+prompt compilation, no memory window. The goal is "did this scenario
+regress when we re-ran it?", not full end-to-end fidelity. Richer
+wiring (persona compile, memory context, presence injection) lands
+with later slices.
 
 Exit codes:
   0  — every scenario either passed or had no evaluable expectations.
@@ -18,6 +31,7 @@ Exit codes:
 Run:
 
   python tools/evals/__main__.py --dry-run
+  python tools/evals/__main__.py --backend ollama --capture-into captured/
   python tools/evals/__main__.py --report-md out/eval_report.md
 """
 
@@ -25,7 +39,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -91,28 +108,103 @@ def _iter_scenarios(root: Path) -> Iterable[Scenario]:
                 yield Scenario(path=path, line_no=line_no, raw=obj)
 
 
-def _run_scenario(s: Scenario, dry_run: bool) -> ScenarioResult:
-    # v1 scaffold: live backend wiring is a later slice. For now,
-    # the runner consumes the scenario's pre-recorded `actual`
-    # field. When none is present in `--dry-run` mode, we skip
-    # with a clear note so the author knows they need to record
-    # one (or wait for the live backend to land).
+def _last_user_prompt(s: Scenario) -> str | None:
+    """Extract the final `role=user` turn's `content` for live
+    backend prompting. Returns None when the scenario has no user
+    turn (e.g. presence scenarios where the only turn is a system
+    annotation)."""
+    turns = s.raw.get("turns") or []
+    for t in reversed(turns):
+        if isinstance(t, dict) and t.get("role") == "user":
+            content = t.get("content")
+            if isinstance(content, str):
+                return content
+    return None
+
+
+def _ollama_generate(prompt: str) -> tuple[bool, str]:
+    """POST `prompt` to the Ollama `/api/generate` endpoint.
+    Returns `(ok, text)` where `ok=False` carries the error message
+    in `text` so the runner can surface it in the scenario note.
+
+    Intentionally minimal: no streaming, no options, no persona
+    prompt — v1.1 lands the hook, not the full integration."""
+    base = os.environ.get(
+        "AETHER_EVAL_OLLAMA_BASE_URL", "http://127.0.0.1:11434"
+    ).rstrip("/")
+    model = os.environ.get("AETHER_EVAL_OLLAMA_MODEL", "llama3.2")
+    timeout = float(os.environ.get("AETHER_EVAL_OLLAMA_TIMEOUT_S", "30"))
+    body = json.dumps(
+        {"model": model, "prompt": prompt, "stream": False}
+    ).encode("utf-8")
+    req = urllib.request.Request(
+        f"{base}/api/generate",
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.URLError as exc:
+        return False, f"ollama transport error ({base}): {exc}"
+    except json.JSONDecodeError as exc:
+        return False, f"ollama response not JSON: {exc}"
+    text = payload.get("response")
+    if not isinstance(text, str):
+        return False, f"ollama response missing 'response' field: {payload!r}"
+    return True, text
+
+
+def _resolve_actual(
+    s: Scenario, backend: str, dry_run: bool
+) -> tuple[str | None, str | None]:
+    """Produce an `actual` string for scenario `s` or explain why
+    one is not available. Returns `(text, note)` where exactly one
+    is non-None."""
+    if backend == "ollama":
+        prompt = _last_user_prompt(s)
+        if prompt is None:
+            return None, "scenario has no user turn — skipped (ollama backend)"
+        ok, out = _ollama_generate(prompt)
+        if not ok:
+            return None, out
+        return out, None
+    # Default: dry-run / recorded replay.
     text = s.actual_text
+    if text is not None:
+        return text, None
+    if dry_run:
+        return None, "no `actual` recorded — skipped in --dry-run"
+    return None, "no `actual` recorded and no backend selected"
+
+
+def _run_scenario(
+    s: Scenario, backend: str, dry_run: bool, capture_into: Path | None
+) -> ScenarioResult:
+    text, note = _resolve_actual(s, backend, dry_run)
     if text is None:
-        if dry_run:
-            return ScenarioResult(
-                scenario=s,
-                status="skip",
-                response=None,
-                expectations=[],
-                note="no `actual` recorded — skipped in --dry-run",
-            )
         return ScenarioResult(
             scenario=s,
             status="skip",
             response=None,
             expectations=[],
-            note="no `actual` recorded and live backend is not yet wired in v1",
+            note=note,
+        )
+
+    # Live-backend capture: dump the captured `actual` alongside the
+    # scenario so a later dry-run can replay the exact response.
+    # One file per scenario id, markdown for human review.
+    if capture_into is not None and backend != "dry-run":
+        capture_into.mkdir(parents=True, exist_ok=True)
+        safe = s.id.replace("/", "_").replace(" ", "_")
+        out_path = capture_into / f"{safe}.md"
+        out_path.write_text(
+            f"# {s.id}\n\n**domain:** {s.domain}\n\n"
+            f"**backend:** {backend}\n\n"
+            f"## Prompt\n\n```\n{_last_user_prompt(s) or ''}\n```\n\n"
+            f"## Captured response\n\n```\n{text}\n```\n",
+            encoding="utf-8",
         )
 
     results: list[ExpectationResult] = []
@@ -163,6 +255,20 @@ def main(argv: list[str] | None = None) -> int:
              "fields only. Does not invoke any backend.",
     )
     parser.add_argument(
+        "--backend",
+        choices=["dry-run", "ollama"],
+        default="dry-run",
+        help="Response source. `dry-run` (default) replays recorded "
+             "`actual` fields. `ollama` POSTs the last user turn to "
+             "a local Ollama instance (see env vars in module doc).",
+    )
+    parser.add_argument(
+        "--capture-into",
+        default=None,
+        help="When using a live backend, write per-scenario captured "
+             "responses to this directory as markdown.",
+    )
+    parser.add_argument(
         "--report-md",
         default=None,
         help="Write a markdown report to this path.",
@@ -184,7 +290,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"no scenarios found under {root}", file=sys.stderr)
         return 2
 
-    results = [_run_scenario(s, dry_run=args.dry_run) for s in scenarios]
+    # Resolve the effective backend. `--dry-run` is preserved as a
+    # convenience alias for `--backend dry-run`.
+    backend = "dry-run" if args.dry_run else args.backend
+    capture_into = Path(args.capture_into) if args.capture_into else None
+    results = [
+        _run_scenario(s, backend=backend, dry_run=args.dry_run, capture_into=capture_into)
+        for s in scenarios
+    ]
 
     # Print a compact summary to stdout.
     passed = sum(1 for r in results if r.status == "pass")

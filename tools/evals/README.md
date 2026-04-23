@@ -5,11 +5,11 @@ Quality + evaluation harness for Aether.
 See [docs/QUALITY-EVAL-V1-ARCHITECTURE.md](../../docs/QUALITY-EVAL-V1-ARCHITECTURE.md)
 for the full design.
 
-This is the **v1 scaffold**: a minimal Python runner, a small
-expectation DSL, one seed scenario per domain, and a markdown
-report. Nothing ambitious. The goal is to start *measuring*
-quality on a repeatable, replayable surface — not to finish
-the entire eval stack.
+This is the **v1.1 harness**: Python runner, small expectation DSL,
+one seed scenario per domain, one adversarial probe per domain, a
+markdown baseline report, and a minimal live Ollama backend hook.
+Nothing ambitious. The goal is to start *measuring* quality on a
+repeatable, replayable surface — not to finish the entire eval stack.
 
 ## Run
 
@@ -17,14 +17,28 @@ the entire eval stack.
 python tools/evals/__main__.py --help
 python tools/evals/__main__.py --dry-run
 python tools/evals/__main__.py --report-md out/eval_report.md
+# Live Ollama (v1.1):
+python tools/evals/__main__.py --backend ollama --capture-into out/captured
 ```
 
 `--dry-run` does not invoke any backend — it replays expectations
 against the scenarios' pre-recorded `actual` field when present.
 Useful for locking the expectation DSL without needing a live
-model. Without `--dry-run`, a real backend call would be made;
-for v1 the runner only ships the mock / dry-run path — live
-backend wiring is a later slice.
+model.
+
+`--backend ollama` POSTs the final user turn of each scenario to a
+local Ollama instance and evaluates the response. Controlled by:
+
+- `AETHER_EVAL_OLLAMA_BASE_URL` — default `http://127.0.0.1:11434`
+- `AETHER_EVAL_OLLAMA_MODEL`    — default `llama3.2`
+- `AETHER_EVAL_OLLAMA_TIMEOUT_S` — default `30`
+
+`--capture-into <dir>` writes one markdown file per scenario with the
+captured prompt + response — useful for diffing between runs.
+
+Live-backend mode is deliberately minimal: single-turn, no persona
+prompt compilation, no memory context injection. Richer wiring lands
+in later slices.
 
 Exit codes:
 
@@ -79,13 +93,29 @@ not know, so adding new kinds is non-breaking. Implemented in v1:
 4. Check in the scenario file alongside the change that motivated
    it — scenarios are as much documentation as they are tests.
 
+## Adversarial probes
+
+`tools/evals/adversarial/<domain>/*.jsonl` holds known-bad responses
+that exercise the detector. Run separately from the baseline:
+
+```bash
+python tools/evals/__main__.py --dry-run --scenarios-root tools/evals/adversarial
+```
+
+All adversarial probes MUST fail. If one stops firing, the detector
+regressed. v1.1 ships one probe per domain (chat, tool-use, voice,
+memory, presence, vision).
+
 ## Roadmap
 
 Sequencing from the design doc §6:
 
 1. ✅ This scaffold + one seed scenario per domain.
-2. ⏳ Baseline report against current provider config.
-3. ⏳ Adversarial scenarios (first per domain).
-4. ⏳ Session-log replay importer.
-5. ⏳ `tools/lint-quality-doc/` rot guard.
-6. ⏳ Regression harness + `pnpm eval` wiring.
+2. ✅ Baseline report against current provider config
+   (`tools/evals/baseline/`).
+3. ✅ Adversarial scenarios (one per domain, v1.1).
+4. ✅ Live Ollama backend hook (v1.1).
+5. ⏳ Session-log replay importer.
+6. ⏳ `tools/lint-quality-doc/` rot guard (doc stays design-only
+   until this lands).
+7. ⏳ Regression harness + `pnpm eval` wiring.
