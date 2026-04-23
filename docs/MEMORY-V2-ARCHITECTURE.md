@@ -376,12 +376,19 @@ Each step is a session of work.
    `memory.json` for the future domain-typed durable store and
    are skipped with a trace note. `run_retention_sweep` is in
    `memory_service.rs`.
-6. ⏳ **Embeddings (opt-in).** Behind a feature flag; default
-   provider candidate is Ollama's embedding model. No automatic
-   embedding enablement.
-7. ⏳ **Rot guard.** Add `tools/lint-memory-doc/` mirroring the
-   vision lint pattern, seed the anchor manifest from this doc,
-   flip status from "design-only" to "current".
+6. ✅ **Embeddings (opt-in).** Behind the `embeddings` cargo
+   feature on `aether-l2-memory`. Default provider: Ollama
+   `nomic-embed-text` (see ADR-0002 for the full decision set).
+   `memory.json::embeddings.enabled` defaults to `false`; when
+   on, Durable/Projects/Artifacts writes produce an embedding
+   via `maybe_embed_on_write` (best-effort; provider failure
+   does not block the primary write). L5 audits via the new
+   `MemoryEmbed` capability. Telemetry kind `memory_embedded`.
+   See `packages/l2-memory/src/embeddings.rs`.
+7. ✅ **Rot guard.** `tools/lint-memory-doc/` mirrors the
+   vision / voice / presence / quality rot guards. 60 anchors
+   across 12 files; this doc flipped to "Current" in the same
+   change.
 
 ---
 
