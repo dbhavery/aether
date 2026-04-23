@@ -328,6 +328,52 @@ export interface MemoryConfig {
   };
 }
 
+// --- Memory V2 step 4 — Trust drawer Memory tab --------------------------
+
+/** Privacy class per `docs/MEMORY-V2-ARCHITECTURE.md` §1. Facts and
+ * Artifacts are user-sensitive; the other four domains are standard.
+ * Determined server-side and returned on the `MemoryListPayload`. */
+export type MemoryPrivacyClass = "standard" | "user_sensitive";
+
+/** One row in a Trust-drawer Memory lane. `memory_id` is the stable
+ * "mem-{session_id}-{sequence}" handle used by the forget / edit
+ * commands. */
+export interface MemoryListItem {
+  memory_id: string;
+  sequence: number;
+  timestamp_ms: number;
+  role: string;
+  content: string;
+  source: string;
+}
+
+/** Per-domain response from `memory_list`. `items` is empty and
+ * `empty_reason` is set for any domain whose backing store does not
+ * yet exist (today: every domain except `session`). */
+export interface MemoryListPayload {
+  domain: MemoryDomain;
+  privacy_class: MemoryPrivacyClass;
+  risk: MemoryRisk;
+  items: MemoryListItem[];
+  empty_reason: string | null;
+}
+
+/** Discriminated union mirroring Rust `MemoryForgetOutcome`. The `kind`
+ * tag is set by serde's `#[serde(tag = "kind", rename_all =
+ * "snake_case")]`. */
+export type MemoryForgetOutcome =
+  | { kind: "allowed"; removed_count: number; audit_id: string }
+  | { kind: "requires_approval" }
+  | { kind: "denied"; reason: string }
+  | { kind: "not_found" };
+
+/** Discriminated union mirroring Rust `MemoryEditOutcome`. */
+export type MemoryEditOutcome =
+  | { kind: "allowed"; memory_id: string; audit_id: string }
+  | { kind: "requires_approval" }
+  | { kind: "denied"; reason: string }
+  | { kind: "not_found" };
+
 /** Design defaults mirrored client-side so the UI renders sensible
  * values before the first round trip completes, and so the Settings
  * "reset to defaults" button can work without a backend fetch. */

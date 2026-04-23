@@ -1526,7 +1526,7 @@ mod tests {
                 latency_ms: Some(100 + i as u64),
                 prompt_tokens: None,
                 completion_tokens: None,
-                            memory_domain: None,
+                memory_domain: None,
                 memory_id: None,
             });
         }
@@ -1635,7 +1635,7 @@ humor: "playful"
             latency_ms: None,
             prompt_tokens: None,
             completion_tokens: None,
-                    memory_domain: None,
+            memory_domain: None,
             memory_id: None,
         });
         assert_eq!(state.telemetry_recent(10).len(), 1);

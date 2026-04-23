@@ -616,7 +616,7 @@ fn provider_error_payload(
         latency_ms: None,
         prompt_tokens: None,
         completion_tokens: None,
-            memory_domain: None,
+        memory_domain: None,
         memory_id: None,
     });
     transition_presence(
@@ -756,7 +756,7 @@ fn finalize_turn(
             .route
             .as_ref()
             .and_then(|r| r.tokens.map(|t| t.completion)),
-            memory_domain: None,
+        memory_domain: None,
         memory_id: None,
     };
     state.record_telemetry(telemetry_entry);
@@ -1146,7 +1146,7 @@ fn record_frame_early_exit_telemetry(state: &State<'_, AppState>, kind: &str) {
         latency_ms: None,
         prompt_tokens: None,
         completion_tokens: None,
-            memory_domain: None,
+        memory_domain: None,
         memory_id: None,
     });
 }
@@ -1408,7 +1408,7 @@ pub fn analyze_frame(
             .route
             .as_ref()
             .and_then(|r| r.tokens.map(|t| t.completion)),
-            memory_domain: None,
+        memory_domain: None,
         memory_id: None,
     });
 
@@ -1650,7 +1650,7 @@ fn record_utterance_early_exit_telemetry(state: &State<'_, AppState>, kind: &str
         latency_ms: None,
         prompt_tokens: None,
         completion_tokens: None,
-            memory_domain: None,
+        memory_domain: None,
         memory_id: None,
     });
 }
@@ -1973,7 +1973,7 @@ pub fn transcribe_utterance(
             .route
             .as_ref()
             .and_then(|r| r.tokens.map(|t| t.completion)),
-            memory_domain: None,
+        memory_domain: None,
         memory_id: None,
     });
 
@@ -2102,6 +2102,269 @@ pub fn set_memory_config(
     state: State<'_, AppState>,
 ) -> Result<crate::memory_config::MemoryConfig, String> {
     state.set_memory_config(config)
+}
+
+// ------------------------------------------------------------------
+// Memory V2 step 4 — Trust drawer Memory tab command surface.
+// ------------------------------------------------------------------
+//
+// One row per memory item as rendered by the Memory tab. `source`
+// today is always "conversation" because the only backing store is
+// the SessionMemoryStore. Step 5 (retention sweep) introduces a
+// domain-typed durable store and will populate the other five
+// domain lanes; the `empty_reason` field on `MemoryListPayload`
+// exists so today's Facts/Artifacts/Durable/Projects/Preferences
+// lanes render honestly ("Storage for this domain arrives with
+// Memory V2 step 5") rather than invent content.
+#[derive(Debug, Clone, Serialize)]
+pub struct MemoryListItem {
+    pub memory_id: String,
+    pub sequence: u64,
+    pub timestamp_ms: u64,
+    pub role: String,
+    pub content: String,
+    pub source: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct MemoryListPayload {
+    pub domain: String,
+    pub privacy_class: String,
+    pub risk: String,
+    pub items: Vec<MemoryListItem>,
+    pub empty_reason: Option<String>,
+}
+
+/// Privacy class per `docs/MEMORY-V2-ARCHITECTURE.md` §1. Kept in the
+/// command layer rather than on `MemoryDomain` itself so the doc
+/// table is the single source of truth and the wire contract stays
+/// stable even if the enum order changes.
+fn privacy_class_label(domain: crate::memory_config::MemoryDomain) -> &'static str {
+    use crate::memory_config::MemoryDomain;
+    match domain {
+        MemoryDomain::Facts | MemoryDomain::Artifacts => "user_sensitive",
+        MemoryDomain::Session
+        | MemoryDomain::Durable
+        | MemoryDomain::Projects
+        | MemoryDomain::Preferences => "standard",
+    }
+}
+
+fn risk_wire_label(risk: crate::memory_config::MemoryRisk) -> &'static str {
+    use crate::memory_config::MemoryRisk;
+    match risk {
+        MemoryRisk::Auto => "auto",
+        MemoryRisk::Ask => "ask",
+        MemoryRisk::Deny => "deny",
+    }
+}
+
+/// Split `"mem-{session_id}-{sequence}"` back into its two parts.
+/// Returns `None` on any shape mismatch — the caller surfaces a
+/// user-visible error. `session_id` may itself contain hyphens, so
+/// we split from the RIGHT: everything after the last `-` is the
+/// sequence, everything between the `mem-` prefix and that last
+/// hyphen is the session id.
+fn parse_memory_id(memory_id: &str) -> Option<(String, u64)> {
+    let inner = memory_id.strip_prefix("mem-")?;
+    let (session_id, seq_str) = inner.rsplit_once('-')?;
+    if session_id.is_empty() {
+        return None;
+    }
+    let sequence: u64 = seq_str.parse().ok()?;
+    Some((session_id.to_string(), sequence))
+}
+
+/// List memory items for a domain. Today the Session lane surfaces
+/// the current session's turn records; the other five domains
+/// return an empty list with an `empty_reason` string so the UI
+/// can render an honest "not yet stored" state.
+#[tauri::command]
+pub fn memory_list(
+    domain: crate::memory_config::MemoryDomain,
+    session_id: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<MemoryListPayload, String> {
+    use crate::memory_config::MemoryDomain;
+    let risk = state.memory_config().risk_for(domain);
+    let base = MemoryListPayload {
+        domain: domain.label().to_string(),
+        privacy_class: privacy_class_label(domain).to_string(),
+        risk: risk_wire_label(risk).to_string(),
+        items: Vec::new(),
+        empty_reason: None,
+    };
+    match domain {
+        MemoryDomain::Session => {
+            let session = session_id.unwrap_or_else(|| SESSION_ID.to_string());
+            let w = state
+                .memory
+                .recent(&session)
+                .map_err(|e| format!("memory: {e}"))?;
+            let items = w
+                .records
+                .into_iter()
+                .map(|r| MemoryListItem {
+                    memory_id: format!("mem-{}-{}", session, r.sequence),
+                    sequence: r.sequence,
+                    timestamp_ms: r.timestamp_ms,
+                    role: role_label(r.role).to_string(),
+                    content: r.content,
+                    source: "conversation".to_string(),
+                })
+                .collect();
+            Ok(MemoryListPayload { items, ..base })
+        }
+        MemoryDomain::Durable
+        | MemoryDomain::Facts
+        | MemoryDomain::Projects
+        | MemoryDomain::Preferences
+        | MemoryDomain::Artifacts => Ok(MemoryListPayload {
+            empty_reason: Some(
+                "Storage for this domain arrives with Memory V2 step 5.".to_string(),
+            ),
+            ..base
+        }),
+    }
+}
+
+/// Forget every row in a domain's session. Wraps the existing
+/// `AppState::memory_forget` so the Memory tab's "forget all in
+/// domain" button has a UI seat. Serialised outcome mirrors the
+/// Rust enum so the TS side can switch on `kind`.
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum MemoryForgetOutcomeWire {
+    Allowed {
+        removed_count: usize,
+        audit_id: String,
+    },
+    RequiresApproval,
+    Denied {
+        reason: String,
+    },
+    NotFound,
+}
+
+impl From<crate::memory_service::MemoryForgetOutcome> for MemoryForgetOutcomeWire {
+    fn from(o: crate::memory_service::MemoryForgetOutcome) -> Self {
+        use crate::memory_service::MemoryForgetOutcome;
+        match o {
+            MemoryForgetOutcome::Allowed {
+                removed_count,
+                audit_id,
+            } => Self::Allowed {
+                removed_count,
+                audit_id,
+            },
+            MemoryForgetOutcome::RequiresApproval => Self::RequiresApproval,
+            MemoryForgetOutcome::Denied { reason } => Self::Denied { reason },
+            MemoryForgetOutcome::NotFound => Self::NotFound,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum MemoryEditOutcomeWire {
+    Allowed {
+        memory_id: String,
+        audit_id: String,
+    },
+    RequiresApproval,
+    Denied {
+        reason: String,
+    },
+    NotFound,
+}
+
+impl From<crate::memory_service::MemoryEditOutcome> for MemoryEditOutcomeWire {
+    fn from(o: crate::memory_service::MemoryEditOutcome) -> Self {
+        use crate::memory_service::MemoryEditOutcome;
+        match o {
+            MemoryEditOutcome::Allowed {
+                memory_id,
+                audit_id,
+            } => Self::Allowed {
+                memory_id,
+                audit_id,
+            },
+            MemoryEditOutcome::RequiresApproval => Self::RequiresApproval,
+            MemoryEditOutcome::Denied { reason } => Self::Denied { reason },
+            MemoryEditOutcome::NotFound => Self::NotFound,
+        }
+    }
+}
+
+#[tauri::command]
+pub fn memory_forget(
+    domain: crate::memory_config::MemoryDomain,
+    session_id: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<MemoryForgetOutcomeWire, String> {
+    let session = session_id.unwrap_or_else(|| SESSION_ID.to_string());
+    state
+        .memory_forget(domain, &session)
+        .map(Into::into)
+        .map_err(|e| format!("memory_forget: {e}"))
+}
+
+#[tauri::command]
+pub fn memory_forget_item(
+    domain: crate::memory_config::MemoryDomain,
+    memory_id: String,
+    state: State<'_, AppState>,
+) -> Result<MemoryForgetOutcomeWire, String> {
+    let (session_id, sequence) =
+        parse_memory_id(&memory_id).ok_or_else(|| format!("invalid memory_id: {memory_id}"))?;
+    state
+        .memory_forget_item(domain, &session_id, sequence)
+        .map(Into::into)
+        .map_err(|e| format!("memory_forget_item: {e}"))
+}
+
+#[tauri::command]
+pub fn memory_forget_item_after_approval(
+    domain: crate::memory_config::MemoryDomain,
+    memory_id: String,
+    state: State<'_, AppState>,
+) -> Result<MemoryForgetOutcomeWire, String> {
+    let (session_id, sequence) =
+        parse_memory_id(&memory_id).ok_or_else(|| format!("invalid memory_id: {memory_id}"))?;
+    state
+        .memory_forget_item_after_approval(domain, &session_id, sequence)
+        .map(Into::into)
+        .map_err(|e| format!("memory_forget_item_after_approval: {e}"))
+}
+
+#[tauri::command]
+pub fn memory_edit(
+    domain: crate::memory_config::MemoryDomain,
+    memory_id: String,
+    new_content: String,
+    state: State<'_, AppState>,
+) -> Result<MemoryEditOutcomeWire, String> {
+    let (session_id, sequence) =
+        parse_memory_id(&memory_id).ok_or_else(|| format!("invalid memory_id: {memory_id}"))?;
+    state
+        .memory_edit(domain, &session_id, sequence, new_content)
+        .map(Into::into)
+        .map_err(|e| format!("memory_edit: {e}"))
+}
+
+#[tauri::command]
+pub fn memory_edit_after_approval(
+    domain: crate::memory_config::MemoryDomain,
+    memory_id: String,
+    new_content: String,
+    state: State<'_, AppState>,
+) -> Result<MemoryEditOutcomeWire, String> {
+    let (session_id, sequence) =
+        parse_memory_id(&memory_id).ok_or_else(|| format!("invalid memory_id: {memory_id}"))?;
+    state
+        .memory_edit_after_approval(domain, &session_id, sequence, new_content)
+        .map(Into::into)
+        .map_err(|e| format!("memory_edit_after_approval: {e}"))
 }
 
 /// Replace the presence config and persist atomically. The caller
@@ -2378,6 +2641,54 @@ pub fn drive_attention_tick(
 mod tests {
     use super::*;
 
+    // ---------- Memory V2 step 4 command helpers ----------
+
+    #[test]
+    fn parse_memory_id_round_trips_plain_session() {
+        assert_eq!(
+            parse_memory_id("mem-session-1").unwrap(),
+            ("session".to_string(), 1)
+        );
+    }
+
+    #[test]
+    fn parse_memory_id_preserves_hyphenated_session_ids() {
+        // Session ids are opaque strings that may contain hyphens;
+        // splitting from the right is the contract.
+        assert_eq!(
+            parse_memory_id("mem-session-2026-05-17-42").unwrap(),
+            ("session-2026-05-17".to_string(), 42)
+        );
+    }
+
+    #[test]
+    fn parse_memory_id_rejects_malformed_input() {
+        assert!(parse_memory_id("").is_none());
+        assert!(parse_memory_id("session-1").is_none()); // missing mem- prefix
+        assert!(parse_memory_id("mem-sessiononly").is_none()); // missing sequence
+        assert!(parse_memory_id("mem-").is_none()); // empty after prefix
+        assert!(parse_memory_id("mem--1").is_none()); // empty session
+        assert!(parse_memory_id("mem-s1-not-a-number").is_none());
+    }
+
+    #[test]
+    fn privacy_class_tracks_design_doc() {
+        use crate::memory_config::MemoryDomain;
+        assert_eq!(privacy_class_label(MemoryDomain::Facts), "user_sensitive");
+        assert_eq!(
+            privacy_class_label(MemoryDomain::Artifacts),
+            "user_sensitive"
+        );
+        for d in [
+            MemoryDomain::Session,
+            MemoryDomain::Durable,
+            MemoryDomain::Projects,
+            MemoryDomain::Preferences,
+        ] {
+            assert_eq!(privacy_class_label(d), "standard");
+        }
+    }
+
     #[test]
     fn plain_chat_is_files_read_none() {
         let (cap, scope) = parse_command("hello there");
@@ -2649,7 +2960,7 @@ mod tests {
             latency_ms: None,
             prompt_tokens: None,
             completion_tokens: None,
-                    memory_domain: None,
+            memory_domain: None,
             memory_id: None,
         });
 
@@ -2687,7 +2998,7 @@ mod tests {
             latency_ms: None,
             prompt_tokens: None,
             completion_tokens: None,
-                    memory_domain: None,
+            memory_domain: None,
             memory_id: None,
         });
 

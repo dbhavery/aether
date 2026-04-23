@@ -13,6 +13,10 @@ import type {
   MediaPermissions,
   MediaPermissionState,
   MemoryConfig,
+  MemoryDomain,
+  MemoryEditOutcome,
+  MemoryForgetOutcome,
+  MemoryListPayload,
   MicPermission,
   PersonaCatalogEntry,
   PresenceConfig,
@@ -294,4 +298,82 @@ export async function setMemoryConfig(
   config: MemoryConfig,
 ): Promise<MemoryConfig> {
   return invoke<MemoryConfig>("set_memory_config", { config });
+}
+
+// --- Memory V2 step 4 — Trust drawer Memory tab commands ----------------
+
+/** List items for one memory domain. `sessionId` is optional — the
+ * backend falls back to the default session when absent, so the
+ * typical Trust-drawer call is `memoryList("session")`. */
+export async function memoryList(
+  domain: MemoryDomain,
+  sessionId?: string,
+): Promise<MemoryListPayload> {
+  return invoke<MemoryListPayload>("memory_list", {
+    domain,
+    sessionId: sessionId ?? null,
+  });
+}
+
+/** Forget every row in a domain's session ("forget-all-in-domain"
+ * action). */
+export async function memoryForget(
+  domain: MemoryDomain,
+  sessionId?: string,
+): Promise<MemoryForgetOutcome> {
+  return invoke<MemoryForgetOutcome>("memory_forget", {
+    domain,
+    sessionId: sessionId ?? null,
+  });
+}
+
+/** Forget a single memory item addressed by its stable
+ * `mem-{session}-{sequence}` id. Returns `{kind: "requires_approval"}`
+ * for user-sensitive domains (Facts / Artifacts) — the caller must
+ * surface the approval modal and then call
+ * `memoryForgetItemAfterApproval` with the same arguments. */
+export async function memoryForgetItem(
+  domain: MemoryDomain,
+  memoryId: string,
+): Promise<MemoryForgetOutcome> {
+  return invoke<MemoryForgetOutcome>("memory_forget_item", {
+    domain,
+    memoryId,
+  });
+}
+
+export async function memoryForgetItemAfterApproval(
+  domain: MemoryDomain,
+  memoryId: string,
+): Promise<MemoryForgetOutcome> {
+  return invoke<MemoryForgetOutcome>("memory_forget_item_after_approval", {
+    domain,
+    memoryId,
+  });
+}
+
+/** Edit one memory item's content. Role, timestamp, and sequence are
+ * preserved — this is a fact-level edit, not a new turn. */
+export async function memoryEdit(
+  domain: MemoryDomain,
+  memoryId: string,
+  newContent: string,
+): Promise<MemoryEditOutcome> {
+  return invoke<MemoryEditOutcome>("memory_edit", {
+    domain,
+    memoryId,
+    newContent,
+  });
+}
+
+export async function memoryEditAfterApproval(
+  domain: MemoryDomain,
+  memoryId: string,
+  newContent: string,
+): Promise<MemoryEditOutcome> {
+  return invoke<MemoryEditOutcome>("memory_edit_after_approval", {
+    domain,
+    memoryId,
+    newContent,
+  });
 }
