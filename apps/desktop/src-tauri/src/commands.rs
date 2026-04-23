@@ -22,11 +22,11 @@ use aether_l4_router::{
 };
 
 use crate::media_permissions::{CaptureGate, MediaKind, MediaPermissions, PermissionState};
-use crate::mic_permissions::MicPermission;
 #[cfg(feature = "ollama-provider")]
 use crate::memory_router::PROVIDER_ERROR_PREFIX;
 use crate::memory_router::{assistant_record, user_record};
-use crate::state::{AppState, PendingTurn, TelemetryEntry, SESSION_ID};
+use crate::mic_permissions::MicPermission;
+use crate::state::{AppState, PendingTurn, PresenceHistoryEntry, TelemetryEntry, SESSION_ID};
 
 /// Banner payload sent to the UI on startup.
 #[derive(Debug, Clone, Serialize)]
@@ -1097,20 +1097,14 @@ fn validate_frame_data_url(url: &str) -> Result<&str, String> {
         return Err("frame_data_url must be a data:image/... URL".into());
     }
     let Some((_, body)) = url.split_once(',') else {
-        return Err(
-            "frame_data_url is missing the base64 body separator (',')".into(),
-        );
+        return Err("frame_data_url is missing the base64 body separator (',')".into());
     };
     let trimmed = body.trim();
     if trimmed.is_empty() {
-        return Err(
-            "frame_data_url has an empty image body — capture may have failed".into(),
-        );
+        return Err("frame_data_url has an empty image body — capture may have failed".into());
     }
     if trimmed.len() < MIN_FRAME_BODY_LEN {
-        return Err(
-            "frame_data_url body is too short to decode — capture may have failed".into(),
-        );
+        return Err("frame_data_url body is too short to decode — capture may have failed".into());
     }
     Ok(body)
 }
@@ -1253,9 +1247,7 @@ pub fn analyze_frame(
         // that their last capture was rejected. L5 / audit semantics
         // stay untouched — no policy decision was made.
         record_frame_early_exit_telemetry(&state, "frame_invalid");
-        return Err(format!(
-            "{detail}. Try capturing a new frame."
-        ));
+        return Err(format!("{detail}. Try capturing a new frame."));
     }
 
     transition_presence(
@@ -1311,8 +1303,7 @@ pub fn analyze_frame(
     // policy — we keep that and just substitute the assistant text +
     // provider/tier metadata. When vision fails the text-only output
     // stays as a safe fallback.
-    let vision_model =
-        maybe_apply_vision(&state, &mut result, &request.frame_data_url, &cue);
+    let vision_model = maybe_apply_vision(&state, &mut result, &request.frame_data_url, &cue);
 
     let ts_ms = state.next_ts();
     let _ = state.memory.append(TurnMemoryRecord {
@@ -1603,20 +1594,14 @@ pub struct UtteranceOutcome {
 /// is unit-testable without booting Tauri.
 fn validate_utterance_data_url(url: &str) -> Result<&str, String> {
     if !url.starts_with("data:audio/wav") {
-        return Err(
-            "utterance_data_url must be a data:audio/wav;base64,... URL".into(),
-        );
+        return Err("utterance_data_url must be a data:audio/wav;base64,... URL".into());
     }
     let Some((_, body)) = url.split_once(',') else {
-        return Err(
-            "utterance_data_url is missing the base64 body separator (',')".into(),
-        );
+        return Err("utterance_data_url is missing the base64 body separator (',')".into());
     };
     let trimmed = body.trim();
     if trimmed.is_empty() {
-        return Err(
-            "utterance_data_url has an empty audio body — capture may have failed".into(),
-        );
+        return Err("utterance_data_url has an empty audio body — capture may have failed".into());
     }
     if trimmed.len() < MIN_UTTERANCE_BODY_LEN {
         return Err(
@@ -1682,9 +1667,7 @@ fn maybe_apply_voice(
     language: Option<String>,
 ) -> Result<SpeechResponse, String> {
     if let Err(detail) = validate_utterance_data_url(utterance_data_url) {
-        tracing::debug!(
-            "voice: skipping transcribe, utterance failed validation: {detail}",
-        );
+        tracing::debug!("voice: skipping transcribe, utterance failed validation: {detail}",);
         return Err(detail);
     }
     let (mime, body) = match split_audio_data_url(utterance_data_url) {
@@ -2012,10 +1995,101 @@ pub fn transcribe_utterance(
 /// shape is an opaque re-export of `PresenceConfig`; the TS side
 /// mirrors the same fields.
 #[tauri::command]
-pub fn get_presence_config(
-    state: State<'_, AppState>,
-) -> crate::presence_config::PresenceConfig {
+pub fn get_presence_config(state: State<'_, AppState>) -> crate::presence_config::PresenceConfig {
     state.presence_config()
+}
+
+// ---------------------------------------------------------------------
+// Presence V1 step 2 — user-attention status + history surface.
+//
+// Deliberately named `presence_status` (not `presence_current`) because
+// the pre-V2 `presence_current` command returns the assistant-posture
+// snapshot (Quiet / Listening / Thinking / …) and the turn engine
+// depends on that contract. Renaming either would be a breaking IPC
+// change without benefit; two commands on two orthogonal axes keeps
+// the wire surface honest.
+// ---------------------------------------------------------------------
+
+/// Shell-side payload mirroring `AttentionSnapshot` for the
+/// `presence_status` Tauri command. Lower-case `state` label matches
+/// `UserAttention::label` (`"active"` / `"idle"` / `"away"`) so TS
+/// can use it as a discriminant without an enum mapping.
+#[derive(Debug, Clone, Serialize)]
+pub struct PresenceStatusPayload {
+    /// `"active"` / `"idle"` / `"away"`. Meaningless when
+    /// `enabled = false` — TS should branch on the flag first.
+    pub state: String,
+    /// Monotonic ms when the controller entered `state`.
+    pub since_ms: u64,
+    /// Seconds of OS idle at snapshot time. Zero when
+    /// `enabled = false` or the probe reported unsupported.
+    pub idle_seconds: u64,
+    /// `true` when the controller is running.
+    pub enabled: bool,
+    /// `false` on platforms whose idle probe has not shipped yet
+    /// (macOS / Linux stubs today). UI should surface this as
+    /// "idle probe unavailable" rather than pretending to know.
+    pub probe_supported: bool,
+    /// Applied thresholds. Handy for a "Active → Idle after Xs" label
+    /// in Settings without a second round trip.
+    pub idle_after_s: u32,
+    pub away_after_s: u32,
+}
+
+/// Snapshot the current user-attention state. Independent of
+/// `presence_current` — that command reports the assistant-posture
+/// axis (what Aether is doing at turn granularity). See
+/// `docs/PRESENCE-V1-ARCHITECTURE.md` §2 for the three-axis model.
+#[tauri::command]
+pub fn presence_status(state: State<'_, AppState>) -> PresenceStatusPayload {
+    let snap = state.attention_snapshot();
+    let thresholds = state.attention.thresholds();
+    PresenceStatusPayload {
+        state: snap.state.label().to_string(),
+        since_ms: snap.since_ms,
+        idle_seconds: snap.idle_seconds,
+        enabled: snap.enabled,
+        probe_supported: snap.probe_supported,
+        idle_after_s: thresholds.idle_after_s,
+        away_after_s: thresholds.away_after_s,
+    }
+}
+
+/// Snapshot of recent presence transitions for the Trust drawer's
+/// History tab (Presence V1 step 3). Returns newest-first, capped at
+/// `limit` (default 50 when the caller passes `null`). No audit rows
+/// are emitted — presence is observational.
+#[tauri::command]
+pub fn presence_recent_history(
+    state: State<'_, AppState>,
+    limit: Option<usize>,
+) -> Vec<PresenceHistoryEntry> {
+    let lim = limit.unwrap_or(50);
+    state.presence_history_recent(lim)
+}
+
+// ---------------------------------------------------------------------
+// Memory V2 step 2 — memory.json read/write surface.
+// ---------------------------------------------------------------------
+
+/// Snapshot the current memory policy. Wire shape matches
+/// `docs/MEMORY-V2-ARCHITECTURE.md` §3 — retention per domain,
+/// default risk per domain, embeddings opt-in block.
+#[tauri::command]
+pub fn get_memory_config(state: State<'_, AppState>) -> crate::memory_config::MemoryConfig {
+    state.memory_config()
+}
+
+/// Replace the memory policy and persist atomically. Full-snapshot
+/// semantics (no partial patch) so the wire contract stays
+/// predictable. Persistence or validation failures surface as a
+/// user-visible error string.
+#[tauri::command]
+pub fn set_memory_config(
+    config: crate::memory_config::MemoryConfig,
+    state: State<'_, AppState>,
+) -> Result<crate::memory_config::MemoryConfig, String> {
+    state.set_memory_config(config)
 }
 
 /// Replace the presence config and persist atomically. The caller
@@ -2237,6 +2311,57 @@ fn transition_presence(
     }
 }
 
+/// Payload emitted on `presence:attention` whenever the user-attention
+/// axis transitions (driven by the shell's poll loop in `main.rs`).
+/// Same shape as `PresenceHistoryEntry` so the TS side can reuse a
+/// single mapper across the event-bus push and the
+/// `presence_recent_history` command.
+#[derive(Debug, Clone, Serialize)]
+pub struct AttentionEventPayload {
+    pub kind: String,
+    pub from: String,
+    pub to: String,
+    pub idle_seconds: u64,
+    pub at_ms: u64,
+}
+
+impl From<PresenceHistoryEntry> for AttentionEventPayload {
+    fn from(e: PresenceHistoryEntry) -> Self {
+        Self {
+            kind: e.kind,
+            from: e.from,
+            to: e.to,
+            idle_seconds: e.idle_seconds,
+            at_ms: e.at_ms,
+        }
+    }
+}
+
+/// Poll-tick handler. Called from the shell's presence loop; keeps
+/// the emit + history-push contract in one place so the loop body
+/// stays tiny. Records a `presence_state_changed` row on every
+/// transition per design §5.
+pub fn drive_attention_tick(
+    app: &AppHandle,
+    state: &AppState,
+    now_ms: u64,
+    idle_seconds: Option<u64>,
+) {
+    let Some(event) = state.attention_tick(now_ms, idle_seconds) else {
+        return;
+    };
+    let entry = PresenceHistoryEntry {
+        kind: "presence_state_changed".to_string(),
+        from: event.from.label().to_string(),
+        to: event.to.label().to_string(),
+        idle_seconds: event.idle_seconds,
+        at_ms: event.at_ms,
+    };
+    state.push_presence_history(entry.clone());
+    let payload: AttentionEventPayload = entry.into();
+    let _ = app.emit("presence:attention", payload);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2411,8 +2536,7 @@ mod tests {
 
     #[test]
     fn validate_utterance_data_url_rejects_whitespace_only_body() {
-        let err =
-            validate_utterance_data_url("data:audio/wav;base64,   \n\t  ").unwrap_err();
+        let err = validate_utterance_data_url("data:audio/wav;base64,   \n\t  ").unwrap_err();
         assert!(err.contains("empty audio body"), "{err}");
     }
 

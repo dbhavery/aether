@@ -3,7 +3,9 @@
 
 mod adapter;
 mod commands;
+mod idle_probe;
 mod media_permissions;
+mod memory_config;
 mod memory_router;
 mod mic_permissions;
 mod presence_config;
@@ -14,7 +16,15 @@ mod vision_registry;
 mod voice_registry;
 
 use state::AppState;
+use std::time::Duration;
 use tauri::Manager;
+
+/// Poll interval for the presence attention loop. 1 Hz is coarse
+/// enough that the loop is effectively free and fine enough that an
+/// `idle_after_s = 10` threshold is honored within a second. The
+/// design doc §2 suggested 2 Hz; 1 Hz is the conservative default —
+/// threshold resolution is in seconds, not milliseconds.
+const PRESENCE_POLL_MS: u64 = 1_000;
 
 fn main() {
     tauri::Builder::default()
@@ -32,6 +42,16 @@ fn main() {
             // data dir (e.g. %APPDATA%/Aether on Windows).
             let app_state = build_app_state(app.handle())?;
             app.manage(app_state);
+            // Presence V1 step 2: spawn the attention poll loop. Uses
+            // `tauri::async_runtime::spawn` to run on Tauri's own tokio
+            // runtime so we don't stand up a second one. The loop is
+            // cheap — one `GetLastInputInfo` call per tick on Windows,
+            // a no-op on unsupported platforms — and a transition only
+            // produces an event when the state label actually changes.
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                run_presence_loop(handle).await;
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -55,6 +75,10 @@ fn main() {
             commands::set_mic_permission,
             commands::get_presence_config,
             commands::set_presence_config,
+            commands::presence_status,
+            commands::presence_recent_history,
+            commands::get_memory_config,
+            commands::set_memory_config,
             commands::analyze_frame,
             commands::transcribe_utterance,
             commands::voice_status,
@@ -111,6 +135,9 @@ fn build_app_state(app: &tauri::AppHandle) -> Result<AppState, Box<dyn std::erro
                 let presence_path = presence_config::config_path_for(&dir);
                 tracing::info!("presence config file at {}", presence_path.display());
                 state.attach_presence_config_file(presence_path);
+                let memory_cfg_path = memory_config::config_path_for(&dir);
+                tracing::info!("memory config file at {}", memory_cfg_path.display());
+                state.attach_memory_config_file(memory_cfg_path);
                 wire_vision_registry(&state, Some(&dir));
                 wire_voice_registry(&state, Some(&dir));
                 return Ok(state);
@@ -179,9 +206,7 @@ fn register_ollama_vision_if_configured(state: &AppState) {
             let base = cfg.base_url.clone();
             let provider = OllamaVisionProvider::new(cfg);
             if let Err(e) = provider.healthcheck() {
-                tracing::warn!(
-                    "ollama vision healthcheck failed at {base}: {e}; not registering",
-                );
+                tracing::warn!("ollama vision healthcheck failed at {base}: {e}; not registering",);
                 return;
             }
             let arc: Arc<dyn VisionProvider> = Arc::new(provider);
@@ -297,3 +322,37 @@ fn register_whispercpp_speech_if_configured(state: &AppState) {
 
 #[cfg(not(feature = "speech-whispercpp"))]
 fn register_whispercpp_speech_if_configured(_state: &AppState) {}
+
+/// Presence V1 step 2 — the attention poll loop.
+///
+/// Spawned once from the Tauri setup hook; runs for the life of the
+/// app. Each tick:
+///
+/// 1. Sleeps for `PRESENCE_POLL_MS`.
+/// 2. Reads the platform idle probe (Windows: `GetLastInputInfo`;
+///    macOS / Linux: `None` until their probes ship).
+/// 3. Feeds `(now_ms, idle_seconds)` into
+///    [`AppState::attention_tick`] via
+///    [`commands::drive_attention_tick`].
+/// 4. On transition, emits `presence:attention` to the webview and
+///    pushes a `PresenceHistoryEntry` onto the shell's bounded ring.
+///
+/// The loop never unwraps — a missing `AppState` (shouldn't happen in
+/// practice) short-circuits to another sleep; a poisoned lock is
+/// reported via tracing and skipped.
+async fn run_presence_loop(app: tauri::AppHandle) {
+    let probe = idle_probe::platform_probe();
+    tracing::info!("presence loop: idle probe = {}", probe.label());
+    let mut interval = tokio::time::interval(Duration::from_millis(PRESENCE_POLL_MS));
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    loop {
+        interval.tick().await;
+        let Some(state) = app.try_state::<AppState>() else {
+            // Still booting; sleep for a tick and retry.
+            continue;
+        };
+        let now_ms = state.next_ts();
+        let idle = probe.idle_seconds();
+        commands::drive_attention_tick(&app, &state, now_ms, idle);
+    }
+}

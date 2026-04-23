@@ -139,8 +139,8 @@ pub fn save(path: &Path, cfg: &PresenceConfig) -> io::Result<()> {
         fs::create_dir_all(parent)?;
     }
     let tmp = path.with_extension("json.tmp");
-    let body = serde_json::to_string_pretty(cfg)
-        .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?;
+    let body =
+        serde_json::to_string_pretty(cfg).map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?;
     fs::write(&tmp, body)?;
     fs::rename(&tmp, path)?;
     Ok(())
@@ -228,11 +228,7 @@ mod tests {
         // VisionPersistedState / MicPermission.
         let tmp = TempDir::new().unwrap();
         let path = tmp.path().join("presence.json");
-        fs::write(
-            &path,
-            r#"{ "enabled": true, "future_knob": ["x"] }"#,
-        )
-        .unwrap();
+        fs::write(&path, r#"{ "enabled": true, "future_knob": ["x"] }"#).unwrap();
 
         let loaded = load_or_default(&path);
         save(&path, &loaded).expect("rewrite");

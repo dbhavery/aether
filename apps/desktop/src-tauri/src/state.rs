@@ -25,7 +25,10 @@ use crate::voice_registry::{SpeechProviderInfo, VoiceRegistry};
 #[cfg(feature = "sqlite-backend")]
 use aether_l2_memory::{DurableSessionStore, SqliteSessionMemoryStore};
 use aether_l2_memory::{InMemorySessionMemoryStore, SessionMemoryStore};
-use aether_l3_presence::{InMemoryPresenceController, PresenceController};
+use aether_l3_presence::{
+    AttentionEvent, AttentionSnapshot, AttentionThresholds, InMemoryPresenceController,
+    PresenceController, UserAttentionController,
+};
 use aether_l5_policy::{
     policy_engine::PolicyEngine, AuditStore, AutonomyPreset, DefaultPolicyEngine, EngineConfig,
     InMemoryAuditStore, InMemoryGrantLedger, InMemorySink, PersonaId,
@@ -35,9 +38,10 @@ use serde::Serialize;
 
 use crate::adapter::{ModelRouterAdapter, ReflexModelRouter};
 use crate::media_permissions::{self, CaptureGate, MediaKind, MediaPermissions, PermissionState};
+use crate::memory_config::{self, MemoryConfig};
+use crate::memory_router::MemoryAwareRouter;
 use crate::mic_permissions::{self, MicPermission};
 use crate::presence_config::{self, PresenceConfig};
-use crate::memory_router::MemoryAwareRouter;
 use crate::provider::ProviderMode;
 
 /// The single active session id for v0. One conversation per app instance.
@@ -129,6 +133,28 @@ pub struct AppState {
     /// Disk-backed location for `presence_config`. `None` in
     /// sandboxes; in-memory copy still works.
     presence_config_path: Option<PathBuf>,
+    /// Presence V1 step 2 — user-attention axis controller
+    /// (Active / Idle / Away). Sibling to [`PresenceController`],
+    /// which owns the assistant-posture axis. The shell's poll task
+    /// (wired in `main.rs`) calls `tick` with an OS-idle reading each
+    /// interval; transitions are emitted as `presence:attention`
+    /// events and pushed into `presence_history` for the Trust drawer.
+    pub attention: Arc<UserAttentionController>,
+    /// Bounded, UX-only history of attention transitions for the
+    /// Trust drawer's History tab. Does NOT go through the L5 audit
+    /// store — presence is observational per design §4. Cleared on
+    /// app restart.
+    presence_history: Mutex<VecDeque<PresenceHistoryEntry>>,
+    /// Memory V2 step 2 — user-owned memory-system policy
+    /// (retention + per-domain risk + embeddings opt-in). See
+    /// `docs/MEMORY-V2-ARCHITECTURE.md` §3. Step 2 lands the
+    /// config/commands/Settings surface only; L2 consumers wire into
+    /// `risk_for` in a later slice.
+    memory_config: RwLock<MemoryConfig>,
+    /// Disk-backed location for `memory_config`. `None` in sandboxes;
+    /// the in-memory copy still works but changes do not survive
+    /// restarts.
+    memory_config_path: Option<PathBuf>,
     /// Registry of zero or more vision-capable providers + the active
     /// selection. Replaces the v0 single-`Option` model so the user
     /// can swap providers at runtime (Ollama vision ↔ llama.cpp
@@ -163,6 +189,47 @@ pub enum VisionModelListError {
 /// In-memory only; cleared on app restart. A durable telemetry log is
 /// a separate concern and out of scope for this slice.
 pub const TELEMETRY_BUFFER_CAPACITY: usize = 50;
+
+/// How many presence-attention transitions the shell retains for the
+/// Trust drawer's History tab. Bounded by design — presence is
+/// observational and transient per `docs/PRESENCE-V1-ARCHITECTURE.md`
+/// §8. Separate buffer from `telemetry` so the presence-event shape
+/// doesn't leak into the turn-telemetry schema.
+pub const PRESENCE_HISTORY_CAPACITY: usize = 64;
+
+/// One row on the shell's presence-history ring. Mirrors an
+/// `AttentionEvent` from L3 plus a stable label for telemetry-kind
+/// matching (design §5 — `presence_state_changed`). Serde is on so
+/// the Tauri command can return it directly.
+#[derive(Debug, Clone, Serialize)]
+pub struct PresenceHistoryEntry {
+    /// Always `"presence_state_changed"` for the step-2 surface. Held
+    /// as a field rather than a constant so step-3+ history shapes
+    /// (e.g. `session_opened`) can share the same ring.
+    pub kind: String,
+    /// Previous state label (`"active"` / `"idle"` / `"away"`).
+    pub from: String,
+    /// New state label.
+    pub to: String,
+    /// Seconds of OS idle at the transition — useful for debugging
+    /// and for the Trust drawer's future hover tooltip.
+    pub idle_seconds: u64,
+    /// `AppState::next_ts`-stamped transition time (monotonic ms).
+    pub at_ms: u64,
+}
+
+impl PresenceHistoryEntry {
+    /// Lift a raw L3 attention event onto the shell history shape.
+    fn from_event(ev: AttentionEvent) -> Self {
+        Self {
+            kind: "presence_state_changed".to_string(),
+            from: ev.from.label().to_string(),
+            to: ev.to.label().to_string(),
+            idle_seconds: ev.idle_seconds,
+            at_ms: ev.at_ms,
+        }
+    }
+}
 
 /// One observable turn on the telemetry surface. `kind` distinguishes
 /// normal completed turns from policy-blocked / denied turns so the UI
@@ -284,6 +351,14 @@ impl AppState {
     fn build(memory: Arc<dyn SessionMemoryStore>, backend: MemoryBackend) -> Result<Self, String> {
         let catalog = merge_yaml_personas(default_catalog());
         let presence: Arc<dyn PresenceController> = Arc::new(InMemoryPresenceController::new());
+        let cfg = PresenceConfig::defaults();
+        let attention = Arc::new(UserAttentionController::new(
+            cfg.enabled,
+            AttentionThresholds {
+                idle_after_s: cfg.idle_after_s,
+                away_after_s: cfg.away_after_s,
+            },
+        ));
         let active = build_active(&pick_default(&catalog), memory.clone(), None)?;
 
         Ok(Self {
@@ -302,8 +377,12 @@ impl AppState {
             media_permissions_path: None,
             mic_permission: RwLock::new(MicPermission::defaults()),
             mic_permission_path: None,
-            presence_config: RwLock::new(PresenceConfig::defaults()),
+            presence_config: RwLock::new(cfg),
             presence_config_path: None,
+            attention,
+            presence_history: Mutex::new(VecDeque::with_capacity(PRESENCE_HISTORY_CAPACITY)),
+            memory_config: RwLock::new(MemoryConfig::defaults()),
+            memory_config_path: None,
             vision: RwLock::new(VisionRegistry::empty()),
             vision_model_cache: ModelListCache::from_env(),
             voice: RwLock::new(VoiceRegistry::empty()),
@@ -395,9 +474,7 @@ impl AppState {
     ///
     /// Returns `(provider_id, models)` so the caller can construct the
     /// VisionModelList envelope without a second registry lookup.
-    pub fn vision_model_list_cached(
-        &self,
-    ) -> Result<(String, Vec<String>), VisionModelListError> {
+    pub fn vision_model_list_cached(&self) -> Result<(String, Vec<String>), VisionModelListError> {
         let Some(provider) = self.vision_provider() else {
             return Err(VisionModelListError::NoActive);
         };
@@ -627,10 +704,7 @@ impl AppState {
     /// is emitted here — the audit surface for mic activity lives at
     /// the capture site (see `transcribe_utterance`, step 4), the same
     /// way `analyze_frame` owns the audit for media capture.
-    pub fn set_mic_permission(
-        &self,
-        state: PermissionState,
-    ) -> Result<MicPermission, String> {
+    pub fn set_mic_permission(&self, state: PermissionState) -> Result<MicPermission, String> {
         let (previous, snapshot) = {
             let mut w = self.mic_permission.write().expect("mic perm write lock");
             let previous = w.state;
@@ -642,11 +716,7 @@ impl AppState {
                 .map_err(|e| format!("persist mic permission: {e}"))?;
         }
         if previous != state {
-            tracing::info!(
-                "mic permission: {} -> {}",
-                previous.wire(),
-                state.wire()
-            );
+            tracing::info!("mic permission: {} -> {}", previous.wire(), state.wire());
         }
         Ok(snapshot)
     }
@@ -663,11 +733,25 @@ impl AppState {
     /// Wire a disk-backed presence config into this state. Loads
     /// current contents (falling back to defaults for
     /// missing/malformed files) and remembers the path so
-    /// subsequent writes persist atomically.
+    /// subsequent writes persist atomically. Also seeds the
+    /// attention controller with the loaded thresholds + enabled
+    /// flag so the first poll tick respects the persisted policy
+    /// rather than the code defaults.
     pub fn attach_presence_config_file(&mut self, path: PathBuf) {
         let loaded = presence_config::load_or_default(&path);
-        *self.presence_config.write().expect("presence cfg write lock") = loaded;
+        *self
+            .presence_config
+            .write()
+            .expect("presence cfg write lock") = loaded;
         self.presence_config_path = Some(path);
+        // Propagate into the attention controller. Swallow lock
+        // errors — tracing handles observability, and a poisoned
+        // lock on boot is a far bigger problem than presence rot.
+        let _ = self.attention.set_enabled(loaded.enabled);
+        let _ = self.attention.set_thresholds(AttentionThresholds {
+            idle_after_s: loaded.idle_after_s,
+            away_after_s: loaded.away_after_s,
+        });
     }
 
     /// Snapshot the current presence config. Cheap clone; safe to
@@ -681,18 +765,154 @@ impl AppState {
     /// can echo it back to the UI in one round trip. Persistence
     /// failures are surfaced as `Err` so the UI can show the change
     /// did not stick.
-    pub fn set_presence_config(
-        &self,
-        cfg: PresenceConfig,
-    ) -> Result<PresenceConfig, String> {
+    ///
+    /// Also hot-swaps the threshold + enabled flag onto the live
+    /// attention controller so the next poll tick uses the updated
+    /// config without requiring an app restart.
+    pub fn set_presence_config(&self, cfg: PresenceConfig) -> Result<PresenceConfig, String> {
+        // Reject obviously-invalid thresholds at the boundary. The
+        // controller sanitises further, but rejecting here keeps the
+        // Settings UI honest (we don't persist a 5-second Away
+        // threshold when the UI's number input has loose validation).
+        if cfg.idle_after_s < 10 || cfg.idle_after_s > 86_400 {
+            return Err(format!(
+                "idle_after_s must be between 10 and 86400 seconds (got {})",
+                cfg.idle_after_s
+            ));
+        }
+        if cfg.away_after_s < 10 || cfg.away_after_s > 86_400 {
+            return Err(format!(
+                "away_after_s must be between 10 and 86400 seconds (got {})",
+                cfg.away_after_s
+            ));
+        }
+        if cfg.away_after_s <= cfg.idle_after_s {
+            return Err(format!(
+                "away_after_s ({}) must be greater than idle_after_s ({})",
+                cfg.away_after_s, cfg.idle_after_s
+            ));
+        }
         let snapshot = {
-            let mut w = self.presence_config.write().expect("presence cfg write lock");
+            let mut w = self
+                .presence_config
+                .write()
+                .expect("presence cfg write lock");
             *w = cfg;
             *w
         };
         if let Some(path) = &self.presence_config_path {
             presence_config::save(path, &snapshot)
                 .map_err(|e| format!("persist presence config: {e}"))?;
+        }
+        // Live-propagate into the attention controller so the next
+        // tick picks up the new policy without requiring a restart.
+        // Lock-poison errors are logged but not fatal — the config
+        // is persisted and will be re-applied on next boot.
+        if let Err(e) = self.attention.set_enabled(snapshot.enabled) {
+            tracing::warn!("attention set_enabled failed: {e}");
+        }
+        if let Err(e) = self.attention.set_thresholds(AttentionThresholds {
+            idle_after_s: snapshot.idle_after_s,
+            away_after_s: snapshot.away_after_s,
+        }) {
+            tracing::warn!("attention set_thresholds failed: {e}");
+        }
+        Ok(snapshot)
+    }
+
+    /// Apply one presence-poll tick. Feeds the controller the current
+    /// monotonic timestamp and an idle reading (or `None` when the
+    /// platform probe is unsupported — macOS / Linux today). Returns
+    /// `Some(event)` when the state label changed; the caller (the
+    /// poll task) is then responsible for `app.emit` and for pushing
+    /// a `PresenceHistoryEntry` via [`push_presence_history`].
+    pub fn attention_tick(&self, now_ms: u64, idle_seconds: Option<u64>) -> Option<AttentionEvent> {
+        self.attention.tick(now_ms, idle_seconds)
+    }
+
+    /// Cheap snapshot for the `presence_status` command.
+    pub fn attention_snapshot(&self) -> AttentionSnapshot {
+        self.attention.snapshot()
+    }
+
+    /// Push a transition onto the UX-only presence-history ring
+    /// buffer. Bounded by [`PRESENCE_HISTORY_CAPACITY`]; oldest
+    /// entries are evicted first. Never errors — UX buffer only.
+    pub fn push_presence_history(&self, entry: PresenceHistoryEntry) {
+        match self.presence_history.lock() {
+            Ok(mut g) => {
+                if g.len() == PRESENCE_HISTORY_CAPACITY {
+                    g.pop_front();
+                }
+                g.push_back(entry);
+            }
+            Err(e) => {
+                tracing::warn!("presence history lock poisoned: {e}; entry dropped");
+            }
+        }
+    }
+
+    /// Snapshot of recent attention transitions (newest-first).
+    /// Capped at `limit` entries. Used by the Trust drawer's History
+    /// tab (Presence V1 step 3).
+    pub fn presence_history_recent(&self, limit: usize) -> Vec<PresenceHistoryEntry> {
+        let Ok(g) = self.presence_history.lock() else {
+            return Vec::new();
+        };
+        g.iter().rev().take(limit).cloned().collect()
+    }
+
+    // --- Memory V2 step 2 — memory.json read/write surface ---------------
+
+    /// Wire a disk-backed memory config into this state. Mirrors
+    /// `attach_presence_config_file`: load contents (falling back to
+    /// defaults for missing/malformed files) and remember the path
+    /// for atomic writes.
+    pub fn attach_memory_config_file(&mut self, path: PathBuf) {
+        let loaded = memory_config::load_or_default(&path);
+        *self.memory_config.write().expect("memory cfg write lock") = loaded;
+        self.memory_config_path = Some(path);
+    }
+
+    /// Snapshot the current memory policy. Cheap clone; safe to hand
+    /// to a Tauri command response.
+    pub fn memory_config(&self) -> MemoryConfig {
+        self.memory_config
+            .read()
+            .expect("memory cfg read lock")
+            .clone()
+    }
+
+    /// Replace the memory policy and persist atomically when a path
+    /// is wired. Returns the resulting snapshot so the caller can
+    /// echo it back to the UI. Persistence failures surface as `Err`
+    /// so the UI can show the change did not stick.
+    ///
+    /// No L2 consumer yet — step 2 scope. Step 3 wires the write
+    /// path through `MemoryConfig::risk_for`.
+    pub fn set_memory_config(&self, cfg: MemoryConfig) -> Result<MemoryConfig, String> {
+        // Reject embeddings.enabled without a provider — the later
+        // embeddings slice can reject at the plumbing layer, but
+        // catching this at the policy boundary keeps the Settings UI
+        // honest and spares the user a confusing "embeddings on but
+        // nothing's happening" state.
+        if cfg.embeddings.enabled
+            && cfg
+                .embeddings
+                .provider
+                .as_deref()
+                .map_or(true, |p| p.trim().is_empty())
+        {
+            return Err("embeddings.provider must be set before embeddings.enabled = true".into());
+        }
+        let snapshot = {
+            let mut w = self.memory_config.write().expect("memory cfg write lock");
+            *w = cfg;
+            w.clone()
+        };
+        if let Some(path) = &self.memory_config_path {
+            memory_config::save(path, &snapshot)
+                .map_err(|e| format!("persist memory config: {e}"))?;
         }
         Ok(snapshot)
     }
@@ -1591,9 +1811,7 @@ humor: "playful"
         {
             let mut state = AppState::new().unwrap();
             state.attach_mic_permission_file(mic_path.clone());
-            state
-                .set_mic_permission(PermissionState::Allow)
-                .unwrap();
+            state.set_mic_permission(PermissionState::Allow).unwrap();
         }
 
         let mut state2 = AppState::new().unwrap();
@@ -1626,6 +1844,112 @@ humor: "playful"
             .expect("media set");
         let mic = state.mic_permission();
         assert_eq!(mic.state, PermissionState::Allow);
+    }
+
+    // --- Presence V1 step 2 — attention state wiring --------------------
+
+    #[test]
+    fn set_presence_config_rejects_out_of_range_thresholds() {
+        let state = AppState::new().unwrap();
+        let mut cfg = state.presence_config();
+        cfg.idle_after_s = 5;
+        assert!(
+            state.set_presence_config(cfg).is_err(),
+            "too small rejected"
+        );
+        let mut cfg = state.presence_config();
+        cfg.idle_after_s = 100_000;
+        assert!(state.set_presence_config(cfg).is_err(), "too big rejected");
+    }
+
+    #[test]
+    fn set_presence_config_rejects_away_le_idle() {
+        let state = AppState::new().unwrap();
+        let mut cfg = state.presence_config();
+        cfg.idle_after_s = 300;
+        cfg.away_after_s = 300;
+        assert!(
+            state.set_presence_config(cfg).is_err(),
+            "away must be > idle"
+        );
+    }
+
+    #[test]
+    fn set_presence_config_hot_swaps_attention_thresholds_and_enabled() {
+        // Locks the controller contract from the user's perspective: a
+        // Settings-UI write must take effect without restart.
+        let state = AppState::new().unwrap();
+        let mut cfg = state.presence_config();
+        cfg.enabled = false;
+        cfg.idle_after_s = 20;
+        cfg.away_after_s = 40;
+        state.set_presence_config(cfg).expect("persisted");
+        let thresholds = state.attention.thresholds();
+        assert_eq!(thresholds.idle_after_s, 20);
+        assert_eq!(thresholds.away_after_s, 40);
+        let snap = state.attention_snapshot();
+        assert!(!snap.enabled, "enabled flag propagated");
+    }
+
+    #[test]
+    fn attention_tick_and_history_record_transition() {
+        let state = AppState::new().unwrap();
+        let mut cfg = state.presence_config();
+        cfg.idle_after_s = 10;
+        cfg.away_after_s = 30;
+        state.set_presence_config(cfg).unwrap();
+
+        // Tick with idle reading under threshold: silent.
+        assert!(state.attention_tick(1_000, Some(0)).is_none());
+        assert!(state.presence_history_recent(10).is_empty());
+
+        // Tick past idle_after_s: transition fires and the shell
+        // pushes a `presence_state_changed` row on the ring.
+        let ev = state.attention_tick(11_000, Some(15)).expect("→ idle");
+        let entry = PresenceHistoryEntry {
+            kind: "presence_state_changed".into(),
+            from: ev.from.label().into(),
+            to: ev.to.label().into(),
+            idle_seconds: ev.idle_seconds,
+            at_ms: ev.at_ms,
+        };
+        state.push_presence_history(entry);
+        let recent = state.presence_history_recent(10);
+        assert_eq!(recent.len(), 1);
+        assert_eq!(recent[0].kind, "presence_state_changed");
+        assert_eq!(recent[0].from, "active");
+        assert_eq!(recent[0].to, "idle");
+    }
+
+    #[test]
+    fn disabled_presence_controller_never_emits() {
+        let state = AppState::new().unwrap();
+        let mut cfg = state.presence_config();
+        cfg.enabled = false;
+        cfg.idle_after_s = 10;
+        cfg.away_after_s = 30;
+        state.set_presence_config(cfg).unwrap();
+        // Even with idle seconds well past the threshold, a disabled
+        // controller is silent.
+        assert!(state.attention_tick(10_000, Some(500)).is_none());
+    }
+
+    #[test]
+    fn presence_history_ring_is_bounded() {
+        let state = AppState::new().unwrap();
+        for i in 0..(PRESENCE_HISTORY_CAPACITY + 10) {
+            state.push_presence_history(PresenceHistoryEntry {
+                kind: "presence_state_changed".into(),
+                from: "active".into(),
+                to: "idle".into(),
+                idle_seconds: 0,
+                at_ms: i as u64,
+            });
+        }
+        assert_eq!(
+            state.presence_history_recent(usize::MAX).len(),
+            PRESENCE_HISTORY_CAPACITY
+        );
     }
 
     /// If we point the durable constructor at an un-writable path, it

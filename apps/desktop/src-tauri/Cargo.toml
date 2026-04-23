@@ -25,6 +25,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "1"
 tracing = "0.1"
+# tokio is already a transitive dep via tauri; declared explicitly here so
+# the presence poll loop (main.rs::run_presence_loop) can use
+# `tokio::time::interval`. Scope limited to the `time` feature — no new
+# runtime, no network stack. Presence V1 step 2.
+tokio = { version = "1", features = ["time"] }
 
 # Engine crates — the shell is an integration surface, same as apps/l1-cli.
 # CLAUDE.md §1.4 regulates packages/l*-* siblings; apps/* are allowed to
