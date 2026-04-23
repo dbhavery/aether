@@ -160,15 +160,21 @@ pub enum MemoryForgetOutcome {
         /// Stable grouping reason.
         reason: String,
     },
+    /// Per-item forget: the target row was not present (already
+    /// evicted by retention, never existed, or raced with another
+    /// forget). Distinct from `Denied` so the Trust drawer can
+    /// render a softer "already gone" state instead of treating it
+    /// as a policy refusal. Telemetry still fires under
+    /// `memory_forgotten` so the audit trail reflects the attempt.
+    NotFound,
 }
 
-/// Outcome of a gated memory edit. Step 3 wires the gate and audit;
-/// the actual per-item mutation arrives with the Memory tab (step 4).
+/// Outcome of a gated memory edit. Step 4 wires the per-item
+/// mutation through `SessionMemoryStore::update`; `Allowed` now
+/// means the store was mutated successfully.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MemoryEditOutcome {
-    /// Edit allowed at the gate. `memory_id` is the target item;
-    /// today the caller is responsible for mutating the underlying
-    /// row — this service does not own domain-typed storage yet.
+    /// Edit allowed and applied. `memory_id` is the target item.
     Allowed {
         /// Target item.
         memory_id: String,
@@ -177,11 +183,16 @@ pub enum MemoryEditOutcome {
     },
     /// Domain posture is Ask.
     RequiresApproval,
-    /// Denied.
+    /// Denied — policy refused the edit.
     Denied {
         /// Stable grouping reason.
         reason: String,
     },
+    /// Target row did not exist. Same rationale as
+    /// `MemoryForgetOutcome::NotFound`: retention may have claimed
+    /// it, or the Trust drawer may be holding a stale id. Softer
+    /// surface than `Denied`.
+    NotFound,
 }
 
 /// Errors surfaced by the service. Intentionally narrow — lock
@@ -317,21 +328,13 @@ impl AppState {
         match gate {
             MemoryGate::Deny => {
                 let ts_ms = self.next_ts();
-                emit_memory_telemetry(
-                    self,
-                    ts_ms,
-                    telemetry_kind::WRITE_DENIED,
-                    domain,
-                    None,
-                );
+                emit_memory_telemetry(self, ts_ms, telemetry_kind::WRITE_DENIED, domain, None);
                 Ok(MemoryWriteOutcome::Denied {
                     reason: "config_deny".to_string(),
                 })
             }
             MemoryGate::Ask => Ok(MemoryWriteOutcome::RequiresApproval),
-            MemoryGate::Auto => {
-                self.perform_memory_write(domain, session_id, content, role, false)
-            }
+            MemoryGate::Auto => self.perform_memory_write(domain, session_id, content, role, false),
         }
     }
 
@@ -416,13 +419,7 @@ impl AppState {
                 })
             }
             other => {
-                emit_memory_telemetry(
-                    self,
-                    ts_ms,
-                    telemetry_kind::WRITE_DENIED,
-                    domain,
-                    None,
-                );
+                emit_memory_telemetry(self, ts_ms, telemetry_kind::WRITE_DENIED, domain, None);
                 let reason = deny_reason(&other).to_string();
                 let _ = audit_id_of(&other); // side-effect-free read for future debugging.
                 Ok(MemoryWriteOutcome::Denied { reason })
@@ -443,13 +440,7 @@ impl AppState {
         let ts_ms = self.next_ts();
         match gate {
             MemoryGate::Deny => {
-                emit_memory_telemetry(
-                    self,
-                    ts_ms,
-                    telemetry_kind::WRITE_DENIED,
-                    domain,
-                    None,
-                );
+                emit_memory_telemetry(self, ts_ms, telemetry_kind::WRITE_DENIED, domain, None);
                 Ok(MemoryForgetOutcome::Denied {
                     reason: "config_deny".to_string(),
                 })
@@ -474,13 +465,7 @@ impl AppState {
                         self.memory
                             .clear_session(session_id)
                             .map_err(|e| MemoryServiceError::Store(format!("clear: {e}")))?;
-                        emit_memory_telemetry(
-                            self,
-                            ts_ms,
-                            telemetry_kind::FORGOTTEN,
-                            domain,
-                            None,
-                        );
+                        emit_memory_telemetry(self, ts_ms, telemetry_kind::FORGOTTEN, domain, None);
                         Ok(MemoryForgetOutcome::Allowed {
                             removed_count: pre_len,
                             audit_id: audit_id.0,
@@ -494,49 +479,172 @@ impl AppState {
         }
     }
 
-    /// Gated edit. Step 3 wires the gate + audit + telemetry; the
-    /// actual per-item mutation of memory content arrives with the
-    /// Memory tab (step 4), at which point this function will grow a
-    /// new-content parameter.
+    /// Gated per-item forget. Like `memory_forget` but targets a
+    /// single `(session_id, sequence)` row instead of the whole
+    /// session. Returns `NotFound` when the row is already gone.
+    pub fn memory_forget_item(
+        &self,
+        domain: MemoryDomain,
+        session_id: &str,
+        sequence: u64,
+    ) -> Result<MemoryForgetOutcome, MemoryServiceError> {
+        let gate = self.evaluate_memory_gate(domain);
+        match gate {
+            MemoryGate::Deny => {
+                let ts_ms = self.next_ts();
+                emit_memory_telemetry(
+                    self,
+                    ts_ms,
+                    telemetry_kind::WRITE_DENIED,
+                    domain,
+                    Some(&mk_memory_id(session_id, sequence)),
+                );
+                Ok(MemoryForgetOutcome::Denied {
+                    reason: "config_deny".to_string(),
+                })
+            }
+            MemoryGate::Ask => Ok(MemoryForgetOutcome::RequiresApproval),
+            MemoryGate::Auto => self.perform_memory_forget_item(domain, session_id, sequence),
+        }
+    }
+
+    /// Complete a `RequiresApproval` per-item forget after the shell
+    /// has surfaced the approval modal and the user approved. Same
+    /// persistence path as the Auto flow; no separate telemetry
+    /// distinguishes it from `memory_forgotten` today (forget is
+    /// terminal, unlike writes — there is no "forgot-after-ask" need
+    /// for an extra tag beyond the audit row carrying the capability).
+    pub fn memory_forget_item_after_approval(
+        &self,
+        domain: MemoryDomain,
+        session_id: &str,
+        sequence: u64,
+    ) -> Result<MemoryForgetOutcome, MemoryServiceError> {
+        self.perform_memory_forget_item(domain, session_id, sequence)
+    }
+
+    fn perform_memory_forget_item(
+        &self,
+        domain: MemoryDomain,
+        session_id: &str,
+        sequence: u64,
+    ) -> Result<MemoryForgetOutcome, MemoryServiceError> {
+        let (request, emitted_at) = build_action_request(self, Capability::MemoryForget);
+        let decision = {
+            let active = self.active.read().expect("active read lock");
+            active
+                .policy
+                .evaluate(request)
+                .map_err(|e| MemoryServiceError::Internal(format!("policy evaluate: {e}")))?
+        };
+        let ts_ms = emitted_at.0;
+        let memory_id = mk_memory_id(session_id, sequence);
+        match decision {
+            Decision::Allow { audit_id, .. } => {
+                let removed = self
+                    .memory
+                    .remove(session_id, sequence)
+                    .map_err(|e| MemoryServiceError::Store(format!("remove: {e}")))?;
+                if !removed {
+                    // Audit row still recorded the attempt; emit no
+                    // forget telemetry since nothing was actually
+                    // evicted. The L5 audit captures the authorised
+                    // capability call regardless.
+                    return Ok(MemoryForgetOutcome::NotFound);
+                }
+                emit_memory_telemetry(
+                    self,
+                    ts_ms,
+                    telemetry_kind::FORGOTTEN,
+                    domain,
+                    Some(&memory_id),
+                );
+                Ok(MemoryForgetOutcome::Allowed {
+                    removed_count: 1,
+                    audit_id: audit_id.0,
+                })
+            }
+            other => Ok(MemoryForgetOutcome::Denied {
+                reason: deny_reason(&other).to_string(),
+            }),
+        }
+    }
+
+    /// Gated per-item edit. `sequence` is the row to mutate and
+    /// `new_content` replaces its text. Auto path calls
+    /// `SessionMemoryStore::update`; Ask returns `RequiresApproval`
+    /// so the shell can surface the modal and then call
+    /// `memory_edit_after_approval`.
     pub fn memory_edit(
         &self,
         domain: MemoryDomain,
-        memory_id: String,
+        session_id: &str,
+        sequence: u64,
+        new_content: String,
     ) -> Result<MemoryEditOutcome, MemoryServiceError> {
         let gate = self.evaluate_memory_gate(domain);
-        let ts_ms = self.next_ts();
         match gate {
             MemoryGate::Deny => Ok(MemoryEditOutcome::Denied {
                 reason: "config_deny".to_string(),
             }),
             MemoryGate::Ask => Ok(MemoryEditOutcome::RequiresApproval),
-            MemoryGate::Auto => {
-                let (request, _) = build_action_request(self, Capability::MemoryEdit);
-                let decision = {
-                    let active = self.active.read().expect("active read lock");
-                    active.policy.evaluate(request).map_err(|e| {
-                        MemoryServiceError::Internal(format!("policy evaluate: {e}"))
-                    })?
-                };
-                match decision {
-                    Decision::Allow { audit_id, .. } => {
-                        emit_memory_telemetry(
-                            self,
-                            ts_ms,
-                            telemetry_kind::EDITED,
-                            domain,
-                            Some(&memory_id),
-                        );
-                        Ok(MemoryEditOutcome::Allowed {
-                            memory_id,
-                            audit_id: audit_id.0,
-                        })
-                    }
-                    other => Ok(MemoryEditOutcome::Denied {
-                        reason: deny_reason(&other).to_string(),
-                    }),
+            MemoryGate::Auto => self.perform_memory_edit(domain, session_id, sequence, new_content),
+        }
+    }
+
+    /// Post-approval edit path. Counterpart to
+    /// `memory_write_after_approval`.
+    pub fn memory_edit_after_approval(
+        &self,
+        domain: MemoryDomain,
+        session_id: &str,
+        sequence: u64,
+        new_content: String,
+    ) -> Result<MemoryEditOutcome, MemoryServiceError> {
+        self.perform_memory_edit(domain, session_id, sequence, new_content)
+    }
+
+    fn perform_memory_edit(
+        &self,
+        domain: MemoryDomain,
+        session_id: &str,
+        sequence: u64,
+        new_content: String,
+    ) -> Result<MemoryEditOutcome, MemoryServiceError> {
+        let (request, emitted_at) = build_action_request(self, Capability::MemoryEdit);
+        let decision = {
+            let active = self.active.read().expect("active read lock");
+            active
+                .policy
+                .evaluate(request)
+                .map_err(|e| MemoryServiceError::Internal(format!("policy evaluate: {e}")))?
+        };
+        let ts_ms = emitted_at.0;
+        let memory_id = mk_memory_id(session_id, sequence);
+        match decision {
+            Decision::Allow { audit_id, .. } => {
+                let applied = self
+                    .memory
+                    .update(session_id, sequence, new_content)
+                    .map_err(|e| MemoryServiceError::Store(format!("update: {e}")))?;
+                if !applied {
+                    return Ok(MemoryEditOutcome::NotFound);
                 }
+                emit_memory_telemetry(
+                    self,
+                    ts_ms,
+                    telemetry_kind::EDITED,
+                    domain,
+                    Some(&memory_id),
+                );
+                Ok(MemoryEditOutcome::Allowed {
+                    memory_id,
+                    audit_id: audit_id.0,
+                })
             }
+            other => Ok(MemoryEditOutcome::Denied {
+                reason: deny_reason(&other).to_string(),
+            }),
         }
     }
 
@@ -568,13 +676,7 @@ impl AppState {
             return;
         }
         drop(active);
-        emit_memory_telemetry(
-            self,
-            emitted_at.0,
-            telemetry_kind::RETRIEVAL,
-            domain,
-            None,
-        );
+        emit_memory_telemetry(self, emitted_at.0, telemetry_kind::RETRIEVAL, domain, None);
     }
 }
 
@@ -623,8 +725,10 @@ mod tests {
     fn gate_follows_config_updates() {
         let state = setup_state();
         let mut cfg = MemoryConfig::defaults();
-        cfg.default_risk.insert(MemoryDomain::Durable, MemoryRisk::Ask);
-        cfg.default_risk.insert(MemoryDomain::Facts, MemoryRisk::Deny);
+        cfg.default_risk
+            .insert(MemoryDomain::Durable, MemoryRisk::Ask);
+        cfg.default_risk
+            .insert(MemoryDomain::Facts, MemoryRisk::Deny);
         state.set_memory_config(cfg).expect("update config");
         assert_eq!(
             state.evaluate_memory_gate(MemoryDomain::Durable),
@@ -641,12 +745,7 @@ mod tests {
     #[test]
     fn auto_flow_durable_write_persists_and_audits() {
         let state = setup_state();
-        let before = state
-            .memory
-            .recent("s1")
-            .expect("pre-recall")
-            .records
-            .len();
+        let before = state.memory.recent("s1").expect("pre-recall").records.len();
         let outcome = state
             .memory_write(
                 MemoryDomain::Durable,
@@ -745,7 +844,8 @@ mod tests {
     fn config_deny_short_circuits_with_denied_telemetry() {
         let state = setup_state();
         let mut cfg = MemoryConfig::defaults();
-        cfg.default_risk.insert(MemoryDomain::Durable, MemoryRisk::Deny);
+        cfg.default_risk
+            .insert(MemoryDomain::Durable, MemoryRisk::Deny);
         state.set_memory_config(cfg).unwrap();
         let outcome = state
             .memory_write(
@@ -805,22 +905,209 @@ mod tests {
         assert_eq!(outcome, MemoryForgetOutcome::RequiresApproval);
     }
 
-    // ---------- Edit ----------
+    // ---------- Edit (Auto) ----------
 
     #[test]
-    fn edit_auto_domain_allowed_and_emits_edited_telemetry() {
+    fn edit_auto_domain_replaces_content_and_emits_edited_telemetry() {
+        let state = setup_state();
+        // Seed a Durable write so there's something to edit. Auto
+        // domain, so the write persists immediately.
+        let written = state
+            .memory_write(
+                MemoryDomain::Durable,
+                "s1",
+                "original".into(),
+                MemoryRole::User,
+            )
+            .expect("seed write");
+        let seq = match written {
+            MemoryWriteOutcome::Allowed { turn_sequence, .. } => turn_sequence,
+            other => panic!("expected Allowed, got {other:?}"),
+        };
+        let outcome = state
+            .memory_edit(MemoryDomain::Durable, "s1", seq, "edited".into())
+            .expect("edit call");
+        match outcome {
+            MemoryEditOutcome::Allowed { memory_id, .. } => {
+                assert_eq!(memory_id, format!("mem-s1-{seq}"));
+            }
+            other => panic!("expected Allowed, got {other:?}"),
+        }
+        // Store actually mutated.
+        let w = state.memory.recent("s1").expect("recent");
+        assert_eq!(w.records[0].content, "edited");
+        assert_eq!(w.records[0].sequence, seq);
+        // Telemetry fired.
+        let tel = state.telemetry_recent(20);
+        assert!(tel.iter().any(|e| e.kind == telemetry_kind::EDITED));
+    }
+
+    #[test]
+    fn edit_auto_domain_returns_not_found_when_row_missing() {
         let state = setup_state();
         let outcome = state
-            .memory_edit(MemoryDomain::Durable, "mem-s1-1".to_string())
+            .memory_edit(MemoryDomain::Durable, "s1", 999, "whatever".into())
             .expect("edit call");
+        assert_eq!(outcome, MemoryEditOutcome::NotFound);
+        // No `memory_edited` telemetry, because nothing was edited.
+        let tel = state.telemetry_recent(20);
+        assert!(!tel.iter().any(|e| e.kind == telemetry_kind::EDITED));
+    }
+
+    #[test]
+    fn edit_ask_domain_returns_requires_approval_without_mutating() {
+        let state = setup_state();
+        // Facts is Ask by default; seeding via the gate would require
+        // approval first, so go straight through the raw store.
+        state
+            .memory
+            .append(TurnMemoryRecord {
+                session_id: "s1".into(),
+                sequence: 0,
+                role: MemoryRole::User,
+                content: "unchanged".into(),
+                timestamp_ms: 1,
+            })
+            .unwrap();
+        let outcome = state
+            .memory_edit(MemoryDomain::Facts, "s1", 1, "EDITED".into())
+            .expect("edit call");
+        assert_eq!(outcome, MemoryEditOutcome::RequiresApproval);
+        let w = state.memory.recent("s1").unwrap();
+        assert_eq!(w.records[0].content, "unchanged");
+    }
+
+    #[test]
+    fn edit_after_approval_persists_mutation_on_ask_domain() {
+        let state = setup_state();
+        state
+            .memory
+            .append(TurnMemoryRecord {
+                session_id: "s1".into(),
+                sequence: 0,
+                role: MemoryRole::User,
+                content: "v1".into(),
+                timestamp_ms: 1,
+            })
+            .unwrap();
+        let outcome = state
+            .memory_edit_after_approval(MemoryDomain::Facts, "s1", 1, "v2".into())
+            .expect("edit after approval");
         match outcome {
             MemoryEditOutcome::Allowed { memory_id, .. } => {
                 assert_eq!(memory_id, "mem-s1-1");
             }
             other => panic!("expected Allowed, got {other:?}"),
         }
-        let tel = state.telemetry_recent(10);
-        assert!(tel.iter().any(|e| e.kind == telemetry_kind::EDITED));
+        let w = state.memory.recent("s1").unwrap();
+        assert_eq!(w.records[0].content, "v2");
+    }
+
+    #[test]
+    fn edit_deny_domain_short_circuits_without_mutating() {
+        let state = setup_state();
+        let mut cfg = MemoryConfig::defaults();
+        cfg.default_risk
+            .insert(MemoryDomain::Durable, MemoryRisk::Deny);
+        state.set_memory_config(cfg).unwrap();
+        // Seed via raw store so the Durable-deny gate doesn't block the
+        // setup, then try to edit.
+        state
+            .memory
+            .append(TurnMemoryRecord {
+                session_id: "s1".into(),
+                sequence: 0,
+                role: MemoryRole::User,
+                content: "locked".into(),
+                timestamp_ms: 1,
+            })
+            .unwrap();
+        let outcome = state
+            .memory_edit(MemoryDomain::Durable, "s1", 1, "hijack".into())
+            .expect("edit call");
+        match outcome {
+            MemoryEditOutcome::Denied { reason } => {
+                assert_eq!(reason, "config_deny");
+            }
+            other => panic!("expected Denied, got {other:?}"),
+        }
+        let w = state.memory.recent("s1").unwrap();
+        assert_eq!(w.records[0].content, "locked");
+    }
+
+    // ---------- Per-item forget ----------
+
+    #[test]
+    fn forget_item_auto_domain_removes_one_row_and_emits_telemetry() {
+        let state = setup_state();
+        for i in 0..3 {
+            state
+                .memory_write(
+                    MemoryDomain::Durable,
+                    "s1",
+                    format!("row {i}"),
+                    MemoryRole::User,
+                )
+                .unwrap();
+        }
+        // Target the middle row.
+        let outcome = state
+            .memory_forget_item(MemoryDomain::Durable, "s1", 2)
+            .expect("forget item");
+        match outcome {
+            MemoryForgetOutcome::Allowed { removed_count, .. } => {
+                assert_eq!(removed_count, 1);
+            }
+            other => panic!("expected Allowed, got {other:?}"),
+        }
+        let w = state.memory.recent("s1").unwrap();
+        assert_eq!(w.records.len(), 2);
+        assert!(w.records.iter().all(|r| r.sequence != 2));
+        let tel = state.telemetry_recent(30);
+        assert!(tel.iter().any(|e| e.kind == telemetry_kind::FORGOTTEN));
+    }
+
+    #[test]
+    fn forget_item_returns_not_found_when_row_missing() {
+        let state = setup_state();
+        let outcome = state
+            .memory_forget_item(MemoryDomain::Durable, "s1", 999)
+            .expect("forget item");
+        assert_eq!(outcome, MemoryForgetOutcome::NotFound);
+    }
+
+    #[test]
+    fn forget_item_ask_domain_returns_requires_approval() {
+        let state = setup_state();
+        let outcome = state
+            .memory_forget_item(MemoryDomain::Facts, "s1", 1)
+            .expect("forget item");
+        assert_eq!(outcome, MemoryForgetOutcome::RequiresApproval);
+    }
+
+    #[test]
+    fn forget_item_after_approval_removes_row() {
+        let state = setup_state();
+        state
+            .memory
+            .append(TurnMemoryRecord {
+                session_id: "s1".into(),
+                sequence: 0,
+                role: MemoryRole::User,
+                content: "sensitive".into(),
+                timestamp_ms: 1,
+            })
+            .unwrap();
+        let outcome = state
+            .memory_forget_item_after_approval(MemoryDomain::Facts, "s1", 1)
+            .expect("post-approval forget");
+        match outcome {
+            MemoryForgetOutcome::Allowed { removed_count, .. } => {
+                assert_eq!(removed_count, 1);
+            }
+            other => panic!("expected Allowed, got {other:?}"),
+        }
+        assert!(state.memory.recent("s1").unwrap().records.is_empty());
     }
 
     // ---------- Sampled read audit ----------
@@ -876,6 +1163,9 @@ mod tests {
             .iter()
             .filter(|e| e.kind == telemetry_kind::RETRIEVAL)
             .count();
-        assert_eq!(count, 6, "each domain samples independently on its first tick");
+        assert_eq!(
+            count, 6,
+            "each domain samples independently on its first tick"
+        );
     }
 }
