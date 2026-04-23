@@ -14,11 +14,15 @@ import type {
   MicPermission,
   PersonaCatalogEntry,
   PresencePayload,
+  SpeechModelList,
+  TranscribeUtteranceRequest,
   TranscriptMessage,
   TrustAuditRow,
   TurnOutcome,
+  UtteranceOutcome,
   VisionModelList,
   VisionStatus,
+  VoiceStatus,
 } from "./types";
 
 export async function companionBanner(): Promise<CompanionBanner> {
@@ -194,4 +198,36 @@ export async function setActiveVisionModel(
   id: string,
 ): Promise<VisionStatus> {
   return invoke<VisionStatus>("set_active_vision_model", { id });
+}
+
+// --- Voice V1 step 5 ------------------------------------------------------
+
+export async function transcribeUtterance(
+  req: TranscribeUtteranceRequest,
+): Promise<UtteranceOutcome> {
+  return invoke<UtteranceOutcome>("transcribe_utterance", { request: req });
+}
+
+export async function voiceStatus(): Promise<VoiceStatus> {
+  return invoke<VoiceStatus>("voice_status");
+}
+
+export async function listSpeechModels(): Promise<SpeechModelList> {
+  return invoke<SpeechModelList>("list_speech_models");
+}
+
+export async function refreshSpeechModels(): Promise<SpeechModelList> {
+  return invoke<SpeechModelList>("refresh_speech_models");
+}
+
+export async function setActiveSpeechProvider(
+  id: string | null,
+): Promise<VoiceStatus> {
+  return invoke<VoiceStatus>("set_active_speech_provider", { id });
+}
+
+export async function setActiveSpeechModel(
+  id: string,
+): Promise<VoiceStatus> {
+  return invoke<VoiceStatus>("set_active_speech_model", { id });
 }

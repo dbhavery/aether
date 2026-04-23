@@ -17,17 +17,23 @@ export interface CompanionBanner {
 export interface MessageMeta {
   tier: string | null;
   provider: string | null;
-  /** Vision-route model id, when the assistant message came from a
-   * vision provider that exposes one. Mirrors `TelemetryEntry.model`
-   * so transcript bubbles, the per-panel hint, and the Trust drawer
-   * all show the same identifier for the same turn. Absent for
-   * text-only turns and for adapters that don't report a model. */
+  /** Vision- or speech-route model id, when the assistant message
+   * came from a provider that exposes one. Mirrors
+   * `TelemetryEntry.model` so transcript bubbles, the per-panel
+   * hint, and the Trust drawer all show the same identifier for
+   * the same turn. Absent for text-only turns and for adapters that
+   * don't report a model. */
   model?: string;
   // Optional because the Rust side `#[serde(skip_serializing_if = "Option::is_none")]`
   // drops these fields when absent; treat missing as "not reported".
   latency_ms?: number;
   prompt_tokens?: number;
   completion_tokens?: number;
+  /** Modality origin tag. `"voice"` when the turn was driven by a
+   * push-to-talk transcribe_utterance call, `"vision"` when driven
+   * by a camera/screen analyze_frame call. Text-only turns omit
+   * this field. Voice V1 step 5 introduced the field. */
+  origin?: "voice" | "vision";
 }
 
 export interface TranscriptMessage {
@@ -172,6 +178,58 @@ export interface VisionStatus {
  * unavailable" hint without modal noise.
  */
 export interface VisionModelList {
+  provider_id: string | null;
+  models: string[];
+  error: string | null;
+}
+
+// --- Voice V1 step 5 -------------------------------------------------------
+
+/** Outcome kinds the `transcribe_utterance` command can return. */
+export type UtteranceKind =
+  | "utterance_transcribed"
+  | "utterance_blocked"
+  | "mic_permission_denied"
+  | "mic_permission_ask";
+
+/** Result envelope from `transcribe_utterance`. Mirrors the Rust
+ * struct. Errors surface as a thrown string (invalid utterance,
+ * provider failure, no active speech provider). */
+export interface UtteranceOutcome {
+  turn_id: string;
+  kind: UtteranceKind;
+  message: TranscriptMessage | null;
+  error_note: string | null;
+}
+
+/** Request payload for `transcribe_utterance`. */
+export interface TranscribeUtteranceRequest {
+  utterance_data_url: string;
+  duration_ms: number;
+  cue: string | null;
+  sample_rate: number;
+  channels: number;
+  language: string | null;
+}
+
+/** One registered speech provider entry. */
+export interface SpeechProviderInfo {
+  id: string;
+  label: string;
+  active: boolean;
+}
+
+/** Status of the active speech provider (returned by `voice_status`). */
+export interface VoiceStatus {
+  enabled: boolean;
+  active_id: string | null;
+  label: string | null;
+  active_model: string | null;
+  providers: SpeechProviderInfo[];
+}
+
+/** Result of `list_speech_models` / `refresh_speech_models`. */
+export interface SpeechModelList {
   provider_id: string | null;
   models: string[];
   error: string | null;
