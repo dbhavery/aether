@@ -1306,6 +1306,34 @@ mod tests {
     use aether_l6_persona::Stance;
     use aether_l7_trust::{build_approval_response, ApprovalResolution};
 
+    /// Process-wide lock shared by every test in this module that
+    /// mutates `AETHER_PERSONAS_DIR` — or any other env var read by
+    /// `AppState::new`. Previously each env-touching test declared
+    /// its own function-scoped `static` mutex, which looked like
+    /// serialisation but wasn't: function-scope `static` items are
+    /// unique per function, so two tests declaring
+    /// `static ENV_LOCK: Mutex<()>` hold distinct locks. Under
+    /// parallel execution that left
+    /// `yaml_persona_pack_merges_into_catalog` and
+    /// `yaml_persona_id_collision_with_builtin_is_skipped` racing
+    /// each other through `AETHER_PERSONAS_DIR`. Hoisting the lock
+    /// to module scope fixes this at the source; see
+    /// `HANDOFF_2026-05-17_SESSION_END_ULTRA_LONG_SETUP.md` Risk E.
+    ///
+    /// Handles lock poisoning internally so a panic inside a guarded
+    /// test only poisons the lock, which the next test recovers
+    /// from.
+    static STATE_TESTS_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// Acquire the env lock, returning a guard that releases the
+    /// mutex when dropped. Paired with a `TempDir` + scoped env
+    /// pattern in each env-touching test.
+    fn state_tests_env_lock() -> std::sync::MutexGuard<'static, ()> {
+        STATE_TESTS_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+    }
+
     #[test]
     fn default_catalog_contains_expected_persona_ids() {
         let cat = default_catalog();
@@ -1558,12 +1586,37 @@ mod tests {
     /// serialised via a file-scoped mutex to avoid clobbering other
     /// tests that might read the same var in parallel. (Rust's test
     /// runner runs tests in-process but threaded.)
+    /// RAII wrapper that holds the shared env lock and restores the
+    /// previous `AETHER_PERSONAS_DIR` value on drop — including the
+    /// panic path. Required because a panic inside a test after
+    /// `set_var` would leave the process-wide env var pointing at a
+    /// `TempDir` that's about to be cleaned up, poisoning any
+    /// subsequent `AppState::new` that reads the directory.
+    struct PersonasDirGuard {
+        _lock: std::sync::MutexGuard<'static, ()>,
+        previous: Option<std::ffi::OsString>,
+    }
+
+    impl PersonasDirGuard {
+        fn with(dir: &std::path::Path) -> Self {
+            let _lock = state_tests_env_lock();
+            let previous = std::env::var_os("AETHER_PERSONAS_DIR");
+            std::env::set_var("AETHER_PERSONAS_DIR", dir);
+            Self { _lock, previous }
+        }
+    }
+
+    impl Drop for PersonasDirGuard {
+        fn drop(&mut self) {
+            match self.previous.take() {
+                Some(v) => std::env::set_var("AETHER_PERSONAS_DIR", v),
+                None => std::env::remove_var("AETHER_PERSONAS_DIR"),
+            }
+        }
+    }
+
     #[test]
     fn yaml_persona_pack_merges_into_catalog() {
-        use std::sync::Mutex;
-        static ENV_LOCK: Mutex<()> = Mutex::new(());
-        let _g = ENV_LOCK.lock().unwrap();
-
         let tmp = tempfile::TempDir::new().unwrap();
         let yaml = r#"
 id: "solstice"
@@ -1577,9 +1630,8 @@ humor: "dry"
 "#;
         std::fs::write(tmp.path().join("solstice.yaml"), yaml).unwrap();
 
-        std::env::set_var("AETHER_PERSONAS_DIR", tmp.path());
+        let _env = PersonasDirGuard::with(tmp.path());
         let state = AppState::new().expect("AppState::new");
-        std::env::remove_var("AETHER_PERSONAS_DIR");
 
         let ids: Vec<String> = state.catalog_entries().into_iter().map(|e| e.id).collect();
         assert!(ids.contains(&"aurora".to_string()));
@@ -1591,10 +1643,6 @@ humor: "dry"
 
     #[test]
     fn yaml_persona_id_collision_with_builtin_is_skipped() {
-        use std::sync::Mutex;
-        static ENV_LOCK: Mutex<()> = Mutex::new(());
-        let _g = ENV_LOCK.lock().unwrap();
-
         let tmp = tempfile::TempDir::new().unwrap();
         // Try to override `aurora` from YAML — must be rejected.
         let yaml = r#"
@@ -1609,9 +1657,8 @@ humor: "playful"
 "#;
         std::fs::write(tmp.path().join("rogue.yaml"), yaml).unwrap();
 
-        std::env::set_var("AETHER_PERSONAS_DIR", tmp.path());
+        let _env = PersonasDirGuard::with(tmp.path());
         let state = AppState::new().expect("AppState::new");
-        std::env::remove_var("AETHER_PERSONAS_DIR");
 
         let entries = state.catalog_entries();
         let aurora = entries.iter().find(|e| e.id == "aurora").unwrap();

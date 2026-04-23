@@ -449,26 +449,20 @@ impl ModelRouter for OllamaProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::{Mutex, MutexGuard, OnceLock};
-
-    /// Serialize all env-mutating tests — they share process-wide state.
-    fn env_lock() -> MutexGuard<'static, ()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-    }
+    use std::sync::MutexGuard;
 
     /// Unconditionally set the Ollama-related env vars for a test. Cleans
-    /// up on drop. Holds the global env lock for the whole scope so two
-    /// env-mutating tests never overlap.
+    /// up on drop. Holds the crate-wide env lock
+    /// (`crate::providers::env_lock`) for the whole scope so no other
+    /// env-mutating test — in this module or in siblings like
+    /// `ollama_vision` — can interleave with us.
     struct EnvGuard {
         _lock: MutexGuard<'static, ()>,
     }
 
     impl EnvGuard {
         fn fresh(base_url: Option<&str>, model: Option<&str>, timeout_ms: Option<&str>) -> Self {
-            let lock = env_lock();
+            let lock = crate::providers::env_lock();
             for (k, v) in [
                 ("AETHER_OLLAMA_BASE_URL", base_url),
                 ("AETHER_OLLAMA_MODEL", model),

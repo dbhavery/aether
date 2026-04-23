@@ -290,21 +290,16 @@ mod tests {
         env::remove_var("AETHER_OLLAMA_VISION_TIMEOUT_MS");
     }
 
-    /// `AETHER_OLLAMA_VISION_MODEL` and the env-set crate share state, so
-    /// these tests are serialised through this mutex. Ollama's text
-    /// provider tests use the same pattern in providers/ollama.rs.
-    static ENV_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
     #[test]
     fn from_env_returns_none_without_vision_model_var() {
-        let _g = ENV_MUTEX.lock().unwrap_or_else(|p| p.into_inner());
+        let _g = crate::providers::env_lock();
         unset_vision_env();
         assert!(OllamaVisionConfig::from_env().is_none());
     }
 
     #[test]
     fn from_env_picks_up_explicit_vision_model_and_defaults() {
-        let _g = ENV_MUTEX.lock().unwrap_or_else(|p| p.into_inner());
+        let _g = crate::providers::env_lock();
         unset_vision_env();
         env::set_var("AETHER_OLLAMA_VISION_MODEL", "llava:latest");
         let cfg = OllamaVisionConfig::from_env().unwrap().unwrap();
@@ -316,7 +311,7 @@ mod tests {
 
     #[test]
     fn from_env_inherits_text_provider_base_url_when_vision_url_unset() {
-        let _g = ENV_MUTEX.lock().unwrap_or_else(|p| p.into_inner());
+        let _g = crate::providers::env_lock();
         unset_vision_env();
         env::set_var("AETHER_OLLAMA_VISION_MODEL", "llava");
         env::set_var("AETHER_OLLAMA_BASE_URL", "http://10.0.0.5:11434");
@@ -328,7 +323,7 @@ mod tests {
 
     #[test]
     fn from_env_rejects_malformed_timeout() {
-        let _g = ENV_MUTEX.lock().unwrap_or_else(|p| p.into_inner());
+        let _g = crate::providers::env_lock();
         unset_vision_env();
         env::set_var("AETHER_OLLAMA_VISION_MODEL", "llava");
         env::set_var("AETHER_OLLAMA_VISION_TIMEOUT_MS", "not-a-number");
