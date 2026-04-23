@@ -1,6 +1,6 @@
-# Voice v1 — architecture reference (design only)
+# Voice v1 — architecture reference
 
-> **Status:** Design-only as of 2026-05-08.
+> **Status:** Current as of 2026-05-13.
 > **Scope:** Short-turn voice input — a local-first,
 > push-to-talk-style single-utterance speech-to-text adapter. The
 > captured text becomes a user turn in the existing transcript /
@@ -12,9 +12,10 @@
 
 This doc mirrors `docs/VISION-V1-ARCHITECTURE.md` section by section
 so future readers can reason about both modalities against a shared
-shape. When Voice v1 ships, this doc moves from "design-only" to
-"current" and a rot-guard manifest is added alongside
-`tools/lint-vision-doc/`.
+shape. A rot-guard manifest at `tools/lint-voice-doc/check.py`
+enforces that the file paths, symbols, and string constants this
+doc references still exist in code — when the guard fails, either
+restore the code or update the doc and the manifest in the same PR.
 
 ---
 
@@ -32,7 +33,7 @@ Shared contract:
 | Capture model             | single frame (camera or screen)        | single utterance (push-to-talk)               |
 | Permission storage        | `<app_data>/media_permissions.json`    | `<app_data>/mic_permissions.json`             |
 | Permission tri-state      | Allow / Ask / Deny                     | Allow / Ask / Deny                            |
-| Capability                | `MediaCamera` / `MediaScreenCapture`   | `Microphone`                                  |
+| Capability                | `MediaCamera` / `MediaScreenCapture`   | `MediaMic`                                    |
 | Payload                   | `data:image/...;base64,<body>`         | PCM WAV bytes, base64 in IPC                  |
 | Payload persistence       | transient                              | transient                                     |
 | Provider trait            | `VisionProvider`                       | `SpeechProvider`                              |
@@ -66,7 +67,7 @@ diverging. Divergences are called out explicitly where they appear.
   │    - Err → telemetry("utterance_invalid"), short-circuit
   │ 3. record system-role memory: "[voice capture] {duration}s"
   │    (no raw audio, no transcript yet — that happens after STT)
-  │ 4. invoke turn engine with capability Microphone
+  │ 4. invoke turn engine with capability MediaMic
   │    (resource scope none)
   │
 [TurnEngine — packages/* through L5/L6]
