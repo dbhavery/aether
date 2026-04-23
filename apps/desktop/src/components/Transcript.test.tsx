@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { buildMetaParts, tierChipForFooter } from "./Transcript";
+import {
+  buildMetaParts,
+  originChipForFooter,
+  tierChipForFooter,
+} from "./Transcript";
 import type { MessageMeta } from "../lib/types";
 
 function meta(overrides: Partial<MessageMeta> = {}): MessageMeta {
@@ -83,6 +87,53 @@ describe("buildMetaParts", () => {
     expect(
       buildMetaParts(meta({ provider: "ollama", prompt_tokens: 19 })),
     ).toEqual(["ollama", "19 tok"]);
+  });
+});
+
+describe("originChipForFooter", () => {
+  it("returns null when origin is absent", () => {
+    expect(originChipForFooter(meta())).toBeNull();
+  });
+
+  it("labels voice turns", () => {
+    expect(originChipForFooter(meta({ origin: "voice" }))).toBe("voice");
+  });
+
+  it("labels vision turns", () => {
+    expect(originChipForFooter(meta({ origin: "vision" }))).toBe("vision");
+  });
+});
+
+describe("buildMetaParts + origin chip", () => {
+  it("prepends the voice chip on voice-originating turns", () => {
+    const m = meta({
+      origin: "voice",
+      tier: "local",
+      provider: "ollama",
+      model: "ggml-base.en",
+      latency_ms: 420,
+    });
+    const parts = buildMetaParts(m);
+    expect(parts[0]).toBe("voice");
+    expect(parts).toContain("ollama");
+    expect(parts).toContain("ggml-base.en");
+  });
+
+  it("prepends the vision chip on vision-originating turns", () => {
+    const m = meta({
+      origin: "vision",
+      tier: "Ollama vision · llava · http://127.0.0.1:11434",
+      provider: "ollama-vision",
+      model: "llava:latest",
+    });
+    const parts = buildMetaParts(m);
+    expect(parts[0]).toBe("vision");
+    // tier still dropped on vision turns
+    expect(parts).not.toContain(
+      "Ollama vision · llava · http://127.0.0.1:11434",
+    );
+    expect(parts).toContain("ollama-vision");
+    expect(parts).toContain("llava:latest");
   });
 });
 

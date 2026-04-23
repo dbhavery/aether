@@ -15,6 +15,7 @@ interface Props {
   onOpenSettings: () => void;
   onOpenCamera: () => void;
   onOpenScreen: () => void;
+  onOpenVoice: () => void;
   onReopenDisclosure: () => void;
   onClearSession: () => void;
   onSwitchPersona: (id: string) => void;
@@ -29,6 +30,7 @@ export function Header({
   onOpenSettings,
   onOpenCamera,
   onOpenScreen,
+  onOpenVoice,
   onReopenDisclosure,
   onClearSession,
   onSwitchPersona,
@@ -101,6 +103,14 @@ export function Header({
           title="Screen capture (single screenshot + analysis)"
         >
           Screen
+        </button>
+        <button
+          type="button"
+          onClick={onOpenVoice}
+          className="rounded-md border border-transparent px-2.5 py-1 text-[11.5px] text-aether-muted transition-colors hover:border-aether-border hover:text-aether-text"
+          title="Voice capture (push-to-talk, single utterance)"
+        >
+          Voice
         </button>
         <button
           type="button"

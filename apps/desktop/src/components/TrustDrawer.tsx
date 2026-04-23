@@ -11,6 +11,8 @@ import {
   MEDIA_TURN_KINDS,
   visionRouteSummary,
 } from "../lib/mediaTurns";
+import { speechRouteSummary } from "../lib/speechProviders";
+import { isVoiceTurn, VOICE_TURN_KINDS } from "../lib/voiceTurns";
 import { truncateMiddleForDisplay } from "../lib/displayString";
 import type { AuditDecisionLabel, TrustAuditRow } from "../lib/types";
 
@@ -20,13 +22,14 @@ import type { AuditDecisionLabel, TrustAuditRow } from "../lib/types";
 const MODEL_ID_DISPLAY_MAX = 28;
 
 type Tab = "audit" | "history";
-type HistoryFilter = "all" | "media";
+type HistoryFilter = "all" | "media" | "voice";
 
 // MEDIA_TURN_KINDS / isMediaTurn moved to ../lib/mediaTurns so the
 // constant can be unit-tested without dragging React in. Re-export
 // here for back-compat with any external consumers that imported from
-// this module before the move.
-export { isMediaTurn, MEDIA_TURN_KINDS };
+// this module before the move. VOICE_TURN_KINDS and isVoiceTurn live
+// in ../lib/voiceTurns; re-exported here for symmetry.
+export { isMediaTurn, MEDIA_TURN_KINDS, isVoiceTurn, VOICE_TURN_KINDS };
 
 interface Props {
   open: boolean;
@@ -242,8 +245,13 @@ function HistoryView({
   onFilterChange: (f: HistoryFilter) => void;
 }) {
   const filtered =
-    filter === "media" ? entries.filter((e) => isMediaTurn(e.kind)) : entries;
+    filter === "media"
+      ? entries.filter((e) => isMediaTurn(e.kind))
+      : filter === "voice"
+        ? entries.filter((e) => isVoiceTurn(e.kind))
+        : entries;
   const mediaCount = entries.filter((e) => isMediaTurn(e.kind)).length;
+  const voiceCount = entries.filter((e) => isVoiceTurn(e.kind)).length;
   return (
     <div className="flex flex-col gap-3">
       <div
@@ -261,8 +269,13 @@ function HistoryView({
           onClick={() => onFilterChange("media")}
           label={`Media only (${mediaCount})`}
         />
+        <FilterPill
+          active={filter === "voice"}
+          onClick={() => onFilterChange("voice")}
+          label={`Voice only (${voiceCount})`}
+        />
       </div>
-      <HistoryList entries={filtered} filterApplied={filter === "media"} />
+      <HistoryList entries={filtered} filterApplied={filter} />
     </div>
   );
 }
@@ -298,22 +311,33 @@ function HistoryList({
   filterApplied,
 }: {
   entries: TelemetryEntry[];
-  filterApplied?: boolean;
+  filterApplied?: HistoryFilter | false;
 }) {
   if (entries.length === 0) {
-    return (
-      <div className="mt-6 text-center text-aether-muted">
-        {filterApplied
-          ? "No media turns yet. Open the Camera or Screen panel and analyze a frame."
-          : "No turns logged yet. Send a message and timing will appear here."}
-      </div>
-    );
+    const empty =
+      filterApplied === "media"
+        ? "No media turns yet. Open the Camera or Screen panel and analyze a frame."
+        : filterApplied === "voice"
+          ? "No voice turns yet. Open the Voice panel and record an utterance."
+          : "No turns logged yet. Send a message and timing will appear here.";
+    return <div className="mt-6 text-center text-aether-muted">{empty}</div>;
   }
   return (
     <div className="flex flex-col gap-2">
       {entries.map((e) => {
-        const visionBadge = visionRouteSummary(e.provider, e.model);
-        const visionTitle = visionRouteTitle(e.provider, e.model);
+        // Voice route summary takes priority when the provider is a
+        // known speech adapter; otherwise fall back to vision. The
+        // two routes are disjoint because their provider id sets are.
+        const speechBadge = speechRouteSummary(e.provider, e.model);
+        const visionBadge = speechBadge
+          ? null
+          : visionRouteSummary(e.provider, e.model);
+        const routeTitle = speechBadge
+          ? speechRouteTitle(e.provider, e.model)
+          : visionBadge
+            ? visionRouteTitle(e.provider, e.model)
+            : null;
+        const routeLabel = speechBadge ?? visionBadge;
         return (
           <div
             key={e.turn_id}
@@ -326,12 +350,12 @@ function HistoryList({
                 {e.kind.replace(/_/g, " ")}
               </span>
               <div className="flex items-center gap-2">
-                {visionBadge && (
+                {routeLabel && (
                   <span
                     className="rounded-full border border-aether-ok/40 bg-aether-ok/5 px-1.5 py-0.5 text-[10px] text-aether-ok"
-                    title={visionTitle}
+                    title={routeTitle ?? undefined}
                   >
-                    {visionBadge}
+                    {routeLabel}
                   </span>
                 )}
                 <span className="text-[10px] font-mono text-aether-dim">
@@ -360,6 +384,20 @@ function HistoryList({
       })}
     </div>
   );
+}
+
+/**
+ * Tooltip copy for the speech-route badge. Mirrors `visionRouteTitle`.
+ */
+function speechRouteTitle(
+  provider: string | null | undefined,
+  model: string | null | undefined,
+): string {
+  const p = provider ?? "speech provider";
+  const trimmed = typeof model === "string" ? model.trim() : "";
+  return trimmed.length > 0
+    ? `Served by ${p} (${trimmed})`
+    : `Served by ${p}`;
 }
 
 function kindClass(kind: string): string {

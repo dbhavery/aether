@@ -33,6 +33,7 @@ import { ScreenPanel } from "./components/ScreenPanel";
 import { SettingsDrawer } from "./components/SettingsDrawer";
 import { Transcript } from "./components/Transcript";
 import { TrustDrawer } from "./components/TrustDrawer";
+import { VoicePanel } from "./components/VoicePanel";
 
 const PERSONA_STORAGE_KEY = "aether.persona.last";
 
@@ -67,7 +68,7 @@ export function App() {
     useState<ApprovalPayload | null>(null);
   const [busy, setBusy] = useState(false);
   const [drawer, setDrawer] = useState<
-    "none" | "memory" | "trust" | "settings" | "camera" | "screen"
+    "none" | "memory" | "trust" | "settings" | "camera" | "screen" | "voice"
   >("none");
   const [memoryRefreshKey, setMemoryRefreshKey] = useState(0);
   const [forceDisclosure, setForceDisclosure] = useState(false);
@@ -344,6 +345,7 @@ export function App() {
         onOpenSettings={() => setDrawer("settings")}
         onOpenCamera={() => setDrawer("camera")}
         onOpenScreen={() => setDrawer("screen")}
+        onOpenVoice={() => setDrawer("voice")}
         onReopenDisclosure={() => setForceDisclosure(true)}
         onClearSession={handleClearSession}
         onSwitchPersona={handleSwitchPersona}
@@ -385,6 +387,14 @@ export function App() {
         open={drawer === "screen"}
         onClose={() => setDrawer("none")}
         onFrameAnalyzed={(msg) => {
+          setMessages((prev) => [...prev, msg]);
+          setMemoryRefreshKey((k) => k + 1);
+        }}
+      />
+      <VoicePanel
+        open={drawer === "voice"}
+        onClose={() => setDrawer("none")}
+        onUtteranceTranscribed={(msg) => {
           setMessages((prev) => [...prev, msg]);
           setMemoryRefreshKey((k) => k + 1);
         }}

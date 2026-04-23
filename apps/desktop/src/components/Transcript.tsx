@@ -99,6 +99,8 @@ function MessageMetaFooter({ meta }: { meta: MessageMeta }) {
  */
 export function buildMetaParts(meta: MessageMeta): string[] {
   const parts: string[] = [];
+  const originChip = originChipForFooter(meta);
+  if (originChip) parts.push(originChip);
   const tier = tierChipForFooter(meta);
   if (tier) parts.push(tier);
   if (meta.provider) parts.push(meta.provider);
@@ -111,6 +113,18 @@ export function buildMetaParts(meta: MessageMeta): string[] {
   const tokenStr = formatTokens(meta.prompt_tokens, meta.completion_tokens);
   if (tokenStr) parts.push(tokenStr);
   return parts;
+}
+
+/**
+ * Modality chip for the transcript footer. Surfaces which capture
+ * path the turn came from — `"voice"` for push-to-talk, `"vision"`
+ * for camera/screen. Text-only turns have no origin and return
+ * null. Pure: exposed for unit tests.
+ */
+export function originChipForFooter(meta: MessageMeta): string | null {
+  if (meta.origin === "voice") return "voice";
+  if (meta.origin === "vision") return "vision";
+  return null;
 }
 
 /**
