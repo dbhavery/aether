@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 #[cfg(feature = "ollama-provider")]
 use aether_l1_interaction::TokenUsage;
-use aether_l1_interaction::{L1Error, RouteOutcome, TurnId, TurnRequest, TurnResult, TurnRouter};
+use aether_l1_interaction::{L1Error, RouteOutcome, TurnId, TurnResult, TurnRouter};
 use aether_l2_memory::{
     render_transcript, MemoryRole, RecentMemoryWindow, SessionMemoryStore, TurnMemoryRecord,
 };
@@ -62,23 +62,12 @@ impl<R: TurnRouter> TurnRouter for MemoryAwareRouter<R> {
     }
 }
 
-/// Append the user side of a turn to memory.
-pub fn user_record(session_id: &str, request: &TurnRequest) -> TurnMemoryRecord {
-    TurnMemoryRecord {
-        session_id: session_id.to_string(),
-        sequence: 0,
-        role: MemoryRole::User,
-        content: request.utterance.clone(),
-        timestamp_ms: request.emitted_at.0,
-    }
-}
-
 /// Append the user side of a turn to memory with an explicit utterance
-/// string. Used by the retrieval-wiring path (ADR-0005): the router
-/// sees a retrieval-augmented utterance, but memory must record the
-/// original user text without the injected `Relevant context (retrieval):`
-/// block. Caller supplies the raw utterance and the emission timestamp
-/// from `TurnRequest::emitted_at`.
+/// string. Shell callers use the raw variant (rather than reading
+/// directly off `TurnRequest::utterance`) because ADR-0005 introduced a
+/// retrieval-wiring path where the router sees a retrieval-augmented
+/// utterance that memory must NOT record. Caller supplies the raw
+/// utterance and the emission timestamp from `TurnRequest::emitted_at`.
 pub fn user_record_raw(session_id: &str, utterance: &str, ts_ms: u64) -> TurnMemoryRecord {
     TurnMemoryRecord {
         session_id: session_id.to_string(),
