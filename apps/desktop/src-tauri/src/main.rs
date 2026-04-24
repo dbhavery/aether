@@ -9,6 +9,7 @@ mod memory_config;
 mod memory_router;
 mod memory_service;
 mod mic_permissions;
+mod retrieval;
 mod presence_config;
 mod provider;
 mod state;

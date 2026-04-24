@@ -213,6 +213,18 @@ impl EngineConfig {
                 risk: RiskClass::Low,
             },
         );
+        // ADR-0005: retrieval-augmented read. Parallel to MemoryRead
+        // (Low / Auto). Every turn-engine consultation of
+        // EmbeddingStore::query_nearest produces one audit row via
+        // this capability. Distinct variant keeps retrieval audits
+        // filterable from plain session recall.
+        d.insert(
+            Capability::RetrievalContext,
+            CapabilityPolicy {
+                mode: ApprovalMode::Auto,
+                risk: RiskClass::Low,
+            },
+        );
         Self {
             preset: PresetId(String::from("wave3.balanced")),
             preset_version: 1,
@@ -405,6 +417,9 @@ fn default_risk_for(cap: &Capability) -> RiskClass {
         // facing content is persisted, only a vector derived from
         // the already-persisted memory row.
         MemoryEmbed => RiskClass::Low,
+        // ADR-0005: retrieval-augmented read. Low — no state mutation,
+        // parallel to MemoryRead.
+        RetrievalContext => RiskClass::Low,
         _ => RiskClass::Medium,
     }
 }
