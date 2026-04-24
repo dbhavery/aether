@@ -382,11 +382,16 @@ impl AppState {
         let ts_ms = emitted_at.0;
         match decision {
             Decision::Allow { audit_id, .. } => {
+                // ADR-0004: route to the per-domain store. Session +
+                // Durable have dedicated lanes today; other domains
+                // fall back to the Session store with a warn (handled
+                // inside `memory_for_domain`).
+                let store = self.memory_for_domain(domain);
                 // Append first so the assigned sequence is part of the
                 // memory_id. On store failure we surface an error but
                 // the L5 audit row remains — it records the attempt,
                 // which matches design §4's "audit row per write".
-                let pre_len = match self.memory.recent(session_id) {
+                let pre_len = match store.recent(session_id) {
                     Ok(w) => w.records.len() as u64,
                     Err(e) => {
                         return Err(MemoryServiceError::Store(format!("pre-recall: {e}")));
@@ -402,7 +407,7 @@ impl AppState {
                     content,
                     timestamp_ms: ts_ms,
                 };
-                self.memory
+                store
                     .append(record)
                     .map_err(|e| MemoryServiceError::Store(format!("append: {e}")))?;
                 let seq = pre_len + 1;
@@ -472,13 +477,15 @@ impl AppState {
                 };
                 match decision {
                     Decision::Allow { audit_id, .. } => {
-                        let pre_len = match self.memory.recent(session_id) {
+                        // ADR-0004: clear the lane that owns the domain.
+                        let store = self.memory_for_domain(domain);
+                        let pre_len = match store.recent(session_id) {
                             Ok(w) => w.records.len(),
                             Err(e) => {
                                 return Err(MemoryServiceError::Store(format!("pre-recall: {e}")));
                             }
                         };
-                        self.memory
+                        store
                             .clear_session(session_id)
                             .map_err(|e| MemoryServiceError::Store(format!("clear: {e}")))?;
                         emit_memory_telemetry(self, ts_ms, telemetry_kind::FORGOTTEN, domain, None);
@@ -557,8 +564,9 @@ impl AppState {
         let memory_id = mk_memory_id(session_id, sequence);
         match decision {
             Decision::Allow { audit_id, .. } => {
-                let removed = self
-                    .memory
+                // ADR-0004: per-item forget hits the domain-owning store.
+                let store = self.memory_for_domain(domain);
+                let removed = store
                     .remove(session_id, sequence)
                     .map_err(|e| MemoryServiceError::Store(format!("remove: {e}")))?;
                 if !removed {
@@ -642,8 +650,9 @@ impl AppState {
         let memory_id = mk_memory_id(session_id, sequence);
         match decision {
             Decision::Allow { audit_id, .. } => {
-                let applied = self
-                    .memory
+                // ADR-0004: edit lands in the domain-owning store.
+                let store = self.memory_for_domain(domain);
+                let applied = store
                     .update(session_id, sequence, new_content)
                     .map_err(|e| MemoryServiceError::Store(format!("update: {e}")))?;
                 if !applied {
@@ -751,54 +760,59 @@ impl AppState {
         }
 
         let cfg = self.memory_config();
-        let sessions = self
-            .memory
-            .list_sessions()
-            .map_err(|e| MemoryServiceError::Store(format!("list_sessions: {e}")))?;
         let mut total_evicted: usize = 0;
+        let mut total_sessions_walked: usize = 0;
+        // ADR-0004: walk each domain that has a dedicated store and
+        // prune with its own TTL. Domains without a store
+        // (Projects / Artifacts / Facts / Preferences today) are
+        // trace-skipped — ADR-0005 closes that gap.
         for domain in MemoryDomain::ALL {
             let Some(days) = cfg.retention_for(domain) else {
                 // `None` = keep until forgotten — skip.
                 continue;
             };
-            if domain != MemoryDomain::Session {
-                // Only the Session domain has a backing store today;
-                // other domains' retention policies are recorded in
-                // `memory.json` for the future domain-typed durable
-                // store (Memory V2 step 6+).
+            if !self.has_domain_store(domain) {
                 tracing::trace!(
-                    "retention sweep: domain {} has retention but no backing store yet; skipping",
+                    "retention sweep: domain {} has retention but no backing store yet (ADR-0005); skipping",
                     domain.label()
                 );
                 continue;
             }
+            let store = self.memory_for_domain(domain);
+            let sessions = match store.list_sessions() {
+                Ok(list) => list,
+                Err(e) => {
+                    tracing::warn!(
+                        "retention sweep: list_sessions({}) failed: {e}; skipping domain",
+                        domain.label()
+                    );
+                    continue;
+                }
+            };
             let cutoff_ms = now_ms.saturating_sub((days as u64) * 86_400_000);
             let mut domain_evicted: usize = 0;
             for session_id in &sessions {
-                match self.memory.prune_before(session_id, cutoff_ms) {
+                match store.prune_before(session_id, cutoff_ms) {
                     Ok(n) => domain_evicted = domain_evicted.saturating_add(n),
                     Err(e) => {
                         tracing::warn!(
-                            "retention sweep: prune_before({session_id}) failed: {e}"
+                            "retention sweep: prune_before({} / {session_id}) failed: {e}",
+                            domain.label()
                         );
                     }
                 }
             }
+            total_sessions_walked = total_sessions_walked.saturating_add(sessions.len());
             if domain_evicted > 0 {
-                emit_memory_telemetry(
-                    self,
-                    emitted_at.0,
-                    telemetry_kind::FORGOTTEN,
-                    domain,
-                    None,
-                );
+                emit_memory_telemetry(self, emitted_at.0, telemetry_kind::FORGOTTEN, domain, None);
                 total_evicted = total_evicted.saturating_add(domain_evicted);
             }
         }
         tracing::debug!(
-            "retention sweep: evicted {} row(s) across {} session(s)",
+            "retention sweep: evicted {} row(s) across {} session(s) in {} domain(s)",
             total_evicted,
-            sessions.len()
+            total_sessions_walked,
+            Self::DOMAINS_WITH_STORE.len()
         );
         Ok(total_evicted)
     }
@@ -851,10 +865,7 @@ impl AppState {
             }
         };
         if !matches!(decision, Decision::Allow { .. }) {
-            tracing::debug!(
-                "embed skipped: policy decision {}",
-                deny_reason(&decision)
-            );
+            tracing::debug!("embed skipped: policy decision {}", deny_reason(&decision));
             return;
         }
         let provider = {
@@ -980,7 +991,14 @@ mod tests {
     #[test]
     fn auto_flow_durable_write_persists_and_audits() {
         let state = setup_state();
-        let before = state.memory.recent("s1").expect("pre-recall").records.len();
+        // ADR-0004: Durable writes land in the Durable lane, not Session.
+        let session_before = state.memory.recent("s1").expect("pre-recall").records.len();
+        let durable_before = state
+            .durable_memory
+            .recent("s1")
+            .expect("durable pre-recall")
+            .records
+            .len();
         let outcome = state
             .memory_write(
                 MemoryDomain::Durable,
@@ -995,14 +1013,23 @@ mod tests {
                 turn_sequence,
                 audit_id,
             } => {
-                assert_eq!(turn_sequence, (before as u64) + 1);
+                assert_eq!(turn_sequence, (durable_before as u64) + 1);
                 assert!(memory_id.starts_with("mem-s1-"));
                 assert!(!audit_id.is_empty(), "L5 must assign an audit id");
             }
             other => panic!("expected Allowed, got {other:?}"),
         }
-        let after = state.memory.recent("s1").unwrap().records.len();
-        assert_eq!(after, before + 1, "item must be persisted");
+        let session_after = state.memory.recent("s1").unwrap().records.len();
+        let durable_after = state.durable_memory.recent("s1").unwrap().records.len();
+        assert_eq!(
+            session_after, session_before,
+            "Session lane MUST be unchanged by a Durable write (ADR-0004 isolation)"
+        );
+        assert_eq!(
+            durable_after,
+            durable_before + 1,
+            "Durable lane must grow by one"
+        );
         // Telemetry: one memory_written entry.
         let tel = state.telemetry_recent(10);
         let written = tel
@@ -1168,8 +1195,9 @@ mod tests {
             }
             other => panic!("expected Allowed, got {other:?}"),
         }
-        // Store actually mutated.
-        let w = state.memory.recent("s1").expect("recent");
+        // Store actually mutated — ADR-0004 routes Durable edits to
+        // the Durable lane.
+        let w = state.durable_memory.recent("s1").expect("recent");
         assert_eq!(w.records[0].content, "edited");
         assert_eq!(w.records[0].sequence, seq);
         // Telemetry fired.
@@ -1295,7 +1323,8 @@ mod tests {
             }
             other => panic!("expected Allowed, got {other:?}"),
         }
-        let w = state.memory.recent("s1").unwrap();
+        // ADR-0004: Durable forget targets the Durable lane.
+        let w = state.durable_memory.recent("s1").unwrap();
         assert_eq!(w.records.len(), 2);
         assert!(w.records.iter().all(|r| r.sequence != 2));
         let tel = state.telemetry_recent(30);
@@ -1561,12 +1590,17 @@ mod tests {
             )
             .expect("write");
         assert_eq!(
-            state.embedding_store().count(MemoryDomain::Durable).unwrap(),
+            state
+                .embedding_store()
+                .count(MemoryDomain::Durable)
+                .unwrap(),
             0
         );
         let tel = state.telemetry_recent(200);
         assert_eq!(
-            tel.iter().filter(|e| e.kind == telemetry_kind::EMBEDDED).count(),
+            tel.iter()
+                .filter(|e| e.kind == telemetry_kind::EMBEDDED)
+                .count(),
             0
         );
     }
@@ -1585,7 +1619,10 @@ mod tests {
             )
             .expect("write");
         assert_eq!(
-            state.embedding_store().count(MemoryDomain::Durable).unwrap(),
+            state
+                .embedding_store()
+                .count(MemoryDomain::Durable)
+                .unwrap(),
             1
         );
         let tel = state.telemetry_recent(200);
@@ -1611,14 +1648,19 @@ mod tests {
             .expect("write");
         // Session is not embed-eligible.
         assert_eq!(
-            state.embedding_store().count(MemoryDomain::Durable).unwrap(),
+            state
+                .embedding_store()
+                .count(MemoryDomain::Durable)
+                .unwrap(),
             0
         );
         // Ineligible domain still gets a memory_written row — just no
         // memory_embedded row.
         let tel = state.telemetry_recent(200);
         assert_eq!(
-            tel.iter().filter(|e| e.kind == telemetry_kind::EMBEDDED).count(),
+            tel.iter()
+                .filter(|e| e.kind == telemetry_kind::EMBEDDED)
+                .count(),
             0
         );
         assert!(tel.iter().any(|e| e.kind == telemetry_kind::WRITTEN));
@@ -1646,15 +1688,24 @@ mod tests {
             )
             .unwrap();
         assert_eq!(
-            state.embedding_store().count(MemoryDomain::Durable).unwrap(),
+            state
+                .embedding_store()
+                .count(MemoryDomain::Durable)
+                .unwrap(),
             1
         );
         assert_eq!(
-            state.embedding_store().count(MemoryDomain::Projects).unwrap(),
+            state
+                .embedding_store()
+                .count(MemoryDomain::Projects)
+                .unwrap(),
             1
         );
         assert_eq!(
-            state.embedding_store().count(MemoryDomain::Artifacts).unwrap(),
+            state
+                .embedding_store()
+                .count(MemoryDomain::Artifacts)
+                .unwrap(),
             1
         );
     }
@@ -1674,7 +1725,10 @@ mod tests {
             )
             .expect("write");
         assert_eq!(
-            state.embedding_store().count(MemoryDomain::Durable).unwrap(),
+            state
+                .embedding_store()
+                .count(MemoryDomain::Durable)
+                .unwrap(),
             1
         );
         // Durable domain defaults to Auto posture.
@@ -1682,7 +1736,10 @@ mod tests {
             .memory_forget_item(MemoryDomain::Durable, "s1", 1)
             .expect("forget item");
         assert_eq!(
-            state.embedding_store().count(MemoryDomain::Durable).unwrap(),
+            state
+                .embedding_store()
+                .count(MemoryDomain::Durable)
+                .unwrap(),
             0
         );
     }
@@ -1697,9 +1754,8 @@ mod tests {
         // Point it at a definitely-unreachable port so transport fails
         // fast rather than attempting a 30s connect.
         std::env::set_var("AETHER_EMBED_OLLAMA_BASE_URL", "http://127.0.0.1:1");
-        let provider: StdArc<dyn aether_l2_memory::EmbeddingProvider> = StdArc::new(
-            aether_l2_memory::OllamaEmbeddingProvider::from_env(),
-        );
+        let provider: StdArc<dyn aether_l2_memory::EmbeddingProvider> =
+            StdArc::new(aether_l2_memory::OllamaEmbeddingProvider::from_env());
         *state
             .embedding_provider
             .write()
@@ -1720,7 +1776,10 @@ mod tests {
         }
         // No embedding row landed — provider failed.
         assert_eq!(
-            state.embedding_store().count(MemoryDomain::Durable).unwrap(),
+            state
+                .embedding_store()
+                .count(MemoryDomain::Durable)
+                .unwrap(),
             0
         );
     }

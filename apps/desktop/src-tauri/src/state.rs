@@ -23,7 +23,7 @@ use crate::vision_cache::ModelListCache;
 use crate::vision_registry::{VisionProviderInfo, VisionRegistry};
 use crate::voice_registry::{SpeechProviderInfo, VoiceRegistry};
 #[cfg(feature = "sqlite-backend")]
-use aether_l2_memory::{DurableSessionStore, SqliteSessionMemoryStore};
+use aether_l2_memory::{DurableSessionStore, SessionAndDurableStores, SqliteSessionMemoryStore};
 use aether_l2_memory::{
     EmbeddingProvider, EmbeddingStore, FlatFileEmbeddingStore, InMemorySessionMemoryStore,
     OllamaEmbeddingProvider, SessionMemoryStore,
@@ -88,6 +88,14 @@ pub struct AppState {
     pub catalog: Vec<PersonaProfile>,
     pub presence: Arc<dyn PresenceController>,
     pub memory: Arc<dyn SessionMemoryStore>,
+    /// Memory V2 / ADR-0004 — Durable-domain session-memory store.
+    /// Routed to from [`AppState::memory_for_domain`] whenever the
+    /// request carries `MemoryDomain::Durable`. When the shell booted
+    /// against the in-memory backend (tests, sandboxes), this is a
+    /// second `InMemorySessionMemoryStore` instance — separate from
+    /// `memory` so Session rows and Durable rows do not cross-pollute
+    /// even without a real SQLite file.
+    pub durable_memory: Arc<dyn SessionMemoryStore>,
     /// Memory V2 step 6 (ADR-0002) — embeddings store. Owned by the
     /// shell so the Memory tab can query, count, and forget without
     /// downcasting. Trait object so tests can inject an in-memory
@@ -328,10 +336,14 @@ impl AppState {
     /// without a writable data directory. Mirrors the historical
     /// pre-durable-memory behaviour.
     pub fn new() -> Result<Self, String> {
-        Self::build(
-            Arc::new(InMemorySessionMemoryStore::new_default()) as Arc<dyn SessionMemoryStore>,
-            MemoryBackend::InMemory,
-        )
+        let session: Arc<dyn SessionMemoryStore> =
+            Arc::new(InMemorySessionMemoryStore::new_default());
+        // Separate in-memory store for the Durable lane so fallback-mode
+        // callers still see per-domain isolation — matches the ADR-0004
+        // contract that Durable writes do not mix with Session writes.
+        let durable: Arc<dyn SessionMemoryStore> =
+            Arc::new(InMemorySessionMemoryStore::new_default());
+        Self::build(session, durable, MemoryBackend::InMemory)
     }
 
     /// Construct the app state with an explicit persistence path for the
@@ -350,17 +362,36 @@ impl AppState {
                 return Self::new();
             }
         }
-        match DurableSessionStore::open(path_ref) {
-            Ok(durable) => {
-                tracing::info!("durable session memory opened at {}", path_ref.display());
-                let concrete = durable.concrete();
+        match DurableSessionStore::open_session_and_durable(
+            path_ref,
+            aether_l2_memory::RecentMemoryConfig::default_narrow(),
+            aether_l2_memory::RetentionPolicy::default_bounded(),
+            aether_l2_memory::RetentionPolicy::unbounded(),
+        ) {
+            Ok(SessionAndDurableStores {
+                session,
+                durable,
+                conn: _,
+            }) => {
+                tracing::info!(
+                    "durable session+durable memory opened at {}",
+                    path_ref.display()
+                );
+                // Clone the concrete typed handle so `durable_store()`
+                // keeps surfacing the Session-lane store for retention
+                // maintenance (the existing accessor). ADR-0004's
+                // per-domain stores are reached via `memory_for_domain`.
+                let concrete = session.clone();
+                let session_trait: Arc<dyn SessionMemoryStore> = session;
+                let durable_trait: Arc<dyn SessionMemoryStore> = durable;
                 let mut state = Self::build(
-                    durable.store.clone(),
+                    session_trait,
+                    durable_trait,
                     MemoryBackend::Durable {
                         path: path_ref.to_path_buf(),
                     },
                 )?;
-                state.durable_store = concrete;
+                state.durable_store = Some(concrete);
                 Ok(state)
             }
             Err(e) => {
@@ -381,7 +412,49 @@ impl AppState {
         self.durable_store.clone()
     }
 
-    fn build(memory: Arc<dyn SessionMemoryStore>, backend: MemoryBackend) -> Result<Self, String> {
+    /// ADR-0004: pick the backing store for `domain`. Session and
+    /// Durable each own a dedicated store; every other domain falls
+    /// back to the Session store with a `warn!` citing the
+    /// known-limitation gap ADR-0005 will close.
+    ///
+    /// Callers that know they only ever route a real-store domain
+    /// (Session/Durable) can still call this; the fallback is
+    /// defensive, not a normal path.
+    pub fn memory_for_domain(&self, domain: MemoryDomain) -> Arc<dyn SessionMemoryStore> {
+        match domain {
+            MemoryDomain::Session => self.memory.clone(),
+            MemoryDomain::Durable => self.durable_memory.clone(),
+            other => {
+                tracing::warn!(
+                    "memory_for_domain({}) has no dedicated store yet (ADR-0005); falling back to Session lane",
+                    other.label()
+                );
+                self.memory.clone()
+            }
+        }
+    }
+
+    /// ADR-0004: domains with a dedicated backing store today. Used by
+    /// the retention sweep to decide which lanes to prune; domains not
+    /// in this list are trace-skipped regardless of their retention
+    /// policy value. Order matches `MemoryDomain::ALL` for deterministic
+    /// sweep-walk ordering.
+    pub const DOMAINS_WITH_STORE: &'static [MemoryDomain] =
+        &[MemoryDomain::Session, MemoryDomain::Durable];
+
+    /// True iff `domain` has a dedicated backing store (vs. the Session
+    /// fallback). Wrapper over the `DOMAINS_WITH_STORE` constant so
+    /// callers can write `state.has_domain_store(d)` without importing
+    /// the slice directly.
+    pub fn has_domain_store(&self, domain: MemoryDomain) -> bool {
+        Self::DOMAINS_WITH_STORE.contains(&domain)
+    }
+
+    fn build(
+        memory: Arc<dyn SessionMemoryStore>,
+        durable_memory: Arc<dyn SessionMemoryStore>,
+        backend: MemoryBackend,
+    ) -> Result<Self, String> {
         let catalog = merge_yaml_personas(default_catalog());
         let presence: Arc<dyn PresenceController> = Arc::new(InMemoryPresenceController::new());
         let cfg = PresenceConfig::defaults();
@@ -402,6 +475,7 @@ impl AppState {
             catalog,
             presence,
             memory,
+            durable_memory,
             embedding_store,
             embedding_provider: RwLock::new(embedding_provider),
             active: RwLock::new(active),

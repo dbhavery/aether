@@ -2267,14 +2267,9 @@ impl From<crate::memory_service::MemoryForgetOutcome> for MemoryForgetOutcomeWir
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum MemoryEditOutcomeWire {
-    Allowed {
-        memory_id: String,
-        audit_id: String,
-    },
+    Allowed { memory_id: String, audit_id: String },
     RequiresApproval,
-    Denied {
-        reason: String,
-    },
+    Denied { reason: String },
     NotFound,
 }
 
