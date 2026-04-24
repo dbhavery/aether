@@ -71,16 +71,43 @@ def _render(title: str, pair: tuple[str, str] | None) -> None:
     print()
 
 
+def _last_commit_time(path: Path) -> int:
+    """Return the unix timestamp of the last commit touching ``path``.
+
+    Falls back to ``0`` for untracked files so they sort last. Using
+    commit time (not filename date) prevents future-dated filenames
+    from masquerading as "newest" — see
+    MILESTONE_1_RETROSPECTIVE_2026-04-23.md §3 item 1.
+    """
+    out = _run(["git", "log", "-1", "--format=%ct", "--", path.name])
+    try:
+        return int(out)
+    except ValueError:
+        return 0
+
+
+def _handoffs_newest_first(root: Path, pattern: str) -> list[Path]:
+    """List handoff paths ordered by last-commit-time, newest first.
+
+    Untracked handoffs (commit time ``0``) keep a stable filename
+    tiebreak so a fresh working-copy file still appears first if it
+    was just written.
+    """
+    files = list(root.glob(pattern))
+    files.sort(key=lambda p: (_last_commit_time(p), p.name), reverse=True)
+    return files
+
+
 def main(argv: list[str]) -> int:
     root = _repo_root()
     if len(argv) > 1 and argv[1] == "--list":
-        for p in sorted(root.glob("HANDOFF_*.md"), reverse=True):
+        for p in _handoffs_newest_first(root, "HANDOFF_*.md"):
             print(p.name)
         return 0
 
     filt = argv[1] if len(argv) > 1 else ""
     pattern = f"HANDOFF_*{filt}*.md" if filt else "HANDOFF_*.md"
-    matches = sorted(root.glob(pattern), reverse=True)
+    matches = _handoffs_newest_first(root, pattern)
     if not matches:
         sys.stderr.write(f"error: no handoff matched: {filt or '<latest>'}\n")
         sys.stderr.write("try: python scripts/current_status.py --list\n")

@@ -1,0 +1,4 @@
+# Normalise line endings across Don's Windows environment and CI.
+# Retires the per-commit LF/CRLF warning noise flagged in
+# MILESTONE_1_RETROSPECTIVE_2026-04-23.md §3 item 2.
+* text=auto eol=lf
