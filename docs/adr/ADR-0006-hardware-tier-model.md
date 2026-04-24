@@ -1,6 +1,6 @@
 # ADR-0006: Hardware tier model — Spark / Flame / Forge
 
-- **Status:** Proposed (pending Don review — 2026-04-24)
+- **Status:** Accepted (Don, 2026-04-24, with external reviewer concurrence on the Run 3 discuss-session output).
 - **Date:** 2026-04-24
 - **Deciders:** Don (owner). Claude captures the design + rationale from the Run 3 discuss session.
 - **Supersedes:** nothing (first ADR to formalise the tier concept).
@@ -44,6 +44,8 @@ Detection runs once at first launch and again when the user clicks "Re-detect ha
 - **System RAM / core count** via `sysinfo::System::total_memory`, `cpus()`.
 - **Disk available** via `std::fs::available_space` on the app data directory.
 - **Ollama GPU status** via `GET /api/ps` — tells us whether any Ollama model is currently loaded on GPU, which validates the GPU path is actually wired end-to-end.
+
+**Default adapter selection on multi-GPU systems:** highest-VRAM discrete adapter wins, with `device_type = DiscreteGpu` preferred over integrated. Multi-GPU disambiguation (laptop with iGPU + dGPU, eGPU enclosures, NVLink pairs) and remote-desktop / headless contexts remain intentionally unresolved here; the user-override path covers the cases where automatic selection picks wrong, and a future detection refinement ADR can revisit when real-world reports warrant.
 
 Cross-platform. No new crates beyond `wgpu` (already indirectly depended on through Tauri / any future rendering) and `sysinfo` (lightweight).
 
@@ -96,7 +98,7 @@ Provisional reservation so ADR-0008 inherits a stable envelope:
 | **Flame** | ~4 GB reserved (future neural face model) | Effective budget – 4 GB |
 | **Forge** | ~8 GB reserved (future full-fidelity neural face + expressions + gaze) | Effective budget – 8 GB |
 
-These numbers are provisional. ADR-0008 finalises them against the actual Rust avatar stack once that's scoped. Until then, consuming ADRs (ADR-0007 in particular) size their own budgets so they fit within `effective_budget - reserved`.
+These reservations are envelope placeholders, not implementation commitments; consuming ADRs must treat them as soft ceilings pending ADR-0008. The numbers themselves are provisional — ADR-0008 finalises them against the actual Rust avatar stack once that's scoped. Until then, consuming ADRs (ADR-0007 in particular) size their own budgets so they fit within `effective_budget - reserved`.
 
 ### 7. Storage. `tier.json` sibling to `memory.json`, same contract.
 

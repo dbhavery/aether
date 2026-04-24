@@ -4,7 +4,7 @@
 - **Date:** 2026-04-24
 - **Deciders:** Don (delegated expert call to Claude during M2 planning). Session delegated authority to execute the pin swap past the usual "reserved decisions" gate because the change is a default-constant + doc swap — implementation mechanics are trivial and the reasoning is research-driven.
 - **Supersedes:** `docs/adr/ADR-0002-embeddings-provider-and-vector-backend.md` §Decisions 1 (embedding-model default). All other ADR-0002 decisions (Ollama provider, flat-file store, MemoryEmbed capability, cargo feature gate, embed-eligible domains) remain in force.
-- **Superseded by:** nothing.
+- **Superseded by:** `docs/adr/ADR-0007-embeddings-onboarding.md` (Decision 2 only — embedding-model default is now tier-parameterised under the ADR-0006 hardware tier model rather than globally singular). Decision 1 (gemma4:e4b LLM pin) remains in force pending a future LLM tier-manifest ADR.
 - **Related:** `MILESTONE_1_RETROSPECTIVE_2026-04-23.md` §4 (invariant: ADRs precede cross-layer refactors — this one covers L2 + L4 + tools/evals), `ROADMAP_2026-04-24_MILESTONE_2.md` (runs that consume these defaults).
 
 ## Context

@@ -1,9 +1,9 @@
 # ADR-0007: Embeddings onboarding — tier-aware readiness, pull UX, and backfill
 
-- **Status:** Proposed (pending Don review — 2026-04-24)
+- **Status:** Accepted (Don, 2026-04-24, with external reviewer concurrence on the nine-block discuss outputs).
 - **Date:** 2026-04-24
 - **Deciders:** Don (owner). Nine-block discuss session 2026-04-24 locked every decision below. Claude captures.
-- **Supersedes:** nothing.
+- **Supersedes:** `docs/adr/ADR-0003-model-defaults-supersession.md` Decision 2 only — embedding-model default is now tier-parameterised under the ADR-0006 hardware tier model rather than globally singular. ADR-0003 Decision 1 (gemma4:e4b LLM pin) remains in force pending a future LLM tier-manifest ADR. ADR-0003's Mini-Run 0 *methodology* (research-driven default re-evaluation) remains valid and is not superseded.
 - **Superseded by:** nothing.
 - **Related:** `docs/adr/ADR-0005-retrieval-wiring.md` (wired the path that this ADR now onboards), `docs/adr/ADR-0003-model-defaults-supersession.md` (model pins — become tier-parameterised here), `docs/adr/ADR-0006-hardware-tier-model.md` (defines the tier axis this ADR consumes), `docs/MEMORY-V2-ARCHITECTURE.md` §§10–11.
 
@@ -81,7 +81,7 @@ Three surfaces, composed:
 
 Rejected: chrome pill (always-visible, conflicts with minimal aesthetic); Settings-only (contradicts Decision 1's "surfaced" — burying it defeats the purpose); toast-only (missed toast = missed signal, no fallback).
 
-### 7. Tier-parameterised model manifest. (Supersedes the single-model pin in ADR-0003.)
+### 7. Tier-parameterised model manifest. (Formally supersedes ADR-0003 Decision 2 — see header.)
 
 ADR-0003 pinned `bge-m3` as *the* embedding default. Under ADR-0006, there are three tiers — one model doesn't fit all.
 
@@ -93,9 +93,7 @@ ADR-0003 pinned `bge-m3` as *the* embedding default. Under ADR-0006, there are t
 
 The `RetrievalConfig` shape in `memory.json` does not need to change — `embeddings.provider` string continues to name the model. What changes: the *default* value is resolved from `tier.json` at read time, so a new install picks the right model for its hardware without hand-editing. Explicit user override remains available (advanced users who want bge-m3 on a Spark machine can set it manually; we don't second-guess).
 
-These numbers feed the backfill estimate (Decision 5) and the pull-size copy (Decision 4).
-
-ADR-0003's *process* (Mini-Run 0 methodology for model pins) is preserved and still valid. Only the "one model" assumption is revised.
+These numbers feed the backfill estimate (Decision 5) and the pull-size copy (Decision 4). Final per-tier latency figures may shift once on-hardware validation runs (see implementation plan); the *manifest concept* is the binding decision, the numbers are best estimates.
 
 ### 8. Disk-space preflight. (Not previously in the nine blocks — added during drafting.)
 
