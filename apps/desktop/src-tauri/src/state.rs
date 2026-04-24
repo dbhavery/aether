@@ -329,6 +329,12 @@ pub enum MemoryBackend {
 pub struct PendingTurn {
     pub request: TurnRequest,
     pub ask_result: TurnResult,
+    /// Raw user utterance *without* the ADR-0005 retrieval block.
+    /// `request.utterance` may be the augmented form that was handed to
+    /// the router; memory records and the user-visible transcript must
+    /// use this unmodified text. Equals `request.utterance` when the
+    /// retrieval path was off or produced zero hits.
+    pub original_utterance: String,
 }
 
 impl AppState {
@@ -1481,6 +1487,7 @@ mod tests {
             PendingTurn {
                 request: req.clone(),
                 ask_result: ask_result.clone(),
+                original_utterance: req.utterance.clone(),
             },
         );
 
@@ -1542,11 +1549,13 @@ mod tests {
             Decision::Ask { ticket, .. } => ticket.clone(),
             other => panic!("expected Ask, got {other:?}"),
         };
+        let utter = req.utterance.clone();
         state.record_pending(
             ticket.ticket_id.0.clone(),
             PendingTurn {
                 request: req,
                 ask_result: ask,
+                original_utterance: utter,
             },
         );
 

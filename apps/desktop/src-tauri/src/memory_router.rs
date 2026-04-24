@@ -73,6 +73,22 @@ pub fn user_record(session_id: &str, request: &TurnRequest) -> TurnMemoryRecord 
     }
 }
 
+/// Append the user side of a turn to memory with an explicit utterance
+/// string. Used by the retrieval-wiring path (ADR-0005): the router
+/// sees a retrieval-augmented utterance, but memory must record the
+/// original user text without the injected `Relevant context (retrieval):`
+/// block. Caller supplies the raw utterance and the emission timestamp
+/// from `TurnRequest::emitted_at`.
+pub fn user_record_raw(session_id: &str, utterance: &str, ts_ms: u64) -> TurnMemoryRecord {
+    TurnMemoryRecord {
+        session_id: session_id.to_string(),
+        sequence: 0,
+        role: MemoryRole::User,
+        content: utterance.to_string(),
+        timestamp_ms: ts_ms,
+    }
+}
+
 /// Append the assistant or system side of a turn to memory. On Allow the
 /// assistant text is the route response; on any block the content is a
 /// short system note so transcript continuity survives refusals.

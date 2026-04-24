@@ -24,8 +24,11 @@ use aether_l4_router::{
 use crate::media_permissions::{CaptureGate, MediaKind, MediaPermissions, PermissionState};
 #[cfg(feature = "ollama-provider")]
 use crate::memory_router::PROVIDER_ERROR_PREFIX;
-use crate::memory_router::{assistant_record, user_record};
+use crate::memory_router::{assistant_record, user_record_raw};
 use crate::mic_permissions::MicPermission;
+use crate::retrieval::{
+    augment_utterance, format_retrieval_block, run_retrieval_context, DEFAULT_RETRIEVAL_DEADLINE,
+};
 use crate::state::{AppState, PendingTurn, PresenceHistoryEntry, TelemetryEntry, SESSION_ID};
 
 /// Banner payload sent to the UI on startup.
@@ -303,13 +306,32 @@ pub fn submit_turn(
     );
     let ts = state.next_ts();
     let (capability, resource) = parse_command(&text);
+
+    // ADR-0005 retrieval wiring: run the orchestrator BEFORE the L1
+    // engine sees the turn. Non-empty hits get formatted into a
+    // deterministic `Relevant context (retrieval):` block and prepended
+    // to the utterance the router forwards. The original text is kept
+    // separately and is what memory and the transcript record. Empty
+    // hits (embeddings off, policy deny, bailout, zero rows) produce a
+    // byte-identical `router_utterance == text` and no memory drift.
+    let max_items = state.memory_config().retrieval.max_items as usize;
+    let hits = run_retrieval_context(
+        &state,
+        SESSION_ID,
+        &text,
+        max_items,
+        DEFAULT_RETRIEVAL_DEADLINE,
+    );
+    let retrieval_block = format_retrieval_block(&hits);
+    let router_utterance = augment_utterance(retrieval_block.as_deref(), &text);
+
     let request = {
         let a = state.active.read().expect("active read lock");
         TurnRequest {
             session_id: SessionId(SESSION_ID.into()),
             persona: PersonaId(a.compiled.persona_id.0.clone()),
             task_id: None,
-            utterance: text.clone(),
+            utterance: router_utterance,
             capability,
             resource,
             emitted_at: MonotonicTimestamp(ts),
@@ -335,7 +357,7 @@ pub fn submit_turn(
                 // mapping from typed L4Error → friendly copy.
                 if let Some(msg) = extract_provider_error(&e.to_string()) {
                     drop(a);
-                    return Ok(provider_error_payload(&app, &state, &request, msg));
+                    return Ok(provider_error_payload(&app, &state, &request, &text, msg));
                 }
                 return Err(format!("engine error: {e}"));
             }
@@ -363,6 +385,7 @@ pub fn submit_turn(
             PendingTurn {
                 request,
                 ask_result: first.clone(),
+                original_utterance: text.clone(),
             },
         );
         return Ok(TurnOutcomePayload {
@@ -374,7 +397,7 @@ pub fn submit_turn(
         });
     }
 
-    let payload = finalize_turn(&app, &state, &request, &first);
+    let payload = finalize_turn(&app, &state, &request, &text, &first);
     Ok(payload)
 }
 
@@ -442,7 +465,13 @@ pub fn resolve_approval(
         }
     };
 
-    let payload = finalize_turn(&app, &state, &pending.request, &final_result);
+    let payload = finalize_turn(
+        &app,
+        &state,
+        &pending.request,
+        &pending.original_utterance,
+        &final_result,
+    );
     Ok(payload)
 }
 
@@ -582,6 +611,7 @@ fn provider_error_payload(
     app: &AppHandle,
     state: &State<'_, AppState>,
     request: &TurnRequest,
+    original_utterance: &str,
     friendly: String,
 ) -> TurnOutcomePayload {
     transition_presence(
@@ -592,7 +622,13 @@ fn provider_error_payload(
         None,
     );
     let ts_ms = state.next_ts();
-    let _ = state.memory.append(user_record(SESSION_ID, request));
+    // ADR-0005: record the ORIGINAL user utterance in memory, not the
+    // retrieval-augmented form the router saw.
+    let _ = state.memory.append(user_record_raw(
+        SESSION_ID,
+        original_utterance,
+        request.emitted_at.0,
+    ));
     let _ = state.memory.append(aether_l2_memory::TurnMemoryRecord {
         session_id: SESSION_ID.to_string(),
         sequence: 0,
@@ -646,6 +682,7 @@ fn finalize_turn(
     app: &AppHandle,
     state: &State<'_, AppState>,
     request: &TurnRequest,
+    original_utterance: &str,
     result: &TurnResult,
 ) -> TurnOutcomePayload {
     transition_presence(
@@ -657,7 +694,13 @@ fn finalize_turn(
     );
 
     let ts_ms = state.next_ts();
-    let _ = state.memory.append(user_record(SESSION_ID, request));
+    // ADR-0005: record the ORIGINAL user utterance in memory, not the
+    // retrieval-augmented form the router saw.
+    let _ = state.memory.append(user_record_raw(
+        SESSION_ID,
+        original_utterance,
+        request.emitted_at.0,
+    ));
     let _ = state
         .memory
         .append(assistant_record(SESSION_ID, result, ts_ms));

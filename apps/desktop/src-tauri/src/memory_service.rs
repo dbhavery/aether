@@ -1628,7 +1628,12 @@ mod tests {
             "Session row of equal age MUST survive (no TTL set)"
         );
         assert!(
-            state.durable_memory.recent("s1").unwrap().records.is_empty(),
+            state
+                .durable_memory
+                .recent("s1")
+                .unwrap()
+                .records
+                .is_empty(),
             "Durable row evicted by 1-day TTL"
         );
 

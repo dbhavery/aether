@@ -141,7 +141,10 @@ pub fn run_retrieval_context(
                 return Vec::new();
             }
             TimedResult::Timeout => {
-                tracing::warn!("retrieval embed phase exceeded {}s deadline", deadline.as_secs());
+                tracing::warn!(
+                    "retrieval embed phase exceeded {}s deadline",
+                    deadline.as_secs()
+                );
                 return Vec::new();
             }
         }
@@ -151,7 +154,10 @@ pub fn run_retrieval_context(
     let mut all_hits: Vec<(MemoryDomain, SimilarityHit)> = Vec::new();
     for &domain in EMBED_ELIGIBLE_DOMAINS {
         if Instant::now() >= deadline_at {
-            tracing::warn!("retrieval deadline exceeded before querying {}", domain.label());
+            tracing::warn!(
+                "retrieval deadline exceeded before querying {}",
+                domain.label()
+            );
             return Vec::new();
         }
         match state
@@ -256,6 +262,59 @@ fn timed<T, F: FnOnce() -> T>(deadline: Instant, op: F) -> TimedResult<T> {
         return TimedResult::Timeout;
     }
     TimedResult::Ok(op())
+}
+
+/// Render a ranked `[RetrievalHit]` into the deterministic prompt
+/// prefix the router injects ahead of the user utterance. Returns
+/// `None` for an empty slice so callers can skip prompt mutation
+/// byte-for-byte.
+///
+/// Format (stable — do not reshape without bumping an ADR):
+///
+/// ```text
+/// Relevant context (retrieval):
+/// [1] <domain> <memory_id>: <content>
+/// [2] ...
+/// ```
+///
+/// The numbering reflects rank order as produced by
+/// `run_retrieval_context`. Domain + memory_id render as plain
+/// provenance so the model can cite them back. Content is included
+/// verbatim; callers are responsible for content-length budgets via
+/// `RetrievalConfig::max_items`.
+pub fn format_retrieval_block(hits: &[RetrievalHit]) -> Option<String> {
+    if hits.is_empty() {
+        return None;
+    }
+    let mut out = String::from("Relevant context (retrieval):\n");
+    for (i, h) in hits.iter().enumerate() {
+        use std::fmt::Write as _;
+        let _ = writeln!(
+            out,
+            "[{}] {} {}: {}",
+            i + 1,
+            h.domain.label(),
+            h.memory_id,
+            h.content
+        );
+    }
+    Some(out)
+}
+
+/// Join a retrieval block + original utterance into the single string
+/// the router forwards to the provider. Keeps the empty-hits case
+/// byte-identical to pre-wire behaviour (returns `utterance.to_string()`).
+pub fn augment_utterance(block: Option<&str>, utterance: &str) -> String {
+    match block {
+        Some(b) if !b.is_empty() => {
+            let mut out = String::with_capacity(b.len() + utterance.len() + 1);
+            out.push_str(b);
+            out.push('\n');
+            out.push_str(utterance);
+            out
+        }
+        _ => utterance.to_string(),
+    }
 }
 
 #[cfg(test)]
@@ -425,6 +484,48 @@ mod tests {
             hits.is_empty(),
             "stale hit must drop, not surface malformed content"
         );
+    }
+
+    #[test]
+    fn format_retrieval_block_none_on_empty() {
+        assert!(format_retrieval_block(&[]).is_none());
+    }
+
+    #[test]
+    fn format_retrieval_block_renders_rank_domain_id_content() {
+        let hits = vec![
+            RetrievalHit {
+                memory_id: "mem-s1-1".into(),
+                domain: MemoryDomain::Durable,
+                score: 0.9,
+                content: "alpha".into(),
+                timestamp_ms: 1_000,
+            },
+            RetrievalHit {
+                memory_id: "mem-s1-2".into(),
+                domain: MemoryDomain::Facts,
+                score: 0.8,
+                content: "beta".into(),
+                timestamp_ms: 2_000,
+            },
+        ];
+        let out = format_retrieval_block(&hits).expect("non-empty");
+        assert!(out.starts_with("Relevant context (retrieval):\n"));
+        assert!(out.contains("[1] durable mem-s1-1: alpha"));
+        assert!(out.contains("[2] facts mem-s1-2: beta"));
+    }
+
+    #[test]
+    fn augment_utterance_noop_when_block_absent() {
+        assert_eq!(augment_utterance(None, "hello"), "hello");
+        assert_eq!(augment_utterance(Some(""), "hello"), "hello");
+    }
+
+    #[test]
+    fn augment_utterance_prepends_block_then_newline_then_utterance() {
+        let out = augment_utterance(Some("Relevant context:\n[1] x: y\n"), "do the thing");
+        assert!(out.ends_with("do the thing"));
+        assert!(out.starts_with("Relevant context:"));
     }
 
     #[test]
