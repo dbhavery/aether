@@ -137,6 +137,15 @@ pub enum Capability {
     /// already-allowed MemoryWrite, so the primary capability gates
     /// the user-visible decision.
     MemoryEmbed,
+    /// Memory V2 / ADR-0005: retrieval-augmented read. Distinct
+    /// from `MemoryRead` so future audit surfaces can filter
+    /// retrieval-augmented reads from plain session recall. Emitted
+    /// once per turn when the turn engine consults
+    /// `EmbeddingStore::query_nearest`. Default posture Auto
+    /// (parallel to `MemoryRead`); no Ask flow. Naming is
+    /// extendable — future retrieval modes (web, code, graph) land
+    /// as sibling variants rather than reopening this one.
+    RetrievalContext,
 
     // ----- Media -----
     /// Access microphone.

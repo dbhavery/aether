@@ -481,6 +481,42 @@ impl SessionMemoryStore for SqliteSessionMemoryStore {
         }
         Ok(out)
     }
+
+    fn fetch_one(
+        &self,
+        session_id: &str,
+        sequence: u64,
+    ) -> Result<Option<TurnMemoryRecord>, L2Error> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| L2Error::Internal(format!("sqlite memory lock poisoned: {e}")))?;
+        let sql = format!(
+            "SELECT role, content, timestamp_ms FROM {} \
+             WHERE session_id = ?1 AND sequence = ?2",
+            self.table_name
+        );
+        use aether_storage::rusqlite::Error as RusqliteError;
+        let result: Result<(String, String, i64), RusqliteError> =
+            conn.query_row(&sql, params![session_id, sequence as i64], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+            });
+        match result {
+            Ok((role_str, content, ts)) => {
+                let role = role_from_wire(&role_str)
+                    .ok_or_else(|| L2Error::Storage(format!("unknown role: {role_str}")))?;
+                Ok(Some(TurnMemoryRecord {
+                    session_id: session_id.to_string(),
+                    sequence,
+                    role,
+                    content,
+                    timestamp_ms: ts as u64,
+                }))
+            }
+            Err(RusqliteError::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(L2Error::Storage(format!("fetch_one: {e}"))),
+        }
+    }
 }
 
 /// Convenience builder that mirrors L5's `DurableBackends::open`: open

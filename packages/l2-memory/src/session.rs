@@ -178,6 +178,21 @@ pub trait SessionMemoryStore: Send + Sync {
     /// walk the set without needing to know which sessions the shell
     /// has ever opened. Empty vec for an empty store.
     fn list_sessions(&self) -> Result<Vec<String>, L2Error>;
+
+    /// ADR-0005: look up one row by `(session_id, sequence)`. Returns
+    /// `Ok(None)` when the row has been evicted or never existed —
+    /// the retrieval orchestrator treats a `None` as "stale embedding
+    /// row; drop the hit". Returns `Err(_)` on storage failure.
+    ///
+    /// Separate from `recent` because retrieval touches one row at a
+    /// time, not a bounded tail, and because the resulting
+    /// `TurnMemoryRecord` carries the `timestamp_ms` that the
+    /// retrieval rank step needs for its recency tiebreak.
+    fn fetch_one(
+        &self,
+        session_id: &str,
+        sequence: u64,
+    ) -> Result<Option<TurnMemoryRecord>, L2Error>;
 }
 
 /// In-process implementation of [`SessionMemoryStore`]. Backed by a
@@ -375,6 +390,25 @@ impl SessionMemoryStore for InMemorySessionMemoryStore {
             .lock()
             .map_err(|e| L2Error::Internal(format!("session memory lock poisoned: {e}")))?;
         Ok(guard.keys().cloned().collect())
+    }
+
+    fn fetch_one(
+        &self,
+        session_id: &str,
+        sequence: u64,
+    ) -> Result<Option<TurnMemoryRecord>, L2Error> {
+        let guard = self
+            .inner
+            .lock()
+            .map_err(|e| L2Error::Internal(format!("session memory lock poisoned: {e}")))?;
+        let Some(state) = guard.get(session_id) else {
+            return Ok(None);
+        };
+        Ok(state
+            .records
+            .iter()
+            .find(|r| r.sequence == sequence)
+            .cloned())
     }
 }
 

@@ -140,6 +140,7 @@ pub fn human_capability(cap: &Capability) -> &'static str {
         Capability::MemoryForget => "memory.forget",
         Capability::MemoryEdit => "memory.edit",
         Capability::MemoryEmbed => "memory.embed",
+        Capability::RetrievalContext => "retrieval_context",
         Capability::MediaMic => "media.mic",
         Capability::MediaCamera => "media.camera",
         Capability::MediaScreenCapture => "media.screen_capture",

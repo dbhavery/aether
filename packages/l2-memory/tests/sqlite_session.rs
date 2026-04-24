@@ -608,3 +608,68 @@ fn durable_store_retention_prunes_only_its_own_table() {
         "durable lane is empty after its own sweep"
     );
 }
+
+// ---------- ADR-0005: fetch_one ----------
+
+#[test]
+fn fetch_one_returns_row_when_present() {
+    let tmp = TempDir::new().unwrap();
+    let db = DurableSessionStore::open(tmp.path().join("aether.db")).unwrap();
+    let store = db.store.clone();
+
+    store
+        .append(rec("s1", MemoryRole::User, "first", 100))
+        .unwrap();
+    store
+        .append(rec("s1", MemoryRole::Assistant, "second", 200))
+        .unwrap();
+
+    let hit = store.fetch_one("s1", 2).unwrap().expect("row exists");
+    assert_eq!(hit.content, "second");
+    assert_eq!(hit.sequence, 2);
+    assert_eq!(hit.timestamp_ms, 200);
+    assert_eq!(hit.role, MemoryRole::Assistant);
+}
+
+#[test]
+fn fetch_one_returns_none_when_missing() {
+    // Core ADR-0005 contract: a stale embedding row whose memory has
+    // been evicted must surface as Ok(None), not Err. The orchestrator
+    // drops the hit and continues.
+    let tmp = TempDir::new().unwrap();
+    let db = DurableSessionStore::open(tmp.path().join("aether.db")).unwrap();
+    let store = db.store.clone();
+    assert!(store.fetch_one("s1", 999).unwrap().is_none());
+    store
+        .append(rec("s1", MemoryRole::User, "only", 1))
+        .unwrap();
+    assert!(store.fetch_one("s1", 999).unwrap().is_none());
+    assert!(store.fetch_one("never-used", 1).unwrap().is_none());
+}
+
+#[test]
+fn fetch_one_honours_table_parameterization() {
+    // Two lanes sharing a DB: fetch_one on the durable store must not
+    // find a session-lane row, and vice versa.
+    let tmp = TempDir::new().unwrap();
+    let path = tmp.path().join("aether.db");
+    let pair = DurableSessionStore::open_session_and_durable(
+        &path,
+        RecentMemoryConfig::default_narrow(),
+        RetentionPolicy::unbounded(),
+        RetentionPolicy::unbounded(),
+    )
+    .unwrap();
+
+    pair.session
+        .append(rec("s1", MemoryRole::User, "ses", 1))
+        .unwrap();
+    pair.durable
+        .append(rec("s1", MemoryRole::User, "dur", 1))
+        .unwrap();
+
+    let ses = pair.session.fetch_one("s1", 1).unwrap().unwrap();
+    let dur = pair.durable.fetch_one("s1", 1).unwrap().unwrap();
+    assert_eq!(ses.content, "ses");
+    assert_eq!(dur.content, "dur");
+}
