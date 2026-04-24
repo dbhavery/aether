@@ -326,6 +326,12 @@ export interface MemoryConfig {
     enabled: boolean;
     provider: string | null;
   };
+  /** Retrieval wiring config — ADR-0005. `max_items` gates the top-K
+   * cap `submit_turn` passes to `run_retrieval_context`. Default 5;
+   * `0` disables injection without flipping `embeddings.enabled`. */
+  retrieval: {
+    max_items: number;
+  };
 }
 
 // --- Memory V2 step 4 — Trust drawer Memory tab --------------------------
@@ -397,5 +403,8 @@ export const MEMORY_CONFIG_DEFAULTS: Readonly<MemoryConfig> = {
   embeddings: {
     enabled: false,
     provider: null,
+  },
+  retrieval: {
+    max_items: 5,
   },
 };
