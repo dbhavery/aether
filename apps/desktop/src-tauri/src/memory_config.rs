@@ -100,6 +100,11 @@ pub struct MemoryConfig {
     /// Embeddings subsystem config. Design §3: default disabled.
     #[serde(default)]
     pub embeddings: EmbeddingsConfig,
+    /// Retrieval wiring config — top-K cap and future retrieval knobs.
+    /// Additive per ADR-0005; unknown nested fields fall back to the
+    /// `RetrievalConfig` default the same way `embeddings` does.
+    #[serde(default)]
+    pub retrieval: RetrievalConfig,
 }
 
 /// Embeddings opt-in block. `enabled = false` is the ship default;
@@ -121,6 +126,30 @@ impl Default for EmbeddingsConfig {
         Self {
             enabled: false,
             provider: None,
+        }
+    }
+}
+
+/// Retrieval wiring config (ADR-0005 §Decision 3). Owns the top-K cap
+/// applied after rank. Future fields (min-score floor, per-domain
+/// multipliers) land additively under the same key.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RetrievalConfig {
+    /// Maximum number of ranked hits returned per turn. ADR-0005
+    /// §Decision 3 ships the default at 5; zero disables retrieval
+    /// injection without flipping `embeddings.enabled`.
+    #[serde(default = "default_retrieval_max_items")]
+    pub max_items: u32,
+}
+
+fn default_retrieval_max_items() -> u32 {
+    5
+}
+
+impl Default for RetrievalConfig {
+    fn default() -> Self {
+        Self {
+            max_items: default_retrieval_max_items(),
         }
     }
 }
@@ -158,6 +187,7 @@ impl MemoryConfig {
             retention_days: default_retention_map(),
             default_risk: default_risk_map(),
             embeddings: EmbeddingsConfig::default(),
+            retrieval: RetrievalConfig::default(),
         }
     }
 
@@ -254,6 +284,25 @@ mod tests {
         // Embeddings ship off per §3.
         assert!(!c.embeddings.enabled);
         assert!(c.embeddings.provider.is_none());
+        // ADR-0005 §Decision 3: retrieval top-K defaults to 5.
+        assert_eq!(c.retrieval.max_items, 5);
+    }
+
+    #[test]
+    fn retrieval_config_roundtrips_and_falls_back_when_absent() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("memory.json");
+        // Missing `retrieval` block — must default to 5, not 0.
+        fs::write(&path, r#"{ "embeddings": { "enabled": false } }"#).unwrap();
+        let loaded = load_or_default(&path);
+        assert_eq!(loaded.retrieval.max_items, 5);
+
+        // Explicit override roundtrips.
+        let mut cfg = MemoryConfig::defaults();
+        cfg.retrieval.max_items = 12;
+        save(&path, &cfg).expect("save");
+        let reloaded = load_or_default(&path);
+        assert_eq!(reloaded.retrieval.max_items, 12);
     }
 
     #[test]
