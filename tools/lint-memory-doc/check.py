@@ -125,10 +125,21 @@ ANCHORS: list[tuple[str, str, str | None, str]] = [
     ("symbol", "apps/desktop/src-tauri/src/state.rs", "pub const DOMAINS_WITH_STORE", "ADR-0004: stored-domain set"),
     ("symbol", "apps/desktop/src-tauri/src/state.rs", "pub durable_memory", "ADR-0004: Durable lane on AppState"),
 
+    # ---- ADR-0005 — Retrieval wiring (Milestone 2 Run 2) ----
+    ("file",   "apps/desktop/src-tauri/src/retrieval.rs", None, "ADR-0005: retrieval orchestrator module"),
+    ("symbol", "apps/desktop/src-tauri/src/retrieval.rs", "fn run_retrieval_context", "ADR-0005: orchestrator entry"),
+    ("symbol", "apps/desktop/src-tauri/src/retrieval.rs", "pub struct RetrievalHit", "ADR-0005: ranked hit shape"),
+    ("symbol", "apps/desktop/src-tauri/src/retrieval.rs", "fn format_retrieval_block", "ADR-0005: prompt-prefix renderer"),
+    ("symbol", "apps/desktop/src-tauri/src/retrieval.rs", "fn augment_utterance", "ADR-0005: utterance composer"),
+    ("string", "apps/desktop/src-tauri/src/retrieval.rs", "Capability::RetrievalContext", "ADR-0005: L5 capability gate"),
+    ("symbol", "apps/desktop/src-tauri/src/memory_config.rs", "pub struct RetrievalConfig", "ADR-0005: top-K config"),
+    ("symbol", "apps/desktop/src-tauri/src/memory_router.rs", "pub fn user_record_raw", "ADR-0005: original-utterance memory record"),
+
     # ---- ADRs ----
     ("file",   "docs/adr/ADR-0001-memory-domain-reconciliation.md", None, "ADR-0001: domain relocation"),
     ("file",   "docs/adr/ADR-0002-embeddings-provider-and-vector-backend.md", None, "ADR-0002: embeddings defaults"),
     ("file",   "docs/adr/ADR-0004-durable-store-shape.md", None, "ADR-0004: Durable-store shape"),
+    ("file",   "docs/adr/ADR-0005-retrieval-wiring.md", None, "ADR-0005: retrieval wiring"),
 ]
 
 

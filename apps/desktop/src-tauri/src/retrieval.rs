@@ -487,6 +487,49 @@ mod tests {
     }
 
     #[test]
+    fn end_to_end_determinism_when_embeddings_off() {
+        // The guarantee ADR-0005 ships under: with the flag off, the
+        // composed pipeline produces the user's original utterance
+        // byte-for-byte. If this test ever fails, the retrieval wiring
+        // has introduced a side effect that would drift memory /
+        // transcript state even when the user never opted in.
+        let state = setup_state();
+        let original = "what did we decide yesterday?";
+        let hits = run_retrieval_context(&state, "s1", original, 5, DEFAULT_RETRIEVAL_DEADLINE);
+        assert!(hits.is_empty());
+        let block = format_retrieval_block(&hits);
+        assert!(block.is_none());
+        let augmented = augment_utterance(block.as_deref(), original);
+        assert_eq!(augmented, original, "off-path must be byte-identical");
+    }
+
+    #[test]
+    fn end_to_end_augments_when_embeddings_on_with_hits() {
+        // Happy path: seed a durable row whose content matches the
+        // query, flip embeddings on, compose the pipeline, and assert
+        // the router sees the block-then-utterance shape.
+        let state = setup_state();
+        swap_stub_embedder(&state, 16);
+        enable_embeddings(&state);
+        seed_durable(&state, "s1", 1, "we decided to ship on friday", 1_000);
+
+        let original = "we decided to ship on friday";
+        let hits = run_retrieval_context(&state, "s1", original, 5, DEFAULT_RETRIEVAL_DEADLINE);
+        assert!(!hits.is_empty());
+        let block = format_retrieval_block(&hits).expect("non-empty block");
+        let augmented = augment_utterance(Some(&block), original);
+        assert!(augmented.starts_with("Relevant context (retrieval):"));
+        assert!(augmented.ends_with(original));
+        // The ORIGINAL is what memory records (via user_record_raw in
+        // commands.rs); the augmented form is only what the router
+        // forwards. That separation is enforced at the call site, not
+        // here — this test just confirms the two strings differ when
+        // retrieval fires, which is the invariant the call site relies
+        // on.
+        assert_ne!(augmented, original);
+    }
+
+    #[test]
     fn format_retrieval_block_none_on_empty() {
         assert!(format_retrieval_block(&[]).is_none());
     }

@@ -394,6 +394,23 @@ Each step is a session of work.
    vision / voice / presence / quality rot guards. 60 anchors
    across 12 files; this doc flipped to "Current" in the same
    change.
+8. ✅ **Retrieval wiring (ADR-0005, Milestone 2 Run 2).** The
+   turn pipeline now consults embeddings during real turns when
+   `memory.json::embeddings.enabled = true`. Flow:
+   `submit_turn` → `run_retrieval_context` (embed → query_nearest
+   → fetch_one → rank, 5-second wall-clock bailout) →
+   `format_retrieval_block` → `augment_utterance` → the router
+   forwards the augmented string to the provider. Top-K is
+   configurable via the new `memory.json::retrieval.max_items`
+   field (default 5; `0` disables injection without flipping
+   embeddings off). The original user text is preserved through
+   a parallel channel (`user_record_raw`,
+   `PendingTurn::original_utterance`) so memory records and the
+   transcript never drift from what the user actually typed. L5
+   gate: `Capability::RetrievalContext` — one audit row per
+   retrieval invocation, even when embeddings are off. See
+   `apps/desktop/src-tauri/src/retrieval.rs` and
+   `docs/adr/ADR-0005-retrieval-wiring.md`.
 
 ---
 
