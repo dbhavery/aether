@@ -315,8 +315,9 @@ in a form that reads like notes, not logs.
 ### Embeddings
 
 - Which local embedding provider is the reference candidate?
-  (Likely `bge-small` or `nomic-embed-text` via Ollama.) Lock in
-  Memory V2 step 4.
+  Locked in ADR-0003 (supersedes ADR-0002 Decision 1): **BGE-M3**
+  via Ollama (`bge-m3:latest`). See `docs/adr/ADR-0003-model-defaults-supersession.md`
+  for rationale.
 - Vector index backend — SQLite + rusqlite extensions? A separate
   sqlite-vec file? Out of scope for design-only doc; decide at
   implementation time.
@@ -378,7 +379,9 @@ Each step is a session of work.
    `memory_service.rs`.
 6. ✅ **Embeddings (opt-in).** Behind the `embeddings` cargo
    feature on `aether-l2-memory`. Default provider: Ollama
-   `nomic-embed-text` (see ADR-0002 for the full decision set).
+   `bge-m3` (ADR-0003 supersedes ADR-0002 Decision 1; other
+   ADR-0002 decisions — trait shape, flat-file store, capability,
+   domain eligibility — unchanged).
    `memory.json::embeddings.enabled` defaults to `false`; when
    on, Durable/Projects/Artifacts writes produce an embedding
    via `maybe_embed_on_write` (best-effort; provider failure

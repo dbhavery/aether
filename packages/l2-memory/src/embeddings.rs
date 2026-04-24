@@ -93,7 +93,7 @@ pub trait EmbeddingProvider: Send + Sync {
     fn embed(&self, text: &str) -> Result<Vec<f32>, L2Error>;
 
     /// Provider-identifying label for logs + config validation
-    /// (e.g. `"ollama:nomic-embed-text"`).
+    /// (e.g. `"ollama:bge-m3"`).
     fn label(&self) -> String;
 }
 
@@ -337,9 +337,13 @@ fn norm(v: &[f32]) -> f32 {
 // Ollama provider
 // ---------------------------------------------------------------------------
 
-/// Default Ollama embedding model. Chosen by ADR-0002: 768-dim,
-/// open weights, freely pullable, CPU-fast.
-pub const DEFAULT_OLLAMA_EMBED_MODEL: &str = "nomic-embed-text";
+/// Default Ollama embedding model. Chosen by ADR-0003 (supersedes
+/// ADR-0002 Decision 1): BGE-M3, 1024-dim dense output, multi-functional
+/// (dense + sparse + multi-vector capable), MIT licence, 8K context,
+/// ~1.2 GB pull. ~25-point retrieval accuracy lift over
+/// `nomic-embed-text` on April 2026 RAG benchmarks; still CPU-viable
+/// at personal scale.
+pub const DEFAULT_OLLAMA_EMBED_MODEL: &str = "bge-m3";
 
 /// Default Ollama base URL. Matches the existing text-generation
 /// default shared by the router and Quality-Eval harness.
@@ -369,7 +373,7 @@ impl OllamaEmbeddingProvider {
     ///
     /// - `AETHER_EMBED_OLLAMA_BASE_URL` — default
     ///   `http://127.0.0.1:11434`.
-    /// - `AETHER_EMBED_OLLAMA_MODEL` — default `nomic-embed-text`.
+    /// - `AETHER_EMBED_OLLAMA_MODEL` — default `bge-m3` (ADR-0003).
     pub fn from_env() -> Self {
         let base = std::env::var("AETHER_EMBED_OLLAMA_BASE_URL")
             .unwrap_or_else(|_| DEFAULT_OLLAMA_BASE_URL.to_string());
@@ -649,7 +653,7 @@ mod tests {
 
     #[test]
     fn ollama_provider_label_includes_model() {
-        let p = OllamaEmbeddingProvider::new("http://localhost:11434", "nomic-embed-text");
-        assert_eq!(p.label(), "ollama:nomic-embed-text");
+        let p = OllamaEmbeddingProvider::new("http://localhost:11434", "bge-m3");
+        assert_eq!(p.label(), "ollama:bge-m3");
     }
 }

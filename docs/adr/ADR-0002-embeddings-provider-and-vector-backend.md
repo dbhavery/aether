@@ -1,10 +1,10 @@
 # ADR-0002: Embeddings provider + vector backend (Memory V2 step 6)
 
-- **Status:** Accepted
+- **Status:** Accepted (Decision 1 superseded by ADR-0003 on 2026-04-24).
 - **Date:** 2026-04-23
 - **Deciders:** Don (owner). Session delegated authority to execute Run 3 past the usual stopping point.
 - **Supersedes:** nothing.
-- **Superseded by:** nothing.
+- **Superseded by:** `docs/adr/ADR-0003-model-defaults-supersession.md` — Decision 1 (embedding model default) only. All other decisions in this ADR remain in force.
 - **Related:** `docs/adr/ADR-0001-memory-domain-reconciliation.md`, `docs/MEMORY-V2-ARCHITECTURE.md` §§8 (hard constraint 5 — local-only), 9 (open questions), 10 item 6.
 
 ## Context

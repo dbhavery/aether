@@ -16,7 +16,7 @@ See `docs/QUALITY-EVAL-V1-ARCHITECTURE.md`. This entry point:
 Live backend config (Ollama):
 
   env AETHER_EVAL_OLLAMA_BASE_URL  default `http://127.0.0.1:11434`
-  env AETHER_EVAL_OLLAMA_MODEL     default `gemma4`
+  env AETHER_EVAL_OLLAMA_MODEL     default `gemma4:e4b` (ADR-0003 pin)
   env AETHER_EVAL_OLLAMA_TIMEOUT_S default `30`
 
 Live-backend mode is deliberately minimal: single-turn, no persona
@@ -151,7 +151,7 @@ def _ollama_env() -> tuple[str, str, float]:
     base = os.environ.get(
         "AETHER_EVAL_OLLAMA_BASE_URL", "http://127.0.0.1:11434"
     ).rstrip("/")
-    model = os.environ.get("AETHER_EVAL_OLLAMA_MODEL", "gemma4")
+    model = os.environ.get("AETHER_EVAL_OLLAMA_MODEL", "gemma4:e4b")
     timeout = float(os.environ.get("AETHER_EVAL_OLLAMA_TIMEOUT_S", "30"))
     return base, model, timeout
 

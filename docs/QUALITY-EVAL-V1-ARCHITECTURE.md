@@ -187,7 +187,7 @@ together by `_ollama_env` so capture metadata and the outbound
 POST agree on exactly which values were in effect:
 
 - `AETHER_EVAL_OLLAMA_BASE_URL` — default `http://127.0.0.1:11434`.
-- `AETHER_EVAL_OLLAMA_MODEL` — default `gemma4`.
+- `AETHER_EVAL_OLLAMA_MODEL` — default `gemma4:e4b` (ADR-0003 pin — avoids silent `:latest` drift).
 - `AETHER_EVAL_OLLAMA_TIMEOUT_S` — default `30`.
 
 Capture flow (v1.2):

@@ -17,7 +17,9 @@
 //!
 //! Constructed via [`OllamaConfig::from_env`] which reads:
 //! - `AETHER_OLLAMA_BASE_URL` (default `http://127.0.0.1:11434`),
-//! - `AETHER_OLLAMA_MODEL` (default `gemma4`),
+//! - `AETHER_OLLAMA_MODEL` (default `gemma4:e4b` per ADR-0003 — pin the
+//!   known-good variant; 31B Dense has an unresolved FlashAttention hang
+//!   and `gemma4:latest` resolution can drift),
 //! - `AETHER_OLLAMA_TIMEOUT_MS` (default `60_000`).
 //!
 //! Opt-in at build time via the `ollama-provider` Cargo feature; opt-in at
@@ -36,7 +38,7 @@ use crate::router::{
 use aether_l5_policy::Decision;
 
 const DEFAULT_BASE_URL: &str = "http://127.0.0.1:11434";
-const DEFAULT_MODEL: &str = "gemma4";
+const DEFAULT_MODEL: &str = "gemma4:e4b";
 const DEFAULT_TIMEOUT_MS: u64 = 60_000;
 
 /// Configuration for [`OllamaProvider`]. All fields are required at

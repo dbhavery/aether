@@ -1,5 +1,33 @@
 # Milestone 2 roadmap — 2026-04-24
 
+> **AMENDMENT 2026-04-24 (same day, post-research):** Mini-Run 0 and run ordering
+> revised after a web-research pass on the April 2026 local-LLM landscape plus
+> a discovery that the original Run 1 (Retrieval Wiring) had no backing rows
+> to retrieve over — the embed-eligible domains (Durable / Projects / Artifacts)
+> have no durable store yet (carried forward from Milestone 1 as backlog 5.5a).
+>
+> **Mini-Run 0 (SHIPPED 2026-04-24, commit TBD this session):** ADR-0003
+> supersedes ADR-0002 Decision 1. Text default pinned `gemma4` → `gemma4:e4b`
+> (avoids silent `:latest` drift and the 31B Dense FlashAttention hang).
+> Embedding default swapped `nomic-embed-text` → `bge-m3` (~25-point retrieval
+> accuracy lift per April 2026 RAG benchmarks). Ollama stays as the runtime;
+> no `mistral.rs` / `candle` / `ZML` pivot. Hygiene chore (`.gitattributes` +
+> `current_status.sh` newest-handoff fix) shipped separately in commit 344fbcf.
+>
+> **Revised run order (supersedes the §Run 1 / §Run 2 sequencing below):**
+>
+> 1. **M2 Run 1 (was Run 2) — Durable Store + ADR-0004.** Ship first so
+>    retrieval has real embed-eligible rows. Larger session.
+> 2. **M2 Run 2 (was Run 1) — Retrieval Wiring.** Consumes real BGE-M3
+>    vectors against the Durable store. Smaller session, cleaner demo.
+> 3. Runs 3, 4, 5, 6 — unchanged in shape. ADR numbering shifts: CI ADR
+>    becomes ADR-0005 (ADR-0003 was consumed by Mini-Run 0, ADR-0004 by the
+>    new Run 1).
+>
+> The §below text is the as-written-this-morning plan. Treat the amendment
+> as authoritative where they conflict; keep the original for milestone-close
+> retrospective.
+
 **Theme:** *Aether becomes retrieval-aware and user-facing.*
 
 **Premise.** Milestone 1 made the five subsystems trustworthy. Memory V2 can write embeddings, but the turn engine doesn't read them yet — which means the most expensive piece of Milestone 1 (embeddings infrastructure) has zero user-visible effect. Milestone 2's job is to close that loop, make the opt-in frictionless, and do the documentation work that pays back once the feature is real.
