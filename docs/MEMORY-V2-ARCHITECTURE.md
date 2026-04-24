@@ -367,16 +367,18 @@ Each step is a session of work.
    item retention indicators. Forget-all-in-domain action.
 5. ✅ **Retention sweep.** Boot-time pass + hourly background tick
    (`RETENTION_SWEEP_INTERVAL_MS` = 1 hour, `apps/desktop/src-tauri/src/main.rs`).
-   Iterates every known session via `SessionMemoryStore::list_sessions`
-   and evicts rows older than `MemoryConfig::retention_for(domain)`
-   via `SessionMemoryStore::prune_before`. Emits one aggregated
-   `memory_forgotten` telemetry row per domain that evicted ≥1
-   row, and one L5 audit row per sweep invocation via
-   `MemoryForget`. Today only the Session domain has a backing
-   store; other domains' retention policies persist in
-   `memory.json` for the future domain-typed durable store and
-   are skipped with a trace note. `run_retention_sweep` is in
-   `memory_service.rs`.
+   Iterates every domain in `AppState::DOMAINS_WITH_STORE` and
+   evicts rows older than `MemoryConfig::retention_for(domain)` via
+   `SessionMemoryStore::prune_before` on the correct lane
+   (resolved via `AppState::memory_for_domain`). Emits one
+   aggregated `memory_forgotten` telemetry row per domain that
+   evicted ≥1 row, and one L5 audit row per sweep invocation via
+   `MemoryForget`.
+   **Coverage post-ADR-0004 (2026-04-24):** Session +
+   **Durable**. Remaining four domains (Facts / Projects /
+   Preferences / Artifacts) persist their retention policies in
+   `memory.json` but are trace-skipped; ADR-0005 closes that gap.
+   `run_retention_sweep` is in `memory_service.rs`.
 6. ✅ **Embeddings (opt-in).** Behind the `embeddings` cargo
    feature on `aether-l2-memory`. Default provider: Ollama
    `bge-m3` (ADR-0003 supersedes ADR-0002 Decision 1; other

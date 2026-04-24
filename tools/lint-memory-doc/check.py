@@ -114,9 +114,21 @@ ANCHORS: list[tuple[str, str, str | None, str]] = [
     ("string", "packages/l2-memory/src/embeddings.rs", "AETHER_EMBED_OLLAMA_MODEL", "§10 step 6 model env var"),
     ("string", "packages/l2-memory/src/embeddings.rs", "AETHER_EMBED_OLLAMA_BASE_URL", "§10 step 6 base URL env var"),
 
+    # ---- ADR-0004 — Durable-domain store (Milestone 2 Run 1) ----
+    ("file",   "packages/storage/migrations/0005_durable_log.sql", None, "ADR-0004: Durable table migration"),
+    ("string", "packages/l2-memory/src/sqlite_session.rs", "DURABLE_TABLE", "ADR-0004: Durable table name const"),
+    ("string", "packages/l2-memory/src/sqlite_session.rs", "DEFAULT_TABLE", "ADR-0004: Default table name const"),
+    ("symbol", "packages/l2-memory/src/sqlite_session.rs", "pub fn with_table", "ADR-0004: parameterized constructor"),
+    ("symbol", "packages/l2-memory/src/sqlite_session.rs", "pub fn open_session_and_durable", "ADR-0004: paired opener"),
+    ("symbol", "packages/l2-memory/src/sqlite_session.rs", "pub struct SessionAndDurableStores", "ADR-0004: paired-opener return"),
+    ("symbol", "apps/desktop/src-tauri/src/state.rs", "pub fn memory_for_domain", "ADR-0004: domain router"),
+    ("symbol", "apps/desktop/src-tauri/src/state.rs", "pub const DOMAINS_WITH_STORE", "ADR-0004: stored-domain set"),
+    ("symbol", "apps/desktop/src-tauri/src/state.rs", "pub durable_memory", "ADR-0004: Durable lane on AppState"),
+
     # ---- ADRs ----
     ("file",   "docs/adr/ADR-0001-memory-domain-reconciliation.md", None, "ADR-0001: domain relocation"),
     ("file",   "docs/adr/ADR-0002-embeddings-provider-and-vector-backend.md", None, "ADR-0002: embeddings defaults"),
+    ("file",   "docs/adr/ADR-0004-durable-store-shape.md", None, "ADR-0004: Durable-store shape"),
 ]
 
 

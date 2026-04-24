@@ -1540,19 +1540,146 @@ mod tests {
     }
 
     #[test]
-    fn sweep_skips_non_session_domains_without_backing_store() {
-        // Set retention on a non-Session domain; sweep must not touch
-        // the Session-domain rows today (no domain-typed store yet).
+    fn sweep_skips_domains_without_a_backing_store_post_adr_0004() {
+        // ADR-0004 gave Durable a real backing store. The remaining
+        // four domains (Facts / Projects / Preferences / Artifacts)
+        // still have none — ADR-0005 closes that gap. Setting a TTL
+        // on one of those domains must not touch any other lane.
         let state = setup_state();
         let mut cfg = MemoryConfig::defaults();
-        cfg.retention_days.insert(MemoryDomain::Durable, Some(1));
-        // Explicitly null out Session so only Durable has a TTL.
+        cfg.retention_days.insert(MemoryDomain::Projects, Some(1));
         cfg.retention_days.insert(MemoryDomain::Session, None);
+        cfg.retention_days.insert(MemoryDomain::Durable, None);
         state.set_memory_config(cfg).unwrap();
-        seed_row(&state, "s1", "ancient", 1);
+        seed_row(&state, "s1", "ancient-session", 1);
         let evicted = state.run_retention_sweep(9_999_999).expect("sweep");
         assert_eq!(evicted, 0);
         assert_eq!(state.memory.recent("s1").unwrap().records.len(), 1);
+    }
+
+    // ---------- ADR-0004: per-domain lane isolation + Durable sweep ----------
+
+    fn seed_durable_row(state: &AppState, sid: &str, content: &str, ts_ms: u64) {
+        state
+            .durable_memory
+            .append(TurnMemoryRecord {
+                session_id: sid.into(),
+                sequence: 0,
+                role: MemoryRole::User,
+                content: content.into(),
+                timestamp_ms: ts_ms,
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn durable_writes_do_not_appear_in_session_lane() {
+        // Core ADR-0004 invariant: a write tagged Durable must never
+        // pollute the Session lane, and vice versa.
+        let state = setup_state();
+        state
+            .memory_write(
+                MemoryDomain::Durable,
+                "s1",
+                "durable-content".into(),
+                MemoryRole::User,
+            )
+            .expect("durable write");
+        state
+            .memory_write(
+                MemoryDomain::Session,
+                "s1",
+                "session-content".into(),
+                MemoryRole::User,
+            )
+            .expect("session write");
+
+        let session_window = state.memory.recent("s1").unwrap();
+        let durable_window = state.durable_memory.recent("s1").unwrap();
+
+        assert_eq!(session_window.records.len(), 1);
+        assert_eq!(session_window.records[0].content, "session-content");
+        assert_eq!(durable_window.records.len(), 1);
+        assert_eq!(durable_window.records[0].content, "durable-content");
+    }
+
+    #[test]
+    fn durable_sweep_prunes_durable_lane_without_touching_session() {
+        // The single regression guard ADR-0004 was designed to buy:
+        // running a retention sweep with a Durable TTL must evict
+        // Durable rows and leave Session rows of the same age alone.
+        let state = setup_state();
+        let mut cfg = MemoryConfig::defaults();
+        cfg.retention_days.insert(MemoryDomain::Durable, Some(1));
+        cfg.retention_days.insert(MemoryDomain::Session, None);
+        state.set_memory_config(cfg).unwrap();
+
+        let day_ms: u64 = 86_400_000;
+        let now_ms: u64 = 10 * day_ms;
+        // Seed ancient rows — well before the Durable 1-day cutoff.
+        seed_row(&state, "s1", "ancient-session", 1);
+        seed_durable_row(&state, "s1", "ancient-durable", 1);
+
+        let evicted = state.run_retention_sweep(now_ms).expect("sweep");
+        assert_eq!(evicted, 1, "exactly the durable row evicts");
+        assert_eq!(
+            state.memory.recent("s1").unwrap().records.len(),
+            1,
+            "Session row of equal age MUST survive (no TTL set)"
+        );
+        assert!(
+            state.durable_memory.recent("s1").unwrap().records.is_empty(),
+            "Durable row evicted by 1-day TTL"
+        );
+
+        // Aggregated memory_forgotten telemetry fires exactly once
+        // for the Durable domain (Decision #56 still applies).
+        let tel = state.telemetry_recent(50);
+        let durable_forgotten = tel
+            .iter()
+            .filter(|e| {
+                e.kind == telemetry_kind::FORGOTTEN && e.memory_domain.as_deref() == Some("durable")
+            })
+            .count();
+        assert_eq!(durable_forgotten, 1);
+    }
+
+    #[test]
+    fn memory_for_domain_falls_back_to_session_for_unbacked_domains() {
+        // Contract: Session + Durable get dedicated lanes; everything
+        // else falls back to Session with a warn!. This test guards
+        // against a silent regression where an unbacked domain starts
+        // routing elsewhere without an ADR-0005.
+        use std::sync::Arc as StdArc;
+        let state = setup_state();
+        let session_store = state.memory_for_domain(MemoryDomain::Session);
+        let durable_store = state.memory_for_domain(MemoryDomain::Durable);
+        let projects_store = state.memory_for_domain(MemoryDomain::Projects);
+        let facts_store = state.memory_for_domain(MemoryDomain::Facts);
+
+        // Session + Durable are distinct Arcs.
+        assert!(
+            !StdArc::ptr_eq(&session_store, &durable_store),
+            "Session and Durable must be distinct stores"
+        );
+        // Unbacked domains alias the Session store.
+        assert!(
+            StdArc::ptr_eq(&session_store, &projects_store),
+            "Projects currently falls back to Session (ADR-0005 pending)"
+        );
+        assert!(
+            StdArc::ptr_eq(&session_store, &facts_store),
+            "Facts currently falls back to Session (ADR-0005 pending)"
+        );
+    }
+
+    #[test]
+    fn domains_with_store_is_session_and_durable_only() {
+        // Rot-guard constant: if ADR-0005 lands and Projects/Artifacts
+        // gain stores, this assertion forces a deliberate update.
+        assert_eq!(AppState::DOMAINS_WITH_STORE.len(), 2);
+        assert!(AppState::DOMAINS_WITH_STORE.contains(&MemoryDomain::Session));
+        assert!(AppState::DOMAINS_WITH_STORE.contains(&MemoryDomain::Durable));
     }
 
     // ---------- Embeddings (Memory V2 step 6, ADR-0002) ----------
