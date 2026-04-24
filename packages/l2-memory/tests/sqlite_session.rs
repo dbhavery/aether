@@ -8,7 +8,7 @@
 
 use aether_l2_memory::{
     DurableSessionStore, MemoryRole, RecentMemoryConfig, RetentionPolicy, SessionMemoryStore,
-    TurnMemoryRecord,
+    SqliteSessionMemoryStore, TurnMemoryRecord, DEFAULT_TABLE, DURABLE_TABLE,
 };
 use tempfile::TempDir;
 
@@ -466,4 +466,145 @@ fn update_survives_reopen() {
     let w = db.store.recent("s1").unwrap();
     assert_eq!(w.records.len(), 1);
     assert_eq!(w.records[0].content, "v2");
+}
+
+// ---------- ADR-0004: per-domain table parameterization ----------
+
+#[test]
+fn default_table_constants_are_stable() {
+    // Rot-guard: the shell's DomainStoreRegistry (ADR-0004 §3) keys the
+    // Durable entry on this literal, and migration 0005 creates the
+    // table with this exact name. A rename requires a migration + a
+    // shell-side registry audit.
+    assert_eq!(DEFAULT_TABLE, "conversation_log");
+    assert_eq!(DURABLE_TABLE, "durable_log");
+}
+
+#[test]
+fn with_table_targets_the_named_table_and_isolates_rows() {
+    // Two stores sharing one DB but targeting different tables should
+    // NOT see each other's rows. This is the core per-domain isolation
+    // promise ADR-0004 makes.
+    let tmp = TempDir::new().unwrap();
+    let db = DurableSessionStore::open(tmp.path().join("aether.db"))
+        .expect("durable session store open");
+    let conn = db.conn.clone();
+    let config = RecentMemoryConfig::default_narrow();
+    let retention = RetentionPolicy::unbounded();
+
+    let session_store =
+        SqliteSessionMemoryStore::with_table(conn.clone(), config, retention, DEFAULT_TABLE);
+    let durable_store =
+        SqliteSessionMemoryStore::with_table(conn.clone(), config, retention, DURABLE_TABLE);
+
+    assert_eq!(session_store.table_name(), DEFAULT_TABLE);
+    assert_eq!(durable_store.table_name(), DURABLE_TABLE);
+
+    session_store
+        .append(rec("s1", MemoryRole::User, "session-only", 10))
+        .unwrap();
+    durable_store
+        .append(rec("s1", MemoryRole::User, "durable-only", 20))
+        .unwrap();
+
+    let ses = session_store.recent("s1").unwrap();
+    let dur = durable_store.recent("s1").unwrap();
+
+    assert_eq!(ses.records.len(), 1, "session store sees only its row");
+    assert_eq!(ses.records[0].content, "session-only");
+    assert_eq!(dur.records.len(), 1, "durable store sees only its row");
+    assert_eq!(dur.records[0].content, "durable-only");
+}
+
+#[test]
+fn open_session_and_durable_returns_both_stores_on_shared_conn() {
+    let tmp = TempDir::new().unwrap();
+    let path = tmp.path().join("aether.db");
+    let pair = DurableSessionStore::open_session_and_durable(
+        &path,
+        RecentMemoryConfig::default_narrow(),
+        RetentionPolicy::default_bounded(),
+        RetentionPolicy::unbounded(),
+    )
+    .expect("open_session_and_durable");
+
+    assert_eq!(pair.session.table_name(), DEFAULT_TABLE);
+    assert_eq!(pair.durable.table_name(), DURABLE_TABLE);
+    assert_eq!(
+        pair.session.retention().max_rows_per_session,
+        Some(500),
+        "Session store carries default bounded retention"
+    );
+    assert!(
+        pair.durable.retention().max_rows_per_session.is_none(),
+        "Durable store carries unbounded row-cap retention"
+    );
+
+    // Write into each and verify cross-store isolation survives reopen.
+    pair.session
+        .append(rec("s1", MemoryRole::User, "in-session", 1))
+        .unwrap();
+    pair.durable
+        .append(rec("durable", MemoryRole::User, "in-durable", 2))
+        .unwrap();
+    drop(pair);
+
+    let pair2 = DurableSessionStore::open_session_and_durable(
+        &path,
+        RecentMemoryConfig::default_narrow(),
+        RetentionPolicy::default_bounded(),
+        RetentionPolicy::unbounded(),
+    )
+    .expect("reopen");
+    assert_eq!(
+        pair2.session.recent("s1").unwrap().records[0].content,
+        "in-session"
+    );
+    assert_eq!(
+        pair2.durable.recent("durable").unwrap().records[0].content,
+        "in-durable"
+    );
+    // Crucially: neither store sees the other's session_id rows.
+    assert!(pair2.session.recent("durable").unwrap().records.is_empty());
+    assert!(pair2.durable.recent("s1").unwrap().records.is_empty());
+}
+
+#[test]
+fn durable_store_retention_prunes_only_its_own_table() {
+    // If the shell sweeps Durable with a 30-day cutoff, Session rows of
+    // the same age must survive. Regression test for the "shared
+    // table = cross-contamination" bug ADR-0004 Option (a) would have
+    // introduced.
+    let tmp = TempDir::new().unwrap();
+    let path = tmp.path().join("aether.db");
+    let pair = DurableSessionStore::open_session_and_durable(
+        &path,
+        RecentMemoryConfig::default_narrow(),
+        RetentionPolicy::unbounded(),
+        RetentionPolicy::unbounded(),
+    )
+    .expect("open pair");
+    pair.session
+        .append(rec("s1", MemoryRole::User, "session-ancient", 1_000))
+        .unwrap();
+    pair.durable
+        .append(rec("durable", MemoryRole::User, "durable-ancient", 1_000))
+        .unwrap();
+
+    // 30-day TTL means cutoff = now - 30d. We use a synthetic cutoff
+    // above both timestamps to guarantee both ancient rows are "older"
+    // than the cutoff.
+    let cutoff = 10_000u64;
+    let removed = pair.durable.prune_older_than("durable", cutoff).unwrap();
+    assert_eq!(removed, 1, "durable row evicted");
+    assert_eq!(
+        pair.session.recent("s1").unwrap().records.len(),
+        1,
+        "session row must NOT be evicted by a durable-lane sweep"
+    );
+    assert_eq!(
+        pair.durable.recent("durable").unwrap().records.len(),
+        0,
+        "durable lane is empty after its own sweep"
+    );
 }

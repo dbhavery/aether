@@ -119,39 +119,75 @@ impl Default for RetentionPolicy {
     }
 }
 
+/// Default table name for the store — the Session-lane log.
+/// `SqliteSessionMemoryStore::new*` constructors use this; per-domain
+/// stores (e.g. Durable) use [`Self::with_table`] + its migration-created
+/// sibling table. See ADR-0004.
+pub const DEFAULT_TABLE: &str = "conversation_log";
+
+/// Table name for the Durable-domain log, introduced in migration
+/// `0005_durable_log.sql`. Shape-identical to [`DEFAULT_TABLE`]; pair
+/// with [`Self::with_table`] (ADR-0004 §Decisions 1, 4).
+pub const DURABLE_TABLE: &str = "durable_log";
+
 /// SQLite-backed [`SessionMemoryStore`].
 #[derive(Debug)]
 pub struct SqliteSessionMemoryStore {
     conn: Arc<Mutex<Connection>>,
     config: RecentMemoryConfig,
     retention: RetentionPolicy,
+    table_name: &'static str,
 }
 
 impl SqliteSessionMemoryStore {
-    /// Build a store from a shared connection with an explicit read
-    /// window and the [`RetentionPolicy::default_bounded`] retention
-    /// policy. Use [`Self::new_with_retention`] for custom retention.
+    /// Build a store targeting the default `conversation_log` table with
+    /// explicit read window and the [`RetentionPolicy::default_bounded`]
+    /// retention policy. Use [`Self::new_with_retention`] for custom
+    /// retention, or [`Self::with_table`] for per-domain stores
+    /// (ADR-0004).
     pub fn new(conn: Arc<Mutex<Connection>>, config: RecentMemoryConfig) -> Self {
         Self::new_with_retention(conn, config, RetentionPolicy::default_bounded())
     }
 
-    /// Build a store with explicit read window and retention policy.
+    /// Build a store targeting `DEFAULT_TABLE` with explicit read window
+    /// and retention policy.
     pub fn new_with_retention(
         conn: Arc<Mutex<Connection>>,
         config: RecentMemoryConfig,
         retention: RetentionPolicy,
     ) -> Self {
+        Self::with_table(conn, config, retention, DEFAULT_TABLE)
+    }
+
+    /// Build a store targeting an arbitrary log table. Per ADR-0004,
+    /// this is the constructor used by per-domain stores (Durable today;
+    /// ADR-0005 will add Projects/Artifacts). The caller must ensure the
+    /// table exists with the conversation-log shape; the store does not
+    /// run migrations.
+    pub fn with_table(
+        conn: Arc<Mutex<Connection>>,
+        config: RecentMemoryConfig,
+        retention: RetentionPolicy,
+        table_name: &'static str,
+    ) -> Self {
         Self {
             conn,
             config,
             retention,
+            table_name,
         }
     }
 
     /// Build with [`RecentMemoryConfig::default_narrow`] and
-    /// [`RetentionPolicy::default_bounded`].
+    /// [`RetentionPolicy::default_bounded`] on `DEFAULT_TABLE`.
     pub fn new_default(conn: Arc<Mutex<Connection>>) -> Self {
         Self::new(conn, RecentMemoryConfig::default_narrow())
+    }
+
+    /// Table this store writes to. Exposed for diagnostics and tests;
+    /// immutable after construction.
+    pub fn table_name(&self) -> &'static str {
+        self.table_name
     }
 
     /// Retention policy this store will apply. Exposed for diagnostics
@@ -173,12 +209,12 @@ impl SqliteSessionMemoryStore {
             .lock()
             .map_err(|e| L2Error::Internal(format!("sqlite memory lock poisoned: {e}")))?;
         let cutoff = now_ms.saturating_sub(max_age_ms) as i64;
+        let sql = format!(
+            "DELETE FROM {} WHERE session_id = ?1 AND timestamp_ms < ?2",
+            self.table_name
+        );
         let removed = conn
-            .execute(
-                "DELETE FROM conversation_log \
-                 WHERE session_id = ?1 AND timestamp_ms < ?2",
-                params![session_id, cutoff],
-            )
+            .execute(&sql, params![session_id, cutoff])
             .map_err(|e| L2Error::Storage(format!("prune_session: {e}")))?;
         Ok(removed)
     }
@@ -193,12 +229,12 @@ impl SqliteSessionMemoryStore {
             .conn
             .lock()
             .map_err(|e| L2Error::Internal(format!("sqlite memory lock poisoned: {e}")))?;
+        let sql = format!(
+            "DELETE FROM {} WHERE session_id = ?1 AND timestamp_ms < ?2",
+            self.table_name
+        );
         let removed = conn
-            .execute(
-                "DELETE FROM conversation_log \
-                 WHERE session_id = ?1 AND timestamp_ms < ?2",
-                params![session_id, cutoff_ms as i64],
-            )
+            .execute(&sql, params![session_id, cutoff_ms as i64])
             .map_err(|e| L2Error::Storage(format!("prune_older_than: {e}")))?;
         Ok(removed)
     }
@@ -215,11 +251,9 @@ impl SqliteSessionMemoryStore {
             .lock()
             .map_err(|e| L2Error::Internal(format!("sqlite memory lock poisoned: {e}")))?;
         let cutoff = now_ms.saturating_sub(max_age_ms) as i64;
+        let sql = format!("DELETE FROM {} WHERE timestamp_ms < ?1", self.table_name);
         let removed = conn
-            .execute(
-                "DELETE FROM conversation_log WHERE timestamp_ms < ?1",
-                params![cutoff],
-            )
+            .execute(&sql, params![cutoff])
             .map_err(|e| L2Error::Storage(format!("prune_all: {e}")))?;
         Ok(removed)
     }
@@ -240,16 +274,17 @@ impl SqliteSessionMemoryStore {
         }
         // Delete rows where sequence is below `(max_sequence - max_rows + 1)`.
         // SQLite handles the subquery efficiently because `(session_id,
-        // sequence)` is the primary key (declared in migration 0004).
+        // sequence)` is the primary key (declared in migration 0004 / 0005).
+        let sql = format!(
+            "DELETE FROM {0} \
+             WHERE session_id = ?1 AND sequence <= ( \
+                 SELECT MAX(sequence) - ?2 FROM {0} \
+                 WHERE session_id = ?1 \
+             )",
+            self.table_name
+        );
         let removed = conn
-            .execute(
-                "DELETE FROM conversation_log \
-                 WHERE session_id = ?1 AND sequence <= ( \
-                     SELECT MAX(sequence) - ?2 FROM conversation_log \
-                     WHERE session_id = ?1 \
-                 )",
-                params![session_id, max_rows as i64],
-            )
+            .execute(&sql, params![session_id, max_rows as i64])
             .map_err(|e| L2Error::Storage(format!("enforce_row_cap: {e}")))?;
         Ok(removed)
     }
@@ -265,12 +300,12 @@ impl SqliteSessionMemoryStore {
         // SQLite's MAX() returns NULL for no rows, which rusqlite maps to
         // `Option<i64>` here. Treat NULL / missing as `0` so the next
         // sequence is `1`, mirroring the in-memory store.
+        let sql = format!(
+            "SELECT MAX(sequence) FROM {} WHERE session_id = ?1",
+            self.table_name
+        );
         let max: Option<i64> = conn
-            .query_row(
-                "SELECT MAX(sequence) FROM conversation_log WHERE session_id = ?1",
-                params![session_id],
-                |r| r.get::<_, Option<i64>>(0),
-            )
+            .query_row(&sql, params![session_id], |r| r.get::<_, Option<i64>>(0))
             .map_err(|e| L2Error::Storage(format!("next_sequence: {e}")))?;
         Ok((max.unwrap_or(0) as u64) + 1)
     }
@@ -284,10 +319,14 @@ impl SessionMemoryStore for SqliteSessionMemoryStore {
             .map_err(|e| L2Error::Internal(format!("sqlite memory lock poisoned: {e}")))?;
         let seq = self.next_sequence(&conn, &record.session_id)?;
         let role = role_wire(record.role);
-        conn.execute(
-            "INSERT INTO conversation_log \
+        let sql = format!(
+            "INSERT INTO {} \
                 (session_id, sequence, role, content, timestamp_ms) \
              VALUES (?1, ?2, ?3, ?4, ?5)",
+            self.table_name
+        );
+        conn.execute(
+            &sql,
             params![
                 record.session_id,
                 seq as i64,
@@ -315,14 +354,16 @@ impl SessionMemoryStore for SqliteSessionMemoryStore {
         // would complicate the SQL without changing behaviour for the
         // window sizes v0 actually uses (tens of turns). Deferred.
         let limit = self.config.max_turns.max(1) as i64;
+        let sql = format!(
+            "SELECT sequence, role, content, timestamp_ms \
+             FROM {} \
+             WHERE session_id = ?1 \
+             ORDER BY sequence DESC \
+             LIMIT ?2",
+            self.table_name
+        );
         let mut stmt = conn
-            .prepare(
-                "SELECT sequence, role, content, timestamp_ms \
-                 FROM conversation_log \
-                 WHERE session_id = ?1 \
-                 ORDER BY sequence DESC \
-                 LIMIT ?2",
-            )
+            .prepare(&sql)
             .map_err(|e| L2Error::Storage(format!("recent prepare: {e}")))?;
         let rows = stmt
             .query_map(params![session_id, limit], |r| {
@@ -371,11 +412,9 @@ impl SessionMemoryStore for SqliteSessionMemoryStore {
             .conn
             .lock()
             .map_err(|e| L2Error::Internal(format!("sqlite memory lock poisoned: {e}")))?;
-        conn.execute(
-            "DELETE FROM conversation_log WHERE session_id = ?1",
-            params![session_id],
-        )
-        .map_err(|e| L2Error::Storage(format!("clear_session: {e}")))?;
+        let sql = format!("DELETE FROM {} WHERE session_id = ?1", self.table_name);
+        conn.execute(&sql, params![session_id])
+            .map_err(|e| L2Error::Storage(format!("clear_session: {e}")))?;
         Ok(())
     }
 
@@ -384,12 +423,12 @@ impl SessionMemoryStore for SqliteSessionMemoryStore {
             .conn
             .lock()
             .map_err(|e| L2Error::Internal(format!("sqlite memory lock poisoned: {e}")))?;
+        let sql = format!(
+            "DELETE FROM {} WHERE session_id = ?1 AND sequence = ?2",
+            self.table_name
+        );
         let affected = conn
-            .execute(
-                "DELETE FROM conversation_log \
-                 WHERE session_id = ?1 AND sequence = ?2",
-                params![session_id, sequence as i64],
-            )
+            .execute(&sql, params![session_id, sequence as i64])
             .map_err(|e| L2Error::Storage(format!("remove: {e}")))?;
         Ok(affected > 0)
     }
@@ -407,13 +446,12 @@ impl SessionMemoryStore for SqliteSessionMemoryStore {
         // Only `content` is rewritten. `role`, `timestamp_ms`, and
         // `sequence` are preserved — Memory V2 treats an "edited fact"
         // as the same item with revised text, not a new turn.
+        let sql = format!(
+            "UPDATE {} SET content = ?3 WHERE session_id = ?1 AND sequence = ?2",
+            self.table_name
+        );
         let affected = conn
-            .execute(
-                "UPDATE conversation_log \
-                 SET content = ?3 \
-                 WHERE session_id = ?1 AND sequence = ?2",
-                params![session_id, sequence as i64, new_content],
-            )
+            .execute(&sql, params![session_id, sequence as i64, new_content])
             .map_err(|e| L2Error::Storage(format!("update: {e}")))?;
         Ok(affected > 0)
     }
@@ -430,8 +468,9 @@ impl SessionMemoryStore for SqliteSessionMemoryStore {
             .conn
             .lock()
             .map_err(|e| L2Error::Internal(format!("sqlite memory lock poisoned: {e}")))?;
+        let sql = format!("SELECT DISTINCT session_id FROM {}", self.table_name);
         let mut stmt = conn
-            .prepare("SELECT DISTINCT session_id FROM conversation_log")
+            .prepare(&sql)
             .map_err(|e| L2Error::Storage(format!("list_sessions prepare: {e}")))?;
         let rows = stmt
             .query_map([], |r| r.get::<_, String>(0))
@@ -511,6 +550,65 @@ impl DurableSessionStore {
     pub fn concrete(&self) -> Option<Arc<SqliteSessionMemoryStore>> {
         self.concrete.clone()
     }
+
+    /// Open a DB and return a pair of stores targeting the Session and
+    /// Durable log tables respectively, sharing one connection.
+    ///
+    /// The Session store targets [`DEFAULT_TABLE`] (`conversation_log`);
+    /// the Durable store targets [`DURABLE_TABLE`] (`durable_log`). Both
+    /// tables are guaranteed to exist after this call — migration `0005`
+    /// is additive and runs automatically via `open_with_migrations`.
+    ///
+    /// The two stores MAY share the same `RecentMemoryConfig` (turns +
+    /// char window) but typically carry different retention:
+    /// - Session — `RetentionPolicy::default_bounded` (500-row cap).
+    /// - Durable — `RetentionPolicy::unbounded` at the row-cap dial;
+    ///   age-based pruning is driven by the shell's retention sweep
+    ///   using `memory.json::retention_days.durable` (30 days default).
+    ///
+    /// Returns both stores plus the shared connection so the shell can
+    /// retain them in a registry keyed by `MemoryDomain`. Per ADR-0004
+    /// this is the canonical per-domain opener; future ADR-0005 will
+    /// extend the API to include Projects / Artifacts.
+    pub fn open_session_and_durable(
+        path: impl AsRef<Path>,
+        config: RecentMemoryConfig,
+        session_retention: RetentionPolicy,
+        durable_retention: RetentionPolicy,
+    ) -> Result<SessionAndDurableStores, OpenError> {
+        let outcome = aether_storage::open_with_migrations(path)?;
+        let conn = Arc::new(Mutex::new(outcome.conn));
+        let session = Arc::new(SqliteSessionMemoryStore::with_table(
+            conn.clone(),
+            config,
+            session_retention,
+            DEFAULT_TABLE,
+        ));
+        let durable = Arc::new(SqliteSessionMemoryStore::with_table(
+            conn.clone(),
+            config,
+            durable_retention,
+            DURABLE_TABLE,
+        ));
+        Ok(SessionAndDurableStores {
+            session,
+            durable,
+            conn,
+        })
+    }
+}
+
+/// Return shape for [`DurableSessionStore::open_session_and_durable`].
+/// Exposed as a struct (not a tuple) so the shell-side registry wiring
+/// is self-documenting and future ADR-0005 additions (projects,
+/// artifacts) are straightforward field adds.
+pub struct SessionAndDurableStores {
+    /// Session-lane store, targets `conversation_log`.
+    pub session: Arc<SqliteSessionMemoryStore>,
+    /// Durable-lane store, targets `durable_log`.
+    pub durable: Arc<SqliteSessionMemoryStore>,
+    /// Shared connection for future per-domain additions.
+    pub conn: Arc<Mutex<Connection>>,
 }
 
 fn role_wire(role: MemoryRole) -> &'static str {

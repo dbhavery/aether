@@ -43,12 +43,21 @@ pub const MIGRATION_0004_CONVERSATION_LOG: Migration = Migration {
     sql: include_str!("../migrations/0004_conversation_log.sql"),
 };
 
+/// ADR-0004 — Durable-domain log table for Memory V2's Durable lane.
+/// Shape-identical to `conversation_log`; routed by the shell's
+/// `DomainStoreRegistry` via `SqliteSessionMemoryStore::with_table`.
+pub const MIGRATION_0005_DURABLE_LOG: Migration = Migration {
+    id: "0005_durable_log",
+    sql: include_str!("../migrations/0005_durable_log.sql"),
+};
+
 /// Ordered, append-only migration set. New migrations push to the tail.
 pub const MIGRATIONS: &[Migration] = &[
     MIGRATION_0001_INIT,
     MIGRATION_0002_AUDIT_CHAIN,
     MIGRATION_0003_AUDIT_SEAL,
     MIGRATION_0004_CONVERSATION_LOG,
+    MIGRATION_0005_DURABLE_LOG,
 ];
 
 /// Return the expected schema-version id after applying every known migration.
@@ -85,6 +94,6 @@ mod tests {
 
     #[test]
     fn head_id_matches_last_entry() {
-        assert_eq!(expected_head_id(), "0004_conversation_log");
+        assert_eq!(expected_head_id(), "0005_durable_log");
     }
 }
