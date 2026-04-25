@@ -47,6 +47,7 @@ use crate::mic_permissions::{self, MicPermission};
 use crate::presence_config::{self, PresenceConfig};
 use crate::provider::ProviderMode;
 use crate::retrieval::ReadinessState;
+use crate::tier::{self, Tier, TierConfig};
 
 /// The single active session id for v0. One conversation per app instance.
 pub const SESSION_ID: &str = "desktop-session";
@@ -206,6 +207,15 @@ pub struct AppState {
     /// the `embeddings_readiness` Tauri command for the Trust drawer
     /// indicator + drawer-icon attention badge.
     retrieval_readiness: RwLock<ReadinessState>,
+    /// ADR-0006 hardware tier model — selected tier, detected tier,
+    /// hardware snapshot. Read by every tier-aware subsystem (today
+    /// embeddings onboarding via ADR-0007 D7; future TTS/vision/avatar
+    /// ADRs). Disk-backed when `tier_config_path` is wired.
+    tier_config: RwLock<TierConfig>,
+    /// Disk-backed location for `tier_config`. `None` in sandboxes;
+    /// the in-memory copy still works but changes do not survive
+    /// restarts.
+    tier_config_path: Option<PathBuf>,
 }
 
 /// Error surface for the cached vision model-list helpers. Lets the
@@ -517,6 +527,8 @@ impl AppState {
             vision_model_cache: ModelListCache::from_env(),
             voice: RwLock::new(VoiceRegistry::empty()),
             retrieval_readiness: RwLock::new(ReadinessState::Unknown),
+            tier_config: RwLock::new(TierConfig::defaults()),
+            tier_config_path: None,
         })
     }
 
@@ -1003,6 +1015,92 @@ impl AppState {
         let loaded = memory_config::load_or_default(&path);
         *self.memory_config.write().expect("memory cfg write lock") = loaded;
         self.memory_config_path = Some(path);
+    }
+
+    /// Wire the on-disk persistence file for the tier config (ADR-0006).
+    /// Loads the persisted state with safe fallbacks. If `path` does
+    /// not yet exist, the in-memory `TierConfig::defaults()` (Spark,
+    /// pre-detection) stands until the first detect/set_tier call.
+    pub fn attach_tier_config_file(&mut self, path: PathBuf) {
+        let loaded = tier::load_or_default(&path);
+        *self.tier_config.write().expect("tier cfg write lock") = loaded;
+        self.tier_config_path = Some(path);
+    }
+
+    /// Snapshot the current tier config. Cheap clone; safe for Tauri.
+    pub fn tier_config(&self) -> TierConfig {
+        self.tier_config
+            .read()
+            .expect("tier cfg read lock")
+            .clone()
+    }
+
+    /// User-initiated tier change (Settings UI). Updates `selected_tier`,
+    /// flips `manual_override` if the new selection diverges from
+    /// `detected_tier`, and persists atomically when a path is wired.
+    /// Returns the resulting snapshot for the UI to echo back.
+    pub fn set_tier(&self, new_tier: Tier) -> Result<TierConfig, String> {
+        let next = {
+            let mut w = self.tier_config.write().expect("tier cfg write lock");
+            w.selected_tier = new_tier;
+            w.manual_override = new_tier != w.detected_tier;
+            w.clone()
+        };
+        if let Some(path) = &self.tier_config_path {
+            tier::save(path, &next).map_err(|e| format!("persist tier config: {e}"))?;
+        }
+        Ok(next)
+    }
+
+    /// Run a fresh hardware-detection pass and update the tier config
+    /// in place. The recommended tier is recomputed; if the user has
+    /// not manually overridden, `selected_tier` follows the detection.
+    /// If they have, only `detected_tier` and `hardware_snapshot`
+    /// update — their manual selection stays.
+    ///
+    /// Light-usage: calls `hardware::detect`, which is a pure read
+    /// (no model loads, no rendering). Returns the resulting config
+    /// snapshot for the UI to echo.
+    pub fn redetect_hardware(&self) -> Result<TierConfig, String> {
+        let app_data = self
+            .tier_config_path
+            .as_ref()
+            .and_then(|p| p.parent())
+            .map(|p| p.to_path_buf());
+        // Only probe Ollama when the embeddings flag is on; redetection
+        // shouldn't poke at a daemon the user has explicitly turned
+        // off.
+        let cfg = self.memory_config();
+        let ollama_url = if cfg.embeddings.enabled {
+            Some("http://127.0.0.1:11434")
+        } else {
+            None
+        };
+        let snapshot = crate::hardware::detect(app_data.as_deref(), ollama_url);
+        let recommended = tier::recommend_tier(&snapshot);
+
+        let next = {
+            let mut w = self.tier_config.write().expect("tier cfg write lock");
+            w.detected_tier = recommended;
+            w.hardware_snapshot = snapshot;
+            w.detected_at_ms = w
+                .hardware_snapshot
+                .detected_at_ms
+                .max(w.detected_at_ms);
+            // If selected matches the new detected, drop any manual-
+            // override flag — user's choice now coincides with detection.
+            if w.selected_tier == recommended {
+                w.manual_override = false;
+            } else if !w.manual_override {
+                // No prior manual override: follow the new detection.
+                w.selected_tier = recommended;
+            }
+            w.clone()
+        };
+        if let Some(path) = &self.tier_config_path {
+            tier::save(path, &next).map_err(|e| format!("persist tier config: {e}"))?;
+        }
+        Ok(next)
     }
 
     /// Snapshot the current memory policy. Cheap clone; safe to hand
