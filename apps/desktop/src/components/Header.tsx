@@ -5,6 +5,7 @@ import type {
 } from "../lib/types";
 import { PresenceDot } from "./PresenceDot";
 import { ProviderBadge } from "./ProviderBadge";
+import { ReadinessIndicator } from "./ReadinessIndicator";
 
 interface Props {
   banner: CompanionBanner;
@@ -80,14 +81,16 @@ export function Header({
         >
           Memory
         </button>
-        <button
-          type="button"
-          onClick={onOpenTrust}
-          className="rounded-md border border-transparent px-2.5 py-1 text-[11.5px] text-aether-muted transition-colors hover:border-aether-border hover:text-aether-text"
-          title="Review every decision Aether has made"
-        >
-          Trust
-        </button>
+        <ReadinessIndicator>
+          <button
+            type="button"
+            onClick={onOpenTrust}
+            className="rounded-md border border-transparent px-2.5 py-1 text-[11.5px] text-aether-muted transition-colors hover:border-aether-border hover:text-aether-text"
+            title="Review every decision Aether has made"
+          >
+            Trust
+          </button>
+        </ReadinessIndicator>
         <button
           type="button"
           onClick={onOpenCamera}

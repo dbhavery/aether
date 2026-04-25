@@ -18,6 +18,7 @@ import { speechRouteSummary } from "../lib/speechProviders";
 import { isVoiceTurn, VOICE_TURN_KINDS } from "../lib/voiceTurns";
 import { truncateMiddleForDisplay } from "../lib/displayString";
 import { MemoryTab } from "./MemoryTab";
+import { RetrievalTab } from "./RetrievalTab";
 import type {
   AuditDecisionLabel,
   PresenceConfig,
@@ -31,7 +32,7 @@ import type {
  * in the row's `title` attribute so it stays recoverable on hover. */
 const MODEL_ID_DISPLAY_MAX = 28;
 
-type Tab = "audit" | "history" | "memory";
+type Tab = "audit" | "history" | "memory" | "retrieval";
 type HistoryFilter = "all" | "media" | "voice" | "presence";
 
 /** One row of the interleaved History list. Turn telemetry and
@@ -175,7 +176,9 @@ export function TrustDrawer({ open, refreshKey, onClose, initialTab }: Props) {
               ? "What Aether decided, in order"
               : tab === "memory"
                 ? "What Aether remembers, by domain"
-                : "Recent turn timing and usage"}
+                : tab === "retrieval"
+                  ? "Whether Aether can find what it remembers"
+                  : "Recent turn timing and usage"}
           </div>
         </div>
         <button
@@ -202,6 +205,11 @@ export function TrustDrawer({ open, refreshKey, onClose, initialTab }: Props) {
           label="Memory"
         />
         <TabButton
+          active={tab === "retrieval"}
+          onClick={() => setTab("retrieval")}
+          label="Retrieval"
+        />
+        <TabButton
           active={tab === "history"}
           onClick={() => setTab("history")}
           label="History"
@@ -214,6 +222,9 @@ export function TrustDrawer({ open, refreshKey, onClose, initialTab }: Props) {
         )}
         {!err && tab === "memory" && (
           <MemoryTab open={open} refreshKey={refreshKey} />
+        )}
+        {!err && tab === "retrieval" && (
+          <RetrievalTab refreshKey={refreshKey} />
         )}
         {!err && tab === "history" && (
           <HistoryView
@@ -239,6 +250,12 @@ export function TrustDrawer({ open, refreshKey, onClose, initialTab }: Props) {
           <span>
             Forget and edit land immediately. User-sensitive domains ask for
             confirmation first.
+          </span>
+        )}
+        {tab === "retrieval" && (
+          <span>
+            Retrieval is auxiliary. Turns still flow when it&rsquo;s off; only
+            the &ldquo;remember what we said&rdquo; quality drops.
           </span>
         )}
         {tab === "history" && (
