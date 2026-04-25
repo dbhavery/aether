@@ -31,6 +31,7 @@ import { PresetPicker, readStoredPreset } from "./components/PresetPicker";
 import { ScreenPanel } from "./components/ScreenPanel";
 import { SettingsDrawer } from "./components/SettingsDrawer";
 import { Transcript } from "./components/Transcript";
+import { ToastContainer } from "./components/ToastContainer";
 import { TrustDrawer } from "./components/TrustDrawer";
 import { VoicePanel } from "./components/VoicePanel";
 
@@ -409,6 +410,7 @@ export function App() {
           onReject={() => handleResolve(false)}
         />
       )}
+      <ToastContainer />
     </div>
   );
 }
