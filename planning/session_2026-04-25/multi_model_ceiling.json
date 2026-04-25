@@ -1,0 +1,127 @@
+{
+  "timestamp": "2026-04-25T15:37:06.080647+00:00",
+  "hardware": {
+    "gpu": "RTX 3090 Ti",
+    "vram_total_mb": 24564
+  },
+  "ollama_version": "0.21.2",
+  "events": [
+    {
+      "step": 0,
+      "action": "baseline (no models loaded)",
+      "vram_used_mb_nvidia_smi": 3833,
+      "vram_used_mb_ps_sum": 0,
+      "models_resident": [],
+      "eviction": null
+    },
+    {
+      "step": 1,
+      "action": "load gemma4:e4b",
+      "vram_used_mb_nvidia_smi": 14255,
+      "vram_used_mb_ps_sum": 10628,
+      "models_resident": [
+        {
+          "name": "gemma4:e4b",
+          "size_vram_mb": 10628
+        }
+      ],
+      "eviction": null,
+      "load_elapsed_ms": 6824
+    },
+    {
+      "step": 2,
+      "action": "load bge-m3",
+      "vram_used_mb_nvidia_smi": 15940,
+      "vram_used_mb_ps_sum": 11870,
+      "models_resident": [
+        {
+          "name": "bge-m3:latest",
+          "size_vram_mb": 1242
+        },
+        {
+          "name": "gemma4:e4b",
+          "size_vram_mb": 10628
+        }
+      ],
+      "eviction": null,
+      "load_elapsed_ms": 2359
+    },
+    {
+      "step": 3,
+      "action": "load nomic-embed-text",
+      "vram_used_mb_nvidia_smi": 16736,
+      "vram_used_mb_ps_sum": 12438,
+      "models_resident": [
+        {
+          "name": "nomic-embed-text:latest",
+          "size_vram_mb": 568
+        },
+        {
+          "name": "bge-m3:latest",
+          "size_vram_mb": 1242
+        },
+        {
+          "name": "gemma4:e4b",
+          "size_vram_mb": 10628
+        }
+      ],
+      "eviction": null,
+      "load_elapsed_ms": 732
+    },
+    {
+      "step": 4,
+      "action": "load qwen3:1.7b (4th small-model probe)",
+      "vram_used_mb_nvidia_smi": 11482,
+      "vram_used_mb_ps_sum": 6835,
+      "models_resident": [
+        {
+          "name": "qwen3:1.7b",
+          "size_vram_mb": 5025
+        },
+        {
+          "name": "nomic-embed-text:latest",
+          "size_vram_mb": 568
+        },
+        {
+          "name": "bge-m3:latest",
+          "size_vram_mb": 1242
+        }
+      ],
+      "eviction": [
+        "gemma4:e4b"
+      ],
+      "load_elapsed_ms": 5614
+    },
+    {
+      "step": 5,
+      "action": "load gemma4:26b (large-model coexistence probe)",
+      "vram_used_mb_nvidia_smi": 23051,
+      "vram_used_mb_ps_sum": 19570,
+      "models_resident": [
+        {
+          "name": "gemma4:26b",
+          "size_vram_mb": 19570
+        }
+      ],
+      "eviction": [
+        "bge-m3:latest",
+        "nomic-embed-text:latest",
+        "qwen3:1.7b"
+      ],
+      "load_elapsed_ms": 11929
+    }
+  ],
+  "ceiling_findings": {
+    "max_models_no_eviction": 3,
+    "ceiling_vram_mb": 23051,
+    "first_eviction_at_step": 4,
+    "evicted_model": [
+      "gemma4:e4b"
+    ],
+    "baseline_vram_mb": 3833,
+    "headroom_above_baseline_mb": 19218,
+    "headroom_remaining_mb": 1513
+  },
+  "post_cleanup_resident": [],
+  "post_cleanup_vram_mb": 3833
+}

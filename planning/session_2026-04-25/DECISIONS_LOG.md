@@ -123,3 +123,42 @@ section after the insertion point, cascading to every other prompt
 and plan that cites the canonical files. Updating the citation is
 local and surgical; the system-design plan already proves these
 new anchor paths work.
+
+## D-006 — Phase 3C: ceiling is model-count, not VRAM (Forge tier)
+
+**Context.** Phase 3C handoff scope expected the `gemma4:26b` add to
+either coexist with the baseline trio or evict on VRAM pressure.
+Neither happened cleanly — the binding ceiling we hit was Ollama's
+`OLLAMA_MAX_LOADED_MODELS=3` default, and `gemma4:26b` additionally
+forced solo residency at 94% card use.
+
+**Decision.** Document the empirical ceiling in
+`planning/session_2026-04-25/MULTI_MODEL_CEILING_REPORT.md` and
+propose (not commit) an ADR-0006 §6 framing update: treat
+`OLLAMA_MAX_LOADED_MODELS` as a first-class tier-tunable for Forge,
+since the 24 GB card has ~7 GB of stranded headroom under stock
+config. Numerical reservations in §6 (~4 GB Flame, ~8 GB Forge)
+remain intact; only the operational framing shifts.
+
+**Why no in-flight ADR edit.** Per Phase 3C constraints, ADR-0006
+edits are a separate ratification commit. The proposed delta is
+surfaced in the report for Don to ratify.
+
+**Substitutions vs. handoff plan.** None. `gemma4:26b` was available
+locally (17.99 GB on disk) so the substitute-large-model fallback
+(`gpt-oss:20b`, `qwen2.5:32b`) was not needed. The probe order was
+re-arranged from the handoff: a 4th *small* model (`qwen3:1.7b`,
+1.36 GB) was attempted **before** `gemma4:26b` to isolate whether
+the constraint is VRAM or model-count. That re-ordering is what
+exposed the count cap as the binding constraint.
+
+**Headroom finding.** Baseline trio resident = 16736 MB nvidia-smi
+(12.9 GB ps-sum). 4th-model load evicted `gemma4:e4b` despite
+~7.8 GB free VRAM at the eviction moment — proving the constraint
+was count, not bytes. `gemma4:26b` solo residency = 23051 MB
+(94% of card), 1513 MB headroom remaining.
+
+**Concurrent-agent note.** This decision was logged as D-006 because
+another agent in this session already used D-005. The two
+decisions are independent; the numbering simply reflects log
+arrival order.
