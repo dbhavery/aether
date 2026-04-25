@@ -168,6 +168,7 @@ mod tests {
             capability: Capability::FilesCreate,
             resource: ResourceScope::Path("/tmp/foo".to_string()),
             emitted_at: MonotonicTimestamp(1),
+            retrieval_provenance: None,
         }
     }
 

@@ -213,6 +213,7 @@ pub fn run_backfill_worker(
         provenance_tags: Vec::new(),
         intended_route: None,
         risk_class_hint: None,
+        audit_extras: None,
     };
     let allow = {
         let active = state.active.read().expect("active read lock");

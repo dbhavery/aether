@@ -46,6 +46,7 @@ fn allow_path_persists_grant_to_sqlite() {
         capability: Capability::FilesRead,
         resource: ResourceScope::Path(String::from("/tmp/durable.txt")),
         emitted_at: MonotonicTimestamp(2_000),
+        retrieval_provenance: None,
     };
 
     let result = engine.handle_turn(req).expect("handle_turn ok");

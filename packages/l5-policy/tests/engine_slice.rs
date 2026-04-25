@@ -60,6 +60,7 @@ fn req(
         provenance_tags: Vec::new(),
         intended_route: None,
         risk_class_hint: None,
+        audit_extras: None,
     }
 }
 

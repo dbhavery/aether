@@ -8,7 +8,7 @@ use aether_l2_memory::{MemoryRole, TurnMemoryRecord};
 use aether_l3_presence::{PresenceController, PresenceState};
 use aether_l5_policy::{
     AuditFilter, AutonomyPreset, Capability, Decision, DecisionKind, MonotonicTimestamp, PersonaId,
-    ResourceScope, SessionId,
+    ResourceScope, RetrievalProvenance, RetrievedMemoryRef, SessionId,
 };
 use aether_l7_trust::{
     approval_prompt_from_ticket, build_approval_response, human_capability, human_scope,
@@ -285,6 +285,26 @@ fn detail_label(rate: f32) -> String {
     .to_string()
 }
 
+/// ADR-0009 §Decision 2 helper. Project the orchestrator's
+/// `Vec<RetrievalHit>` into the L5 audit-row provenance shape. Always
+/// returns a [`RetrievalProvenance`] (not `Option`) — caller wraps in
+/// `Some(...)` to distinguish "ran retrieval, got nothing" (some,
+/// `block_present=false`, empty hits) from "didn't run retrieval at
+/// all" (`None`).
+fn retrieval_provenance_for(hits: &[crate::retrieval::RetrievalHit]) -> RetrievalProvenance {
+    RetrievalProvenance {
+        block_present: !hits.is_empty(),
+        hits: hits
+            .iter()
+            .map(|h| RetrievedMemoryRef {
+                memory_id: h.memory_id.clone(),
+                domain: format!("{:?}", h.domain).to_lowercase(),
+                score: h.score,
+            })
+            .collect(),
+    }
+}
+
 #[tauri::command]
 pub fn submit_turn(
     text: String,
@@ -336,6 +356,12 @@ pub fn submit_turn(
             capability,
             resource,
             emitted_at: MonotonicTimestamp(ts),
+            // ADR-0009 §Decision 2: stamp provenance describing what
+            // retrieval contributed. Always Some on the conversation
+            // path so the audit row affirmatively records "we asked
+            // retrieval, here is what came back" — even when the hit
+            // list is empty.
+            retrieval_provenance: Some(retrieval_provenance_for(&hits)),
         }
     };
     transition_presence(
@@ -1327,7 +1353,8 @@ pub fn analyze_frame(
             // Media turns have no retrieval augmentation today; the two
             // utterance channels are byte-identical. ADR-0009 §Decision 4
             // — original is the audit-truth, model_input is what the
-            // router/provider receives.
+            // router/provider receives. retrieval_provenance is None
+            // because retrieval did not run for this capability.
             original_utterance: utterance.clone(),
             model_input_utterance: utterance.clone(),
             // Map to the dedicated media capability so the audit log
@@ -1336,6 +1363,7 @@ pub fn analyze_frame(
             // `EngineConfig::wave3_default` because the shell-side
             // permission gate (P1) is the user-facing per-device
             // control; L5 records the audit row without doubling up.
+            retrieval_provenance: None,
             capability: match kind {
                 MediaKind::Camera => Capability::MediaCamera,
                 MediaKind::Screen => Capability::MediaScreenCapture,
@@ -1931,6 +1959,7 @@ pub fn transcribe_utterance(
             capability: Capability::MediaMic,
             resource: ResourceScope::None,
             emitted_at: MonotonicTimestamp(ts),
+            retrieval_provenance: None,
         }
     };
 

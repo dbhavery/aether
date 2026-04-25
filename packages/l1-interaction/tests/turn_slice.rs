@@ -32,6 +32,7 @@ fn request(cap: Capability, resource: ResourceScope) -> TurnRequest {
         capability: cap,
         resource,
         emitted_at: MonotonicTimestamp(1_000),
+        retrieval_provenance: None,
     }
 }
 
@@ -157,6 +158,7 @@ fn allow_path_forwards_model_input_utterance_not_original() {
         capability: Capability::FilesRead,
         resource: ResourceScope::Path(String::from("/tmp/x")),
         emitted_at: MonotonicTimestamp(1_000),
+        retrieval_provenance: None,
     };
 
     let result = engine.handle_turn(req).expect("allow path");

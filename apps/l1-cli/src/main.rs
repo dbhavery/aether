@@ -110,6 +110,7 @@ fn main() {
             capability,
             resource,
             emitted_at: MonotonicTimestamp(ts),
+            retrieval_provenance: None,
         };
         ts += 1;
 
@@ -476,6 +477,7 @@ mod tests {
             capability: cap,
             resource,
             emitted_at: MonotonicTimestamp(1),
+            retrieval_provenance: None,
         }
     }
 

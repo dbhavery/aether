@@ -35,6 +35,12 @@ pub struct ActionRequest {
     pub intended_route: Option<RouteHint>,
     /// Optional risk-class hint (evaluator re-checks regardless).
     pub risk_class_hint: Option<crate::capability::RiskClass>,
+    /// ADR-0009 audit-row extras: original utterance + retrieval
+    /// provenance. The evaluator copies this into the audit row when
+    /// present; absent on non-conversation capabilities and on legacy
+    /// wire payloads (covered by the serde default).
+    #[serde(default)]
+    pub audit_extras: Option<crate::audit::AuditExtras>,
 }
 
 /// Hint L4 attaches when it has already picked a tier.

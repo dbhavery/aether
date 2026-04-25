@@ -189,6 +189,15 @@ struct CanonicalAuditPayload<'a> {
     reason: &'a Option<crate::decision::StaticReasonId>,
     stage_trace: &'a Vec<crate::audit::StageTrace>,
     privileged_profile: bool,
+    // ADR-0009 v2 fields. Included in the canonical payload so HMAC
+    // sealing actually covers them — without this, an attacker could
+    // mutate `original_utterance` post-write and the chain would still
+    // verify. v1 rows that round-trip through this writer carry
+    // `schema_version: 1` and `None`/`None` and hash distinctly from
+    // a v2 row that happens to have empty extras.
+    schema_version: u32,
+    original_utterance: &'a Option<String>,
+    retrieval_provenance: &'a Option<crate::audit::RetrievalProvenance>,
 }
 
 impl<'a> From<&'a AuditRecordEvent> for CanonicalAuditPayload<'a> {
@@ -206,6 +215,9 @@ impl<'a> From<&'a AuditRecordEvent> for CanonicalAuditPayload<'a> {
             reason: &r.reason,
             stage_trace: &r.stage_trace,
             privileged_profile: r.privileged_profile,
+            schema_version: r.schema_version,
+            original_utterance: &r.original_utterance,
+            retrieval_provenance: &r.retrieval_provenance,
         }
     }
 }

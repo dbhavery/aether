@@ -591,6 +591,14 @@ impl DefaultPolicyEngine {
 
     /// Sync-commit an audit row. Returns its id for the caller to thread into
     /// the outgoing `Decision`.
+    ///
+    /// ADR-0009: when `req.audit_extras` is `Some`, its
+    /// `original_utterance` and `retrieval_provenance` are copied into
+    /// the v2 fields on the audit row. When `None` (non-conversation
+    /// capability or legacy caller), both fields stay `None` and the
+    /// row still carries `schema_version = AUDIT_SCHEMA_VERSION_V2` —
+    /// post-ADR-0009 writers always stamp v2 even when there's no
+    /// utterance to record.
     fn write_audit(
         &self,
         req: &ActionRequest,
@@ -599,6 +607,10 @@ impl DefaultPolicyEngine {
         reason: Option<StaticReasonId>,
     ) -> Result<AuditId, PolicyEngineError> {
         let audit_id = self.next_audit_id();
+        let (original_utterance, retrieval_provenance) = match &req.audit_extras {
+            Some(x) => (x.original_utterance.clone(), x.retrieval_provenance.clone()),
+            None => (None, None),
+        };
         let row = AuditRecordEvent {
             audit_id: audit_id.clone(),
             timestamp_monotonic: req.emitted_at,
@@ -615,6 +627,9 @@ impl DefaultPolicyEngine {
             reason,
             stage_trace: Vec::new(),
             privileged_profile: false,
+            schema_version: crate::audit::AUDIT_SCHEMA_VERSION_V2,
+            original_utterance,
+            retrieval_provenance,
         };
         self.audit
             .append(&row)

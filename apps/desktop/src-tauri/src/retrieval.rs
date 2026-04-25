@@ -183,6 +183,7 @@ pub fn run_retrieval_context(
         provenance_tags: Vec::new(),
         intended_route: None,
         risk_class_hint: None,
+        audit_extras: None,
     };
     let decision = {
         let active = state.active.read().expect("active read lock");

@@ -252,6 +252,7 @@ fn build_action_request(
         provenance_tags: Vec::new(),
         intended_route: None,
         risk_class_hint: None,
+        audit_extras: None,
     };
     (req, emitted_at)
 }

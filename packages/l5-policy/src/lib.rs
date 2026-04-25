@@ -55,7 +55,10 @@ pub mod sqlite_backends;
 pub mod storage_hooks;
 
 pub use approval::{ApprovalResponse, ApprovalTicket, ApprovalTicketId, UserChoice};
-pub use audit::{AuditFilter, AuditId, AuditRecordEvent};
+pub use audit::{
+    AuditExtras, AuditFilter, AuditId, AuditRecordEvent, RetrievalProvenance, RetrievedMemoryRef,
+    AUDIT_SCHEMA_VERSION_V1, AUDIT_SCHEMA_VERSION_V2,
+};
 pub use byok::{CostCap, CostEvent, CostThreshold, CostWindow, ProviderId};
 pub use capability::{
     ApiId, AutomationId, Capability, CapabilityFilter, CapabilityInfo, CapabilityPath,

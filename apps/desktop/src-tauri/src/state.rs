@@ -1768,6 +1768,7 @@ mod tests {
             capability: Capability::FilesEdit,
             resource: ResourceScope::Path("/tmp/x".into()),
             emitted_at: MonotonicTimestamp(state.next_ts()),
+            retrieval_provenance: None,
         };
 
         // Step 1 — first handle_turn: should Ask.
@@ -1839,6 +1840,7 @@ mod tests {
             capability: Capability::FilesEdit,
             resource: ResourceScope::Path("/tmp/y".into()),
             emitted_at: MonotonicTimestamp(state.next_ts()),
+            retrieval_provenance: None,
         };
         let ask = {
             let a = state.active.read().unwrap();
@@ -1881,6 +1883,7 @@ mod tests {
             capability: Capability::FilesRead,
             resource: ResourceScope::Path("/tmp/z".into()),
             emitted_at: MonotonicTimestamp(state.next_ts()),
+            retrieval_provenance: None,
         };
         let follow = {
             let a = state.active.read().unwrap();
@@ -2158,6 +2161,7 @@ humor: "playful"
             capability: Capability::FilesEdit,
             resource: ResourceScope::Path("/tmp/observer".into()),
             emitted_at: MonotonicTimestamp(state.next_ts()),
+            retrieval_provenance: None,
         };
         let res = {
             let a = state.active.read().unwrap();

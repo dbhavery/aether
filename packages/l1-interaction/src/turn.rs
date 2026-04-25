@@ -89,6 +89,14 @@ pub struct TurnRequest {
     /// Monotonic emit time. Callers that don't care can pass
     /// `MonotonicTimestamp(0)`.
     pub emitted_at: MonotonicTimestamp,
+    /// ADR-0009 §Decision 2: retrieval-block provenance to stamp on
+    /// the audit row. The shell's `submit_turn` builds this from the
+    /// orchestrator hits already in scope; L1 forwards it untouched
+    /// into the L5 audit-extras. `None` for non-conversation turns
+    /// and for callers that don't run retrieval. `serde(default)`
+    /// keeps the wire shape backwards-compatible.
+    #[serde(default)]
+    pub retrieval_provenance: Option<aether_l5_policy::RetrievalProvenance>,
 }
 
 /// Token usage reported by the router, when the underlying provider
@@ -218,6 +226,16 @@ impl TurnEngine {
             provenance_tags: Vec::new(),
             intended_route: None,
             risk_class_hint: None,
+            // ADR-0009: stamp the user's original utterance on the
+            // audit row so audit-by-phrasing search works. Retrieval
+            // provenance is layered on by commit 3 (the shell builds
+            // it from the orchestrator hits in scope at submit_turn).
+            // L1 itself doesn't run retrieval — keeping this field
+            // `None` here lets the shell own the truth.
+            audit_extras: Some(aether_l5_policy::AuditExtras {
+                original_utterance: Some(request.original_utterance.clone()),
+                retrieval_provenance: request.retrieval_provenance.clone(),
+            }),
         };
 
         let decision = self
