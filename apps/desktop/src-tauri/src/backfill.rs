@@ -168,9 +168,8 @@ pub fn run_backfill_worker(
     // Compute total up front so the UI can show a real progress bar
     // rather than a spinner.
     let mut total = 0usize;
-    let domains: Vec<L2Domain> = EMBED_ELIGIBLE_DOMAINS.iter().copied().collect();
     let mut per_domain_rows: Vec<(L2Domain, Vec<(String, u64, String)>)> = Vec::new();
-    for &domain in &domains {
+    for &domain in EMBED_ELIGIBLE_DOMAINS {
         let store = state.memory_for_domain(shell_domain(domain));
         let sessions = store.list_sessions().unwrap_or_default();
         let mut rows: Vec<(String, u64, String)> = Vec::new();
@@ -336,6 +335,13 @@ fn emit_done(app: Option<&AppHandle>, job_id: &str, state: &AppState) {
 /// the caller can use to correlate progress events. Returns `None`
 /// (and emits a `tracing::warn`) if a backfill is already in
 /// progress — only one job at a time.
+///
+/// Currently UNUSED: the live `start_backfill` Tauri command runs
+/// the worker synchronously per the v1 design (commands.rs). This
+/// function remains as the future-async-spawn shape that will be
+/// wired once Tauri-managed `Arc<AppState>` is available — keeping
+/// it compiled prevents the Arc-clone shape from drifting.
+#[allow(dead_code)]
 pub fn spawn_backfill(
     state_handle: Arc<AppState>,
     app: AppHandle,
