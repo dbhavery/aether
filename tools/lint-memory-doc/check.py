@@ -135,6 +135,20 @@ ANCHORS: list[tuple[str, str, str | None, str]] = [
     ("symbol", "apps/desktop/src-tauri/src/memory_config.rs", "pub struct RetrievalConfig", "ADR-0005: top-K config"),
     ("symbol", "apps/desktop/src-tauri/src/memory_router.rs", "pub fn user_record_raw", "ADR-0005: original-utterance memory record"),
 
+    # ---- ADR-0007 D5 — Embeddings backfill (Milestone 2 Run 3 follow-up, 2026-04-24) ----
+    ("file",   "apps/desktop/src-tauri/src/backfill.rs", None, "ADR-0007 D5: backfill orchestrator module"),
+    ("symbol", "apps/desktop/src-tauri/src/backfill.rs", "fn run_backfill_worker", "ADR-0007 D5: worker entry"),
+    ("symbol", "apps/desktop/src-tauri/src/backfill.rs", "fn estimate_unembedded_count", "ADR-0007 D5: count estimator"),
+    ("symbol", "apps/desktop/src-tauri/src/backfill.rs", "pub struct BackfillOptions", "ADR-0007 D5: per-row pacing config"),
+    ("string", "apps/desktop/src-tauri/src/backfill.rs", "DEFAULT_PER_ROW_PAUSE_MS", "ADR-0007 D5: pacing-pause constant"),
+    ("symbol", "apps/desktop/src-tauri/src/state.rs", "pub struct BackfillProgress", "ADR-0007 D5: progress shape"),
+    ("string", "apps/desktop/src-tauri/src/state.rs", "backfill_in_progress", "ADR-0007 D5: in-progress atomic"),
+    ("string", "apps/desktop/src-tauri/src/state.rs", "backfill_cancel", "ADR-0007 D5: cancel atomic"),
+    ("symbol", "apps/desktop/src-tauri/src/commands.rs", "pub fn start_backfill", "ADR-0007 D5: Tauri start command"),
+    ("symbol", "apps/desktop/src-tauri/src/commands.rs", "pub fn cancel_backfill", "ADR-0007 D5: Tauri cancel command"),
+    ("symbol", "apps/desktop/src-tauri/src/commands.rs", "pub fn backfill_status", "ADR-0007 D5: Tauri status read"),
+    ("symbol", "apps/desktop/src-tauri/src/commands.rs", "pub fn backfill_count", "ADR-0007 D5: un-embedded count"),
+
     # ---- ADR-0006 — Hardware tier model (Milestone 2 Run 3) ----
     ("file",   "apps/desktop/src-tauri/src/hardware.rs", None, "ADR-0006: hardware detection module"),
     ("symbol", "apps/desktop/src-tauri/src/hardware.rs", "fn detect", "ADR-0006: detection entry"),

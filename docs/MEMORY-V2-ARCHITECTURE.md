@@ -316,11 +316,42 @@ in a form that reads like notes, not logs.
 
 - Which local embedding provider is the reference candidate?
   Locked in ADR-0003 (supersedes ADR-0002 Decision 1): **BGE-M3**
-  via Ollama (`bge-m3:latest`). See `docs/adr/ADR-0003-model-defaults-supersession.md`
-  for rationale.
+  via Ollama (`bge-m3:latest`).
+  **Updated 2026-04-24:** ADR-0007 D7 reframes this as
+  *tier-parameterised* — Spark uses `nomic-embed-text` (substitution
+  for `bge-small-en-v1.5` per DECISIONS_LOG D-001), Flame and Forge
+  use `bge-m3`. See `docs/adr/ADR-0007-embeddings-onboarding.md`.
 - Vector index backend — SQLite + rusqlite extensions? A separate
   sqlite-vec file? Out of scope for design-only doc; decide at
   implementation time.
+
+### Embedding backfill (added 2026-04-24)
+
+When `embeddings.enabled` flips to `true` on a profile that already
+has Durable / Projects / Artifacts content, those rows lack
+embedding rows and are invisible to retrieval. The backfill
+orchestrator (`apps/desktop/src-tauri/src/backfill.rs`,
+ADR-0007 D5) walks every embed-eligible domain and re-embeds each
+row.
+
+Today's behaviour:
+- User-initiated only (button in Trust drawer Retrieval tab).
+- Synchronous Tauri command — blocks the IPC thread for the
+  duration. Acceptable for personal scale (<1000 rows on bge-m3 ≈
+  3 min; on nomic-embed-text ≈ 27 sec — measured on Don's 3090 Ti
+  workstation 2026-04-24, see `planning/validation_2026-04-24/`).
+- Brute-force re-embed: every row, regardless of whether an
+  embedding already exists (`upsert` is idempotent). Smarter
+  "skip already-embedded" requires `EmbeddingStore::embedded_ids`
+  enumeration — a future packages/l2-memory addition.
+- Per-row pacing pause (default 50 ms) defends against the rapid-
+  fire Ollama HTTP 500 surfaced in validation Block 9.
+- Cancel via shared atomic; observed at every row boundary.
+- L5 `Capability::RetrievalContext` gated.
+
+Open: an `EmbeddingStore::embedded_ids(domain)` method to enable
+"skip already-embedded" optimization. Strict-correctness today
+preserved by `upsert` idempotency; performance refinement only.
 
 ### Project boundaries
 
