@@ -81,7 +81,46 @@ pub struct RetrievalProvenance {
     pub block_present: bool,
     /// The ranked memory rows the block drew from. Empty when
     /// `block_present` is false.
+    ///
+    /// **Hard cap: [`RETRIEVAL_PROVENANCE_HITS_CAP`] entries.** Writers
+    /// MUST trim oversized inputs before stamping the audit row;
+    /// [`RetrievalProvenance::new`] enforces this. The L5 audit writer
+    /// also asserts the cap defensively in
+    /// `policy_engine::PolicyEngineImpl::write_audit` so a caller that
+    /// constructs the struct via raw field assignment cannot silently
+    /// inflate the audit row, the canonical-hash CPU cost, or the
+    /// `aether_audit.db` row size. Resolves SECURITY_REVIEW.md
+    /// MEDIUM-2.
     pub hits: Vec<RetrievedMemoryRef>,
+}
+
+/// Maximum number of hits permitted in [`RetrievalProvenance::hits`].
+///
+/// Today the orchestrator's `top_k` is 5 (per the retrieval spec), so 16
+/// leaves head-room for future ranking changes (e.g. multi-pass merges)
+/// without re-tightening this constant. A sustained breach indicates the
+/// caller is bypassing the orchestrator's `top_k` contract and should be
+/// fixed at the source rather than absorbed into audit growth. Set per
+/// SECURITY_REVIEW.md MEDIUM-2 recommendation.
+pub const RETRIEVAL_PROVENANCE_HITS_CAP: usize = 16;
+
+impl RetrievalProvenance {
+    /// Construct a provenance row with the hits vector truncated to
+    /// [`RETRIEVAL_PROVENANCE_HITS_CAP`]. Preferred over field-by-field
+    /// construction because it enforces the cap writer-side.
+    ///
+    /// `hits` past the cap are dropped silently — the orchestrator's
+    /// `top_k` contract is the source of truth, so anything past the
+    /// cap is by definition lower-ranked than what was already kept.
+    pub fn new(block_present: bool, mut hits: Vec<RetrievedMemoryRef>) -> Self {
+        if hits.len() > RETRIEVAL_PROVENANCE_HITS_CAP {
+            hits.truncate(RETRIEVAL_PROVENANCE_HITS_CAP);
+        }
+        Self {
+            block_present,
+            hits,
+        }
+    }
 }
 
 /// Optional ADR-0009 v2 audit fields, threaded through
@@ -194,4 +233,57 @@ pub struct AuditSummary {
     pub by_decision: std::collections::HashMap<DecisionKind, u64>,
     /// Top-5 capabilities for the window.
     pub top_capabilities: Vec<(Capability, u64)>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fake_hit(i: usize) -> RetrievedMemoryRef {
+        RetrievedMemoryRef {
+            memory_id: format!("mem-{i}"),
+            domain: String::from("durable"),
+            score: 0.5,
+        }
+    }
+
+    #[test]
+    fn retrieval_provenance_new_truncates_above_cap() {
+        let oversized: Vec<_> = (0..RETRIEVAL_PROVENANCE_HITS_CAP + 8)
+            .map(fake_hit)
+            .collect();
+        let p = RetrievalProvenance::new(true, oversized);
+        assert_eq!(p.hits.len(), RETRIEVAL_PROVENANCE_HITS_CAP);
+        // Truncation drops the *tail* — first cap entries (assumed
+        // highest-ranked by orchestrator contract) survive.
+        assert_eq!(p.hits.first().unwrap().memory_id, "mem-0");
+        assert_eq!(
+            p.hits.last().unwrap().memory_id,
+            format!("mem-{}", RETRIEVAL_PROVENANCE_HITS_CAP - 1)
+        );
+    }
+
+    #[test]
+    fn retrieval_provenance_new_passes_through_when_under_cap() {
+        let small: Vec<_> = (0..3).map(fake_hit).collect();
+        let p = RetrievalProvenance::new(true, small);
+        assert_eq!(p.hits.len(), 3);
+    }
+
+    #[test]
+    fn retrieval_provenance_new_passes_through_at_exact_cap() {
+        let exact: Vec<_> = (0..RETRIEVAL_PROVENANCE_HITS_CAP).map(fake_hit).collect();
+        let p = RetrievalProvenance::new(false, exact);
+        assert_eq!(p.hits.len(), RETRIEVAL_PROVENANCE_HITS_CAP);
+        assert!(!p.block_present);
+    }
+
+    #[test]
+    fn retrieval_provenance_cap_constant_is_sixteen() {
+        // Pin the cap value so a future change is forced through code
+        // review. Per SECURITY_REVIEW.md MEDIUM-2 — cap of 16 leaves
+        // head-room over today's `top_k = 5` without absorbing
+        // unbounded growth.
+        assert_eq!(RETRIEVAL_PROVENANCE_HITS_CAP, 16);
+    }
 }

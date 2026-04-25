@@ -611,6 +611,19 @@ impl DefaultPolicyEngine {
             Some(x) => (x.original_utterance.clone(), x.retrieval_provenance.clone()),
             None => (None, None),
         };
+        // Defensive truncation: enforce SECURITY_REVIEW.md MEDIUM-2 cap
+        // here even if a caller bypassed `RetrievalProvenance::new`. The
+        // audit row is the last point of control before the canonical
+        // hash and DB write, so cap volume here regardless of upstream
+        // discipline. Silently dropping past-cap entries is correct: the
+        // orchestrator's `top_k` contract already implies entries past
+        // the cap are lower-ranked than what was kept.
+        let retrieval_provenance = retrieval_provenance.map(|mut p| {
+            if p.hits.len() > crate::audit::RETRIEVAL_PROVENANCE_HITS_CAP {
+                p.hits.truncate(crate::audit::RETRIEVAL_PROVENANCE_HITS_CAP);
+            }
+            p
+        });
         let row = AuditRecordEvent {
             audit_id: audit_id.clone(),
             timestamp_monotonic: req.emitted_at,
