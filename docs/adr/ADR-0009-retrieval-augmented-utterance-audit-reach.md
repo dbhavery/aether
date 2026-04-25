@@ -1,7 +1,7 @@
 # ADR-0009: Retrieval-augmented utterance reach into L5 audit + L1 transcripts
 
-- **Status:** **Proposed** (Don to ratify; cross-layer change requires its own focused session per CLAUDE.md §1.3 "one layer per session" doctrine).
-- **Date:** 2026-04-24
+- **Status:** **Accepted** (ratified 2026-04-25 in the autonomous session that implemented it; per `HANDOFF_2026-04-25_NEXT_AUTONOMOUS_SESSION.md` quality standard #8 — implement and ratify in the same change set).
+- **Date:** 2026-04-24 (proposed) / 2026-04-25 (accepted + implemented)
 - **Deciders:** Don (owner). Claude proposes, captures the asymmetry from the M2 Run 3 Session A handoff.
 - **Supersedes:** nothing.
 - **Superseded by:** nothing.
@@ -120,11 +120,64 @@ Estimated change set on accept:
 5. New tests covering: round-trip serde for both schema versions, audit row contains the original utterance not the augmented form, retrieval_provenance is populated when retrieval fires.
 6. Rot-guard anchors for the new fields in `tools/lint-policy-doc/check.py`.
 
-## Open items (NOT decided here)
+## Open items — resolved 2026-04-25 during implementation
 
-- Whether `retrieval_provenance` lives on the audit row or in a sidecar table keyed by `turn_id`. Sidecar is cleaner schema-wise but adds a join cost on audit reads.
-- Whether to backfill `schema_version: 1` onto existing rows or treat the absence of the field as version 1 implicitly. (Implicit is cheaper; explicit is clearer.)
-- Whether the audit UI should offer a toggle "show me what the model actually saw" that re-composes the `model_input` view.
+The three open items in the Proposed draft were all resolved in the
+implementation session per the autonomous-authority delegation in
+`HANDOFF_2026-04-25_NEXT_AUTONOMOUS_SESSION.md`. Full rationale lives
+in `planning/session_2026-04-25/DECISIONS_LOG.md` D-001.
+
+1. **Provenance lives on the audit row, not a sidecar table.**
+   `RetrievalProvenance` is an optional field on `AuditRecordEvent`.
+   A sidecar table would force a join on every audit read and the
+   payload is small enough that storage cost is negligible. The
+   field's `Option<_>` shape means non-conversation rows pay no cost.
+
+2. **Absent `schema_version` field on the wire deserializes implicitly
+   as v1.** `serde(default = "default_schema_version_v1")` resolves
+   to `AUDIT_SCHEMA_VERSION_V1`. Cheaper than backfilling, and the
+   version is recoverable any time a row gets re-serialized through
+   a v2-aware writer.
+
+3. **Audit UI does NOT yet offer a "show me what the model actually
+   saw" toggle.** Deferred to a future ADR. Surfacing the full
+   `model_input_utterance` requires either carrying it on the audit
+   row (re-introducing the retrieval-block pollution this ADR
+   removes) or designing a separate prompt-replay machinery. The v2
+   AuditList renderer surfaces hit count + domains, which is enough
+   for the trust-centre's current "what context did Aether use?"
+   question. A vitest case
+   (`v2 row never renders the augmented model-input string itself`)
+   locks the deliberate absence so a future renderer change cannot
+   silently violate the contract.
+
+## Implementation pointers
+
+The implementation landed on dev between commits `1f99a48` and the
+ratification commit. Key surfaces (kept in sync by
+`tools/lint-policy-doc/check.py` rot-guard):
+
+- `packages/l1-interaction/src/turn.rs` — `TurnRequest` carries
+  `original_utterance`, `model_input_utterance`, and
+  `retrieval_provenance: Option<RetrievalProvenance>`. The L1
+  engine forwards `model_input_utterance` to `TurnRouter::dispatch`
+  and stamps the audit-extras (`AuditExtras { original_utterance,
+  retrieval_provenance }`) on `ActionRequest`.
+- `packages/l5-policy/src/audit.rs` — `AuditRecordEvent` v1→v2 with
+  `schema_version`, `original_utterance: Option<String>`,
+  `retrieval_provenance: Option<RetrievalProvenance>`.
+- `packages/l5-policy/src/audit_seal.rs` — `CanonicalAuditPayload`
+  extended to include the three new fields so HMAC sealing covers
+  them (else an attacker could mutate `original_utterance`
+  post-write and the chain would still verify).
+- `apps/desktop/src-tauri/src/commands.rs::submit_turn` — builds
+  provenance from the orchestrator hits via
+  `retrieval_provenance_for(&hits)` and stamps both utterance
+  channels on the `TurnRequest`.
+- `apps/desktop/src/components/TrustDrawer.tsx::AuditRow` —
+  version-aware rendering. v1 → schema badge + capability/scope.
+  v2 → user's text as headline + collapsed retrieval-summary
+  disclosure.
 
 ---
 
