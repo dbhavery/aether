@@ -111,6 +111,10 @@ fn main() {
             commands::presence_recent_history,
             commands::get_memory_config,
             commands::set_memory_config,
+            commands::get_tier,
+            commands::set_tier,
+            commands::redetect_hardware,
+            commands::embeddings_readiness,
             commands::memory_list,
             commands::memory_forget,
             commands::memory_forget_item,
@@ -176,6 +180,19 @@ fn build_app_state(app: &tauri::AppHandle) -> Result<AppState, Box<dyn std::erro
                 let memory_cfg_path = memory_config::config_path_for(&dir);
                 tracing::info!("memory config file at {}", memory_cfg_path.display());
                 state.attach_memory_config_file(memory_cfg_path);
+                let tier_cfg_path = tier::config_path_for(&dir);
+                tracing::info!("tier config file at {}", tier_cfg_path.display());
+                state.attach_tier_config_file(tier_cfg_path);
+                // ADR-0006 D2 + D3 — run a hardware-detection pass on
+                // first launch and on every subsequent launch where
+                // the user hasn't manually overridden. Light-usage:
+                // wgpu adapter enumeration + sysinfo + 750ms HTTP
+                // probe; no model loads. Persisted snapshot informs
+                // tier-aware subsystems (embeddings onboarding via
+                // ADR-0007 D7 today; future TTS / vision / avatar).
+                if let Err(e) = state.redetect_hardware() {
+                    tracing::warn!("boot-time hardware detection failed: {e}");
+                }
                 wire_vision_registry(&state, Some(&dir));
                 wire_voice_registry(&state, Some(&dir));
                 return Ok(state);

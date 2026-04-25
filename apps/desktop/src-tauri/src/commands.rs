@@ -2148,6 +2148,68 @@ pub fn set_memory_config(
 }
 
 // ------------------------------------------------------------------
+// ADR-0006 — Hardware tier model command surface.
+// ------------------------------------------------------------------
+
+/// Snapshot of the current tier config (selected, detected, hardware
+/// snapshot). Cheap clone; safe to call on every render. Read by the
+/// Settings UI to render the three-tier picker, badge the recommended
+/// tier, and surface "your hardware suggests X" hint when selected
+/// and detected diverge.
+#[tauri::command]
+pub fn get_tier(state: State<'_, AppState>) -> crate::tier::TierConfig {
+    state.tier_config()
+}
+
+/// User-initiated tier change. Updates `selected_tier`, flips
+/// `manual_override` if the new selection diverges from the detected
+/// recommendation, and persists atomically when `tier.json` is wired.
+/// Subsystems that consume tier (embeddings onboarding via ADR-0007,
+/// future TTS/vision/avatar ADRs) re-read on `tier_changed` event
+/// emission — this command does not directly wire that bus today.
+#[tauri::command]
+pub fn set_tier(
+    tier: crate::tier::Tier,
+    state: State<'_, AppState>,
+) -> Result<crate::tier::TierConfig, String> {
+    state.set_tier(tier)
+}
+
+/// Run a fresh hardware-detection pass and update the tier config.
+/// Pure read on the hardware side (wgpu adapter enumeration, sysinfo,
+/// `fs::available_space`, optional 750ms `/api/ps` HTTP probe). No
+/// rendering, no model loads. Honours manual override: if the user
+/// has previously chosen a non-detected tier, redetection updates
+/// `detected_tier` and `hardware_snapshot` only — the manual selection
+/// stays.
+#[tauri::command]
+pub fn redetect_hardware(
+    state: State<'_, AppState>,
+) -> Result<crate::tier::TierConfig, String> {
+    state.redetect_hardware()
+}
+
+// ------------------------------------------------------------------
+// ADR-0007 — Retrieval readiness command surface.
+// ------------------------------------------------------------------
+
+/// Snapshot the current retrieval readiness state per ADR-0007 D3.
+/// Read by the Trust drawer indicator + drawer-icon attention badge +
+/// transition-toast subscription. Cheap clone; UI may poll on a
+/// reasonable interval (≥1s) without backend cost.
+///
+/// State updates are pushed by `run_retrieval_context` itself (every
+/// real turn) and by future boot / settings-change probes. The state
+/// machine is event-driven (ADR-0007 D3); this command is the read
+/// side only.
+#[tauri::command]
+pub fn embeddings_readiness(
+    state: State<'_, AppState>,
+) -> crate::retrieval::ReadinessState {
+    state.retrieval_readiness()
+}
+
+// ------------------------------------------------------------------
 // Memory V2 step 4 — Trust drawer Memory tab command surface.
 // ------------------------------------------------------------------
 //
