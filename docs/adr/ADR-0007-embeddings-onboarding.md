@@ -83,7 +83,7 @@ Rejected: chrome pill (always-visible, conflicts with minimal aesthetic); Settin
 
 ### 7. Tier-parameterised model manifest. (Formally supersedes ADR-0003 Decision 2 — see header.)
 
-ADR-0003 pinned `bge-m3` as *the* embedding default. Under ADR-0006, there are three tiers — one model doesn't fit all.
+ADR-0003 pinned `bge-m3` as *the* embedding default. Under ADR-0006, there are three tiers, but the selection rule is *quality-first*, not *tier-first*: tier defines the search space within which the model is chosen; the smallest model that meets the constant retrieval-quality bar wins. If no model in the tier's search space passes the bar, retrieval does not ship at that tier (mirrors the avatar-medium principle in ADR-0006 Decision 1: tiers vary the medium to preserve the bar, never lower the bar to fit the medium). One model rarely fits all hardware; this is why tiers exist. But quality is the ceiling, not a knob.
 
 | Tier | Default embedding model | Approx. size | Approx. cold-start | Approx. per-row embed latency |
 | --- | --- | --- | --- | --- |

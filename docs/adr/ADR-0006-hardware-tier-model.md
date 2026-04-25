@@ -14,10 +14,11 @@ Aether is a personal, local-first AI companion. Its end-state capability surface
 The design constraint set from the Run 3 discuss session:
 
 1. **Quality bar is constant across hardware.** Avatar must be indistinguishable from a real human at every tier. Text + voice + memory must feel human at every tier. Tiers vary the *medium* (Tier Low: real recorded video; Tier Mid/High: neural rendering) but not the quality bar.
-2. **Never bog the user's hardware.** Aether targets ≤50% of available GPU VRAM as its runtime budget, leaving headroom for games, other AI work, browser workloads, background apps.
-3. **Three tiers.** One tier is too coarse; more than three is fragmentation. Three covers integrated / mid-range discrete / flagship discrete, which maps cleanly onto the consumer GPU market.
-4. **Hardware auto-detection.** The installer / first-run flow detects the machine and recommends a tier. User can override (choose a lower tier for headroom; pick Low manually if they want minimum footprint).
-5. **Retail SaaS integrations are out of scope.** Avatar and supporting capabilities are metal-up Rust builds using `wgpu` + ML-in-Rust (candle/burn-family). Tier budgets reserve VRAM for those future systems without committing to specific stacks here.
+2. **Never bog the user's hardware.** Aether targets ≤50% of available GPU VRAM as the *recommended floor* for tier auto-selection, leaving headroom for games, other AI work, browser workloads, background apps. Aether does not cap itself at runtime — users who dedicate their hardware to Aether may safely allocate well above 50%, and Aether uses what is available.
+3. **Quality posture: optimise for quality, not for footprint.** Where a knob exists that trades quality for resource efficiency (truncated context, partial GPU offload, aggressive model eviction, silent tier downgrade under contention), the default position is the quality-preserving setting. Resource pressure is *surfaced* to the user (per ADR-0007's best-effort + warning posture); it is never absorbed silently by quietly degrading model fidelity. Future ADRs (TTS, vision, avatar) inherit this posture by default.
+4. **Three tiers.** One tier is too coarse; more than three is fragmentation. Three covers integrated / mid-range discrete / flagship discrete, which maps cleanly onto the consumer GPU market.
+5. **Hardware auto-detection.** The installer / first-run flow detects the machine and recommends a tier. User can override (choose a lower tier for headroom; pick Low manually if they want minimum footprint).
+6. **Retail SaaS integrations are out of scope.** Avatar and supporting capabilities are metal-up Rust builds using `wgpu` + ML-in-Rust (candle/burn-family). Tier budgets reserve VRAM for those future systems without committing to specific stacks here.
 
 This ADR defines the tier model itself. It does **not** enumerate which specific models / avatar stacks run at each tier — that's deliberately deferred to the consuming ADRs (ADR-0007 for embeddings, ADR-0008 for avatar, future ADRs for TTS / vision / LLM) so they can evolve independently on top of a stable tier contract.
 
