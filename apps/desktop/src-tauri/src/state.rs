@@ -390,10 +390,11 @@ pub struct PendingTurn {
     pub request: TurnRequest,
     pub ask_result: TurnResult,
     /// Raw user utterance *without* the ADR-0005 retrieval block.
-    /// `request.utterance` may be the augmented form that was handed to
-    /// the router; memory records and the user-visible transcript must
-    /// use this unmodified text. Equals `request.utterance` when the
-    /// retrieval path was off or produced zero hits.
+    /// Now redundant with `request.original_utterance` after ADR-0009
+    /// landed (the L1 `TurnRequest` carries both channels itself), but
+    /// kept as a separately-owned `String` so the post-approval
+    /// `finalize_turn` path doesn't need a borrow into `pending.request`.
+    /// Memory records and the user-visible transcript use this string.
     pub original_utterance: String,
 }
 
@@ -1762,7 +1763,8 @@ mod tests {
             session_id: SessionId(SESSION_ID.into()),
             persona: PersonaId("aurora".into()),
             task_id: None,
-            utterance: "edit /tmp/x".into(),
+            original_utterance: "edit /tmp/x".into(),
+            model_input_utterance: "edit /tmp/x".into(),
             capability: Capability::FilesEdit,
             resource: ResourceScope::Path("/tmp/x".into()),
             emitted_at: MonotonicTimestamp(state.next_ts()),
@@ -1783,7 +1785,7 @@ mod tests {
             PendingTurn {
                 request: req.clone(),
                 ask_result: ask_result.clone(),
-                original_utterance: req.utterance.clone(),
+                original_utterance: req.original_utterance.clone(),
             },
         );
 
@@ -1832,7 +1834,8 @@ mod tests {
             session_id: SessionId(SESSION_ID.into()),
             persona: PersonaId("aurora".into()),
             task_id: None,
-            utterance: "edit /tmp/y".into(),
+            original_utterance: "edit /tmp/y".into(),
+            model_input_utterance: "edit /tmp/y".into(),
             capability: Capability::FilesEdit,
             resource: ResourceScope::Path("/tmp/y".into()),
             emitted_at: MonotonicTimestamp(state.next_ts()),
@@ -1845,7 +1848,7 @@ mod tests {
             Decision::Ask { ticket, .. } => ticket.clone(),
             other => panic!("expected Ask, got {other:?}"),
         };
-        let utter = req.utterance.clone();
+        let utter = req.original_utterance.clone();
         state.record_pending(
             ticket.ticket_id.0.clone(),
             PendingTurn {
@@ -1873,7 +1876,8 @@ mod tests {
             session_id: SessionId(SESSION_ID.into()),
             persona: PersonaId("aurora".into()),
             task_id: None,
-            utterance: "read /tmp/z".into(),
+            original_utterance: "read /tmp/z".into(),
+            model_input_utterance: "read /tmp/z".into(),
             capability: Capability::FilesRead,
             resource: ResourceScope::Path("/tmp/z".into()),
             emitted_at: MonotonicTimestamp(state.next_ts()),
@@ -2149,7 +2153,8 @@ humor: "playful"
             session_id: SessionId(SESSION_ID.into()),
             persona: PersonaId("sable".into()),
             task_id: None,
-            utterance: "edit /tmp/observer".into(),
+            original_utterance: "edit /tmp/observer".into(),
+            model_input_utterance: "edit /tmp/observer".into(),
             capability: Capability::FilesEdit,
             resource: ResourceScope::Path("/tmp/observer".into()),
             emitted_at: MonotonicTimestamp(state.next_ts()),

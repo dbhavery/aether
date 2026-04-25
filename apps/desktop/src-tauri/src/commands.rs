@@ -331,7 +331,8 @@ pub fn submit_turn(
             session_id: SessionId(SESSION_ID.into()),
             persona: PersonaId(a.compiled.persona_id.0.clone()),
             task_id: None,
-            utterance: router_utterance,
+            original_utterance: text.clone(),
+            model_input_utterance: router_utterance,
             capability,
             resource,
             emitted_at: MonotonicTimestamp(ts),
@@ -1323,7 +1324,12 @@ pub fn analyze_frame(
             session_id: SessionId(SESSION_ID.into()),
             persona: PersonaId(a.compiled.persona_id.0.clone()),
             task_id: None,
-            utterance: utterance.clone(),
+            // Media turns have no retrieval augmentation today; the two
+            // utterance channels are byte-identical. ADR-0009 §Decision 4
+            // — original is the audit-truth, model_input is what the
+            // router/provider receives.
+            original_utterance: utterance.clone(),
+            model_input_utterance: utterance.clone(),
             // Map to the dedicated media capability so the audit log
             // reads `media.camera` / `media.screen_capture` instead of
             // misleading file-read rows. Both are configured Auto in
@@ -1910,7 +1916,11 @@ pub fn transcribe_utterance(
             session_id: SessionId(SESSION_ID.into()),
             persona: PersonaId(a.compiled.persona_id.0.clone()),
             task_id: None,
-            utterance: utterance_text.clone(),
+            // Voice turns: the transcribed text IS the user's utterance,
+            // and there's no augmentation in this path today, so both
+            // channels carry the same string. ADR-0009 §Decision 4.
+            original_utterance: utterance_text.clone(),
+            model_input_utterance: utterance_text.clone(),
             // L5 audit stamps this turn with `MediaMic`. The shell's
             // mic_permissions.json tri-state is the user-facing
             // per-device gate; L5 records the row without doubling

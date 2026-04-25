@@ -111,7 +111,7 @@ pub fn user_record(session_id: &str, request: &TurnRequest) -> TurnMemoryRecord 
         session_id: session_id.to_string(),
         sequence: 0,
         role: MemoryRole::User,
-        content: request.utterance.clone(),
+        content: request.original_utterance.clone(),
         timestamp_ms: request.emitted_at.0,
     }
 }

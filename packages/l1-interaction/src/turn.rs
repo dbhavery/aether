@@ -39,10 +39,30 @@ use aether_l5_policy::{
 use crate::engine::{TurnId, TurnState};
 use crate::error::L1Error;
 
-/// A single-turn request flowing into L1. The input is deliberately narrow:
-/// one utterance, one session, one persona, one target capability + resource.
-/// Broader shape (intent hints, multi-turn context, media tracks) lands in
-/// later waves.
+/// A single-turn request flowing into L1.
+///
+/// ## ADR-0009 — two-channel utterance shape
+///
+/// Per ADR-0009 (`docs/adr/ADR-0009-...md`) the request carries the
+/// user's utterance in **two parallel channels**:
+///
+/// - [`original_utterance`] is what the user actually typed/said. This
+///   is the audit-truth: memory, transcript, and L5 audit rows record
+///   this string. Searching audit by user phrasing operates on this
+///   field.
+/// - [`model_input_utterance`] is what the router/provider receives
+///   after any prompt-builder augmentation (currently the ADR-0005
+///   retrieval block; future presence-state injection, persona overlays,
+///   etc. share the same channel). This is the reproducibility-truth:
+///   "what did the model actually see?" answers from this field.
+///
+/// The two are byte-identical in the no-augmentation case (retrieval
+/// off, zero hits, etc.); when they diverge, the divergence is the
+/// prompt-builder's contribution and must never be charged back to
+/// the user as if they typed it.
+///
+/// Broader shape (intent hints, multi-turn context, media tracks) lands
+/// in later waves.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TurnRequest {
     /// Session correlation.
@@ -51,8 +71,17 @@ pub struct TurnRequest {
     pub persona: PersonaId,
     /// Optional task correlation for task-scoped grants.
     pub task_id: Option<TaskId>,
-    /// Raw user utterance.
-    pub utterance: String,
+    /// What the user typed (or was transcribed as saying). The
+    /// audit-truth string per ADR-0009 §Decision 1; never includes
+    /// retrieval blocks or any other prompt-builder augmentation.
+    pub original_utterance: String,
+    /// What the router/provider receives. Equals `original_utterance`
+    /// when no augmentation fired; otherwise is the augmented form
+    /// (e.g. ADR-0005 `Relevant context (retrieval):\n…\n\n{original}`).
+    /// This is the reproducibility-truth string per ADR-0009 §Decision
+    /// 4; the L1 engine forwards exactly this value to the
+    /// `TurnRouter::dispatch` call.
+    pub model_input_utterance: String,
     /// Capability the turn intends to invoke.
     pub capability: Capability,
     /// Target resource scope.
@@ -202,7 +231,7 @@ impl TurnEngine {
                 let started = Instant::now();
                 let mut outcome = self
                     .router
-                    .dispatch(&turn_id, &request.utterance, &decision)?;
+                    .dispatch(&turn_id, &request.model_input_utterance, &decision)?;
                 // Always stamp the engine-measured latency. If a router
                 // populated its own value we deliberately overwrite so the
                 // number is consistently "handle_turn round-trip" across
