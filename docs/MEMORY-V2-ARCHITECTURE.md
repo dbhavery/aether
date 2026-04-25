@@ -321,6 +321,12 @@ in a form that reads like notes, not logs.
   *tier-parameterised* — Spark uses `nomic-embed-text` (substitution
   for `bge-small-en-v1.5` per DECISIONS_LOG D-001), Flame and Forge
   use `bge-m3`. See `docs/adr/ADR-0007-embeddings-onboarding.md`.
+  **Updated 2026-04-25:** the original `bge-small-en-v1.5` is now
+  loadable via the HuggingFace provider (`hf:BAAI/bge-small-en-v1.5`,
+  see `docs/HF_EMBEDDER.md` and DECISIONS_LOG D-014). The
+  `nomic-embed-text` substitution remains the zero-dependency
+  default; users who install `sentence-transformers` may opt back
+  into the original ADR-0007 D7 model.
 - Vector index backend — SQLite + rusqlite extensions? A separate
   sqlite-vec file? Out of scope for design-only doc; decide at
   implementation time.

@@ -114,6 +114,15 @@ ANCHORS: list[tuple[str, str, str | None, str]] = [
     ("string", "packages/l2-memory/src/embeddings.rs", "AETHER_EMBED_OLLAMA_MODEL", "§10 step 6 model env var"),
     ("string", "packages/l2-memory/src/embeddings.rs", "AETHER_EMBED_OLLAMA_BASE_URL", "§10 step 6 base URL env var"),
 
+    # ---- Phase 4C (2026-04-25) — HuggingFace embedder via Python helper ----
+    ("file",   "packages/l2-memory/src/hf_provider.rs", None, "Phase 4C: HF provider module"),
+    ("symbol", "packages/l2-memory/src/hf_provider.rs", "pub struct HfEmbeddingProvider", "Phase 4C: HF provider type"),
+    ("symbol", "packages/l2-memory/src/hf_provider.rs", "pub fn normalise_model_id", "Phase 4C: legacy id form normalisation"),
+    ("string", "packages/l2-memory/src/hf_provider.rs", "AETHER_HF_HELPER_PYTHON", "Phase 4C: python interpreter env var"),
+    ("string", "packages/l2-memory/src/hf_provider.rs", "AETHER_HF_HELPER_SCRIPT", "Phase 4C: script path env var"),
+    ("file",   "tools/hf_embed_helper/embed.py", None, "Phase 4C: persistent Python helper"),
+    ("file",   "docs/HF_EMBEDDER.md", None, "Phase 4C: HF embedder enablement guide"),
+
     # ---- ADR-0004 — Durable-domain store (Milestone 2 Run 1) ----
     ("file",   "packages/storage/migrations/0005_durable_log.sql", None, "ADR-0004: Durable table migration"),
     ("string", "packages/l2-memory/src/sqlite_session.rs", "DURABLE_TABLE", "ADR-0004: Durable table name const"),
