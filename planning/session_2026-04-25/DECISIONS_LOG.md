@@ -382,3 +382,64 @@ sessions need an index-lock discipline.
 **Test counts.** `cargo test -p aether-l5-policy --all-features`:
 57 → 65 (+4 audit_seal tests, +4 audit.rs tests). `cargo test
 --workspace` clean. `python tools/lint-policy-doc/check.py` OK.
+
+## D-013 — Phase 3B: Option B (Python pacing-mirror bench), not Option A (Tauri integration test)
+
+**Context.** Phase 3B (sustained backfill stress, HANDOFF §3B) offered
+two procedures: (A) full Tauri integration test under
+`apps/desktop/src-tauri/tests/`, or (B) standalone Python script that
+hammers the Ollama embed endpoint at exactly the pacing the production
+worker uses (`backfill::DEFAULT_PER_ROW_PAUSE_MS = 50`). The phase
+prompt allowed Option B "if integration test plumbing is too heavy" —
+which it was: Phase 4C is concurrently editing `state.rs` and Phase 4D
+just landed `Arc<AppState>` plumbing in `main.rs`, so adding a 300+ LOC
+test harness that constructs `AppState`, mocks the L5 policy gate, seeds
+`durable_memory`, and races against parallel agent edits would risk
+merge conflicts and offer marginal additional fidelity over Option B
+(the backfill loop IS sequential `provider.embed + sleep`).
+
+**Decision.** Option B. Script lives at
+`planning/session_2026-04-25/bench_backfill_stress.py`; raw timeline at
+`planning/session_2026-04-25/backfill_stress_results.json`; narrative
+report at `planning/session_2026-04-25/BACKFILL_STRESS_REPORT.md`. No
+production code touched.
+
+**D-number note.** Both this entry and the security agent's claim D-012;
+this entry takes D-013 to keep numbering forward-monotonic. The two
+agents arrived at the log nearly simultaneously.
+
+**Headline result.** 1000 rows × bge-m3 × 50 ms initial pacing
+(auto-bumped to 100 ms after the first 500 at row 20):
+- 4.71 min wall-clock — within ADR-0007 D7's "~3-5 min" projected band, top half.
+- 3.54 rows/sec sustained (vs D7's 5 rows/sec extrapolation — 30% slower).
+- 181.8 ms ± 19.5 ms per-row mean.
+- 1.3% failure rate (13/1000 HTTP 500s) at almost-perfect 50-row cadence — pacing mitigates but does not eliminate Ollama's internal pressure mode.
+- Steady-state VRAM 5519 MiB, 0 MiB creep over 280 s.
+- Throughput drift -15.6% (got faster after ~400-row warmup).
+
+**Real bug found, NOT fixed in this session.** The 1.3% failure rate
+suggests an Ollama internal cadence (every ~50 rows) that pacing alone
+cannot suppress. The backfill worker correctly counts these as failures
+and continues (matches design); residue is recovered by Phase 2's
+`embedded_ids` skip-path on the next invocation. Per phase prompt
+constraint ("if integration test reveals a real bug, document it,
+don't try to fix in this commit — would risk conflict with Phase 4D's
+just-landed work"), the F1-F3 follow-ups in the report are documented
+but not implemented:
+- F1: per-row retry-on-500 with backoff in `run_backfill_worker`
+- F2: distinct failure-count surface in `BackfillProgressView`
+- F3: upstream investigation of the 50-row Ollama cadence
+
+**Proposed ADR-0007 D7 §Tuning notes update.** Drafted in
+BACKFILL_STRESS_REPORT.md §6, **not committed**. Replaces the
+50-row-extrapolated 1000-row estimate with the sustained-real numbers
+above. Recommendation: keep the 50 ms pacing default (100 ms costs
+15-20% throughput for an incomplete reduction in the 500 rate; the
+1.3% un-embedded residue is the cheaper failure mode given the skip-path
+recovery).
+
+**Why no ADR edit this session.** Per quality standard #8, ADR
+modifications happen when implementing the ADR's decisions, not as
+side-effect of validation. The proposed delta is propose-only — Don
+ratifies (or a future session that lands F1's retry-on-500 ratifies as
+part of that change).

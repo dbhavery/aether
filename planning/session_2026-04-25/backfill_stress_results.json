@@ -1,0 +1,394 @@
+{
+  "model": "bge-m3",
+  "row_count": 1000,
+  "pace_ms_initial": 50,
+  "pace_ms_final": 100,
+  "pace_changes": [
+    {
+      "row_idx": 20,
+      "old_pace_ms": 50,
+      "new_pace_ms": 100,
+      "reason": "HTTP 500 from Ollama"
+    }
+  ],
+  "total_seconds": 282.48,
+  "total_minutes": 4.71,
+  "rows_per_second": 3.54,
+  "failures": 13,
+  "failure_rate_pct": 1.3,
+  "failure_log": [
+    {
+      "row_idx": 20,
+      "status": 500,
+      "elapsed_s": 5.48,
+      "body_excerpt": "{\"error\":\"failed to encode response: json: unsupported value: NaN\"}"
+    },
+    {
+      "row_idx": 70,
+      "status": 500,
+      "elapsed_s": 21.22,
+      "body_excerpt": "{\"error\":\"failed to encode response: json: unsupported value: NaN\"}"
+    },
+    {
+      "row_idx": 120,
+      "status": 500,
+      "elapsed_s": 35.67,
+      "body_excerpt": "{\"error\":\"failed to encode response: json: unsupported value: NaN\"}"
+    },
+    {
+      "row_idx": 170,
+      "status": 500,
+      "elapsed_s": 50.64,
+      "body_excerpt": "{\"error\":\"failed to encode response: json: unsupported value: NaN\"}"
+    },
+    {
+      "row_idx": 220,
+      "status": 500,
+      "elapsed_s": 65.45,
+      "body_excerpt": "{\"error\":\"failed to encode response: json: unsupported value: NaN\"}"
+    },
+    {
+      "row_idx": 270,
+      "status": 500,
+      "elapsed_s": 79.91,
+      "body_excerpt": "{\"error\":\"failed to encode response: json: unsupported value: NaN\"}"
+    },
+    {
+      "row_idx": 370,
+      "status": 500,
+      "elapsed_s": 109.36,
+      "body_excerpt": "{\"error\":\"failed to encode response: json: unsupported value: NaN\"}"
+    },
+    {
+      "row_idx": 470,
+      "status": 500,
+      "elapsed_s": 136.89,
+      "body_excerpt": "{\"error\":\"failed to encode response: json: unsupported value: NaN\"}"
+    },
+    {
+      "row_idx": 620,
+      "status": 500,
+      "elapsed_s": 178.22,
+      "body_excerpt": "{\"error\":\"failed to encode response: json: unsupported value: NaN\"}"
+    },
+    {
+      "row_idx": 670,
+      "status": 500,
+      "elapsed_s": 192.32,
+      "body_excerpt": "{\"error\":\"failed to encode response: json: unsupported value: NaN\"}"
+    },
+    {
+      "row_idx": 720,
+      "status": 500,
+      "elapsed_s": 206.03,
+      "body_excerpt": "{\"error\":\"failed to encode response: json: unsupported value: NaN\"}"
+    },
+    {
+      "row_idx": 770,
+      "status": 500,
+      "elapsed_s": 219.6,
+      "body_excerpt": "{\"error\":\"failed to encode response: json: unsupported value: NaN\"}"
+    },
+    {
+      "row_idx": 870,
+      "status": 500,
+      "elapsed_s": 247.43,
+      "body_excerpt": "{\"error\":\"failed to encode response: json: unsupported value: NaN\"}"
+    }
+  ],
+  "per_row_mean_ms": 181.8,
+  "per_row_median_ms": 179.8,
+  "per_row_stddev_ms": 19.5,
+  "per_row_p95_ms": 213.7,
+  "per_row_p99_ms": 227.1,
+  "per_row_min_ms": 142.9,
+  "per_row_max_ms": 356.0,
+  "first_100_mean_ms": 200.8,
+  "last_100_mean_ms": 169.6,
+  "throughput_drift_pct": -15.57,
+  "windows_100": [
+    {
+      "window_start": 0,
+      "window_end": 99,
+      "rows": 100,
+      "mean_ms": 200.8,
+      "median_ms": 205.3,
+      "stddev_ms": 22.2,
+      "min_ms": 154.0,
+      "max_ms": 304.8
+    },
+    {
+      "window_start": 100,
+      "window_end": 199,
+      "rows": 100,
+      "mean_ms": 197.7,
+      "median_ms": 196.5,
+      "stddev_ms": 12.0,
+      "min_ms": 166.6,
+      "max_ms": 227.7
+    },
+    {
+      "window_start": 200,
+      "window_end": 299,
+      "rows": 100,
+      "mean_ms": 190.4,
+      "median_ms": 189.5,
+      "stddev_ms": 13.5,
+      "min_ms": 162.7,
+      "max_ms": 219.0
+    },
+    {
+      "window_start": 300,
+      "window_end": 399,
+      "rows": 100,
+      "mean_ms": 188.7,
+      "median_ms": 190.1,
+      "stddev_ms": 15.2,
+      "min_ms": 152.0,
+      "max_ms": 225.1
+    },
+    {
+      "window_start": 400,
+      "window_end": 499,
+      "rows": 100,
+      "mean_ms": 173.2,
+      "median_ms": 172.2,
+      "stddev_ms": 12.5,
+      "min_ms": 150.8,
+      "max_ms": 211.7
+    },
+    {
+      "window_start": 500,
+      "window_end": 599,
+      "rows": 100,
+      "mean_ms": 174.7,
+      "median_ms": 173.9,
+      "stddev_ms": 13.8,
+      "min_ms": 147.6,
+      "max_ms": 208.3
+    },
+    {
+      "window_start": 600,
+      "window_end": 699,
+      "rows": 100,
+      "mean_ms": 175.2,
+      "median_ms": 172.4,
+      "stddev_ms": 16.2,
+      "min_ms": 148.0,
+      "max_ms": 236.6
+    },
+    {
+      "window_start": 700,
+      "window_end": 799,
+      "rows": 100,
+      "mean_ms": 174.8,
+      "median_ms": 174.9,
+      "stddev_ms": 14.9,
+      "min_ms": 142.9,
+      "max_ms": 215.0
+    },
+    {
+      "window_start": 800,
+      "window_end": 899,
+      "rows": 100,
+      "mean_ms": 173.1,
+      "median_ms": 170.2,
+      "stddev_ms": 24.0,
+      "min_ms": 146.4,
+      "max_ms": 356.0
+    },
+    {
+      "window_start": 900,
+      "window_end": 999,
+      "rows": 100,
+      "mean_ms": 169.6,
+      "median_ms": 168.2,
+      "stddev_ms": 13.5,
+      "min_ms": 146.8,
+      "max_ms": 206.6
+    }
+  ],
+  "vram_timeline": [
+    {
+      "t_s": 0.0,
+      "row_idx": 0,
+      "used_mib": 15940,
+      "total_mib": 24564
+    },
+    {
+      "t_s": 10.13,
+      "row_idx": 35,
+      "used_mib": 15940,
+      "total_mib": 24564
+    },
+    {
+      "t_s": 20.2,
+      "row_idx": 67,
+      "used_mib": 15940,
+      "total_mib": 24564
+    },
+    {
+      "t_s": 30.39,
+      "row_idx": 103,
+      "used_mib": 5519,
+      "total_mib": 24564
+    },
+    {
+      "t_s": 40.51,
+      "row_idx": 136,
+      "used_mib": 5519,
+      "total_mib": 24564
+    },
+    {
+      "t_s": 50.64,
+      "row_idx": 170,
+      "used_mib": 5519,
+      "total_mib": 24564
+    },
+    {
+      "t_s": 60.65,
+      "row_idx": 204,
+      "used_mib": 5519,
+      "total_mib": 24564
+    },
+    {
+      "t_s": 70.93,
+      "row_idx": 239,
+      "used_mib": 5519,
+      "total_mib": 24564
+    },
+    {
+      "t_s": 81.08,
+      "row_idx": 274,
+      "used_mib": 5519,
+      "total_mib": 24564
+    },
+    {
+      "t_s": 91.28,
+      "row_idx": 309,
+      "used_mib": 5519,
+      "total_mib": 24564
+    },
+    {
+      "t_s": 101.5,
+      "row_idx": 343,
+      "used_mib": 5519,
+      "total_mib": 24564
+    },
+    {
+      "t_s": 111.56,
+      "row_idx": 378,
+      "used_mib": 5519,
+      "total_mib": 24564
+    },
+    {
+      "t_s": 121.77,
+      "row_idx": 415,
+      "used_mib": 5519,
+      "total_mib": 24564
+    },
+    {
+      "t_s": 132.02,
+      "row_idx": 452,
+      "used_mib": 5519,
+      "total_mib": 24564
+    },
+    {
+      "t_s": 142.07,
+      "row_idx": 489,
+      "used_mib": 5519,
+      "total_mib": 24564
+    },
+    {
+      "t_s": 152.18,
+      "row_idx": 526,
+      "used_mib": 5519,
+      "total_mib": 24564
+    },
+    {
+      "t_s": 162.38,
+      "row_idx": 563,
+      "used_mib": 5519,
+      "total_mib": 24564
+    },
+    {
+      "t_s": 172.46,
+      "row_idx": 599,
+      "used_mib": 5519,
+      "total_mib": 24564
+    },
+    {
+      "t_s": 182.46,
+      "row_idx": 635,
+      "used_mib": 5519,
+      "total_mib": 24564
+    },
+    {
+      "t_s": 192.58,
+      "row_idx": 671,
+      "used_mib": 5519,
+      "total_mib": 24564
+    },
+    {
+      "t_s": 202.67,
+      "row_idx": 708,
+      "used_mib": 5519,
+      "total_mib": 24564
+    },
+    {
+      "t_s": 212.75,
+      "row_idx": 745,
+      "used_mib": 5519,
+      "total_mib": 24564
+    },
+    {
+      "t_s": 222.9,
+      "row_idx": 782,
+      "used_mib": 5519,
+      "total_mib": 24564
+    },
+    {
+      "t_s": 233.06,
+      "row_idx": 818,
+      "used_mib": 5519,
+      "total_mib": 24564
+    },
+    {
+      "t_s": 243.1,
+      "row_idx": 854,
+      "used_mib": 5519,
+      "total_mib": 24564
+    },
+    {
+      "t_s": 253.29,
+      "row_idx": 892,
+      "used_mib": 5519,
+      "total_mib": 24564
+    },
+    {
+      "t_s": 263.54,
+      "row_idx": 929,
+      "used_mib": 5519,
+      "total_mib": 24564
+    },
+    {
+      "t_s": 273.74,
+      "row_idx": 967,
+      "used_mib": 5519,
+      "total_mib": 24564
+    },
+    {
+      "t_s": 282.48,
+      "row_idx": 999,
+      "used_mib": 5519,
+      "total_mib": 24564
+    }
+  ],
+  "vram_min_mib": 5519,
+  "vram_max_mib": 15940,
+  "vram_creep_mib": 10421,
+  "per_row_status_counts": {
+    "200": 987,
+    "500": 13
+  }
+}
