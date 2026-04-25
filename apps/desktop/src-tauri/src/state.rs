@@ -254,6 +254,15 @@ pub struct BackfillProgress {
     /// Rows that errored mid-embed and were skipped. Worker continues
     /// past failures so a single bad row doesn't kill the job.
     pub failures: usize,
+    /// Rows skipped because an embedding already exists for the
+    /// (domain, memory_id) pair. Surfaced separately from `completed`
+    /// so the UI can show "skipped X already-embedded rows" rather
+    /// than double-counting them as completed work. Populated when the
+    /// `EmbeddingStore` impl honours `embedded_ids(domain)`; impls that
+    /// fall back to the trait default (empty set) will see this stay
+    /// at 0 and the worker will fall back to the historical brute-
+    /// force re-embed.
+    pub skipped_already_embedded: usize,
     /// Domain currently being walked, if any. `None` between domains
     /// or when finished.
     pub current_domain: Option<String>,

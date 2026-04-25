@@ -25,15 +25,17 @@
 //!   rapid-fire bge-m3 embeds can trigger Ollama HTTP 500 from queue
 //!   pressure. Default per-row pause: 50 ms. Tunable via
 //!   `BackfillOptions::per_row_pause_ms`.
-//! - **Wasteful but correct.** Today we re-embed every row
-//!   unconditionally, even rows that already have an embedding (the
-//!   `EmbeddingStore` `upsert` is idempotent so this is safe). A
-//!   smarter "skip if already embedded" path would require an
-//!   `embedded_ids(domain)` enumeration method on the trait — that's
-//!   a `packages/l2-memory` change and out of scope for this shell-
-//!   only commit. Backfill is one-time-per-flag-flip; for typical
-//!   personal-scale (<1000 rows), the brute-force walk completes in
-//!   under a minute even on Spark hardware.
+//! - **Skip-already-embedded fast path.** At each domain boundary the
+//!   worker asks `EmbeddingStore::embedded_ids(domain)` for the set
+//!   of memory ids already vectorised. Rows whose synthetic id
+//!   (`mem-{session}-{seq}`) is in that set are counted into
+//!   `BackfillProgress::skipped_already_embedded` and skipped without
+//!   issuing an embed call. The second invocation of backfill on the
+//!   same data therefore drops from ~3-5 sec/row to a single index
+//!   scan + a no-op walk. Stores that don't override `embedded_ids`
+//!   return an empty set (trait default) and the historical brute-
+//!   force re-embed kicks in — strictly safe; `upsert` is idempotent
+//!   so re-embedding never corrupts state, just wastes wall-clock.
 //! - **Capability-gated.** Every backfill invocation routes through
 //!   the same L5 `Capability::RetrievalContext` gate the orchestrator
 //!   uses. A non-Allow decision aborts before any embed call lands.
@@ -41,6 +43,7 @@
 //!   the job; the row is counted as a failure and the worker
 //!   continues. The final report carries `failures` count.
 
+use std::collections::HashSet;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
@@ -189,6 +192,7 @@ pub fn run_backfill_worker(
         p.total = total;
         p.completed = 0;
         p.failures = 0;
+        p.skipped_already_embedded = 0;
         p.finished = false;
         p.cancelled = false;
         p.current_domain = None;
@@ -239,6 +243,20 @@ pub fn run_backfill_worker(
         .clone();
     let pause = Duration::from_millis(options.per_row_pause_ms);
     'outer: for (domain, rows) in per_domain_rows {
+        // Pre-compute the already-embedded set for this domain so the
+        // hot per-row loop is a single hash probe. A failure here is
+        // non-fatal — we fall back to "skip nothing" (the same shape
+        // a default-impl store gives) and keep going.
+        let already: HashSet<MemoryId> = match state.embedding_store.embedded_ids(domain) {
+            Ok(set) => set,
+            Err(e) => {
+                tracing::warn!(
+                    "backfill embedded_ids({}) failed; falling back to brute-force: {e}",
+                    domain.label()
+                );
+                HashSet::new()
+            }
+        };
         {
             let mut p = state.backfill_progress.lock().expect("backfill progress lock");
             p.current_domain = Some(domain.label().to_string());
@@ -249,10 +267,17 @@ pub fn run_backfill_worker(
                 p.cancelled = true;
                 break 'outer;
             }
+            let memory_id = MemoryId::new(format!("mem-{sid}-{seq}"));
+            if already.contains(&memory_id) {
+                bump_skipped(state);
+                emit_progress(app, &job_id, state);
+                // No pause on skip — the whole point is the cheap path.
+                continue;
+            }
             match provider.embed(&content) {
                 Ok(vector) => {
                     let row = EmbeddingRow {
-                        memory_id: MemoryId::new(format!("mem-{sid}-{seq}")),
+                        memory_id: memory_id.clone(),
                         domain,
                         vector,
                     };
@@ -287,6 +312,11 @@ fn bump_completed(state: &AppState) {
 fn bump_failures(state: &AppState) {
     let mut p = state.backfill_progress.lock().expect("backfill progress lock");
     p.failures += 1;
+}
+
+fn bump_skipped(state: &AppState) {
+    let mut p = state.backfill_progress.lock().expect("backfill progress lock");
+    p.skipped_already_embedded += 1;
 }
 
 fn finalize(state: &AppState, app: Option<&AppHandle>, job_id: &str, cancelled: bool) {
@@ -469,6 +499,133 @@ mod tests {
         let p = state.backfill_progress.lock().unwrap();
         assert!(p.finished);
         assert!(p.cancelled, "cancelled flag must surface in final progress");
+    }
+
+    #[test]
+    fn worker_skips_already_embedded_rows_on_second_pass() {
+        // First pass embeds N=4 rows. Second pass on the same state
+        // must skip every row via embedded_ids — no new embeds, no
+        // failures, and skipped_already_embedded == 4.
+        let state = AppState::new().expect("state");
+        swap_stub_embedder(&state, 8);
+        enable_embeddings(&state);
+        seed_durable_only(&state, "s1", 4);
+
+        run_backfill_worker(
+            &state,
+            None,
+            "first".into(),
+            BackfillOptions { per_row_pause_ms: 0 },
+        );
+        {
+            let p = state.backfill_progress.lock().unwrap();
+            assert_eq!(p.completed, 4);
+            assert_eq!(p.skipped_already_embedded, 0);
+            assert_eq!(p.failures, 0);
+        }
+
+        // Second invocation — the FlatFile store now has all four ids
+        // for Durable, so every row should land in the skip path.
+        run_backfill_worker(
+            &state,
+            None,
+            "second".into(),
+            BackfillOptions { per_row_pause_ms: 0 },
+        );
+        let p = state.backfill_progress.lock().unwrap();
+        assert!(p.finished);
+        assert!(!p.cancelled);
+        assert_eq!(p.total, 4);
+        assert_eq!(p.completed, 0, "second pass must not re-embed");
+        assert_eq!(p.failures, 0);
+        assert_eq!(
+            p.skipped_already_embedded, 4,
+            "every row must be counted as skipped on second pass"
+        );
+    }
+
+    #[test]
+    fn worker_skips_subset_when_only_some_rows_pre_embedded() {
+        // Seed N=5 rows, then manually pre-embed two of them so the
+        // second pass shows a mixed completed/skipped split.
+        let state = AppState::new().expect("state");
+        swap_stub_embedder(&state, 8);
+        enable_embeddings(&state);
+        seed_durable_only(&state, "s1", 5);
+
+        // Pre-populate two ids in the embedding store so the worker
+        // sees them as already-embedded. seed_durable_only writes
+        // sequence=0 for every record because the in-memory durable
+        // store assigns sequence inside `append`; mirror the worker's
+        // id-construction logic against the actual stored sequences.
+        let store = state.memory_for_domain(crate::memory_config::MemoryDomain::Durable);
+        let sessions = store.list_sessions().unwrap();
+        let mut all_ids: Vec<MemoryId> = Vec::new();
+        for sid in sessions {
+            for r in store.recent(&sid).unwrap().records {
+                all_ids.push(MemoryId::new(format!("mem-{}-{}", r.session_id, r.sequence)));
+            }
+        }
+        assert_eq!(all_ids.len(), 5);
+        // Pre-embed the first two with a junk vector.
+        for id in all_ids.iter().take(2) {
+            state
+                .embedding_store
+                .upsert(EmbeddingRow {
+                    memory_id: id.clone(),
+                    domain: L2Domain::Durable,
+                    vector: vec![0.0; 8],
+                })
+                .unwrap();
+        }
+
+        run_backfill_worker(
+            &state,
+            None,
+            "mixed".into(),
+            BackfillOptions { per_row_pause_ms: 0 },
+        );
+        let p = state.backfill_progress.lock().unwrap();
+        assert!(p.finished);
+        assert_eq!(p.total, 5);
+        assert_eq!(p.skipped_already_embedded, 2);
+        assert_eq!(p.completed, 3);
+        assert_eq!(p.failures, 0);
+    }
+
+    #[test]
+    fn worker_cancel_during_skip_walk_still_marks_cancelled() {
+        // Pre-embed every row so the skip path runs for all of them,
+        // then pre-cancel before the worker enters the row loop.
+        // The cancel check sits at the head of the per-row loop — the
+        // worker must observe the flag and exit cancelled rather than
+        // marching through the skip walk to natural completion.
+        let state = AppState::new().expect("state");
+        swap_stub_embedder(&state, 8);
+        enable_embeddings(&state);
+        seed_durable_only(&state, "s1", 6);
+
+        // First pass: embed everything.
+        run_backfill_worker(
+            &state,
+            None,
+            "warmup".into(),
+            BackfillOptions { per_row_pause_ms: 0 },
+        );
+
+        // Now pre-cancel and run again. Every row would be a skip, but
+        // the cancel must short-circuit the loop.
+        state.backfill_cancel.store(true, Ordering::SeqCst);
+        run_backfill_worker(
+            &state,
+            None,
+            "cancelled".into(),
+            BackfillOptions { per_row_pause_ms: 0 },
+        );
+        let p = state.backfill_progress.lock().unwrap();
+        assert!(p.finished);
+        assert!(p.cancelled, "cancel during skip walk must still surface");
+        assert_eq!(p.completed, 0);
     }
 
     #[test]

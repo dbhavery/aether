@@ -162,3 +162,57 @@ was count, not bytes. `gemma4:26b` solo residency = 23051 MB
 another agent in this session already used D-005. The two
 decisions are independent; the numbering simply reflects log
 arrival order.
+
+## D-007 — `EmbeddingStore::embedded_ids` returns `HashSet<MemoryId>` with default impl returning empty
+
+**Context.** Phase 2 (handoff §4B) adds an enumeration method to the
+`EmbeddingStore` trait so backfill can skip already-embedded rows on
+the second pass. Three sub-decisions:
+
+1. **Return shape.** Handoff suggested `HashSet<String>`. `MemoryId`
+   is the existing typed key on every other trait method (`upsert`,
+   `delete`, `EmbeddingRow::memory_id`). Returning `String` would
+   force the consumer to wrap on every `contains` probe.
+2. **Default impl vs required.** A default returning empty set
+   means a stale `impl EmbeddingStore` keeps compiling but reverts
+   to historical brute-force re-embed.
+3. **Skip-count surfacing.** New `BackfillProgress` field
+   `skipped_already_embedded` rather than folding into `completed`.
+
+**Decision.**
+1. `HashSet<MemoryId>` — typed handle, O(1) probe, no allocation
+   churn in the hot loop.
+2. **Default impl returning `Ok(HashSet::new())`.** The semantic
+   contract of an empty set is "skip nothing", which is strictly
+   safer than an over-eager "everything-already-embedded" default
+   that would silently drop work. `FlatFileEmbeddingStore` overrides;
+   any future store author has a compile-time green path with
+   correctness preserved by `upsert` idempotency.
+3. **Surfaced separately.** `BackfillProgress` gains
+   `skipped_already_embedded: usize`. The UI's
+   `BackfillProgressView` computes `processed = completed +
+   skipped_already_embedded` for the bar percentage so skip work
+   advances the progress strip; the post-run summary line and the
+   in-progress text both call out the skip count distinctly. Folding
+   skipped into completed would lie about how much real embed work
+   landed and obscure the cheap-path win.
+
+**Why no Tauri command for `embedded_ids` directly.** The new method
+is consumed in-process by the backfill worker — exposing it as an
+IPC surface would invite UI calls that duplicate state better held
+in `BackfillProgress`. Keep the trait surface internal.
+
+**Doc + lint.** `docs/MEMORY-V2-ARCHITECTURE.md` §"Embedding
+backfill" updated to reflect the implemented fast path (was: "Open"
+flagged as future work). Three new rot-guard anchors added to
+`tools/lint-memory-doc/check.py`: `fn embedded_ids` in
+`packages/l2-memory/src/embeddings.rs`, the
+`skipped_already_embedded` field in `state.rs`, and the
+`embedded_ids(domain)` call site in `backfill.rs`. Anchor count
+112 → 115.
+
+**Test deltas.** l2-memory lib 33 → 37 (+4: empty store, domain
+isolation, upsert-replace+delete, persistence roundtrip). desktop
+src-tauri 275 → 278 (+3: second-pass full-skip, mixed
+completed/skipped, cancel during skip walk). Frontend vitest
+217 → 218 (+1: post-run summary surfaces skip count).

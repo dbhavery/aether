@@ -312,13 +312,19 @@ export function RetrievalTab({ refreshKey }: Props) {
             modelName={model.name}
           />
         )}
-        {!backfillRunning && backfill && backfill.finished && backfill.completed > 0 && (
-          <div className="text-aether-muted text-xs">
-            Last backfill: {backfill.completed} indexed
-            {backfill.failures > 0 ? `, ${backfill.failures} failed` : ""}
-            {backfill.cancelled ? " (cancelled)" : ""}.
-          </div>
-        )}
+        {!backfillRunning &&
+          backfill &&
+          backfill.finished &&
+          (backfill.completed > 0 || backfill.skipped_already_embedded > 0) && (
+            <div className="text-aether-muted text-xs">
+              Last backfill: {backfill.completed} indexed
+              {backfill.skipped_already_embedded > 0
+                ? `, ${backfill.skipped_already_embedded} already-embedded skipped`
+                : ""}
+              {backfill.failures > 0 ? `, ${backfill.failures} failed` : ""}
+              {backfill.cancelled ? " (cancelled)" : ""}.
+            </div>
+          )}
       </div>
     );
   }
@@ -351,16 +357,22 @@ function BackfillProgressView({
   onCancel,
   modelName,
 }: BackfillProgressViewProps) {
+  // Both newly-embedded rows and already-embedded skips count as
+  // "processed" for the progress bar — skipping is the cheap path,
+  // not unfinished work.
+  const processed = backfill.completed + backfill.skipped_already_embedded;
   const pct =
     backfill.total > 0
-      ? Math.round((backfill.completed / backfill.total) * 100)
+      ? Math.round((processed / backfill.total) * 100)
       : 0;
   return (
     <div className="space-y-1">
       <div className="text-aether-muted text-sm">
-        Indexing with <code>{modelName}</code>: {backfill.completed} of{" "}
-        {backfill.total}
-        {backfill.current_domain ? ` (${backfill.current_domain})` : ""}.
+        Indexing with <code>{modelName}</code>: {processed} of {backfill.total}
+        {backfill.skipped_already_embedded > 0
+          ? ` (${backfill.skipped_already_embedded} already embedded)`
+          : ""}
+        {backfill.current_domain ? ` — ${backfill.current_domain}` : ""}.
       </div>
       <div className="h-1 w-full overflow-hidden rounded bg-aether-bg/40">
         <div

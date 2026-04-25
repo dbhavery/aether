@@ -148,6 +148,10 @@ ANCHORS: list[tuple[str, str, str | None, str]] = [
     ("symbol", "apps/desktop/src-tauri/src/commands.rs", "pub fn cancel_backfill", "ADR-0007 D5: Tauri cancel command"),
     ("symbol", "apps/desktop/src-tauri/src/commands.rs", "pub fn backfill_status", "ADR-0007 D5: Tauri status read"),
     ("symbol", "apps/desktop/src-tauri/src/commands.rs", "pub fn backfill_count", "ADR-0007 D5: un-embedded count"),
+    # Skip-already-embedded fast path (Phase 2, 2026-04-25):
+    ("string", "packages/l2-memory/src/embeddings.rs", "fn embedded_ids", "ADR-0007 D5: skip-already-embedded enumeration"),
+    ("string", "apps/desktop/src-tauri/src/state.rs", "skipped_already_embedded", "ADR-0007 D5: skip count surfaced in progress"),
+    ("string", "apps/desktop/src-tauri/src/backfill.rs", "embedded_ids(domain)", "ADR-0007 D5: backfill calls into skip enumeration"),
 
     # ---- ADR-0006 — Hardware tier model (Milestone 2 Run 3) ----
     ("file",   "apps/desktop/src-tauri/src/hardware.rs", None, "ADR-0006: hardware detection module"),

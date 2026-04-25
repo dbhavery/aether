@@ -78,6 +78,7 @@ beforeEach(() => {
     total: 0,
     completed: 0,
     failures: 0,
+    skipped_already_embedded: 0,
     current_domain: null,
     started_at_ms: 0,
   });
@@ -208,6 +209,33 @@ describe("RetrievalTab", () => {
     });
     // Flame default per ADR-0007 D7 = bge-m3.
     expect(screen.getByText(/bge-m3/)).toBeTruthy();
+  });
+
+  it("surfaces skipped-already-embedded count in the post-run summary", async () => {
+    // Second-pass backfill (after EmbeddingStore::embedded_ids fast
+    // path) reports skipped > 0. The Last-backfill summary must
+    // expose that number so the user understands why "indexed" is low.
+    mockedApi.embeddingsReadiness.mockResolvedValue({ kind: "ready" } as ReadinessState);
+    mockedApi.backfillCount.mockResolvedValue(0);
+    mockedApi.backfillStatus.mockResolvedValue({
+      finished: true,
+      cancelled: false,
+      total: 5,
+      completed: 0,
+      failures: 0,
+      skipped_already_embedded: 5,
+      current_domain: null,
+      started_at_ms: 0,
+    });
+    render(<RetrievalTab refreshKey={0} />);
+    await waitFor(() => {
+      expect(screen.getByText(/Retrieval is active/)).toBeTruthy();
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByText(/5 already-embedded skipped/),
+      ).toBeTruthy();
+    });
   });
 
   it("strips provider prefix to display the bare model name", async () => {

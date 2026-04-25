@@ -427,6 +427,12 @@ export interface BackfillProgress {
   total: number;
   completed: number;
   failures: number;
+  /** Rows skipped because an embedding already exists for the
+   * (domain, memory_id) pair. Surfaced separately from `completed`
+   * so the UI can render "skipped X already-embedded rows" rather
+   * than double-counting them as completed work. Populated by the
+   * second-pass backfill fast path (EmbeddingStore::embedded_ids). */
+  skipped_already_embedded: number;
   current_domain: string | null;
   started_at_ms: number;
 }

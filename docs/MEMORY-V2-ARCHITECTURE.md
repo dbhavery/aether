@@ -340,18 +340,20 @@ Today's behaviour:
   duration. Acceptable for personal scale (<1000 rows on bge-m3 ≈
   3 min; on nomic-embed-text ≈ 27 sec — measured on Don's 3090 Ti
   workstation 2026-04-24, see `planning/validation_2026-04-24/`).
-- Brute-force re-embed: every row, regardless of whether an
-  embedding already exists (`upsert` is idempotent). Smarter
-  "skip already-embedded" requires `EmbeddingStore::embedded_ids`
-  enumeration — a future packages/l2-memory addition.
+- Skip-already-embedded fast path (added 2026-04-25): the worker
+  asks `EmbeddingStore::embedded_ids(domain)` for the set of memory
+  ids already vectorised, then skips matching rows during the walk.
+  Skipped rows count into `BackfillProgress::skipped_already_embedded`
+  rather than `completed`, so the UI can render "skipped X" without
+  inflating the indexed count. Stores that don't override the trait
+  default return an empty set; the worker falls back to brute-force
+  re-embed (`upsert` is idempotent — strictly safe, just wasteful).
 - Per-row pacing pause (default 50 ms) defends against the rapid-
-  fire Ollama HTTP 500 surfaced in validation Block 9.
-- Cancel via shared atomic; observed at every row boundary.
+  fire Ollama HTTP 500 surfaced in validation Block 9. The skip
+  path bypasses pacing — there's no embed call to throttle.
+- Cancel via shared atomic; observed at every row boundary,
+  including during the skip walk.
 - L5 `Capability::RetrievalContext` gated.
-
-Open: an `EmbeddingStore::embedded_ids(domain)` method to enable
-"skip already-embedded" optimization. Strict-correctness today
-preserved by `upsert` idempotency; performance refinement only.
 
 ### Project boundaries
 
