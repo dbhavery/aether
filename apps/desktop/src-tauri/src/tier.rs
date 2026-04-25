@@ -116,25 +116,27 @@ impl Default for TierConfig {
     }
 }
 
-/// Implements ADR-0006 §Decision 3 — recommend the highest tier whose
-/// minimum hardware envelope the detected machine meets or exceeds.
+/// Implements ADR-0008 — recommend the highest tier from `device_type`
+/// + `total_ram_gb`. **Replaces ADR-0006 §Decision 3** (which used
+/// `wgpu::Limits::max_buffer_size` as a VRAM proxy and was proven
+/// unreliable cross-backend during 2026-04-24 on-hardware validation
+/// — see ADR-0008 §Context for the data).
 ///
 /// The 50% headroom rule (ADR-0006 §Constraint 2) is applied here at
-/// recommendation time. Quality-first amendment: this is the
+/// recommendation time on RAM. Quality-first amendment: this is the
 /// *recommended floor*, not a runtime cap; users who dedicate their
 /// hardware may safely allocate above 50% via manual override.
 ///
-/// Heuristics (ADR-0006 D2 — VRAM is a lower-bound estimate, device
-/// type is primary signal):
+/// Rule:
+/// - No GPU detected → Spark.
+/// - Non-discrete adapter (Integrated / Cpu / Other) → Spark.
+/// - Discrete adapter + total RAM >= 32 GB → Forge (workstation).
+/// - Discrete adapter + total RAM >= 16 GB → Flame (enthusiast).
+/// - Discrete adapter + total RAM < 16 GB → Spark (constrained).
 ///
-/// - Any non-discrete adapter (Integrated / Cpu / Other / no GPU
-///   info) → Spark, regardless of RAM.
-/// - Discrete adapter with effective-vram >= 12 GB AND total RAM >=
-///   16 GB → Forge.
-/// - Discrete adapter with effective-vram >= 6 GB AND total RAM >= 8
-///   GB → Flame.
-/// - Anything else discrete → Spark (conservative — small discrete
-///   cards behave more like integrated under load).
+/// Note: `gpu.vram_gb_estimate` is intentionally NOT consumed here.
+/// It remains a populated diagnostic field on the snapshot but is
+/// no longer a decision input — see ADR-0008 §Decision 3.
 pub fn recommend_tier(snapshot: &HardwareSnapshot) -> Tier {
     let Some(gpu) = snapshot.gpu.as_ref() else {
         return Tier::Spark;
@@ -145,14 +147,13 @@ pub fn recommend_tier(snapshot: &HardwareSnapshot) -> Tier {
         return Tier::Spark;
     }
 
-    // 50% rule applied at recommendation: use half of detected
-    // resources as the envelope the recommendation must fit within.
-    let effective_vram = (gpu.vram_gb_estimate as f32) * 0.5;
-    let effective_ram = (snapshot.total_ram_gb as f32) * 0.5;
-
-    if effective_vram >= 12.0 && effective_ram >= 16.0 {
+    // 50% headroom rule applied to RAM only. Effective_ram = total / 2.
+    // Forge floor = 16 GB effective (32 GB total). Flame floor = 8 GB
+    // effective (16 GB total).
+    let effective_ram = snapshot.total_ram_gb / 2;
+    if effective_ram >= 16 {
         Tier::Forge
-    } else if effective_vram >= 6.0 && effective_ram >= 8.0 {
+    } else if effective_ram >= 8 {
         Tier::Flame
     } else {
         Tier::Spark
@@ -251,37 +252,53 @@ mod tests {
     }
 
     #[test]
-    fn discrete_with_high_vram_and_high_ram_recommends_forge() {
-        // 24 GB VRAM card * 0.5 rule = 12 GB effective; 32 GB RAM * 0.5
-        // = 16 GB effective. Hits Forge floor exactly.
+    fn discrete_with_high_ram_recommends_forge() {
+        // ADR-0008: discrete + 32 GB RAM (16 GB effective) hits Forge
+        // floor. VRAM estimate intentionally ignored.
         let s = snap(Some(gpu(GpuKind::DiscreteGpu, 24)), 32);
         assert_eq!(recommend_tier(&s), Tier::Forge);
     }
 
     #[test]
-    fn discrete_with_mid_vram_recommends_flame() {
-        // 12 GB card * 0.5 = 6 GB effective (Flame floor); 16 GB RAM *
-        // 0.5 = 8 GB effective (Flame floor). Doesn't reach Forge.
+    fn discrete_with_mid_ram_recommends_flame() {
+        // ADR-0008: discrete + 16 GB RAM (8 GB effective) hits Flame
+        // floor; doesn't reach Forge.
         let s = snap(Some(gpu(GpuKind::DiscreteGpu, 12)), 16);
         assert_eq!(recommend_tier(&s), Tier::Flame);
     }
 
     #[test]
     fn discrete_with_too_little_ram_falls_back_to_spark() {
-        // High VRAM but low RAM disqualifies — modern LLM serving
-        // needs system memory for prompt tokenisation, KV management
-        // before VRAM offload, etc.
+        // ADR-0008: discrete with <16 GB total RAM (8 GB effective)
+        // doesn't meet Flame floor. Modern LLM serving needs system
+        // memory for prompt tokenisation + KV before VRAM offload.
         let s = snap(Some(gpu(GpuKind::DiscreteGpu, 24)), 4);
         assert_eq!(recommend_tier(&s), Tier::Spark);
     }
 
     #[test]
-    fn discrete_with_low_vram_falls_back_to_spark() {
-        // Low-end discrete (4 GB card * 0.5 = 2 GB effective) doesn't
-        // reach the Flame floor. Conservative — small discrete cards
-        // perform more like integrated under serving load.
-        let s = snap(Some(gpu(GpuKind::DiscreteGpu, 4)), 16);
-        assert_eq!(recommend_tier(&s), Tier::Spark);
+    fn discrete_with_low_vram_estimate_no_longer_demotes() {
+        // ADR-0008 invariant: vram_gb_estimate is NOT a decision input.
+        // A 4 GB discrete card with 32 GB RAM is now Forge; under the
+        // old ADR-0006 §3 rule it would have been Spark.
+        let s = snap(Some(gpu(GpuKind::DiscreteGpu, 4)), 32);
+        assert_eq!(recommend_tier(&s), Tier::Forge);
+    }
+
+    #[test]
+    fn discrete_with_unreliable_vram_sentinel_picks_correct_tier() {
+        // ADR-0008 motivating case: Vulkan often returns u64::MAX as
+        // max_buffer_size, which previously divided by 1 GB to ~4
+        // billion and trivially passed the Forge floor. The new rule
+        // is independent of that field — verify the tier comes from
+        // RAM, not from the bogus VRAM number.
+        let s = snap(Some(gpu(GpuKind::DiscreteGpu, u32::MAX)), 16);
+        // 16 GB RAM = Flame, regardless of the sentinel VRAM.
+        assert_eq!(recommend_tier(&s), Tier::Flame);
+
+        let s2 = snap(Some(gpu(GpuKind::DiscreteGpu, u32::MAX)), 32);
+        // 32 GB RAM = Forge (was Forge before too — by accident).
+        assert_eq!(recommend_tier(&s2), Tier::Forge);
     }
 
     #[test]

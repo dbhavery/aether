@@ -1,6 +1,6 @@
 # ADR-0008: Tier detection from device_type + system RAM (replaces wgpu max_buffer_size signal)
 
-- **Status:** **Proposed** (Don to ratify on return from autonomous validation run, 2026-04-24).
+- **Status:** **Accepted** (Don ratified 2026-04-24 mid-autonomous-run; implementation landed in same wrap batch).
 - **Date:** 2026-04-24
 - **Deciders:** Don (owner). Claude proposes, captures rationale from on-hardware validation data.
 - **Supersedes:** ADR-0006 §Decision 2 (the `max_buffer_size`-based VRAM estimate path) and §Decision 3 (the recommendation rule that consumed it).
