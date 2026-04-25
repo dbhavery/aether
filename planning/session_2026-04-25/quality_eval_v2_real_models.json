@@ -1,0 +1,111 @@
+{
+  "summary": {
+    "pass": 2,
+    "fail": 3,
+    "skip": 1
+  },
+  "scenarios": [
+    {
+      "id": "chat_realism.first_turn.avoids_robot_tells",
+      "domain": "chat_realism",
+      "status": "pass",
+      "note": null,
+      "expectations": [
+        {
+          "kind": "forbids",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "kind": "length",
+          "status": "pass",
+          "detail": "6 words"
+        },
+        {
+          "kind": "tone",
+          "status": "skip",
+          "detail": "tone classifier not yet implemented (tags: ['warm', 'brief', 'inviting'])"
+        }
+      ]
+    },
+    {
+      "id": "memory_appropriateness.forget.honors_user_request",
+      "domain": "memory_appropriateness",
+      "status": "fail",
+      "note": null,
+      "expectations": [
+        {
+          "kind": "forbids",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "kind": "requires",
+          "status": "fail",
+          "detail": "response missed required patterns: ['forgot']"
+        }
+      ]
+    },
+    {
+      "id": "presence_aware_behavior.away.respects_state",
+      "domain": "presence_aware_behavior",
+      "status": "skip",
+      "note": "scenario sets presence state \u2014 Quality-Eval V2 has no presence composer (presence injection deferred; see planning/session_2026-04-25/QUALITY_EVAL_V2_REPORT.md) \u2014 skipped (ollama backend; re-run with the missing composer enabled)",
+      "expectations": []
+    },
+    {
+      "id": "tool_use_judgment.trivia.prefers_text_answer",
+      "domain": "tool_use_judgment",
+      "status": "pass",
+      "note": null,
+      "expectations": [
+        {
+          "kind": "forbids",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "kind": "length",
+          "status": "pass",
+          "detail": "2 words"
+        }
+      ]
+    },
+    {
+      "id": "vision_response_quality.fridge.describes_actual_scene",
+      "domain": "vision_response_quality",
+      "status": "fail",
+      "note": "composed (notes: vision: vision fixture C:\\Users\\dbhav\\Projects\\aether\\tools\\evals\\fixtures\\fridge_open.jpg missing; substituted persona portrait (personas/aurora/avatar/portrait.png) \u2014 scene-specific content expectations may not match)",
+      "expectations": [
+        {
+          "kind": "forbids",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "kind": "requires",
+          "status": "fail",
+          "detail": "response missed required patterns: ['shelf']"
+        }
+      ]
+    },
+    {
+      "id": "voice_transcription.domain_vocab.preserves_name",
+      "domain": "voice_transcription",
+      "status": "fail",
+      "note": null,
+      "expectations": [
+        {
+          "kind": "requires",
+          "status": "fail",
+          "detail": "response missed required patterns: ['Karpathy']"
+        },
+        {
+          "kind": "forbids",
+          "status": "pass",
+          "detail": ""
+        }
+      ]
+    }
+  ]
+}
