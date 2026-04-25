@@ -480,3 +480,15 @@ export async function onBackfillDone(
     cb(e.payload),
   );
 }
+
+// --- ADR-0006 §Decision 5 tier_changed event bus ----------------------
+
+/** Subscribe to `tier:changed` events. Emitted by the backend whenever
+ * `setTier` or `redetectHardware` produces a new TierConfig. Tier-aware
+ * subsystems (RetrievalTab today; future TTS / vision / avatar tabs)
+ * subscribe to re-evaluate their model selection without polling. */
+export async function onTierChanged(
+  cb: (cfg: TierConfig) => void,
+): Promise<UnlistenFn> {
+  return listen<TierConfig>("tier:changed", (e) => cb(e.payload));
+}

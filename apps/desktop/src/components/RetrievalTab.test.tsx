@@ -20,6 +20,7 @@ vi.mock("../lib/api", () => ({
   startBackfill: vi.fn(),
   onBackfillProgress: vi.fn(),
   onBackfillDone: vi.fn(),
+  onTierChanged: vi.fn(),
 }));
 
 import * as api from "../lib/api";
@@ -33,6 +34,7 @@ const mockedApi = api as unknown as {
   startBackfill: ReturnType<typeof vi.fn>;
   onBackfillProgress: ReturnType<typeof vi.fn>;
   onBackfillDone: ReturnType<typeof vi.fn>;
+  onTierChanged: ReturnType<typeof vi.fn>;
 };
 
 const TIER_FLAME: TierConfig = {
@@ -72,6 +74,8 @@ beforeEach(() => {
   });
   mockedApi.onBackfillProgress.mockResolvedValue(() => {});
   mockedApi.onBackfillDone.mockResolvedValue(() => {});
+  mockedApi.onTierChanged.mockReset();
+  mockedApi.onTierChanged.mockResolvedValue(() => {});
 });
 
 describe("RetrievalTab", () => {

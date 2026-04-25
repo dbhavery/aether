@@ -7,6 +7,7 @@ import {
   getTier,
   onBackfillDone,
   onBackfillProgress,
+  onTierChanged,
   startBackfill,
   type BackfillProgress,
 } from "../lib/api";
@@ -146,7 +147,12 @@ export function RetrievalTab({ refreshKey }: Props) {
         setBackfill(payload);
         setBackfillRunning(false);
       });
-      unsubs.push(offProgress, offDone);
+      // ADR-0006 D5: re-read tier on tier:changed without polling.
+      const offTier = await onTierChanged((next) => {
+        if (!mounted) return;
+        setTier(next);
+      });
+      unsubs.push(offProgress, offDone, offTier);
     }
 
     void init();

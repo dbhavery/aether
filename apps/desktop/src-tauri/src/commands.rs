@@ -2164,15 +2164,21 @@ pub fn get_tier(state: State<'_, AppState>) -> crate::tier::TierConfig {
 /// User-initiated tier change. Updates `selected_tier`, flips
 /// `manual_override` if the new selection diverges from the detected
 /// recommendation, and persists atomically when `tier.json` is wired.
-/// Subsystems that consume tier (embeddings onboarding via ADR-0007,
-/// future TTS/vision/avatar ADRs) re-read on `tier_changed` event
-/// emission — this command does not directly wire that bus today.
+/// Emits a `tier:changed` Tauri event with the new TierConfig so
+/// subsystems that consume tier (embeddings onboarding via ADR-0007,
+/// future TTS/vision/avatar ADRs) re-read on demand without polling.
 #[tauri::command]
 pub fn set_tier(
     tier: crate::tier::Tier,
     state: State<'_, AppState>,
+    app: AppHandle,
 ) -> Result<crate::tier::TierConfig, String> {
-    state.set_tier(tier)
+    let cfg = state.set_tier(tier)?;
+    // ADR-0006 §Decision 5: tier_changed event surface. Best-effort
+    // emit; subsystems treat its absence as "tier may have changed,
+    // re-read on next interaction" rather than failing.
+    let _ = app.emit("tier:changed", &cfg);
+    Ok(cfg)
 }
 
 /// Run a fresh hardware-detection pass and update the tier config.
@@ -2185,8 +2191,13 @@ pub fn set_tier(
 #[tauri::command]
 pub fn redetect_hardware(
     state: State<'_, AppState>,
+    app: AppHandle,
 ) -> Result<crate::tier::TierConfig, String> {
-    state.redetect_hardware()
+    let cfg = state.redetect_hardware()?;
+    // Emit tier:changed when the active selection diverges post-detection
+    // (manual override unchanged → no-op for consumers). Best-effort.
+    let _ = app.emit("tier:changed", &cfg);
+    Ok(cfg)
 }
 
 // ------------------------------------------------------------------
