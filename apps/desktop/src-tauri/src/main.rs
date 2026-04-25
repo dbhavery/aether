@@ -3,6 +3,7 @@
 
 mod adapter;
 mod commands;
+mod hardware;
 mod idle_probe;
 mod media_permissions;
 mod memory_config;
