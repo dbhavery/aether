@@ -95,6 +95,25 @@ The `RetrievalConfig` shape in `memory.json` does not need to change — `embedd
 
 These numbers feed the backfill estimate (Decision 5) and the pull-size copy (Decision 4). Final per-tier latency figures may shift once on-hardware validation runs (see implementation plan); the *manifest concept* is the binding decision, the numbers are best estimates.
 
+#### Tuning notes from on-hardware validation (2026-04-24, Don's RTX 3090 Ti workstation)
+
+Captured during the autonomous validation run at `planning/validation_2026-04-24/`. Numbers below replace the table-row estimates with measured reality where it diverges materially.
+
+**Spark candidate substitution.** `bge-small-en-v1.5` is not on the Ollama registry (manifest 404). Ollama-native candidates investigated: `nomic-embed-text` (274 MB, 768-dim, English-language Nomic embedder). At a 150-passage corpus on Don's workstation, nomic-embed-text scored recall@1 = 0.80 (vs bge-m3 0.95) and recall@10 = 0.90, with a sustained per-row warm latency of ~45 ms (vs bge-m3's ~183 ms). **Spark default updated to `nomic-embed-text`** pending Don's ratification — see DECISIONS_LOG D-001. The original "or equivalent small, CPU-viable" clause covers the substitution. If we later add HuggingFace-registry-backed embedders to Aether's provider list, `bge-small-en-v1.5` becomes available again under `hf:` prefix.
+
+**Cold-start estimates were 10× too low for first-ever post-pull load.** First-ever bge-m3 cold start on Don's 3090 Ti measured **33,646 ms** (33.6 s), not the table's 1-3 s. Subsequent cold-restarts after disk-cache warm measured ~2,273 ms — matching the original estimate. **The 1-3 s number applies to subsequent restarts only.** First activation after `ollama pull` is dominated by manifest resolution + decompression + first-load overhead and is materially worse. Indicator copy should set expectations: "first activation may take ~30 s, subsequent restarts are fast." nomic-embed-text first cold start measured 959 ms — matches the Spark `<1 s` estimate.
+
+**Warm latency estimates hold.** bge-m3 sustained warm p50 = 183 ms across 150 passages — within the table's `<200 ms warm` band for Flame/Forge GPU. nomic-embed-text sustained warm p50 = 45 ms — *better* than the table's `~100-200 ms CPU` (Don has GPU; CPU floor estimate stands as written for hardware without GPU).
+
+**Backfill throughput.** Sustained rate measured: bge-m3 ~5.5 rows/sec (extrapolated from sustained warm; rapid-fire test triggered Ollama embedder queue 500s, see `08_backfill_throughput.json` caveat), nomic-embed-text ~20 rows/sec direct measurement. Implications for Decision 5 estimate copy:
+
+| Tier | Model | 100-row backfill | 1000-row backfill |
+| --- | --- | --- | --- |
+| Spark | nomic-embed-text | ~3 sec | ~27 sec |
+| Flame/Forge | bge-m3 | ~18 sec | ~3.0 min |
+
+**Pacing risk for backfill.** Rapid-fire bge-m3 embedding hit HTTP 500 from Ollama at row 4 of a 50-row sequence, despite the model being warmly resident. Cause unclear (likely embedder load-queue or GC). Real backfill should pace rows asynchronously (≥50 ms between calls) to avoid; flag for Session B implementation.
+
 ### 8. Disk-space preflight. (Not previously in the nine blocks — added during drafting.)
 
 Before the indicator shows any CLI-pull instruction or backfill button, check available disk space on the app data directory via `fs::available_space`:
