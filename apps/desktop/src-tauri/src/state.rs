@@ -25,8 +25,8 @@ use crate::voice_registry::{SpeechProviderInfo, VoiceRegistry};
 #[cfg(feature = "sqlite-backend")]
 use aether_l2_memory::{DurableSessionStore, SessionAndDurableStores, SqliteSessionMemoryStore};
 use aether_l2_memory::{
-    EmbeddingProvider, EmbeddingStore, FlatFileEmbeddingStore, InMemorySessionMemoryStore,
-    OllamaEmbeddingProvider, SessionMemoryStore,
+    EmbeddingProvider, EmbeddingStore, FlatFileEmbeddingStore, HfEmbeddingProvider,
+    InMemorySessionMemoryStore, OllamaEmbeddingProvider, SessionMemoryStore,
 };
 use aether_l3_presence::{
     AttentionEvent, AttentionSnapshot, AttentionThresholds, InMemoryPresenceController,
@@ -1291,7 +1291,11 @@ impl AppState {
     /// `parse_model_name` rules:
     /// - `ollama:<model>` -> `OllamaEmbeddingProvider::new(base, model)`
     /// - bare `<model>` (no prefix) -> assume ollama, same as above
-    /// - `hf:org:repo:tag` -> NOT YET SUPPORTED; logs warn, no swap
+    /// - `hf:org/repo` (canonical) or `hf:org:repo:tag` (legacy) ->
+    ///   `HfEmbeddingProvider`. Legacy three-segment form is normalised
+    ///   to canonical via `HfEmbeddingProvider::normalise_model_id`.
+    ///   Helper subprocess spawns lazily on first embed; helper +
+    ///   sentence-transformers must be installed for embeds to succeed.
     /// - `stub:<dim>` -> NOT swapped from runtime (test-only seam)
     /// - unknown prefix -> logs warn, no swap
     ///
@@ -1324,11 +1328,19 @@ impl AppState {
                 }
             }
             "hf" => {
-                tracing::warn!(
-                    "hf: prefix embedding provider is not yet supported \
-                     (configured: {provider_str}); existing provider unchanged. \
-                     See ADR-0007 D7 §Tuning notes for the substitution context."
-                );
+                let model = HfEmbeddingProvider::normalise_model_id(rest);
+                let new_provider: Arc<dyn EmbeddingProvider> =
+                    Arc::new(HfEmbeddingProvider::new(&model));
+                if let Ok(mut w) = self.embedding_provider.write() {
+                    *w = new_provider;
+                    tracing::info!(
+                        "embedding provider swapped to hf:{model} \
+                         (helper subprocess will spawn on first embed; \
+                         requires sentence-transformers Python install)"
+                    );
+                } else {
+                    tracing::warn!("embedding provider lock poisoned; swap skipped");
+                }
             }
             "stub" => {
                 // Stub providers are test-only; the runtime path doesn't
@@ -2506,9 +2518,12 @@ humor: "playful"
     }
 
     #[test]
-    fn set_memory_config_does_not_swap_for_hf_prefix() {
-        // hf: support is not yet wired; swap should be a no-op (warn
-        // logged separately). Provider label remains the default.
+    fn set_memory_config_swaps_for_hf_canonical_prefix() {
+        // hf:org/repo (canonical HF Hub form) MUST swap to a real
+        // HfEmbeddingProvider. The provider label proves the swap took
+        // effect; we don't actually call embed() here (which would
+        // spawn the Python helper). Helper-spawn behaviour is tested
+        // in packages/l2-memory/src/hf_provider.rs.
         let state = AppState::new().expect("state");
         let initial_label = state
             .embedding_provider
@@ -2517,16 +2532,38 @@ humor: "playful"
             .label();
         let mut cfg = state.memory_config();
         cfg.embeddings.enabled = true;
-        cfg.embeddings.provider = Some("hf:BAAI:bge-small-en-v1.5".into());
+        cfg.embeddings.provider = Some("hf:BAAI/bge-small-en-v1.5".into());
         state.set_memory_config(cfg).expect("set_memory_config");
         let after_label = state
             .embedding_provider
             .read()
             .expect("provider read lock")
             .label();
-        assert_eq!(
+        assert_ne!(
             initial_label, after_label,
-            "hf: provider must not swap (unsupported prefix); existing provider preserved"
+            "hf:org/repo must swap (was previously a warn-only no-op)"
+        );
+        assert_eq!(after_label, "hf:BAAI/bge-small-en-v1.5");
+    }
+
+    #[test]
+    fn set_memory_config_swap_normalises_legacy_hf_three_segment_form() {
+        // Legacy memory.json may carry `hf:BAAI:bge-small-en-v1.5`
+        // (three colons, not org/repo). The swap must normalise to
+        // canonical org/repo so HF Hub recognises it.
+        let state = AppState::new().expect("state");
+        let mut cfg = state.memory_config();
+        cfg.embeddings.enabled = true;
+        cfg.embeddings.provider = Some("hf:BAAI:bge-small-en-v1.5".into());
+        state.set_memory_config(cfg).expect("set_memory_config");
+        let label = state
+            .embedding_provider
+            .read()
+            .expect("provider read lock")
+            .label();
+        assert_eq!(
+            label, "hf:BAAI/bge-small-en-v1.5",
+            "legacy three-segment hf id must normalise to org/repo"
         );
     }
 
