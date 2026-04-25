@@ -1121,6 +1121,36 @@ impl AppState {
             .clone()
     }
 
+    /// Run the ADR-0007 §Decisions 2 + 8 readiness probe and update
+    /// the stored readiness state. Light-usage: pure HTTP GET +
+    /// JSON parse + disk check, no model loads. Returns the new
+    /// state for callers that want to react synchronously (e.g.
+    /// the boot path or a settings-change handler that wants to
+    /// emit a transition toast).
+    ///
+    /// Inputs are read from the live `AppState`:
+    /// - `memory_config.embeddings.{enabled, provider}`
+    /// - `tier_config.hardware_snapshot.disk_available_gb`
+    /// - Ollama base URL: `AETHER_EMBED_OLLAMA_BASE_URL` env var
+    ///   or the standard default `http://127.0.0.1:11434`.
+    pub fn probe_readiness_now(&self) -> ReadinessState {
+        let cfg = self.memory_config();
+        let disk = self
+            .tier_config()
+            .hardware_snapshot
+            .disk_available_gb;
+        let base_url = std::env::var("AETHER_EMBED_OLLAMA_BASE_URL")
+            .unwrap_or_else(|_| "http://127.0.0.1:11434".to_string());
+        let next = crate::retrieval::probe_readiness(
+            cfg.embeddings.enabled,
+            cfg.embeddings.provider.as_deref(),
+            &base_url,
+            disk,
+        );
+        self.set_retrieval_readiness(next.clone());
+        next
+    }
+
     /// Replace the retrieval readiness state. Called by
     /// `run_retrieval_context` on every invocation outcome
     /// (event-driven symmetric cadence per ADR-0007 §Decision 3) and
@@ -1166,6 +1196,11 @@ impl AppState {
             memory_config::save(path, &snapshot)
                 .map_err(|e| format!("persist memory config: {e}"))?;
         }
+        // ADR-0007 D3 — settings-change probe. Re-evaluate readiness
+        // whenever the user touches the memory policy; flag flips,
+        // provider swaps, and disk reservations all surface here.
+        // Light-usage: same HTTP probe as boot, no model loads.
+        let _ = self.probe_readiness_now();
         Ok(snapshot)
     }
 

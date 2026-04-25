@@ -369,6 +369,152 @@ fn timed<T, F: FnOnce() -> T>(deadline: Instant, op: F) -> TimedResult<T> {
     TimedResult::Ok(op())
 }
 
+/// Approximate disk-space requirement (in GB, rounded up with safety
+/// margin) for a configured embedding provider string. ADR-0007
+/// §Decision 8 requires `model_size * 1.5` free before any pull /
+/// backfill affordance is offered. We bake the safety multiplier in
+/// here so callers can compare directly against `available_space`.
+///
+/// Provider strings follow the Ollama convention `"ollama:<model>"`
+/// (e.g. `"ollama:bge-m3"`). Unknown providers / models return a
+/// conservative default sized for `bge-m3` so a low-disk machine is
+/// never told it has more headroom than it really does.
+pub fn required_disk_gb_for_provider(provider: Option<&str>) -> u32 {
+    let model = match provider {
+        Some(p) => p.rsplit(':').next().unwrap_or(p),
+        None => return 2,
+    };
+    if model.contains("bge-m3") {
+        2
+    } else if model.contains("bge-small") || model.contains("bge-mini") {
+        1
+    } else if model.contains("nomic-embed") {
+        1
+    } else {
+        // Unknown model name — assume bge-m3 sized to err on the
+        // side of "not enough disk" rather than silently progressing
+        // into a half-pulled state.
+        2
+    }
+}
+
+/// Extract the bare model name from a configured provider string
+/// (`"ollama:bge-m3"` → `"bge-m3"`). Used by both readiness probe and
+/// the indicator's pull-instruction copy.
+pub fn parse_model_name(provider: &str) -> &str {
+    provider.rsplit(':').next().unwrap_or(provider)
+}
+
+/// Run the readiness probe per ADR-0007 §Decisions 2 + 8 + Run 3
+/// Session A. Pure decision function — caller assembles the inputs
+/// from `AppState`, this just maps inputs → state.
+///
+/// Order of checks matters:
+/// 1. Embeddings disabled → `Disabled` (intentional off; no probe).
+/// 2. Provider unset / empty → `NotReady{ModelNotInstalled}` with
+///    an empty model name. UI surfaces "configure provider in
+///    Settings".
+/// 3. Disk below threshold → `NotReady{LowDisk}`. ADR-0007 D8
+///    requires `model_size * 1.5` free.
+/// 4. HTTP probe of `/api/tags` fails → `NotReady{ProviderUnreachable}`.
+/// 5. Model not in `/api/tags` list → `NotReady{ModelNotInstalled}`.
+/// 6. All checks pass → `Ready`.
+///
+/// Light-usage: pure HTTP GET + JSON parse, no model loads. Bounded
+/// by a 750ms timeout so unreachable daemons never hang the boot
+/// path.
+pub fn probe_readiness(
+    embeddings_enabled: bool,
+    provider: Option<&str>,
+    ollama_base_url: &str,
+    disk_available_gb: Option<u32>,
+) -> ReadinessState {
+    if !embeddings_enabled {
+        return ReadinessState::Disabled;
+    }
+
+    let model_name = match provider.and_then(|p| {
+        let m = parse_model_name(p);
+        if m.is_empty() {
+            None
+        } else {
+            Some(m.to_string())
+        }
+    }) {
+        Some(m) => m,
+        None => {
+            return ReadinessState::NotReady {
+                reason: NotReadyReason::ModelNotInstalled {
+                    model: String::new(),
+                },
+            };
+        }
+    };
+
+    let needed = required_disk_gb_for_provider(provider);
+    if let Some(avail) = disk_available_gb {
+        if avail < needed {
+            return ReadinessState::NotReady {
+                reason: NotReadyReason::LowDisk {
+                    needed_gb: needed,
+                    available_gb: avail,
+                },
+            };
+        }
+    }
+
+    let url = format!("{}/api/tags", ollama_base_url.trim_end_matches('/'));
+    let agent = ureq::AgentBuilder::new()
+        .timeout(Duration::from_millis(750))
+        .build();
+    let resp = match agent.get(&url).call() {
+        Ok(r) => r,
+        Err(e) => {
+            return ReadinessState::NotReady {
+                reason: NotReadyReason::ProviderUnreachable {
+                    detail: e.to_string(),
+                },
+            };
+        }
+    };
+    let json: serde_json::Value = match resp.into_json() {
+        Ok(j) => j,
+        Err(e) => {
+            return ReadinessState::NotReady {
+                reason: NotReadyReason::ProviderUnreachable {
+                    detail: format!("parse: {e}"),
+                },
+            };
+        }
+    };
+    // Inline equivalent of `aether_l4_router::providers::ollama_vision::
+    // parse_tags_response`. We duplicate the ~10-line parse so the
+    // readiness probe stays feature-flag-independent (the router's
+    // copy is gated on `ollama-provider`). Any drift between the two
+    // is caught by the integration test that pins the wire shape.
+    let installed: Vec<String> = json
+        .get("models")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|m| m.get("name").and_then(|n| n.as_str()))
+                .map(|s| s.to_string())
+                .collect()
+        })
+        .unwrap_or_default();
+    let installed_match = installed.iter().any(|m| {
+        let bare = m.rsplit(':').next().unwrap_or(m);
+        bare == model_name || m == &model_name || m.starts_with(&format!("{model_name}:"))
+    });
+    if !installed_match {
+        return ReadinessState::NotReady {
+            reason: NotReadyReason::ModelNotInstalled { model: model_name },
+        };
+    }
+
+    ReadinessState::Ready
+}
+
 /// Render a ranked `[RetrievalHit]` into the deterministic prompt
 /// prefix the router injects ahead of the user utterance. Returns
 /// `None` for an empty slice so callers can skip prompt mutation
@@ -491,6 +637,67 @@ mod tests {
         assert_eq!(parse_memory_id(&MemoryId::new("mem-s1")), None);
         assert_eq!(parse_memory_id(&MemoryId::new("s1-42")), None);
         assert_eq!(parse_memory_id(&MemoryId::new("mem-s1-abc")), None);
+    }
+
+    #[test]
+    fn probe_returns_disabled_when_embeddings_off() {
+        let s = probe_readiness(false, Some("ollama:bge-m3"), "http://127.0.0.1:1", Some(100));
+        assert_eq!(s, ReadinessState::Disabled);
+    }
+
+    #[test]
+    fn probe_returns_low_disk_when_below_threshold() {
+        let s = probe_readiness(true, Some("ollama:bge-m3"), "http://127.0.0.1:1", Some(0));
+        assert!(matches!(
+            s,
+            ReadinessState::NotReady {
+                reason: NotReadyReason::LowDisk { needed_gb: 2, available_gb: 0 }
+            }
+        ));
+    }
+
+    #[test]
+    fn probe_returns_provider_unreachable_on_dead_url() {
+        // Port 1 is reserved/blocked on every platform; the connect
+        // attempt fails fast. No daemon involved.
+        let s = probe_readiness(true, Some("ollama:bge-m3"), "http://127.0.0.1:1", Some(100));
+        assert!(matches!(
+            s,
+            ReadinessState::NotReady {
+                reason: NotReadyReason::ProviderUnreachable { .. }
+            }
+        ));
+    }
+
+    #[test]
+    fn probe_returns_model_not_installed_when_provider_empty() {
+        let s = probe_readiness(true, None, "http://127.0.0.1:1", Some(100));
+        assert!(matches!(
+            s,
+            ReadinessState::NotReady {
+                reason: NotReadyReason::ModelNotInstalled { .. }
+            }
+        ));
+    }
+
+    #[test]
+    fn required_disk_gb_for_provider_handles_known_models() {
+        assert_eq!(required_disk_gb_for_provider(Some("ollama:bge-m3")), 2);
+        assert_eq!(
+            required_disk_gb_for_provider(Some("ollama:bge-small-en-v1.5")),
+            1
+        );
+        assert_eq!(required_disk_gb_for_provider(Some("nomic-embed-text")), 1);
+        // Unknown / future model → conservative default sized for bge-m3.
+        assert_eq!(required_disk_gb_for_provider(Some("future-embed-2030")), 2);
+        assert_eq!(required_disk_gb_for_provider(None), 2);
+    }
+
+    #[test]
+    fn parse_model_name_strips_provider_prefix() {
+        assert_eq!(parse_model_name("ollama:bge-m3"), "bge-m3");
+        assert_eq!(parse_model_name("bge-m3"), "bge-m3");
+        assert_eq!(parse_model_name("hf:org:repo:tag"), "tag");
     }
 
     #[test]

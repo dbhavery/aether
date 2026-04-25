@@ -193,6 +193,14 @@ fn build_app_state(app: &tauri::AppHandle) -> Result<AppState, Box<dyn std::erro
                 if let Err(e) = state.redetect_hardware() {
                     tracing::warn!("boot-time hardware detection failed: {e}");
                 }
+                // ADR-0007 D2 + D3 — boot probe wires the initial
+                // retrieval readiness state. Light-usage: HTTP GET on
+                // /api/tags with 750ms timeout, no model loads. State
+                // self-heals on every subsequent real turn (D3
+                // symmetric event-driven cadence) so a flaky probe
+                // here is harmless.
+                let initial = state.probe_readiness_now();
+                tracing::info!("boot-time retrieval readiness: {initial:?}");
                 wire_vision_registry(&state, Some(&dir));
                 wire_voice_registry(&state, Some(&dir));
                 return Ok(state);
