@@ -76,4 +76,92 @@ describe("ToastContainer", () => {
     );
     expect(container.querySelector("[role='status']")).toBeNull();
   });
+
+  it("emits a backfill-done toast when the event fires with completed > 0", async () => {
+    let firedCb: ((p: any) => void) | null = null;
+    mockedApi.embeddingsReadiness.mockResolvedValue({ kind: "ready" });
+    mockedApi.onBackfillDone.mockImplementation(async (cb) => {
+      firedCb = cb;
+      return () => {};
+    });
+
+    render(<ToastContainer />);
+    await waitFor(() => expect(firedCb).not.toBeNull());
+
+    // Simulate a backfill done event with completed > 0.
+    act(() => {
+      firedCb!({
+        job_id: "job-1",
+        finished: true,
+        cancelled: false,
+        total: 12,
+        completed: 12,
+        failures: 0,
+        current_domain: null,
+        started_at_ms: 1,
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Backfill complete — 12 memories indexed/)).toBeTruthy();
+    });
+  });
+
+  it("emits a backfill-done warn toast when the event fires with failures > 0", async () => {
+    let firedCb: ((p: any) => void) | null = null;
+    mockedApi.embeddingsReadiness.mockResolvedValue({ kind: "ready" });
+    mockedApi.onBackfillDone.mockImplementation(async (cb) => {
+      firedCb = cb;
+      return () => {};
+    });
+
+    render(<ToastContainer />);
+    await waitFor(() => expect(firedCb).not.toBeNull());
+
+    act(() => {
+      firedCb!({
+        job_id: "job-2",
+        finished: true,
+        cancelled: false,
+        total: 10,
+        completed: 8,
+        failures: 2,
+        current_domain: null,
+        started_at_ms: 1,
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Backfill complete — 8 indexed, 2 failed/)).toBeTruthy();
+    });
+  });
+
+  it("emits an info toast when backfill is cancelled mid-run", async () => {
+    let firedCb: ((p: any) => void) | null = null;
+    mockedApi.embeddingsReadiness.mockResolvedValue({ kind: "ready" });
+    mockedApi.onBackfillDone.mockImplementation(async (cb) => {
+      firedCb = cb;
+      return () => {};
+    });
+
+    render(<ToastContainer />);
+    await waitFor(() => expect(firedCb).not.toBeNull());
+
+    act(() => {
+      firedCb!({
+        job_id: "job-3",
+        finished: true,
+        cancelled: true,
+        total: 20,
+        completed: 5,
+        failures: 0,
+        current_domain: null,
+        started_at_ms: 1,
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Backfill cancelled at 5 of 20 memories/)).toBeTruthy();
+    });
+  });
 });
