@@ -1059,6 +1059,15 @@ impl AppState {
     /// for atomic writes.
     pub fn attach_memory_config_file(&mut self, path: PathBuf) {
         let loaded = memory_config::load_or_default(&path);
+        // Honor the persisted embeddings.provider on boot — without
+        // this, the in-memory embedding_provider Arc stays at its
+        // boot-time env-loaded default until the user touches Settings,
+        // even if memory.json on disk says something different. Mirror
+        // of the swap applied by set_memory_config so the runtime
+        // provider always matches what the persisted config promises.
+        if let Some(provider_str) = loaded.embeddings.provider.as_deref() {
+            self.swap_embedding_provider_for_config(provider_str);
+        }
         *self.memory_config.write().expect("memory cfg write lock") = loaded;
         self.memory_config_path = Some(path);
     }
