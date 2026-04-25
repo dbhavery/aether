@@ -318,3 +318,67 @@ discipline. Two cheap mitigations: (a) `git diff --cached` before
 every commit; (b) a tiny pre-commit hook that fails when the
 staged set does not match a sentinel manifest the agent wrote
 out before staging.
+
+## D-012 — Security fix pass: HIGH-1 fixed, MEDIUM-1 deferred, MEDIUM-2 fixed (Phase ad-hoc)
+
+**Context.** The session-end security review (`SECURITY_REVIEW.md`)
+flagged one HIGH (audit hash-chain breaks across v1→v2 schema
+boundary) and two MEDIUMs. This pass triages and lands fixes within
+the L5 layer scope only.
+
+**Decision — HIGH-1 (FIXED, commit `88eefe5`).**
+`packages/l5-policy/src/audit_seal.rs::canonical_bytes` now
+dispatches on `row.schema_version`. v1 rows hash through a frozen
+narrow `CanonicalAuditPayloadV1` struct that reproduces the
+pre-`f378ea5` byte layout exactly; v2 rows hash through the wide
+`CanonicalAuditPayloadV2` (which carries `schema_version`,
+`original_utterance`, `retrieval_provenance`). v3+ falls through to
+the wide branch for forward-compat. Picked the two-frozen-structs
+shape over `serde-skip-if` because explicit field lists make the v1
+contract auditable at a glance — a future field added to
+`AuditRecordEvent` cannot accidentally break legacy chains.
+
+Regression test `cross_schema_chain_replay_verifies_v1_then_v2` in
+`packages/l5-policy/tests/audit_seal.rs` seals a v1 row, then a v2
+row on top, and verifies the chain end-to-end. Plus three pinning
+tests for the canonical-byte shape per version.
+
+**Decision — MEDIUM-1 (DEFERRED).**
+The `format!("{:?}", h.domain).to_lowercase()` Debug-formatter
+construction lives in `apps/desktop/src-tauri/src/commands.rs` line
+301 (`retrieval_provenance_for`), not `retrieval.rs`. Phase 4D
+holds a write-lock on `commands.rs` for this session
+(per-task brief). Touching that file would race Phase 4D's
+`start_backfill` async refactor. Deferred to a follow-up session
+that owns `commands.rs`. The fix is well-scoped: replace
+`format!("{:?}", h.domain).to_lowercase()` with `h.domain.label()`
+(method already exists, used elsewhere in the same file at line
+2473) and add a unit test pinning the four lowercase variant
+strings.
+
+**Decision — MEDIUM-2 (FIXED, commit `ce9f007`).**
+Cap value chosen: **16**, per the security review's recommendation.
+Fix lives in two places defensively:
+1. `RetrievalProvenance::new(block_present, hits)` constructor
+   truncates writer-side.
+2. `engine.rs::write_audit` defensively re-truncates in
+   `audit_extras` before sealing — the last point of control before
+   the canonical hash and DB row insert.
+
+`RETRIEVAL_PROVENANCE_HITS_CAP` is exported from the crate root so
+the desktop shell's eventual `retrieval_provenance_for` rewrite
+(MEDIUM-1) can reference the same constant.
+
+**Process incident.** First MEDIUM-2 commit attempt (`ede9cf4`)
+captured Phase 7's untracked planning files (`QUALITY_EVAL_V2_*`)
+into the L5 commit because `git commit` without explicit pathspec
+walks the staging area at execution time, and Phase 7 added files
+between my `git status` check and the commit. Reverted via
+`75a3eec`; redone with `git commit -o <files>` to scope strictly to
+the three L5 source files. Phase 7 will need to recommit its
+planning files. This restates D-011's lesson — concurrent agent
+sessions need an index-lock discipline.
+
+**Test counts.** `cargo test -p aether-l5-policy --all-features`:
+57 → 65 (+4 audit_seal tests, +4 audit.rs tests). `cargo test
+--workspace` clean. `python tools/lint-policy-doc/check.py` OK.
