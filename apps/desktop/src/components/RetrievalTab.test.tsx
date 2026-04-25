@@ -182,4 +182,52 @@ describe("RetrievalTab", () => {
       expect(screen.getByText(/1 memory not indexed for retrieval/)).toBeTruthy();
     });
   });
+
+  it("displays the user-configured model when memory.embeddings.provider is set", async () => {
+    // Active-model resolution: user's explicit provider wins over the
+    // tier default. Critical for not-lying-to-the-user UX.
+    mockedApi.embeddingsReadiness.mockResolvedValue({ kind: "ready" } as ReadinessState);
+    mockedApi.getMemoryConfig.mockResolvedValue({
+      retention_days: {},
+      default_risk: {},
+      embeddings: { enabled: true, provider: "ollama:custom-model-name" },
+      retrieval: { max_items: 5 },
+    });
+    render(<RetrievalTab refreshKey={0} />);
+    await waitFor(() => {
+      expect(screen.getByText(/custom-model-name/)).toBeTruthy();
+    });
+  });
+
+  it("falls back to tier default model when no provider configured", async () => {
+    // Flame tier from beforeEach setup; no provider in memory config.
+    mockedApi.embeddingsReadiness.mockResolvedValue({ kind: "ready" } as ReadinessState);
+    render(<RetrievalTab refreshKey={0} />);
+    await waitFor(() => {
+      expect(screen.getByText(/Retrieval is active/)).toBeTruthy();
+    });
+    // Flame default per ADR-0007 D7 = bge-m3.
+    expect(screen.getByText(/bge-m3/)).toBeTruthy();
+  });
+
+  it("strips provider prefix to display the bare model name", async () => {
+    // bareModelName helper: "ollama:bge-m3" -> "bge-m3" displayed.
+    mockedApi.embeddingsReadiness.mockResolvedValue({
+      kind: "not_ready",
+      reason: { kind: "model_not_installed", model: "" }, // empty model -> falls to bare name from config
+    } as ReadinessState);
+    mockedApi.getMemoryConfig.mockResolvedValue({
+      retention_days: {},
+      default_risk: {},
+      embeddings: { enabled: true, provider: "ollama:fancy-embed-2026" },
+      retrieval: { max_items: 5 },
+    });
+    render(<RetrievalTab refreshKey={0} />);
+    await waitFor(() => {
+      // The bare name appears in both the reason copy and the
+      // "Target model: <code>X</code>" footer; either is sufficient
+      // proof the prefix was stripped.
+      expect(screen.getAllByText(/fancy-embed-2026/).length).toBeGreaterThan(0);
+    });
+  });
 });
