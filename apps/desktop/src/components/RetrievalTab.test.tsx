@@ -140,4 +140,37 @@ describe("RetrievalTab", () => {
       expect(screen.getByText(/Need ~2 GB free; have ~1 GB/)).toBeTruthy();
     });
   });
+
+  it("renders the backfill offer when ready and unembedded count > 0", async () => {
+    mockedApi.embeddingsReadiness.mockResolvedValue({ kind: "ready" } as ReadinessState);
+    mockedApi.backfillCount.mockResolvedValue(7);
+    render(<RetrievalTab refreshKey={0} />);
+    await waitFor(() => {
+      expect(screen.getByText(/Retrieval is active/)).toBeTruthy();
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/7 memories not indexed for retrieval/)).toBeTruthy();
+    });
+    expect(screen.getByRole("button", { name: /Backfill now/ })).toBeTruthy();
+  });
+
+  it("hides the backfill offer when count is zero", async () => {
+    mockedApi.embeddingsReadiness.mockResolvedValue({ kind: "ready" } as ReadinessState);
+    mockedApi.backfillCount.mockResolvedValue(0);
+    render(<RetrievalTab refreshKey={0} />);
+    await waitFor(() => {
+      expect(screen.getByText(/Retrieval is active/)).toBeTruthy();
+    });
+    // No "memories not indexed" copy when count is zero.
+    expect(screen.queryByText(/not indexed for retrieval/)).toBeNull();
+  });
+
+  it("uses singular noun when exactly one memory is unindexed", async () => {
+    mockedApi.embeddingsReadiness.mockResolvedValue({ kind: "ready" } as ReadinessState);
+    mockedApi.backfillCount.mockResolvedValue(1);
+    render(<RetrievalTab refreshKey={0} />);
+    await waitFor(() => {
+      expect(screen.getByText(/1 memory not indexed for retrieval/)).toBeTruthy();
+    });
+  });
 });
