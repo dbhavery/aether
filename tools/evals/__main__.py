@@ -69,8 +69,22 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
+from composition import COMPOSER_NAMES, ComposedPrompt, CompositionContext, compose_prompt
 from expectations import EVALUATED_KINDS, evaluate_expectation, ExpectationResult
 from report import build_markdown_report
+
+
+# Default composition set when `--compose` is omitted. v1 ran no
+# composers at all; the v2 default ("persona") matches the
+# minimum-viable identity injection while keeping legacy capture
+# files re-usable as long as the persona composer is opt-out.
+DEFAULT_COMPOSE = "persona"
+
+
+# Repo root inferred from this file's location: tools/evals/__main__.py
+# -> two parents up. Used by the composition layer to resolve
+# personas/ and tools/evals/fixtures/ without an env-var dance.
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 @dataclass
@@ -216,6 +230,69 @@ def _ollama_generate(prompt: str) -> tuple[bool, str]:
     return True, text
 
 
+def _ollama_chat(composed: ComposedPrompt) -> tuple[bool, str]:
+    """POST a composed prompt to Ollama's `/api/chat` endpoint.
+
+    Used when the harness has at least one composer enabled — chat
+    is the only Ollama surface that accepts both a system message
+    and the multimodal `images` field on a user message. Returns
+    `(ok, text)`; `ok=False` carries the transport error so the
+    runner can surface it in the scenario note.
+
+    Retries once on transport / 500 errors per Phase 7 heavy-usage
+    protocol — Ollama returns 500s under sustained load while the
+    parallel synthetic-corpus phase is also pinging gemma4:e4b.
+    """
+    base, model, timeout = _ollama_env()
+    messages: list[dict[str, object]] = []
+    if composed.system is not None:
+        messages.append({"role": "system", "content": composed.system})
+    user_msg: dict[str, object] = {"role": "user", "content": composed.user}
+    if composed.images:
+        user_msg["images"] = list(composed.images)
+    messages.append(user_msg)
+    body = json.dumps(
+        {"model": model, "messages": messages, "stream": False}
+    ).encode("utf-8")
+
+    last_error: str = ""
+    for attempt in range(2):
+        if attempt > 0:
+            # Single backoff retry per Phase 7 heavy-usage protocol.
+            # 250ms is short enough to not stall the 6-scenario sweep
+            # but long enough to clear a transient overlap with the
+            # parallel embed/generate workload.
+            import time
+            time.sleep(0.25)
+        req = urllib.request.Request(
+            f"{base}/api/chat",
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                payload = json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            last_error = f"ollama HTTP {exc.code} ({base}): {exc.reason}"
+            if exc.code >= 500:
+                continue
+            return False, last_error
+        except urllib.error.URLError as exc:
+            last_error = f"ollama transport error ({base}): {exc}"
+            continue
+        except json.JSONDecodeError as exc:
+            return False, f"ollama response not JSON: {exc}"
+        message = payload.get("message")
+        if not isinstance(message, dict):
+            return False, f"ollama chat response missing 'message': {payload!r}"
+        text = message.get("content")
+        if not isinstance(text, str):
+            return False, f"ollama chat response missing 'content': {payload!r}"
+        return True, text
+    return False, last_error or "ollama chat failed after retries"
+
+
 def _capture_filename(scenario_id: str) -> str:
     """Filesystem-safe base name derived from a scenario id. Same
     rule v1.1 used for its markdown captures; the v1.2 JSON
@@ -282,33 +359,90 @@ def _load_replay_capture(
     return response, None
 
 
+def _scenario_needs_uncomposed(s: Scenario, enabled: set[str]) -> str | None:
+    """Return a skip note when the scenario needs a composition
+    surface that the active `--compose` set does not provide.
+
+    The check mirrors `Scenario.requires_composition` but is
+    context-aware: a memory-dependent scenario is fine when
+    `memory` is enabled, a vision scenario fine when `vision` is
+    enabled, etc. Presence has no composer in this slice (the
+    persona system prompt does not surface presence state); a
+    presence-dependent scenario therefore always requires a manual
+    presence injection that the v2 layer does not yet provide.
+    """
+    setup = s.raw.get("setup")
+    if not isinstance(setup, dict):
+        return None
+    if isinstance(setup.get("memory"), list) and setup["memory"] and "memory" not in enabled:
+        return "scenario sets memory but --compose excludes memory"
+    if "frame" in setup and "vision" not in enabled:
+        return "scenario sets frame but --compose excludes vision"
+    if "audio" in setup and "voice" not in enabled:
+        return "scenario sets audio but --compose excludes voice"
+    if isinstance(setup.get("presence"), dict) and setup["presence"]:
+        return (
+            "scenario sets presence state — Quality-Eval V2 has no presence "
+            "composer (presence injection deferred; see "
+            "planning/session_2026-04-25/QUALITY_EVAL_V2_REPORT.md)"
+        )
+    return None
+
+
 def _resolve_actual(
     s: Scenario,
     backend: str,
     dry_run: bool,
     replay_dir: Path | None,
+    composers: set[str],
+    composition_ctx: CompositionContext,
 ) -> tuple[str | None, str | None]:
     """Produce an `actual` string for scenario `s` or explain why
     one is not available. Returns `(text, note)` where exactly one
-    is non-None."""
+    is non-None.
+
+    When at least one composer is enabled and the backend is live,
+    the harness routes through `compose_prompt` + `_ollama_chat`
+    so persona / memory / vision / voice surfaces reach the model
+    end-to-end. When `--compose` is disabled (empty set), the
+    legacy `_ollama_generate` single-turn path remains, preserving
+    pre-Phase-7 baseline reproducibility.
+    """
     if backend == "replay":
         assert replay_dir is not None, "replay backend requires --replay-from"
         return _load_replay_capture(replay_dir, s.id)
     if backend == "ollama":
-        if s.requires_composition:
-            # Composition-dependent scenarios (memory / presence / vision /
-            # voice context) cannot be tested through the minimal --backend
-            # ollama path that only forwards the last user turn. Surface as
-            # skip with a clear note rather than producing a false-failure.
-            # On-hardware validation 2026-04-24 confirmed every such
-            # scenario in v1 failed for this reason.
-            return None, "requires composition (memory/presence/vision/voice setup) — skipped (ollama backend; needs Quality-Eval V2 composition support)"
         prompt = _last_user_prompt(s)
         if prompt is None:
             return None, "scenario has no user turn — skipped (ollama backend)"
-        ok, out = _ollama_generate(prompt)
+        skip_note = _scenario_needs_uncomposed(s, composers)
+        if skip_note is not None:
+            return None, (
+                f"{skip_note} — skipped (ollama backend; re-run with the "
+                "missing composer enabled)"
+            )
+        if not composers:
+            # Legacy uncomposed path — preserved so prior captures stay
+            # reproducible. The composition-aware skip above prevents
+            # composition-dependent scenarios from false-failing here.
+            ok, out = _ollama_generate(prompt)
+            if not ok:
+                return None, out
+            return out, None
+        composed = compose_prompt(
+            user_prompt=prompt,
+            setup=s.raw.get("setup") if isinstance(s.raw.get("setup"), dict) else None,
+            enabled=composers,
+            ctx=composition_ctx,
+        )
+        ok, out = _ollama_chat(composed)
         if not ok:
             return None, out
+        if composed.notes:
+            # Surface composer-side substitutions in the scenario note;
+            # the response itself stays clean for evaluation.
+            joined = "; ".join(composed.notes)
+            return out, f"composed (notes: {joined})"
         return out, None
     # Default: dry-run / recorded replay.
     text = s.actual_text
@@ -325,8 +459,12 @@ def _run_scenario(
     dry_run: bool,
     capture_into: Path | None,
     replay_dir: Path | None,
+    composers: set[str],
+    composition_ctx: CompositionContext,
 ) -> ScenarioResult:
-    text, note = _resolve_actual(s, backend, dry_run, replay_dir)
+    text, note = _resolve_actual(
+        s, backend, dry_run, replay_dir, composers, composition_ctx
+    )
     if text is None:
         return ScenarioResult(
             scenario=s,
@@ -387,6 +525,10 @@ def _run_scenario(
         status="fail" if failed else "pass",
         response=text,
         expectations=results,
+        # Carry composer-side substitution notes through so the
+        # report can show why a "pass" was qualified or why a
+        # "fail" might be a fixture-substitution artifact.
+        note=note,
     )
 
 
@@ -424,6 +566,18 @@ def main(argv: list[str] | None = None) -> int:
         help="Replay previously captured responses from this "
              "directory. Implies --backend replay; incompatible with "
              "--backend ollama and with --capture-into.",
+    )
+    parser.add_argument(
+        "--compose",
+        default=DEFAULT_COMPOSE,
+        help=(
+            "CSV of composition surfaces to inject into live-backend "
+            "runs. Choices: persona, memory, vision, voice. "
+            f"Default: {DEFAULT_COMPOSE!r}. Use '' (empty string) to "
+            "disable all composers and run the legacy uncomposed "
+            "single-turn path. Composition-dependent scenarios that "
+            "lack a required composer are skipped with a clear note."
+        ),
     )
     parser.add_argument(
         "--report-md",
@@ -480,6 +634,28 @@ def main(argv: list[str] | None = None) -> int:
     else:
         backend = args.backend
     capture_into = Path(args.capture_into) if args.capture_into else None
+
+    # Parse the --compose CSV into the validated composer set.
+    # Empty string disables all composers explicitly. Unknown names
+    # are rejected loudly so a typo doesn't silently produce an
+    # uncomposed run that looks composed in the logs.
+    raw_compose = args.compose.strip()
+    composers: set[str] = set()
+    if raw_compose:
+        for token in raw_compose.split(","):
+            name = token.strip()
+            if not name:
+                continue
+            if name not in COMPOSER_NAMES:
+                print(
+                    f"error: --compose unknown composer {name!r}; "
+                    f"valid choices: {', '.join(COMPOSER_NAMES)}",
+                    file=sys.stderr,
+                )
+                return 2
+            composers.add(name)
+    composition_ctx = CompositionContext.from_repo_root(REPO_ROOT)
+
     results = [
         _run_scenario(
             s,
@@ -487,6 +663,8 @@ def main(argv: list[str] | None = None) -> int:
             dry_run=args.dry_run,
             capture_into=capture_into,
             replay_dir=replay_dir,
+            composers=composers,
+            composition_ctx=composition_ctx,
         )
         for s in scenarios
     ]
