@@ -30,6 +30,18 @@ tracing = "0.1"
 # `tokio::time::interval`. Scope limited to the `time` feature — no new
 # runtime, no network stack. Presence V1 step 2.
 tokio = { version = "1", features = ["time"] }
+# ADR-0006 D2 — hardware detection. `wgpu` is used for adapter enumeration
+# (cross-platform Vulkan / Metal / DX12 backend coverage). `sysinfo` is used
+# for RAM / CPU. Disk space is via `std::fs::available_space`. No additional
+# platform-specific deps. Detection is a pure read — no rendering, no model
+# load, runs once at boot and on explicit user re-detect.
+sysinfo = "0.32"
+wgpu = "23"
+# `ureq` is already a transitive dep via aether-l4-router; declared
+# explicitly here so the readiness probe can hit Ollama's /api/tags
+# without pulling the router crate's full provider machinery into the
+# probe path. Light-weight HTTP only — no model loads, no streaming.
+ureq = { version = "2", features = ["json"] }
 
 # Engine crates — the shell is an integration surface, same as apps/l1-cli.
 # CLAUDE.md §1.4 regulates packages/l*-* siblings; apps/* are allowed to
