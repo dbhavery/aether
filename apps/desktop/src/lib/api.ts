@@ -32,6 +32,9 @@ import type {
   VisionModelList,
   VisionStatus,
   VoiceStatus,
+  ReadinessState,
+  Tier,
+  TierConfig,
 } from "./types";
 
 export async function companionBanner(): Promise<CompanionBanner> {
@@ -376,4 +379,39 @@ export async function memoryEditAfterApproval(
     memoryId,
     newContent,
   });
+}
+
+// --- ADR-0006 hardware tier model -------------------------------------
+
+/** Snapshot of the current TierConfig (selected, detected, hardware
+ * snapshot). Cheap to call on every render — backend just clones from
+ * the in-memory copy. */
+export async function getTier(): Promise<TierConfig> {
+  return invoke<TierConfig>("get_tier");
+}
+
+/** User-initiated tier change. Backend persists atomically and flips
+ * `manual_override` if the new selection diverges from the detected
+ * recommendation. Throws if persistence fails. */
+export async function setTier(tier: Tier): Promise<TierConfig> {
+  return invoke<TierConfig>("set_tier", { tier });
+}
+
+/** Re-run hardware detection. Pure read on the backend — wgpu adapter
+ * enumeration, sysinfo, fs::available_space, and an optional 750ms
+ * /api/ps probe (skipped when embeddings are off). Honours the existing
+ * manual override: if the user previously chose a non-detected tier,
+ * detection updates `detected_tier` only — their selection stays. */
+export async function redetectHardware(): Promise<TierConfig> {
+  return invoke<TierConfig>("redetect_hardware");
+}
+
+// --- ADR-0007 retrieval readiness -------------------------------------
+
+/** Snapshot the current retrieval readiness per ADR-0007 D3. Read-only;
+ * updates are pushed by `run_retrieval_context` (every real turn) plus
+ * boot / settings-change probes on the backend. UI may poll on a
+ * reasonable interval (≥1s) — backend cost is sub-microsecond. */
+export async function embeddingsReadiness(): Promise<ReadinessState> {
+  return invoke<ReadinessState>("embeddings_readiness");
 }

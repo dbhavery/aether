@@ -135,11 +135,36 @@ ANCHORS: list[tuple[str, str, str | None, str]] = [
     ("symbol", "apps/desktop/src-tauri/src/memory_config.rs", "pub struct RetrievalConfig", "ADR-0005: top-K config"),
     ("symbol", "apps/desktop/src-tauri/src/memory_router.rs", "pub fn user_record_raw", "ADR-0005: original-utterance memory record"),
 
+    # ---- ADR-0006 — Hardware tier model (Milestone 2 Run 3) ----
+    ("file",   "apps/desktop/src-tauri/src/hardware.rs", None, "ADR-0006: hardware detection module"),
+    ("symbol", "apps/desktop/src-tauri/src/hardware.rs", "fn detect", "ADR-0006: detection entry"),
+    ("symbol", "apps/desktop/src-tauri/src/hardware.rs", "pub struct HardwareSnapshot", "ADR-0006: snapshot shape"),
+    ("symbol", "apps/desktop/src-tauri/src/hardware.rs", "pub enum GpuKind", "ADR-0006: GPU classification"),
+    ("file",   "apps/desktop/src-tauri/src/tier.rs", None, "ADR-0006: tier model module"),
+    ("symbol", "apps/desktop/src-tauri/src/tier.rs", "pub enum Tier", "ADR-0006: Tier enum"),
+    ("symbol", "apps/desktop/src-tauri/src/tier.rs", "pub struct TierConfig", "ADR-0006: TierConfig persistence"),
+    ("symbol", "apps/desktop/src-tauri/src/tier.rs", "fn recommend_tier", "ADR-0006: tier recommendation rule"),
+    ("string", "apps/desktop/src-tauri/src/tier.rs", "tier.json", "ADR-0006: persistence filename"),
+    ("symbol", "apps/desktop/src-tauri/src/state.rs", "pub fn redetect_hardware", "ADR-0006: redetect entry on AppState"),
+    ("symbol", "apps/desktop/src-tauri/src/state.rs", "pub fn set_tier", "ADR-0006: tier-change entry on AppState"),
+    ("symbol", "apps/desktop/src-tauri/src/commands.rs", "pub fn get_tier", "ADR-0006: get_tier Tauri command"),
+    ("symbol", "apps/desktop/src-tauri/src/commands.rs", "pub fn redetect_hardware", "ADR-0006: redetect Tauri command"),
+
+    # ---- ADR-0007 — Embeddings onboarding (Milestone 2 Run 3) ----
+    ("symbol", "apps/desktop/src-tauri/src/retrieval.rs", "pub enum ReadinessState", "ADR-0007 D3: readiness state machine"),
+    ("symbol", "apps/desktop/src-tauri/src/retrieval.rs", "pub enum NotReadyReason", "ADR-0007 D2/D8: structured reason"),
+    ("symbol", "apps/desktop/src-tauri/src/retrieval.rs", "fn probe_readiness", "ADR-0007 D2: readiness probe entry"),
+    ("symbol", "apps/desktop/src-tauri/src/retrieval.rs", "fn required_disk_gb_for_provider", "ADR-0007 D8: disk-space preflight"),
+    ("symbol", "apps/desktop/src-tauri/src/state.rs", "pub fn probe_readiness_now", "ADR-0007 D3: AppState probe wrapper"),
+    ("symbol", "apps/desktop/src-tauri/src/commands.rs", "pub fn embeddings_readiness", "ADR-0007 D3: readiness Tauri command"),
+
     # ---- ADRs ----
     ("file",   "docs/adr/ADR-0001-memory-domain-reconciliation.md", None, "ADR-0001: domain relocation"),
     ("file",   "docs/adr/ADR-0002-embeddings-provider-and-vector-backend.md", None, "ADR-0002: embeddings defaults"),
     ("file",   "docs/adr/ADR-0004-durable-store-shape.md", None, "ADR-0004: Durable-store shape"),
     ("file",   "docs/adr/ADR-0005-retrieval-wiring.md", None, "ADR-0005: retrieval wiring"),
+    ("file",   "docs/adr/ADR-0006-hardware-tier-model.md", None, "ADR-0006: tier model"),
+    ("file",   "docs/adr/ADR-0007-embeddings-onboarding.md", None, "ADR-0007: embeddings onboarding"),
 ]
 
 

@@ -408,3 +408,79 @@ export const MEMORY_CONFIG_DEFAULTS: Readonly<MemoryConfig> = {
     max_items: 5,
   },
 };
+
+// --- ADR-0006 hardware tier model ---------------------------------------
+
+/** Three named tiers from ADR-0006 Decision 1. Wire form is the lowercase
+ * variant name; matches Rust `tier::Tier`. */
+export type Tier = "spark" | "flame" | "forge";
+
+/** Coarse GPU classification from ADR-0006 §Decision 2. Mirrors Rust
+ * `hardware::GpuKind`; wire form is snake_case. */
+export type GpuKind =
+  | "discrete_gpu"
+  | "integrated_gpu"
+  | "virtual_gpu"
+  | "cpu"
+  | "other";
+
+/** Detected GPU info; matches Rust `hardware::GpuInfo`. All fields are
+ * best-effort — vendors expose different detail through different
+ * backends. `vram_gb_estimate` is a *lower bound* derived from
+ * `wgpu::Limits::max_buffer_size`; may understate actual VRAM. */
+export interface GpuInfo {
+  vendor_id: string;
+  device_name: string;
+  kind: GpuKind;
+  backend: string;
+  vram_gb_estimate: number;
+}
+
+/** Hardware snapshot persisted into `tier.json`; matches Rust
+ * `hardware::HardwareSnapshot`. `null`s indicate "not detected" /
+ * "probe skipped" — the UI should render a clear neutral state, not
+ * a zero. */
+export interface HardwareSnapshot {
+  gpu: GpuInfo | null;
+  total_ram_gb: number;
+  cpu_cores: number;
+  disk_available_gb: number | null;
+  ollama_gpu_loaded: boolean | null;
+  detected_at_ms: number;
+}
+
+/** Persisted shape of `<app_data>/tier.json`. Matches Rust
+ * `tier::TierConfig`. Settings UI reads `selected_tier` to decide
+ * which tier card to highlight; reads `detected_tier` to badge the
+ * recommendation; surfaces `manual_override` as the "your hardware
+ * suggests X" hint when `selected !== detected`. */
+export interface TierConfig {
+  selected_tier: Tier;
+  detected_tier: Tier;
+  detected_at_ms: number;
+  manual_override: boolean;
+  hardware_snapshot: HardwareSnapshot;
+}
+
+// --- ADR-0007 retrieval readiness ---------------------------------------
+
+/** Structured reason for `not_ready`. Matches Rust
+ * `retrieval::NotReadyReason`; wire form is the snake_case `kind` tag
+ * + variant fields. */
+export type NotReadyReason =
+  | { kind: "provider_unreachable"; detail: string }
+  | { kind: "model_not_installed"; model: string }
+  | { kind: "policy_denied" }
+  | { kind: "embed_failed"; detail: string }
+  | { kind: "bailout" }
+  | { kind: "low_disk"; needed_gb: number; available_gb: number };
+
+/** ADR-0007 D3 readiness state machine. Matches Rust
+ * `retrieval::ReadinessState`. UI branches on `kind` to decide
+ * whether to render the Trust-drawer indicator as ready, off, or
+ * not-ready-with-reason. */
+export type ReadinessState =
+  | { kind: "unknown" }
+  | { kind: "disabled" }
+  | { kind: "ready" }
+  | { kind: "not_ready"; reason: NotReadyReason };
