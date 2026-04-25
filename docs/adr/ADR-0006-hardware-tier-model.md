@@ -52,6 +52,8 @@ Cross-platform. No new crates beyond `wgpu` (already indirectly depended on thro
 
 ### 3. Recommendation rule. Highest tier whose minimum hardware envelope the detected machine meets or exceeds.
 
+> **2026-04-24 update:** On-hardware validation revealed that `wgpu::Limits::max_buffer_size` is fundamentally unreliable cross-backend (Vulkan reports `u64::MAX` sentinel on 24 GB cards; DX12 reports 1 GB on the same card). The pseudocode below was the original Session A implementation; **see ADR-0008 (Proposed) for the corrected recommendation rule that uses `device_type` + `total_ram_gb` instead of the broken VRAM estimate.** The pseudocode is preserved here as historical context for the original design intent.
+
 Pseudocode:
 
 ```
