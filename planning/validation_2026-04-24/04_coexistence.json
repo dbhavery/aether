@@ -1,0 +1,229 @@
+{
+  "steps": [
+    {
+      "step": "1-cold-embed-bge-m3",
+      "ms": 2273.3
+    },
+    {
+      "step": "2-cold-gen-gemma4-e4b",
+      "ms": 5519.9
+    },
+    {
+      "step": "3-warm-embed-bge-m3",
+      "ms": 170.4
+    },
+    {
+      "step": "4-warm-gen-gemma4-e4b",
+      "ms": 402.6
+    }
+  ],
+  "ps_before_load": {
+    "models": [
+      {
+        "name": "nomic-embed-text:latest",
+        "model": "nomic-embed-text:latest",
+        "size": 595142656,
+        "digest": "0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f",
+        "details": {
+          "parent_model": "",
+          "format": "gguf",
+          "family": "nomic-bert",
+          "families": [
+            "nomic-bert"
+          ],
+          "parameter_size": "137M",
+          "quantization_level": "F16"
+        },
+        "expires_at": "2026-04-24T18:55:10.1527155-07:00",
+        "size_vram": 595142656,
+        "context_length": 2048
+      }
+    ]
+  },
+  "ps_after_embed": {
+    "models": [
+      {
+        "name": "bge-m3:latest",
+        "model": "bge-m3:latest",
+        "size": 1301811200,
+        "digest": "7907646426070047a77226ac3e684fbbe8410524f7b4a74d02837e43f2146bab",
+        "details": {
+          "parent_model": "",
+          "format": "gguf",
+          "family": "bert",
+          "families": [
+            "bert"
+          ],
+          "parameter_size": "566.70M",
+          "quantization_level": "F16"
+        },
+        "expires_at": "2026-04-24T18:56:12.7063203-07:00",
+        "size_vram": 1301811200,
+        "context_length": 8192
+      },
+      {
+        "name": "nomic-embed-text:latest",
+        "model": "nomic-embed-text:latest",
+        "size": 595142656,
+        "digest": "0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f",
+        "details": {
+          "parent_model": "",
+          "format": "gguf",
+          "family": "nomic-bert",
+          "families": [
+            "nomic-bert"
+          ],
+          "parameter_size": "137M",
+          "quantization_level": "F16"
+        },
+        "expires_at": "2026-04-24T18:55:10.1527155-07:00",
+        "size_vram": 595142656,
+        "context_length": 2048
+      }
+    ]
+  },
+  "ps_after_both_loaded": {
+    "models": [
+      {
+        "name": "gemma4:e4b",
+        "model": "gemma4:e4b",
+        "size": 11144495104,
+        "digest": "c6eb396dbd5992bbe3f5cdb947e8bbc0ee413d7c17e2beaae69f5d569cf982eb",
+        "details": {
+          "parent_model": "",
+          "format": "gguf",
+          "family": "gemma4",
+          "families": [
+            "gemma4"
+          ],
+          "parameter_size": "8.0B",
+          "quantization_level": "Q4_K_M"
+        },
+        "expires_at": "2026-04-24T18:56:18.2284145-07:00",
+        "size_vram": 11144495104,
+        "context_length": 32768
+      },
+      {
+        "name": "bge-m3:latest",
+        "model": "bge-m3:latest",
+        "size": 1301811200,
+        "digest": "7907646426070047a77226ac3e684fbbe8410524f7b4a74d02837e43f2146bab",
+        "details": {
+          "parent_model": "",
+          "format": "gguf",
+          "family": "bert",
+          "families": [
+            "bert"
+          ],
+          "parameter_size": "566.70M",
+          "quantization_level": "F16"
+        },
+        "expires_at": "2026-04-24T18:56:12.7063203-07:00",
+        "size_vram": 1301811200,
+        "context_length": 8192
+      },
+      {
+        "name": "nomic-embed-text:latest",
+        "model": "nomic-embed-text:latest",
+        "size": 595142656,
+        "digest": "0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f",
+        "details": {
+          "parent_model": "",
+          "format": "gguf",
+          "family": "nomic-bert",
+          "families": [
+            "nomic-bert"
+          ],
+          "parameter_size": "137M",
+          "quantization_level": "F16"
+        },
+        "expires_at": "2026-04-24T18:55:10.1527155-07:00",
+        "size_vram": 595142656,
+        "context_length": 2048
+      }
+    ]
+  },
+  "both_loaded": true,
+  "ps_final": {
+    "models": [
+      {
+        "name": "bge-m3:latest",
+        "model": "bge-m3:latest",
+        "size": 1301811200,
+        "digest": "7907646426070047a77226ac3e684fbbe8410524f7b4a74d02837e43f2146bab",
+        "details": {
+          "parent_model": "",
+          "format": "gguf",
+          "family": "bert",
+          "families": [
+            "bert"
+          ],
+          "parameter_size": "566.70M",
+          "quantization_level": "F16"
+        },
+        "expires_at": "2026-04-24T18:56:18.4003923-07:00",
+        "size_vram": 1301811200,
+        "context_length": 8192
+      },
+      {
+        "name": "gemma4:e4b",
+        "model": "gemma4:e4b",
+        "size": 11144495104,
+        "digest": "c6eb396dbd5992bbe3f5cdb947e8bbc0ee413d7c17e2beaae69f5d569cf982eb",
+        "details": {
+          "parent_model": "",
+          "format": "gguf",
+          "family": "gemma4",
+          "families": [
+            "gemma4"
+          ],
+          "parameter_size": "8.0B",
+          "quantization_level": "Q4_K_M"
+        },
+        "expires_at": "2026-04-24T18:56:18.8029715-07:00",
+        "size_vram": 11144495104,
+        "context_length": 32768
+      },
+      {
+        "name": "nomic-embed-text:latest",
+        "model": "nomic-embed-text:latest",
+        "size": 595142656,
+        "digest": "0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f",
+        "details": {
+          "parent_model": "",
+          "format": "gguf",
+          "family": "nomic-bert",
+          "families": [
+            "nomic-bert"
+          ],
+          "parameter_size": "137M",
+          "quantization_level": "F16"
+        },
+        "expires_at": "2026-04-24T18:55:10.1527155-07:00",
+        "size_vram": 595142656,
+        "context_length": 2048
+      }
+    ]
+  },
+  "embed_was_reloaded": false,
+  "gen_was_reloaded": false,
+  "coexistence_holds": true,
+  "total_vram_resident_gb": 12.15,
+  "per_model_vram_gb": [
+    {
+      "name": "bge-m3:latest",
+      "size_vram_gb": 1.21,
+      "size_total_gb": 1.21
+    },
+    {
+      "name": "gemma4:e4b",
+      "size_vram_gb": 10.38,
+      "size_total_gb": 10.38
+    },
+    {
+      "name": "nomic-embed-text:latest",
+      "size_vram_gb": 0.55,
+      "size_total_gb": 0.55
+    }
+  ]
+}

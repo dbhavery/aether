@@ -1,0 +1,13 @@
+{
+  "scenario_id": "presence_aware_behavior.away.respects_state",
+  "domain": "presence_aware_behavior",
+  "backend": "ollama",
+  "captured_at": "2026-04-25T01:55:05Z",
+  "prompt": "[scheduled nudge \u2014 is now a good time to resume?]",
+  "response": "I'm here and ready! \ud83d\ude0a\n\nCould you give me a quick reminder of what we were working on, or where we left off? I'll pick up right where you need me to!",
+  "metadata": {
+    "ollama_base_url": "http://127.0.0.1:11434",
+    "ollama_model": "gemma4:e4b",
+    "ollama_timeout_s": 120.0
+  }
+}

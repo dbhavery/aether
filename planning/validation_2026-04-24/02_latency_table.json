@@ -1,0 +1,148 @@
+{
+  "ollama_version": "0.21.2",
+  "models_pulled": [
+    "gemma4:e4b",
+    "bge-m3:latest",
+    "gemma4:26b",
+    "nomic-embed-text:latest",
+    "qwen3:14b",
+    "qwen3:1.7b",
+    "qwen3:8b"
+  ],
+  "ps_initial": {
+    "models": []
+  },
+  "embed_results": [
+    {
+      "model": "bge-m3",
+      "cold_start_ms": 33646.1,
+      "dim": 1024,
+      "warm_runs_ms": [
+        183.7,
+        5271.0,
+        208.3,
+        198.2,
+        224.3
+      ],
+      "warm_p50_ms": 208.3,
+      "warm_mean_ms": 1217.1,
+      "warm_min_ms": 183.7,
+      "warm_max_ms": 5271.0
+    },
+    {
+      "model": "nomic-embed-text",
+      "cold_start_ms": 958.6,
+      "dim": 768,
+      "warm_runs_ms": [
+        24.9,
+        34.9,
+        62.3,
+        37.3,
+        46.6
+      ],
+      "warm_p50_ms": 37.3,
+      "warm_mean_ms": 41.2,
+      "warm_min_ms": 24.9,
+      "warm_max_ms": 62.3
+    }
+  ],
+  "llm_results": [
+    {
+      "model": "gemma4:e4b",
+      "cold_start_full_ms": 39910.4,
+      "cold_start_first_token_ms": 39803.1,
+      "cold_start_tokens": 8,
+      "warm_runs": [
+        {
+          "full_ms": 936.7,
+          "first_ms": 936.5,
+          "tokens": 1
+        },
+        {
+          "full_ms": 807.9,
+          "first_ms": 807.8,
+          "tokens": 1
+        },
+        {
+          "full_ms": 799.1,
+          "first_ms": 798.9,
+          "tokens": 1
+        },
+        {
+          "full_ms": 804.6,
+          "first_ms": 804.4,
+          "tokens": 1
+        },
+        {
+          "full_ms": 813.4,
+          "first_ms": 813.3,
+          "tokens": 1
+        }
+      ],
+      "warm_full_p50_ms": 807.9,
+      "warm_first_p50_ms": 807.8,
+      "warm_full_mean_ms": 832.3
+    }
+  ],
+  "ps_final": {
+    "models": [
+      {
+        "name": "gemma4:e4b",
+        "model": "gemma4:e4b",
+        "size": 11144495104,
+        "digest": "c6eb396dbd5992bbe3f5cdb947e8bbc0ee413d7c17e2beaae69f5d569cf982eb",
+        "details": {
+          "parent_model": "",
+          "format": "gguf",
+          "family": "gemma4",
+          "families": [
+            "gemma4"
+          ],
+          "parameter_size": "8.0B",
+          "quantization_level": "Q4_K_M"
+        },
+        "expires_at": "2026-04-24T18:53:39.3594488-07:00",
+        "size_vram": 11144495104,
+        "context_length": 32768
+      },
+      {
+        "name": "nomic-embed-text:latest",
+        "model": "nomic-embed-text:latest",
+        "size": 595142656,
+        "digest": "0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f",
+        "details": {
+          "parent_model": "",
+          "format": "gguf",
+          "family": "nomic-bert",
+          "families": [
+            "nomic-bert"
+          ],
+          "parameter_size": "137M",
+          "quantization_level": "F16"
+        },
+        "expires_at": "2026-04-24T18:52:54.2819753-07:00",
+        "size_vram": 595142656,
+        "context_length": 2048
+      },
+      {
+        "name": "bge-m3:latest",
+        "model": "bge-m3:latest",
+        "size": 1301811200,
+        "digest": "7907646426070047a77226ac3e684fbbe8410524f7b4a74d02837e43f2146bab",
+        "details": {
+          "parent_model": "",
+          "format": "gguf",
+          "family": "bert",
+          "families": [
+            "bert"
+          ],
+          "parameter_size": "566.70M",
+          "quantization_level": "F16"
+        },
+        "expires_at": "2026-04-24T18:52:52.095965-07:00",
+        "size_vram": 1301811200,
+        "context_length": 8192
+      }
+    ]
+  }
+}

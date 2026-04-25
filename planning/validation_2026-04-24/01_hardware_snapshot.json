@@ -1,0 +1,60 @@
+{
+  "c_drive_available_gb": 952,
+  "cpu_cores": 32,
+  "detected_at_ms": 1777081555240,
+  "gpu": {
+    "all_adapters": [
+      {
+        "backend": "Vulkan",
+        "device_name": "NVIDIA GeForce RTX 3090 Ti",
+        "index": 0,
+        "kind": "discrete_gpu",
+        "max_buffer_size_bytes": 18446744073709551615,
+        "max_buffer_size_gb_estimate": 4294967295,
+        "max_texture_dimension_2d": 32768,
+        "vendor_id": "0x10de"
+      },
+      {
+        "backend": "Dx12",
+        "device_name": "NVIDIA GeForce RTX 3090 Ti",
+        "index": 1,
+        "kind": "discrete_gpu",
+        "max_buffer_size_bytes": 2147483647,
+        "max_buffer_size_gb_estimate": 1,
+        "max_texture_dimension_2d": 16384,
+        "vendor_id": "0x10de"
+      },
+      {
+        "backend": "Gl",
+        "device_name": "NVIDIA GeForce RTX 3090 Ti/PCIe/SSE2",
+        "index": 2,
+        "kind": "other",
+        "max_buffer_size_bytes": 2147483647,
+        "max_buffer_size_gb_estimate": 1,
+        "max_texture_dimension_2d": 32768,
+        "vendor_id": "0x10de"
+      }
+    ],
+    "selected_best": {
+      "backend": "Vulkan",
+      "device_name": "NVIDIA GeForce RTX 3090 Ti",
+      "index": 0,
+      "kind": "discrete_gpu",
+      "max_buffer_size_bytes": 18446744073709551615,
+      "max_buffer_size_gb_estimate": 4294967295,
+      "max_texture_dimension_2d": 32768,
+      "vendor_id": "0x10de"
+    }
+  },
+  "notes": [
+    "max_buffer_size is a single-allocation ceiling, NOT total VRAM.",
+    "Tier recommendation uses (vram_estimate / 2) as effective_vram per ADR-0006 50% rule.",
+    "Forge needs effective_vram >= 12 GB (so vram_estimate >= 24 GB) AND effective_ram >= 16 GB.",
+    "Flame needs effective_vram >= 6 GB (so vram_estimate >= 12 GB) AND effective_ram >= 8 GB."
+  ],
+  "ollama_api_ps": {
+    "models": []
+  },
+  "recommended_tier_per_adr0006_d3": "forge",
+  "total_ram_gb": 127
+}

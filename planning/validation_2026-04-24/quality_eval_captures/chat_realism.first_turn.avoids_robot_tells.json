@@ -1,0 +1,13 @@
+{
+  "scenario_id": "chat_realism.first_turn.avoids_robot_tells",
+  "domain": "chat_realism",
+  "backend": "ollama",
+  "captured_at": "2026-04-25T01:54:58Z",
+  "prompt": "hi",
+  "response": "Hi! How can I help you today?",
+  "metadata": {
+    "ollama_base_url": "http://127.0.0.1:11434",
+    "ollama_model": "gemma4:e4b",
+    "ollama_timeout_s": 120.0
+  }
+}

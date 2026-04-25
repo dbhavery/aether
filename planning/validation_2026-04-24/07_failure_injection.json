@@ -1,0 +1,36 @@
+{
+  "tests": [
+    {
+      "id": "T1",
+      "name": "daemon-down -> ProviderUnreachable",
+      "result": "PASS: probe would map to ProviderUnreachable (raw error: URLError)"
+    },
+    {
+      "id": "T4",
+      "name": "recovery after daemon restart",
+      "result": "PASS: daemon recovered, /api/tags lists 7 models"
+    },
+    {
+      "id": "T2",
+      "name": "missing-model -> ModelNotInstalled",
+      "result": "PASS: bogus model not in /api/tags -> would map to ModelNotInstalled (installed list has 7 models)"
+    },
+    {
+      "id": "T5",
+      "name": "bailout state transition",
+      "result": "COVERED-BY-UNIT-TEST: retrieval.rs::readiness_flips_to_bailout_when_deadline_expires + readiness_recovers_from_not_ready_to_ready_on_next_success"
+    },
+    {
+      "id": "T3",
+      "name": "disk-pressure -> LowDisk",
+      "result": "COVERED-BY-UNIT-TEST: retrieval.rs::probe_returns_low_disk_when_below_threshold"
+    }
+  ],
+  "summary": {
+    "T1": "PASS",
+    "T4": "PASS",
+    "T2": "PASS",
+    "T5": "COVERED-BY-UNIT-TEST",
+    "T3": "COVERED-BY-UNIT-TEST"
+  }
+}

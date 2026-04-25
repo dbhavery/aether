@@ -1,0 +1,58 @@
+{
+  "corpus_size": 150,
+  "query_count": 20,
+  "models": [
+    {
+      "model": "bge-m3",
+      "corpus_size": 150,
+      "queries": 20,
+      "recall_at_1": 0.95,
+      "recall_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "mrr": 0.975,
+      "embed_p50_ms": 183.2,
+      "embed_p90_ms": 208.3,
+      "query_p50_ms": 169.2,
+      "vec_dim": 1024,
+      "complete_misses": []
+    },
+    {
+      "model": "nomic-embed-text",
+      "corpus_size": 150,
+      "queries": 20,
+      "recall_at_1": 0.8,
+      "recall_at_3": 0.85,
+      "recall_at_5": 0.85,
+      "recall_at_10": 0.9,
+      "mrr": 0.835,
+      "embed_p50_ms": 44.7,
+      "embed_p90_ms": 55.0,
+      "query_p50_ms": 36.4,
+      "vec_dim": 768,
+      "complete_misses": []
+    }
+  ],
+  "summary": [
+    {
+      "model": "bge-m3",
+      "corpus": 150,
+      "r@1": 0.95,
+      "r@3": 1.0,
+      "r@5": 1.0,
+      "r@10": 1.0,
+      "mrr": 0.975,
+      "p50_ms": 183.2
+    },
+    {
+      "model": "nomic-embed-text",
+      "corpus": 150,
+      "r@1": 0.8,
+      "r@3": 0.85,
+      "r@5": 0.85,
+      "r@10": 0.9,
+      "mrr": 0.835,
+      "p50_ms": 44.7
+    }
+  ]
+}

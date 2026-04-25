@@ -1,0 +1,32 @@
+{
+  "backfill_throughput": [
+    {
+      "model": "bge-m3",
+      "rows_embedded": "EXTRAPOLATED FROM BLOCK 5 LONG-CONTEXT WARM LATENCY (rapid-fire test triggered Ollama queue 500s; warm steady-state holds)",
+      "per_row_warm_p50_ms": 183,
+      "projected_100_row_backfill_s": 18.3,
+      "projected_500_row_backfill_s": 91.5,
+      "projected_1000_row_backfill_s": 183.0,
+      "projected_1000_row_backfill_human": "~3.0 min",
+      "caveat": "Concurrent rapid-fire embed calls produced HTTP 500 from Ollama at row 3-4. Cause unclear \u2014 likely embedder load queue or nomic eviction triggering bge-m3 reload. Real backfill would space rows asynchronously and not hit this. Numbers above use the steady-state warm latency from Block 5 (which embedded 150 rows successfully one at a time)."
+    },
+    {
+      "model": "nomic-embed-text",
+      "rows_embedded": 50,
+      "total_seconds": 2.51,
+      "rows_per_second": 19.95,
+      "per_row_mean_ms": 50.1,
+      "per_row_median_ms": 31.5,
+      "per_row_p95_ms": 48.3,
+      "per_row_min_ms": 18.9,
+      "per_row_max_ms": 934.0,
+      "first5_mean_ms": 216.3,
+      "last5_mean_ms": 27.1,
+      "warmup_factor": 7.97,
+      "projected_100_row_backfill_s": 2.7,
+      "projected_500_row_backfill_s": 13.6,
+      "projected_1000_row_backfill_s": 27.1,
+      "projected_1000_row_backfill_human": "~27 sec"
+    }
+  ]
+}

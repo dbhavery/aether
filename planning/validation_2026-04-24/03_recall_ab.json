@@ -1,0 +1,840 @@
+{
+  "models": [
+    {
+      "model": "bge-m3",
+      "corpus_size": 20,
+      "queries": 13,
+      "recall_at_1": 0.769,
+      "recall_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "mrr": 0.872,
+      "embed_time_median_ms": 208.2,
+      "embed_time_p90_ms": 245.7,
+      "query_time_median_ms": 188.1,
+      "vec_dim": 1024,
+      "per_query": [
+        {
+          "query_id": "Q-iceland",
+          "query": "When is Don traveling to see the aurora?",
+          "expected": [
+            "P-iceland"
+          ],
+          "first_match_rank": 2,
+          "top5": [
+            {
+              "id": "L-spanish-iceland",
+              "score": 0.7603
+            },
+            {
+              "id": "P-iceland",
+              "score": 0.6277
+            },
+            {
+              "id": "A-long",
+              "score": 0.371
+            },
+            {
+              "id": "D-norway",
+              "score": 0.37
+            },
+            {
+              "id": "L-french-piano",
+              "score": 0.3364
+            }
+          ]
+        },
+        {
+          "query_id": "Q-piano",
+          "query": "What classical piece has he been practicing on the keyboard?",
+          "expected": [
+            "P-piano"
+          ],
+          "first_match_rank": 1,
+          "top5": [
+            {
+              "id": "P-piano",
+              "score": 0.67
+            },
+            {
+              "id": "L-french-piano",
+              "score": 0.6477
+            },
+            {
+              "id": "D-guitar",
+              "score": 0.4799
+            },
+            {
+              "id": "P-sourdough",
+              "score": 0.4192
+            },
+            {
+              "id": "D-B-readme",
+              "score": 0.4112
+            }
+          ]
+        },
+        {
+          "query_id": "Q-sourdough",
+          "query": "Did the bread baking project work out?",
+          "expected": [
+            "P-sourdough"
+          ],
+          "first_match_rank": 1,
+          "top5": [
+            {
+              "id": "P-sourdough",
+              "score": 0.6577
+            },
+            {
+              "id": "D-bagels",
+              "score": 0.5603
+            },
+            {
+              "id": "P-coffee",
+              "score": 0.4161
+            },
+            {
+              "id": "P-rust",
+              "score": 0.3919
+            },
+            {
+              "id": "L-japanese-sourdough",
+              "score": 0.375
+            }
+          ]
+        },
+        {
+          "query_id": "Q-rust",
+          "query": "What language's memory safety took time to learn?",
+          "expected": [
+            "P-rust"
+          ],
+          "first_match_rank": 1,
+          "top5": [
+            {
+              "id": "P-rust",
+              "score": 0.4761
+            },
+            {
+              "id": "D-guitar",
+              "score": 0.404
+            },
+            {
+              "id": "D-go",
+              "score": 0.3975
+            },
+            {
+              "id": "P-piano",
+              "score": 0.3854
+            },
+            {
+              "id": "L-french-piano",
+              "score": 0.3807
+            }
+          ]
+        },
+        {
+          "query_id": "Q-coffee",
+          "query": "What changed about his morning beverage routine?",
+          "expected": [
+            "P-coffee"
+          ],
+          "first_match_rank": 1,
+          "top5": [
+            {
+              "id": "P-coffee",
+              "score": 0.5696
+            },
+            {
+              "id": "P-sourdough",
+              "score": 0.5104
+            },
+            {
+              "id": "D-bagels",
+              "score": 0.5049
+            },
+            {
+              "id": "P-piano",
+              "score": 0.4417
+            },
+            {
+              "id": "D-tea",
+              "score": 0.4328
+            }
+          ]
+        },
+        {
+          "query_id": "L-q-spanish",
+          "query": "Cuando viaja Don a Islandia?",
+          "expected": [
+            "L-spanish-iceland",
+            "P-iceland"
+          ],
+          "first_match_rank": 1,
+          "top5": [
+            {
+              "id": "L-spanish-iceland",
+              "score": 0.7314
+            },
+            {
+              "id": "P-iceland",
+              "score": 0.7011
+            },
+            {
+              "id": "A-long",
+              "score": 0.3446
+            },
+            {
+              "id": "D-norway",
+              "score": 0.331
+            },
+            {
+              "id": "L-french-piano",
+              "score": 0.2669
+            }
+          ]
+        },
+        {
+          "query_id": "L-q-french",
+          "query": "Quel morceau de Beethoven a-t-il appris au piano?",
+          "expected": [
+            "L-french-piano",
+            "P-piano"
+          ],
+          "first_match_rank": 1,
+          "top5": [
+            {
+              "id": "P-piano",
+              "score": 0.6752
+            },
+            {
+              "id": "L-french-piano",
+              "score": 0.6683
+            },
+            {
+              "id": "D-guitar",
+              "score": 0.4253
+            },
+            {
+              "id": "L-japanese-sourdough",
+              "score": 0.3372
+            },
+            {
+              "id": "D-B-readme",
+              "score": 0.3226
+            }
+          ]
+        },
+        {
+          "query_id": "C-q-fib",
+          "query": "recursive fibonacci implementation",
+          "expected": [
+            "C-python-fib"
+          ],
+          "first_match_rank": 1,
+          "top5": [
+            {
+              "id": "C-python-fib",
+              "score": 0.649
+            },
+            {
+              "id": "D-A-readme",
+              "score": 0.5093
+            },
+            {
+              "id": "D-B-readme",
+              "score": 0.5079
+            },
+            {
+              "id": "C-sql-window",
+              "score": 0.4452
+            },
+            {
+              "id": "C-rust-trait",
+              "score": 0.4346
+            }
+          ]
+        },
+        {
+          "query_id": "C-q-trait",
+          "query": "Rust trait for an embedding interface",
+          "expected": [
+            "C-rust-trait"
+          ],
+          "first_match_rank": 2,
+          "top5": [
+            {
+              "id": "P-rust",
+              "score": 0.5455
+            },
+            {
+              "id": "C-rust-trait",
+              "score": 0.5333
+            },
+            {
+              "id": "A-unicode",
+              "score": 0.4882
+            },
+            {
+              "id": "D-B-readme",
+              "score": 0.4484
+            },
+            {
+              "id": "A-long",
+              "score": 0.4442
+            }
+          ]
+        },
+        {
+          "query_id": "C-q-sql",
+          "query": "ranking employees by salary within department",
+          "expected": [
+            "C-sql-window"
+          ],
+          "first_match_rank": 1,
+          "top5": [
+            {
+              "id": "C-sql-window",
+              "score": 0.7087
+            },
+            {
+              "id": "D-B-readme",
+              "score": 0.4661
+            },
+            {
+              "id": "D-A-readme",
+              "score": 0.4532
+            },
+            {
+              "id": "C-python-fib",
+              "score": 0.3574
+            },
+            {
+              "id": "P-rust",
+              "score": 0.3478
+            }
+          ]
+        },
+        {
+          "query_id": "N-q-readme",
+          "query": "How does the retrieval pipeline work and what is its timeout?",
+          "expected": [
+            "D-A-readme",
+            "D-B-readme"
+          ],
+          "first_match_rank": 1,
+          "top5": [
+            {
+              "id": "D-B-readme",
+              "score": 0.751
+            },
+            {
+              "id": "D-A-readme",
+              "score": 0.717
+            },
+            {
+              "id": "P-rust",
+              "score": 0.4651
+            },
+            {
+              "id": "A-long",
+              "score": 0.4263
+            },
+            {
+              "id": "C-python-fib",
+              "score": 0.4136
+            }
+          ]
+        },
+        {
+          "query_id": "A-q-long",
+          "query": "What time zone does Don prefer for scheduling?",
+          "expected": [
+            "A-long"
+          ],
+          "first_match_rank": 3,
+          "top5": [
+            {
+              "id": "P-iceland",
+              "score": 0.5626
+            },
+            {
+              "id": "L-spanish-iceland",
+              "score": 0.5501
+            },
+            {
+              "id": "A-long",
+              "score": 0.5035
+            },
+            {
+              "id": "D-A-readme",
+              "score": 0.4296
+            },
+            {
+              "id": "P-coffee",
+              "score": 0.3974
+            }
+          ]
+        },
+        {
+          "query_id": "A-q-unicode",
+          "query": "Are user notes allowed to contain emoji and special characters?",
+          "expected": [
+            "A-unicode"
+          ],
+          "first_match_rank": 1,
+          "top5": [
+            {
+              "id": "A-unicode",
+              "score": 0.7381
+            },
+            {
+              "id": "C-rust-trait",
+              "score": 0.4012
+            },
+            {
+              "id": "A-long",
+              "score": 0.3847
+            },
+            {
+              "id": "P-rust",
+              "score": 0.3534
+            },
+            {
+              "id": "C-sql-window",
+              "score": 0.3509
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "nomic-embed-text",
+      "corpus_size": 20,
+      "queries": 13,
+      "recall_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "mrr": 1.0,
+      "embed_time_median_ms": 54.8,
+      "embed_time_p90_ms": 62.9,
+      "query_time_median_ms": 42.2,
+      "vec_dim": 768,
+      "per_query": [
+        {
+          "query_id": "Q-iceland",
+          "query": "When is Don traveling to see the aurora?",
+          "expected": [
+            "P-iceland"
+          ],
+          "first_match_rank": 1,
+          "top5": [
+            {
+              "id": "P-iceland",
+              "score": 0.7734
+            },
+            {
+              "id": "L-spanish-iceland",
+              "score": 0.7117
+            },
+            {
+              "id": "D-norway",
+              "score": 0.7116
+            },
+            {
+              "id": "P-piano",
+              "score": 0.5098
+            },
+            {
+              "id": "A-unicode",
+              "score": 0.4719
+            }
+          ]
+        },
+        {
+          "query_id": "Q-piano",
+          "query": "What classical piece has he been practicing on the keyboard?",
+          "expected": [
+            "P-piano"
+          ],
+          "first_match_rank": 1,
+          "top5": [
+            {
+              "id": "P-piano",
+              "score": 0.7228
+            },
+            {
+              "id": "D-guitar",
+              "score": 0.596
+            },
+            {
+              "id": "L-french-piano",
+              "score": 0.563
+            },
+            {
+              "id": "A-unicode",
+              "score": 0.4889
+            },
+            {
+              "id": "P-sourdough",
+              "score": 0.4831
+            }
+          ]
+        },
+        {
+          "query_id": "Q-sourdough",
+          "query": "Did the bread baking project work out?",
+          "expected": [
+            "P-sourdough"
+          ],
+          "first_match_rank": 1,
+          "top5": [
+            {
+              "id": "P-sourdough",
+              "score": 0.6116
+            },
+            {
+              "id": "P-coffee",
+              "score": 0.5317
+            },
+            {
+              "id": "D-bagels",
+              "score": 0.5202
+            },
+            {
+              "id": "P-piano",
+              "score": 0.5022
+            },
+            {
+              "id": "D-go",
+              "score": 0.4808
+            }
+          ]
+        },
+        {
+          "query_id": "Q-rust",
+          "query": "What language's memory safety took time to learn?",
+          "expected": [
+            "P-rust"
+          ],
+          "first_match_rank": 1,
+          "top5": [
+            {
+              "id": "P-rust",
+              "score": 0.617
+            },
+            {
+              "id": "P-piano",
+              "score": 0.5909
+            },
+            {
+              "id": "D-go",
+              "score": 0.5669
+            },
+            {
+              "id": "A-long",
+              "score": 0.5304
+            },
+            {
+              "id": "D-guitar",
+              "score": 0.516
+            }
+          ]
+        },
+        {
+          "query_id": "Q-coffee",
+          "query": "What changed about his morning beverage routine?",
+          "expected": [
+            "P-coffee"
+          ],
+          "first_match_rank": 1,
+          "top5": [
+            {
+              "id": "P-coffee",
+              "score": 0.6693
+            },
+            {
+              "id": "P-piano",
+              "score": 0.495
+            },
+            {
+              "id": "P-sourdough",
+              "score": 0.4729
+            },
+            {
+              "id": "D-tea",
+              "score": 0.4716
+            },
+            {
+              "id": "D-bagels",
+              "score": 0.4525
+            }
+          ]
+        },
+        {
+          "query_id": "L-q-spanish",
+          "query": "Cuando viaja Don a Islandia?",
+          "expected": [
+            "L-spanish-iceland",
+            "P-iceland"
+          ],
+          "first_match_rank": 1,
+          "top5": [
+            {
+              "id": "L-spanish-iceland",
+              "score": 0.6715
+            },
+            {
+              "id": "P-iceland",
+              "score": 0.5582
+            },
+            {
+              "id": "L-japanese-sourdough",
+              "score": 0.5372
+            },
+            {
+              "id": "D-norway",
+              "score": 0.5319
+            },
+            {
+              "id": "A-unicode",
+              "score": 0.5189
+            }
+          ]
+        },
+        {
+          "query_id": "L-q-french",
+          "query": "Quel morceau de Beethoven a-t-il appris au piano?",
+          "expected": [
+            "L-french-piano",
+            "P-piano"
+          ],
+          "first_match_rank": 1,
+          "top5": [
+            {
+              "id": "L-french-piano",
+              "score": 0.8622
+            },
+            {
+              "id": "P-piano",
+              "score": 0.594
+            },
+            {
+              "id": "L-spanish-iceland",
+              "score": 0.5378
+            },
+            {
+              "id": "D-guitar",
+              "score": 0.514
+            },
+            {
+              "id": "L-japanese-sourdough",
+              "score": 0.5123
+            }
+          ]
+        },
+        {
+          "query_id": "C-q-fib",
+          "query": "recursive fibonacci implementation",
+          "expected": [
+            "C-python-fib"
+          ],
+          "first_match_rank": 1,
+          "top5": [
+            {
+              "id": "C-python-fib",
+              "score": 0.6899
+            },
+            {
+              "id": "D-guitar",
+              "score": 0.4329
+            },
+            {
+              "id": "D-go",
+              "score": 0.4274
+            },
+            {
+              "id": "C-rust-trait",
+              "score": 0.422
+            },
+            {
+              "id": "P-rust",
+              "score": 0.3981
+            }
+          ]
+        },
+        {
+          "query_id": "C-q-trait",
+          "query": "Rust trait for an embedding interface",
+          "expected": [
+            "C-rust-trait"
+          ],
+          "first_match_rank": 1,
+          "top5": [
+            {
+              "id": "C-rust-trait",
+              "score": 0.7367
+            },
+            {
+              "id": "A-long",
+              "score": 0.5992
+            },
+            {
+              "id": "A-unicode",
+              "score": 0.5861
+            },
+            {
+              "id": "D-go",
+              "score": 0.5309
+            },
+            {
+              "id": "D-guitar",
+              "score": 0.5114
+            }
+          ]
+        },
+        {
+          "query_id": "C-q-sql",
+          "query": "ranking employees by salary within department",
+          "expected": [
+            "C-sql-window"
+          ],
+          "first_match_rank": 1,
+          "top5": [
+            {
+              "id": "C-sql-window",
+              "score": 0.7576
+            },
+            {
+              "id": "D-B-readme",
+              "score": 0.4306
+            },
+            {
+              "id": "D-A-readme",
+              "score": 0.4188
+            },
+            {
+              "id": "D-norway",
+              "score": 0.3847
+            },
+            {
+              "id": "L-japanese-sourdough",
+              "score": 0.3397
+            }
+          ]
+        },
+        {
+          "query_id": "N-q-readme",
+          "query": "How does the retrieval pipeline work and what is its timeout?",
+          "expected": [
+            "D-A-readme",
+            "D-B-readme"
+          ],
+          "first_match_rank": 1,
+          "top5": [
+            {
+              "id": "D-B-readme",
+              "score": 0.7776
+            },
+            {
+              "id": "D-A-readme",
+              "score": 0.7762
+            },
+            {
+              "id": "P-rust",
+              "score": 0.5265
+            },
+            {
+              "id": "A-long",
+              "score": 0.4866
+            },
+            {
+              "id": "P-coffee",
+              "score": 0.4563
+            }
+          ]
+        },
+        {
+          "query_id": "A-q-long",
+          "query": "What time zone does Don prefer for scheduling?",
+          "expected": [
+            "A-long"
+          ],
+          "first_match_rank": 1,
+          "top5": [
+            {
+              "id": "A-long",
+              "score": 0.5463
+            },
+            {
+              "id": "D-go",
+              "score": 0.5374
+            },
+            {
+              "id": "D-norway",
+              "score": 0.5316
+            },
+            {
+              "id": "P-iceland",
+              "score": 0.5159
+            },
+            {
+              "id": "P-coffee",
+              "score": 0.5069
+            }
+          ]
+        },
+        {
+          "query_id": "A-q-unicode",
+          "query": "Are user notes allowed to contain emoji and special characters?",
+          "expected": [
+            "A-unicode"
+          ],
+          "first_match_rank": 1,
+          "top5": [
+            {
+              "id": "A-unicode",
+              "score": 0.8527
+            },
+            {
+              "id": "C-rust-trait",
+              "score": 0.5885
+            },
+            {
+              "id": "A-long",
+              "score": 0.548
+            },
+            {
+              "id": "P-rust",
+              "score": 0.4834
+            },
+            {
+              "id": "C-sql-window",
+              "score": 0.4819
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "summary": [
+    {
+      "model": "bge-m3",
+      "recall@1": 0.769,
+      "recall@3": 1.0,
+      "recall@5": 1.0,
+      "mrr": 0.872,
+      "embed_p50_ms": 208.2,
+      "vec_dim": 1024
+    },
+    {
+      "model": "nomic-embed-text",
+      "recall@1": 1.0,
+      "recall@3": 1.0,
+      "recall@5": 1.0,
+      "mrr": 1.0,
+      "embed_p50_ms": 54.8,
+      "vec_dim": 768
+    }
+  ]
+}
