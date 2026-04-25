@@ -298,7 +298,7 @@ fn retrieval_provenance_for(hits: &[crate::retrieval::RetrievalHit]) -> Retrieva
             .iter()
             .map(|h| RetrievedMemoryRef {
                 memory_id: h.memory_id.clone(),
-                domain: format!("{:?}", h.domain).to_lowercase(),
+                domain: h.domain.label().to_string(),
                 score: h.score,
             })
             .collect(),
