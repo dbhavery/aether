@@ -118,7 +118,7 @@ pub struct PresencePayload {
 }
 
 #[tauri::command]
-pub fn companion_banner(state: State<'_, AppState>) -> CompanionBanner {
+pub fn companion_banner(state: State<'_, std::sync::Arc<AppState>>) -> CompanionBanner {
     let a = state.active.read().expect("active read lock");
     CompanionBanner {
         persona_id: a.compiled.persona_id.0.clone(),
@@ -134,14 +134,14 @@ pub fn companion_banner(state: State<'_, AppState>) -> CompanionBanner {
 }
 
 #[tauri::command]
-pub fn list_personas(state: State<'_, AppState>) -> Vec<crate::state::PersonaCatalogEntry> {
+pub fn list_personas(state: State<'_, std::sync::Arc<AppState>>) -> Vec<crate::state::PersonaCatalogEntry> {
     state.catalog_entries()
 }
 
 #[tauri::command]
 pub fn switch_persona(
     id: String,
-    state: State<'_, AppState>,
+    state: State<'_, std::sync::Arc<AppState>>,
     app: AppHandle,
 ) -> Result<CompanionBanner, String> {
     // Capture the outgoing persona name before the swap so the banner
@@ -203,7 +203,7 @@ pub(crate) fn persona_switch_banner_text(previous: &str, new: &str) -> String {
 #[tauri::command]
 pub fn set_autonomy_preset(
     preset: Option<String>,
-    state: State<'_, AppState>,
+    state: State<'_, std::sync::Arc<AppState>>,
 ) -> Result<CompanionBanner, String> {
     let parsed = match preset.as_deref() {
         None | Some("") | Some("later") => None,
@@ -219,7 +219,7 @@ pub fn set_autonomy_preset(
 /// Report the autonomy preset currently overlaid on the engine. `null`
 /// means no overlay (baseline Assistant behaviour).
 #[tauri::command]
-pub fn current_autonomy_preset(state: State<'_, AppState>) -> Option<String> {
+pub fn current_autonomy_preset(state: State<'_, std::sync::Arc<AppState>>) -> Option<String> {
     state.current_preset().map(|p| p.wire_name().to_string())
 }
 
@@ -246,7 +246,7 @@ pub struct ForgetOlderReport {
 #[tauri::command]
 pub fn forget_older_than_days(
     days: u32,
-    state: State<'_, AppState>,
+    state: State<'_, std::sync::Arc<AppState>>,
 ) -> Result<ForgetOlderReport, String> {
     if days == 0 {
         return Err("days must be >= 1".into());
@@ -309,7 +309,7 @@ fn retrieval_provenance_for(hits: &[crate::retrieval::RetrievalHit]) -> Retrieva
 pub fn submit_turn(
     text: String,
     app: AppHandle,
-    state: State<'_, AppState>,
+    state: State<'_, std::sync::Arc<AppState>>,
 ) -> Result<TurnOutcomePayload, String> {
     let text = text.trim().to_string();
     if text.is_empty() {
@@ -336,7 +336,7 @@ pub fn submit_turn(
     // byte-identical `router_utterance == text` and no memory drift.
     let max_items = state.memory_config().retrieval.max_items as usize;
     let hits = run_retrieval_context(
-        &state,
+        state.inner().as_ref(),
         SESSION_ID,
         &text,
         max_items,
@@ -433,7 +433,7 @@ pub fn resolve_approval(
     ticket_id: String,
     approve: bool,
     app: AppHandle,
-    state: State<'_, AppState>,
+    state: State<'_, std::sync::Arc<AppState>>,
 ) -> Result<TurnOutcomePayload, String> {
     let Some(pending) = state.take_pending(&ticket_id) else {
         return Err(format!("ticket not found: {ticket_id}"));
@@ -503,7 +503,7 @@ pub fn resolve_approval(
 }
 
 #[tauri::command]
-pub fn presence_current(state: State<'_, AppState>) -> Result<PresencePayload, String> {
+pub fn presence_current(state: State<'_, std::sync::Arc<AppState>>) -> Result<PresencePayload, String> {
     let snap = state
         .presence
         .current(SESSION_ID)
@@ -516,7 +516,7 @@ pub fn presence_current(state: State<'_, AppState>) -> Result<PresencePayload, S
 }
 
 #[tauri::command]
-pub fn memory_recent(state: State<'_, AppState>) -> Result<Vec<TranscriptMessage>, String> {
+pub fn memory_recent(state: State<'_, std::sync::Arc<AppState>>) -> Result<Vec<TranscriptMessage>, String> {
     let w = state
         .memory
         .recent(SESSION_ID)
@@ -535,7 +535,7 @@ pub fn memory_recent(state: State<'_, AppState>) -> Result<Vec<TranscriptMessage
 }
 
 #[tauri::command]
-pub fn clear_session(state: State<'_, AppState>, app: AppHandle) -> Result<(), String> {
+pub fn clear_session(state: State<'_, std::sync::Arc<AppState>>, app: AppHandle) -> Result<(), String> {
     state.clear_session()?;
     transition_presence(
         &app,
@@ -593,7 +593,7 @@ pub struct TrustAuditRow {
 #[tauri::command]
 pub fn audit_recent(
     limit: Option<u32>,
-    state: State<'_, AppState>,
+    state: State<'_, std::sync::Arc<AppState>>,
 ) -> Result<Vec<TrustAuditRow>, String> {
     let filter = AuditFilter::default();
     let cap = limit.unwrap_or(50).clamp(1, 500);
@@ -679,7 +679,7 @@ fn extract_provider_error(msg: &str) -> Option<String> {
 /// a system-role note with the actionable copy.
 fn provider_error_payload(
     app: &AppHandle,
-    state: &State<'_, AppState>,
+    state: &State<'_, std::sync::Arc<AppState>>,
     request: &TurnRequest,
     original_utterance: &str,
     friendly: String,
@@ -750,7 +750,7 @@ fn provider_error_payload(
 
 fn finalize_turn(
     app: &AppHandle,
-    state: &State<'_, AppState>,
+    state: &State<'_, std::sync::Arc<AppState>>,
     request: &TurnRequest,
     original_utterance: &str,
     result: &TurnResult,
@@ -894,7 +894,7 @@ fn finalize_turn(
 /// Return the newest-first telemetry entries for the Trust drawer
 /// History tab. `limit` is clamped to the internal buffer capacity.
 #[tauri::command]
-pub fn telemetry_recent(limit: Option<usize>, state: State<'_, AppState>) -> Vec<TelemetryEntry> {
+pub fn telemetry_recent(limit: Option<usize>, state: State<'_, std::sync::Arc<AppState>>) -> Vec<TelemetryEntry> {
     let cap = crate::state::TELEMETRY_BUFFER_CAPACITY;
     let n = limit.unwrap_or(cap).min(cap);
     state.telemetry_recent(n)
@@ -902,7 +902,7 @@ pub fn telemetry_recent(limit: Option<usize>, state: State<'_, AppState>) -> Vec
 
 /// Wipe the telemetry buffer. Does not affect the audit log.
 #[tauri::command]
-pub fn telemetry_clear(state: State<'_, AppState>) {
+pub fn telemetry_clear(state: State<'_, std::sync::Arc<AppState>>) {
     state.clear_telemetry();
 }
 
@@ -913,7 +913,7 @@ pub fn telemetry_clear(state: State<'_, AppState>) {
 /// Snapshot of the current local-only media permission posture.
 /// Returned to the Settings UI so it can render tri-state controls.
 #[tauri::command]
-pub fn get_media_permissions(state: State<'_, AppState>) -> MediaPermissions {
+pub fn get_media_permissions(state: State<'_, std::sync::Arc<AppState>>) -> MediaPermissions {
     state.media_permissions()
 }
 
@@ -942,7 +942,7 @@ pub struct VisionStatus {
 }
 
 #[tauri::command]
-pub fn vision_status(state: State<'_, AppState>) -> VisionStatus {
+pub fn vision_status(state: State<'_, std::sync::Arc<AppState>>) -> VisionStatus {
     let label = state.vision_provider_label();
     let active_id = state.vision_active_id();
     let active_model = state.vision_active_model();
@@ -961,7 +961,7 @@ pub fn vision_status(state: State<'_, AppState>) -> VisionStatus {
 /// only want the inventory.
 #[tauri::command]
 pub fn list_vision_providers(
-    state: State<'_, AppState>,
+    state: State<'_, std::sync::Arc<AppState>>,
 ) -> Vec<crate::vision_registry::VisionProviderInfo> {
     state.vision_provider_list()
 }
@@ -987,7 +987,7 @@ pub struct VisionModelList {
 }
 
 #[tauri::command]
-pub fn list_vision_models(state: State<'_, AppState>) -> VisionModelList {
+pub fn list_vision_models(state: State<'_, std::sync::Arc<AppState>>) -> VisionModelList {
     match state.vision_model_list_cached() {
         Ok((id, models)) if models.is_empty() => VisionModelList {
             provider_id: Some(id),
@@ -1017,7 +1017,7 @@ pub fn list_vision_models(state: State<'_, AppState>) -> VisionModelList {
 /// the VisionBadge so the user can pick up a newly-pulled model
 /// without waiting for the TTL to expire.
 #[tauri::command]
-pub fn refresh_vision_models(state: State<'_, AppState>) -> VisionModelList {
+pub fn refresh_vision_models(state: State<'_, std::sync::Arc<AppState>>) -> VisionModelList {
     match state.vision_model_list_refresh() {
         Ok((id, models)) if models.is_empty() => VisionModelList {
             provider_id: Some(id),
@@ -1049,7 +1049,7 @@ pub fn refresh_vision_models(state: State<'_, AppState>) -> VisionModelList {
 #[tauri::command]
 pub fn set_active_vision_provider(
     id: Option<String>,
-    state: State<'_, AppState>,
+    state: State<'_, std::sync::Arc<AppState>>,
 ) -> Result<VisionStatus, String> {
     let normalized = match id.as_deref() {
         None | Some("") | Some("none") => None,
@@ -1071,7 +1071,7 @@ pub fn set_active_vision_provider(
 #[tauri::command]
 pub fn set_active_vision_model(
     id: String,
-    state: State<'_, AppState>,
+    state: State<'_, std::sync::Arc<AppState>>,
 ) -> Result<VisionStatus, String> {
     let trimmed = id.trim();
     if trimmed.is_empty() {
@@ -1115,7 +1115,7 @@ pub fn set_active_vision_model(
 pub fn set_media_permission(
     kind: String,
     state_value: String,
-    state: State<'_, AppState>,
+    state: State<'_, std::sync::Arc<AppState>>,
 ) -> Result<MediaPermissions, String> {
     let parsed_kind =
         MediaKind::from_wire(&kind).ok_or_else(|| format!("unknown media kind: {kind}"))?;
@@ -1134,7 +1134,7 @@ pub fn set_media_permission(
 /// camera/screen consent and the mic consent stay independently
 /// auditable.
 #[tauri::command]
-pub fn get_mic_permission(state: State<'_, AppState>) -> MicPermission {
+pub fn get_mic_permission(state: State<'_, std::sync::Arc<AppState>>) -> MicPermission {
     state.mic_permission()
 }
 
@@ -1146,7 +1146,7 @@ pub fn get_mic_permission(state: State<'_, AppState>) -> MicPermission {
 #[tauri::command]
 pub fn set_mic_permission(
     state_value: String,
-    state: State<'_, AppState>,
+    state: State<'_, std::sync::Arc<AppState>>,
 ) -> Result<MicPermission, String> {
     let parsed_state = PermissionState::from_wire(&state_value)
         .ok_or_else(|| format!("unknown permission state: {state_value}"))?;
@@ -1242,7 +1242,7 @@ fn validate_frame_data_url(url: &str) -> Result<&str, String> {
 /// `provider`, `model`, `tier`, `latency_ms`, and the token fields
 /// are intentionally `None` — no provider was consulted. Only the
 /// persona id and timestamp carry signal.
-fn record_frame_early_exit_telemetry(state: &State<'_, AppState>, kind: &str) {
+fn record_frame_early_exit_telemetry(state: &State<'_, std::sync::Arc<AppState>>, kind: &str) {
     let ts_ms = state.next_ts();
     let persona_id = {
         let a = state.active.read().expect("active read lock");
@@ -1290,7 +1290,7 @@ fn record_frame_early_exit_telemetry(state: &State<'_, AppState>, kind: &str) {
 pub fn analyze_frame(
     request: AnalyzeFrameRequest,
     app: AppHandle,
-    state: State<'_, AppState>,
+    state: State<'_, std::sync::Arc<AppState>>,
 ) -> Result<FrameAnalysisOutcome, String> {
     let kind = MediaKind::from_wire(&request.kind)
         .ok_or_else(|| format!("unknown media kind: {}", request.kind))?;
@@ -1582,7 +1582,7 @@ pub fn analyze_frame(
 /// future adapters) yield `Some` with the provider's id substring
 /// stripped — but today both built-in adapters report the model.
 fn maybe_apply_vision(
-    state: &State<'_, AppState>,
+    state: &State<'_, std::sync::Arc<AppState>>,
     result: &mut TurnResult,
     frame_data_url: &str,
     cue: &str,
@@ -1753,7 +1753,7 @@ fn validate_utterance_data_url(url: &str) -> Result<&str, String> {
 /// are intentionally `None` — no provider was consulted. Only persona
 /// id + timestamp carry signal, same restraint vision uses for its
 /// three early-exit kinds.
-fn record_utterance_early_exit_telemetry(state: &State<'_, AppState>, kind: &str) {
+fn record_utterance_early_exit_telemetry(state: &State<'_, std::sync::Arc<AppState>>, kind: &str) {
     let ts_ms = state.next_ts();
     let persona_id = {
         let a = state.active.read().expect("active read lock");
@@ -1849,7 +1849,7 @@ fn maybe_apply_voice(
 pub fn transcribe_utterance(
     request: TranscribeUtteranceRequest,
     app: AppHandle,
-    state: State<'_, AppState>,
+    state: State<'_, std::sync::Arc<AppState>>,
 ) -> Result<UtteranceOutcome, String> {
     let gate = state.evaluate_mic_permission();
 
@@ -2132,7 +2132,7 @@ pub fn transcribe_utterance(
 /// shape is an opaque re-export of `PresenceConfig`; the TS side
 /// mirrors the same fields.
 #[tauri::command]
-pub fn get_presence_config(state: State<'_, AppState>) -> crate::presence_config::PresenceConfig {
+pub fn get_presence_config(state: State<'_, std::sync::Arc<AppState>>) -> crate::presence_config::PresenceConfig {
     state.presence_config()
 }
 
@@ -2178,7 +2178,7 @@ pub struct PresenceStatusPayload {
 /// axis (what Aether is doing at turn granularity). See
 /// `docs/PRESENCE-V1-ARCHITECTURE.md` §2 for the three-axis model.
 #[tauri::command]
-pub fn presence_status(state: State<'_, AppState>) -> PresenceStatusPayload {
+pub fn presence_status(state: State<'_, std::sync::Arc<AppState>>) -> PresenceStatusPayload {
     let snap = state.attention_snapshot();
     let thresholds = state.attention.thresholds();
     PresenceStatusPayload {
@@ -2198,7 +2198,7 @@ pub fn presence_status(state: State<'_, AppState>) -> PresenceStatusPayload {
 /// are emitted — presence is observational.
 #[tauri::command]
 pub fn presence_recent_history(
-    state: State<'_, AppState>,
+    state: State<'_, std::sync::Arc<AppState>>,
     limit: Option<usize>,
 ) -> Vec<PresenceHistoryEntry> {
     let lim = limit.unwrap_or(50);
@@ -2213,7 +2213,7 @@ pub fn presence_recent_history(
 /// `docs/MEMORY-V2-ARCHITECTURE.md` §3 — retention per domain,
 /// default risk per domain, embeddings opt-in block.
 #[tauri::command]
-pub fn get_memory_config(state: State<'_, AppState>) -> crate::memory_config::MemoryConfig {
+pub fn get_memory_config(state: State<'_, std::sync::Arc<AppState>>) -> crate::memory_config::MemoryConfig {
     state.memory_config()
 }
 
@@ -2224,7 +2224,7 @@ pub fn get_memory_config(state: State<'_, AppState>) -> crate::memory_config::Me
 #[tauri::command]
 pub fn set_memory_config(
     config: crate::memory_config::MemoryConfig,
-    state: State<'_, AppState>,
+    state: State<'_, std::sync::Arc<AppState>>,
 ) -> Result<crate::memory_config::MemoryConfig, String> {
     state.set_memory_config(config)
 }
@@ -2239,7 +2239,7 @@ pub fn set_memory_config(
 /// tier, and surface "your hardware suggests X" hint when selected
 /// and detected diverge.
 #[tauri::command]
-pub fn get_tier(state: State<'_, AppState>) -> crate::tier::TierConfig {
+pub fn get_tier(state: State<'_, std::sync::Arc<AppState>>) -> crate::tier::TierConfig {
     state.tier_config()
 }
 
@@ -2252,7 +2252,7 @@ pub fn get_tier(state: State<'_, AppState>) -> crate::tier::TierConfig {
 #[tauri::command]
 pub fn set_tier(
     tier: crate::tier::Tier,
-    state: State<'_, AppState>,
+    state: State<'_, std::sync::Arc<AppState>>,
     app: AppHandle,
 ) -> Result<crate::tier::TierConfig, String> {
     let cfg = state.set_tier(tier)?;
@@ -2272,7 +2272,7 @@ pub fn set_tier(
 /// stays.
 #[tauri::command]
 pub fn redetect_hardware(
-    state: State<'_, AppState>,
+    state: State<'_, std::sync::Arc<AppState>>,
     app: AppHandle,
 ) -> Result<crate::tier::TierConfig, String> {
     let cfg = state.redetect_hardware()?;
@@ -2297,7 +2297,7 @@ pub fn redetect_hardware(
 /// side only.
 #[tauri::command]
 pub fn embeddings_readiness(
-    state: State<'_, AppState>,
+    state: State<'_, std::sync::Arc<AppState>>,
 ) -> crate::retrieval::ReadinessState {
     state.retrieval_readiness()
 }
@@ -2312,7 +2312,7 @@ pub fn embeddings_readiness(
 /// `crate::state::BackfillProgress`.
 #[tauri::command]
 pub fn backfill_status(
-    state: State<'_, AppState>,
+    state: State<'_, std::sync::Arc<AppState>>,
 ) -> crate::state::BackfillProgress {
     state
         .backfill_progress
@@ -2325,8 +2325,8 @@ pub fn backfill_status(
 /// domains. Drives the "Backfill ~N items" copy. ADR-0007 D5
 /// approximate semantics — see `backfill::estimate_unembedded_count`.
 #[tauri::command]
-pub fn backfill_count(state: State<'_, AppState>) -> usize {
-    crate::backfill::estimate_unembedded_count(&state)
+pub fn backfill_count(state: State<'_, std::sync::Arc<AppState>>) -> usize {
+    crate::backfill::estimate_unembedded_count(state.inner().as_ref())
 }
 
 /// Run a backfill job synchronously. Returns the final
@@ -2343,7 +2343,7 @@ pub fn backfill_count(state: State<'_, AppState>) -> usize {
 /// every row boundary.
 #[tauri::command]
 pub fn start_backfill(
-    state: State<'_, AppState>,
+    state: State<'_, std::sync::Arc<AppState>>,
     app: AppHandle,
 ) -> Result<crate::state::BackfillProgress, String> {
     if state
@@ -2374,7 +2374,7 @@ pub fn start_backfill(
 /// call is allowed to finish so we never strand a partial vector
 /// in the embedding store.
 #[tauri::command]
-pub fn cancel_backfill(state: State<'_, AppState>) -> bool {
+pub fn cancel_backfill(state: State<'_, std::sync::Arc<AppState>>) -> bool {
     if state
         .backfill_in_progress
         .load(std::sync::atomic::Ordering::SeqCst)
@@ -2467,7 +2467,7 @@ fn parse_memory_id(memory_id: &str) -> Option<(String, u64)> {
 pub fn memory_list(
     domain: crate::memory_config::MemoryDomain,
     session_id: Option<String>,
-    state: State<'_, AppState>,
+    state: State<'_, std::sync::Arc<AppState>>,
 ) -> Result<MemoryListPayload, String> {
     use crate::memory_config::MemoryDomain;
     let risk = state.memory_config().risk_for(domain);
@@ -2579,7 +2579,7 @@ impl From<crate::memory_service::MemoryEditOutcome> for MemoryEditOutcomeWire {
 pub fn memory_forget(
     domain: crate::memory_config::MemoryDomain,
     session_id: Option<String>,
-    state: State<'_, AppState>,
+    state: State<'_, std::sync::Arc<AppState>>,
 ) -> Result<MemoryForgetOutcomeWire, String> {
     let session = session_id.unwrap_or_else(|| SESSION_ID.to_string());
     state
@@ -2592,7 +2592,7 @@ pub fn memory_forget(
 pub fn memory_forget_item(
     domain: crate::memory_config::MemoryDomain,
     memory_id: String,
-    state: State<'_, AppState>,
+    state: State<'_, std::sync::Arc<AppState>>,
 ) -> Result<MemoryForgetOutcomeWire, String> {
     let (session_id, sequence) =
         parse_memory_id(&memory_id).ok_or_else(|| format!("invalid memory_id: {memory_id}"))?;
@@ -2606,7 +2606,7 @@ pub fn memory_forget_item(
 pub fn memory_forget_item_after_approval(
     domain: crate::memory_config::MemoryDomain,
     memory_id: String,
-    state: State<'_, AppState>,
+    state: State<'_, std::sync::Arc<AppState>>,
 ) -> Result<MemoryForgetOutcomeWire, String> {
     let (session_id, sequence) =
         parse_memory_id(&memory_id).ok_or_else(|| format!("invalid memory_id: {memory_id}"))?;
@@ -2621,7 +2621,7 @@ pub fn memory_edit(
     domain: crate::memory_config::MemoryDomain,
     memory_id: String,
     new_content: String,
-    state: State<'_, AppState>,
+    state: State<'_, std::sync::Arc<AppState>>,
 ) -> Result<MemoryEditOutcomeWire, String> {
     let (session_id, sequence) =
         parse_memory_id(&memory_id).ok_or_else(|| format!("invalid memory_id: {memory_id}"))?;
@@ -2636,7 +2636,7 @@ pub fn memory_edit_after_approval(
     domain: crate::memory_config::MemoryDomain,
     memory_id: String,
     new_content: String,
-    state: State<'_, AppState>,
+    state: State<'_, std::sync::Arc<AppState>>,
 ) -> Result<MemoryEditOutcomeWire, String> {
     let (session_id, sequence) =
         parse_memory_id(&memory_id).ok_or_else(|| format!("invalid memory_id: {memory_id}"))?;
@@ -2653,7 +2653,7 @@ pub fn memory_edit_after_approval(
 #[tauri::command]
 pub fn set_presence_config(
     config: crate::presence_config::PresenceConfig,
-    state: State<'_, AppState>,
+    state: State<'_, std::sync::Arc<AppState>>,
 ) -> Result<crate::presence_config::PresenceConfig, String> {
     state.set_presence_config(config)
 }
@@ -2690,7 +2690,7 @@ pub struct VoiceStatus {
 }
 
 #[tauri::command]
-pub fn voice_status(state: State<'_, AppState>) -> VoiceStatus {
+pub fn voice_status(state: State<'_, std::sync::Arc<AppState>>) -> VoiceStatus {
     let label = state.speech_provider_label();
     let active_id = state.speech_active_id();
     let active_model = state.speech_active_model();
@@ -2709,7 +2709,7 @@ pub fn voice_status(state: State<'_, AppState>) -> VoiceStatus {
 /// that only want the inventory.
 #[tauri::command]
 pub fn list_speech_providers(
-    state: State<'_, AppState>,
+    state: State<'_, std::sync::Arc<AppState>>,
 ) -> Vec<crate::voice_registry::SpeechProviderInfo> {
     state.speech_provider_list()
 }
@@ -2734,7 +2734,7 @@ pub struct SpeechModelList {
     pub error: Option<String>,
 }
 
-fn collect_speech_models(state: &State<'_, AppState>) -> SpeechModelList {
+fn collect_speech_models(state: &State<'_, std::sync::Arc<AppState>>) -> SpeechModelList {
     let Some(provider) = state.speech_provider() else {
         return SpeechModelList {
             provider_id: None,
@@ -2763,7 +2763,7 @@ fn collect_speech_models(state: &State<'_, AppState>) -> SpeechModelList {
 }
 
 #[tauri::command]
-pub fn list_speech_models(state: State<'_, AppState>) -> SpeechModelList {
+pub fn list_speech_models(state: State<'_, std::sync::Arc<AppState>>) -> SpeechModelList {
     collect_speech_models(&state)
 }
 
@@ -2773,7 +2773,7 @@ pub fn list_speech_models(state: State<'_, AppState>) -> SpeechModelList {
 /// to `list_speech_models` but named so the UI can wire a `↻`
 /// affordance the same way VisionBadge does.
 #[tauri::command]
-pub fn refresh_speech_models(state: State<'_, AppState>) -> SpeechModelList {
+pub fn refresh_speech_models(state: State<'_, std::sync::Arc<AppState>>) -> SpeechModelList {
     collect_speech_models(&state)
 }
 
@@ -2785,7 +2785,7 @@ pub fn refresh_speech_models(state: State<'_, AppState>) -> SpeechModelList {
 #[tauri::command]
 pub fn set_active_speech_provider(
     id: Option<String>,
-    state: State<'_, AppState>,
+    state: State<'_, std::sync::Arc<AppState>>,
 ) -> Result<VoiceStatus, String> {
     let normalized = match id.as_deref() {
         None | Some("") | Some("none") => None,
@@ -2802,7 +2802,7 @@ pub fn set_active_speech_provider(
 #[tauri::command]
 pub fn set_active_speech_model(
     id: String,
-    state: State<'_, AppState>,
+    state: State<'_, std::sync::Arc<AppState>>,
 ) -> Result<VoiceStatus, String> {
     let trimmed = id.trim();
     if trimmed.is_empty() {
@@ -3220,7 +3220,7 @@ mod tests {
         // proves the early-exit plumbing is wired.
         let ts_before = state.telemetry_recent(10).len();
         // Use the helper via a test shim: record_utterance_early_exit
-        // takes `State<'_, AppState>` which we can't construct in
+        // takes `State<'_, std::sync::Arc<AppState>>` which we can't construct in
         // unit tests, so we mirror the call shape with the state
         // method directly.
         let ts_ms = state.next_ts();

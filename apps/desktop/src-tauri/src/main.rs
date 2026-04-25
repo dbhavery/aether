@@ -21,6 +21,7 @@ mod vision_registry;
 mod voice_registry;
 
 use state::AppState;
+use std::sync::Arc;
 use std::time::Duration;
 use tauri::Manager;
 
@@ -54,7 +55,13 @@ fn main() {
             // beside the window-state plugin's data under the OS-native app
             // data dir (e.g. %APPDATA%/Aether on Windows).
             let app_state = build_app_state(app.handle())?;
-            app.manage(app_state);
+            // ADR-0007 D5 (Phase 4D) — wrap in `Arc` so the async backfill
+            // worker can hold its own clone independent of the IPC
+            // thread's `State<...>` borrow. Tauri's `manage<T>` stores
+            // the value in a `Pin<Box<T>>` whose reference cannot escape
+            // the calling command's lifetime; an `Arc` lets background
+            // tasks keep state alive past command return.
+            app.manage(Arc::new(app_state));
             // Memory V2 step 5: run the retention sweep once at boot,
             // before the first command is served. Evicting expired
             // rows up front means the first `memory_recent` the UI
@@ -62,7 +69,7 @@ fn main() {
             // `memory.json` policy said should already be gone.
             // Failures trace and are ignored — a sweep that can't run
             // must not take the shell offline.
-            if let Some(state) = app.try_state::<AppState>() {
+            if let Some(state) = app.try_state::<Arc<AppState>>() {
                 let now_ms = state.next_ts();
                 match state.run_retention_sweep(now_ms) {
                     Ok(n) => tracing::info!("retention sweep (boot): evicted {n} row(s)"),
@@ -415,7 +422,7 @@ async fn run_presence_loop(app: tauri::AppHandle) {
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
         interval.tick().await;
-        let Some(state) = app.try_state::<AppState>() else {
+        let Some(state) = app.try_state::<Arc<AppState>>() else {
             // Still booting; sleep for a tick and retry.
             continue;
         };
@@ -439,7 +446,7 @@ async fn run_retention_sweep_loop(app: tauri::AppHandle) {
     interval.tick().await;
     loop {
         interval.tick().await;
-        let Some(state) = app.try_state::<AppState>() else {
+        let Some(state) = app.try_state::<Arc<AppState>>() else {
             continue;
         };
         let now_ms = state.next_ts();
