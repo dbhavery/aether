@@ -14,6 +14,7 @@ mod presence_config;
 mod provider;
 mod retrieval;
 mod state;
+mod tier;
 mod vision_cache;
 mod vision_registry;
 mod voice_registry;
