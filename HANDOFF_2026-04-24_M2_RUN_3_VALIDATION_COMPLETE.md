@@ -110,7 +110,7 @@ Six commits. All to `dev`. Pushed.
 | `cargo test --all-features` (shell) | **265 / 265** | unchanged |
 | `cargo test --workspace` | all green | unchanged |
 | `tsc --noEmit` (apps/desktop) | clean | unchanged (2 new components added; both typecheck) |
-| `vitest run` | **188 / 188** | unchanged (new components have no behavioral tests yet — Don's call) |
+| `vitest run` | **198 / 198** | +10 (6 RetrievalTab + 4 ReadinessIndicator smoke tests landed in commit 7) |
 | `python tools/lint-memory-doc/check.py` | not re-run yet (no new anchored docs landed yet — ADR-0008 is Proposed, not Accepted, so no anchor required) | n/a |
 | Real-hardware validation captured | ✅ first time this milestone | new |
 
