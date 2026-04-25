@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod adapter;
+mod backfill;
 mod commands;
 mod hardware;
 mod idle_probe;
@@ -115,6 +116,10 @@ fn main() {
             commands::set_tier,
             commands::redetect_hardware,
             commands::embeddings_readiness,
+            commands::backfill_status,
+            commands::backfill_count,
+            commands::start_backfill,
+            commands::cancel_backfill,
             commands::memory_list,
             commands::memory_forget,
             commands::memory_forget_item,

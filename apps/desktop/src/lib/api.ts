@@ -415,3 +415,68 @@ export async function redetectHardware(): Promise<TierConfig> {
 export async function embeddingsReadiness(): Promise<ReadinessState> {
   return invoke<ReadinessState>("embeddings_readiness");
 }
+
+// --- ADR-0007 D5 backfill ---------------------------------------------
+
+/** Snapshot of current backfill progress. Mirrors Rust
+ * `state::BackfillProgress`. UI polls during a job and reads
+ * `finished` to flip the button back from Cancel to Backfill. */
+export interface BackfillProgress {
+  finished: boolean;
+  cancelled: boolean;
+  total: number;
+  completed: number;
+  failures: number;
+  current_domain: string | null;
+  started_at_ms: number;
+}
+
+/** Snapshot of current backfill progress. Cheap call (lock-free read);
+ * UI may poll every 250ms while a job runs. */
+export async function backfillStatus(): Promise<BackfillProgress> {
+  return invoke<BackfillProgress>("backfill_status");
+}
+
+/** Approximate count of un-embedded rows across embed-eligible
+ * domains (Durable / Projects / Artifacts). Drives the "Backfill ~N
+ * items" copy. ADR-0007 D5 approximate semantics: total memory rows
+ * minus current `EmbeddingStore::count`. */
+export async function backfillCount(): Promise<number> {
+  return invoke<number>("backfill_count");
+}
+
+/** Run a backfill synchronously. Returns the final progress on success;
+ * throws when a job is already in progress. The current implementation
+ * blocks the IPC thread for the full duration — call from a UI handler
+ * that shows a spinner / progress strip while the promise pends. */
+export async function startBackfill(): Promise<BackfillProgress> {
+  return invoke<BackfillProgress>("start_backfill");
+}
+
+/** Request cancellation of any in-progress backfill. The worker
+ * observes the flag at the next row boundary; the in-flight embed call
+ * finishes gracefully. Returns `true` when a job was running and the
+ * flag was set, `false` when no backfill was in progress. */
+export async function cancelBackfill(): Promise<boolean> {
+  return invoke<boolean>("cancel_backfill");
+}
+
+/** Subscribe to `backfill:progress` events. Pairs with `startBackfill`
+ * for live progress strip updates without UI polling. */
+export async function onBackfillProgress(
+  cb: (payload: { job_id: string } & BackfillProgress) => void,
+): Promise<UnlistenFn> {
+  return listen<{ job_id: string } & BackfillProgress>("backfill:progress", (e) =>
+    cb(e.payload),
+  );
+}
+
+/** Subscribe to `backfill:done` events. Fires once per job at terminal
+ * state (success, cancel, or denial). */
+export async function onBackfillDone(
+  cb: (payload: { job_id: string } & BackfillProgress) => void,
+): Promise<UnlistenFn> {
+  return listen<{ job_id: string } & BackfillProgress>("backfill:done", (e) =>
+    cb(e.payload),
+  );
+}

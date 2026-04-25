@@ -216,6 +216,49 @@ pub struct AppState {
     /// the in-memory copy still works but changes do not survive
     /// restarts.
     tier_config_path: Option<PathBuf>,
+    /// ADR-0007 §Decision 5 backfill — true while a backfill job is
+    /// running; checked by `start_backfill` to reject concurrent
+    /// requests. The backfill task itself sets it false on completion
+    /// or cancellation. Atomic so the read in the start path is
+    /// lock-free.
+    pub backfill_in_progress: std::sync::atomic::AtomicBool,
+    /// ADR-0007 §Decision 5 backfill — set true by `cancel_backfill`
+    /// to ask the running task to stop at the next row boundary. The
+    /// task resets to false on observation. Atomic so the write from
+    /// the cancel command and the read from the worker task don't
+    /// need a mutex.
+    pub backfill_cancel: std::sync::atomic::AtomicBool,
+    /// ADR-0007 §Decision 5 backfill — last-known progress snapshot.
+    /// Updated by the worker task as it advances; read by
+    /// `backfill_status` for UI polling. Mutex (not RwLock) because
+    /// the writer is the sole hot path.
+    pub backfill_progress: Mutex<BackfillProgress>,
+}
+
+/// ADR-0007 §Decision 5 backfill progress snapshot. Returned by
+/// `backfill_status` and embedded in `backfill:progress` events.
+/// Stable wire shape — UI consumes it for the progress strip.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct BackfillProgress {
+    /// `true` once the worker task has finished (success or cancel).
+    /// Matched by the UI to flip the button back from "Cancel" to
+    /// "Backfill now".
+    pub finished: bool,
+    /// `true` only when the worker exited via cancel.
+    pub cancelled: bool,
+    /// Total rows the worker plans to embed (sum across embed-eligible
+    /// domains at job-start time). Stable for the duration of the job.
+    pub total: usize,
+    /// Rows successfully (re-)embedded so far.
+    pub completed: usize,
+    /// Rows that errored mid-embed and were skipped. Worker continues
+    /// past failures so a single bad row doesn't kill the job.
+    pub failures: usize,
+    /// Domain currently being walked, if any. `None` between domains
+    /// or when finished.
+    pub current_domain: Option<String>,
+    /// Wall-clock millis when the job started; 0 if no job has run.
+    pub started_at_ms: u64,
 }
 
 /// Error surface for the cached vision model-list helpers. Lets the
@@ -529,6 +572,9 @@ impl AppState {
             retrieval_readiness: RwLock::new(ReadinessState::Unknown),
             tier_config: RwLock::new(TierConfig::defaults()),
             tier_config_path: None,
+            backfill_in_progress: std::sync::atomic::AtomicBool::new(false),
+            backfill_cancel: std::sync::atomic::AtomicBool::new(false),
+            backfill_progress: Mutex::new(BackfillProgress::default()),
         })
     }
 

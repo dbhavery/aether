@@ -14,6 +14,12 @@ import type { ReadinessState, TierConfig } from "../lib/types";
 vi.mock("../lib/api", () => ({
   embeddingsReadiness: vi.fn(),
   getTier: vi.fn(),
+  backfillCount: vi.fn(),
+  backfillStatus: vi.fn(),
+  cancelBackfill: vi.fn(),
+  startBackfill: vi.fn(),
+  onBackfillProgress: vi.fn(),
+  onBackfillDone: vi.fn(),
 }));
 
 import * as api from "../lib/api";
@@ -21,6 +27,12 @@ import * as api from "../lib/api";
 const mockedApi = api as unknown as {
   embeddingsReadiness: ReturnType<typeof vi.fn>;
   getTier: ReturnType<typeof vi.fn>;
+  backfillCount: ReturnType<typeof vi.fn>;
+  backfillStatus: ReturnType<typeof vi.fn>;
+  cancelBackfill: ReturnType<typeof vi.fn>;
+  startBackfill: ReturnType<typeof vi.fn>;
+  onBackfillProgress: ReturnType<typeof vi.fn>;
+  onBackfillDone: ReturnType<typeof vi.fn>;
 };
 
 const TIER_FLAME: TierConfig = {
@@ -41,7 +53,25 @@ const TIER_FLAME: TierConfig = {
 beforeEach(() => {
   mockedApi.embeddingsReadiness.mockReset();
   mockedApi.getTier.mockReset();
+  mockedApi.backfillCount.mockReset();
+  mockedApi.backfillStatus.mockReset();
+  mockedApi.cancelBackfill.mockReset();
+  mockedApi.startBackfill.mockReset();
+  mockedApi.onBackfillProgress.mockReset();
+  mockedApi.onBackfillDone.mockReset();
   mockedApi.getTier.mockResolvedValue(TIER_FLAME);
+  mockedApi.backfillCount.mockResolvedValue(0);
+  mockedApi.backfillStatus.mockResolvedValue({
+    finished: true,
+    cancelled: false,
+    total: 0,
+    completed: 0,
+    failures: 0,
+    current_domain: null,
+    started_at_ms: 0,
+  });
+  mockedApi.onBackfillProgress.mockResolvedValue(() => {});
+  mockedApi.onBackfillDone.mockResolvedValue(() => {});
 });
 
 describe("RetrievalTab", () => {

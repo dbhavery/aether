@@ -2210,6 +2210,92 @@ pub fn embeddings_readiness(
 }
 
 // ------------------------------------------------------------------
+// ADR-0007 §Decision 5 — embeddings backfill command surface.
+// ------------------------------------------------------------------
+
+/// Snapshot of current backfill progress. Polled by the UI for the
+/// progress strip and to flip the button state between "Backfill now"
+/// and "Cancel". The full progress shape lives in
+/// `crate::state::BackfillProgress`.
+#[tauri::command]
+pub fn backfill_status(
+    state: State<'_, AppState>,
+) -> crate::state::BackfillProgress {
+    state
+        .backfill_progress
+        .lock()
+        .expect("backfill progress lock")
+        .clone()
+}
+
+/// Approximate count of un-embedded rows across embed-eligible
+/// domains. Drives the "Backfill ~N items" copy. ADR-0007 D5
+/// approximate semantics — see `backfill::estimate_unembedded_count`.
+#[tauri::command]
+pub fn backfill_count(state: State<'_, AppState>) -> usize {
+    crate::backfill::estimate_unembedded_count(&state)
+}
+
+/// Run a backfill job synchronously. Returns the final
+/// `BackfillProgress` snapshot on success or an error when a job is
+/// already in progress (only one job at a time per ADR-0007 D5).
+///
+/// Synchronous-execution caveat: this command blocks the IPC thread
+/// for the full duration of the backfill (~30-60 sec for typical
+/// personal-scale histories at bge-m3 throughput). Async spawn is a
+/// future refinement once Tauri-managed `Arc<AppState>` is wired —
+/// for v1 the simpler sync-block model trades responsiveness for
+/// correctness. Cancel via `cancel_backfill` from another command
+/// invocation works because the worker checks the atomic flag at
+/// every row boundary.
+#[tauri::command]
+pub fn start_backfill(
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<crate::state::BackfillProgress, String> {
+    if state
+        .backfill_in_progress
+        .load(std::sync::atomic::Ordering::SeqCst)
+    {
+        return Err("backfill already in progress".to_string());
+    }
+    state
+        .backfill_cancel
+        .store(false, std::sync::atomic::Ordering::SeqCst);
+    let job_id = format!("backfill-{}", state.next_ts());
+    crate::backfill::run_backfill_worker(
+        &state,
+        Some(&app),
+        job_id,
+        crate::backfill::BackfillOptions::default(),
+    );
+    Ok(state
+        .backfill_progress
+        .lock()
+        .expect("backfill progress lock")
+        .clone())
+}
+
+/// Request cancellation of any in-progress backfill. The worker
+/// observes the flag at the next row boundary; the in-flight embed
+/// call is allowed to finish so we never strand a partial vector
+/// in the embedding store.
+#[tauri::command]
+pub fn cancel_backfill(state: State<'_, AppState>) -> bool {
+    if state
+        .backfill_in_progress
+        .load(std::sync::atomic::Ordering::SeqCst)
+    {
+        state
+            .backfill_cancel
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        true
+    } else {
+        false
+    }
+}
+
+// ------------------------------------------------------------------
 // Memory V2 step 4 — Trust drawer Memory tab command surface.
 // ------------------------------------------------------------------
 //

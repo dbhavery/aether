@@ -1,5 +1,15 @@
 import { useEffect, useState } from "react";
-import { embeddingsReadiness, getTier } from "../lib/api";
+import {
+  backfillCount,
+  backfillStatus,
+  cancelBackfill,
+  embeddingsReadiness,
+  getTier,
+  onBackfillDone,
+  onBackfillProgress,
+  startBackfill,
+  type BackfillProgress,
+} from "../lib/api";
 import type { ReadinessState, NotReadyReason, TierConfig } from "../lib/types";
 
 /**
@@ -80,10 +90,14 @@ export function RetrievalTab({ refreshKey }: Props) {
   const [readiness, setReadiness] = useState<ReadinessState | null>(null);
   const [tier, setTier] = useState<TierConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [unembeddedCount, setUnembeddedCount] = useState<number | null>(null);
+  const [backfill, setBackfill] = useState<BackfillProgress | null>(null);
+  const [backfillRunning, setBackfillRunning] = useState(false);
 
   useEffect(() => {
     let mounted = true;
     let interval: ReturnType<typeof setInterval> | null = null;
+    const unsubs: Array<() => void> = [];
 
     async function refresh() {
       try {
@@ -91,6 +105,24 @@ export function RetrievalTab({ refreshKey }: Props) {
         if (mounted) setReadiness(r);
       } catch (e) {
         if (mounted) setError(`readiness probe error: ${String(e)}`);
+      }
+      try {
+        const n = await backfillCount();
+        if (mounted) setUnembeddedCount(n);
+      } catch {
+        // backfill_count is best-effort; quietly ignore
+      }
+      try {
+        const p = await backfillStatus();
+        if (mounted) {
+          setBackfill(p);
+          // Sync running flag with worker state — covers the case where
+          // a backfill is in progress when the tab first opens.
+          if (!p.finished && p.total > 0) setBackfillRunning(true);
+          if (p.finished) setBackfillRunning(false);
+        }
+      } catch {
+        // backfill_status is best-effort
       }
     }
 
@@ -103,14 +135,55 @@ export function RetrievalTab({ refreshKey }: Props) {
       }
       await refresh();
       interval = setInterval(refresh, POLL_INTERVAL_MS);
+
+      // Live event subscriptions for sub-second progress updates.
+      const offProgress = await onBackfillProgress((payload) => {
+        if (!mounted) return;
+        setBackfill(payload);
+      });
+      const offDone = await onBackfillDone((payload) => {
+        if (!mounted) return;
+        setBackfill(payload);
+        setBackfillRunning(false);
+      });
+      unsubs.push(offProgress, offDone);
     }
 
     void init();
     return () => {
       mounted = false;
       if (interval) clearInterval(interval);
+      unsubs.forEach((fn) => fn());
     };
   }, [refreshKey]);
+
+  async function handleBackfill() {
+    setError(null);
+    setBackfillRunning(true);
+    try {
+      const finalProgress = await startBackfill();
+      setBackfill(finalProgress);
+      setBackfillRunning(false);
+      // Refresh count so the "~N items" copy reflects post-backfill reality.
+      try {
+        const n = await backfillCount();
+        setUnembeddedCount(n);
+      } catch {
+        // best-effort
+      }
+    } catch (e) {
+      setError(`backfill error: ${String(e)}`);
+      setBackfillRunning(false);
+    }
+  }
+
+  async function handleCancel() {
+    try {
+      await cancelBackfill();
+    } catch (e) {
+      setError(`cancel error: ${String(e)}`);
+    }
+  }
 
   if (error) {
     return <div className="text-aether-err text-sm">{error}</div>;
@@ -142,6 +215,8 @@ export function RetrievalTab({ refreshKey }: Props) {
   }
 
   if (readiness.kind === "ready") {
+    const showBackfillOffer =
+      unembeddedCount !== null && unembeddedCount > 0 && !backfillRunning;
     return (
       <div className="space-y-2">
         <div className="text-aether-ok text-sm">Retrieval is active.</div>
@@ -149,8 +224,36 @@ export function RetrievalTab({ refreshKey }: Props) {
           Tier: <strong>{tier?.selected_tier ?? "unknown"}</strong>. Embedding
           model: <code>{model.name}</code>.
         </div>
-        {/* Backfill button: hook point for ADR-0007 D5 backend command.
-            Currently a no-op stub; hidden until the command surface ships. */}
+        {showBackfillOffer && (
+          <div className="space-y-1">
+            <div className="text-aether-muted text-sm">
+              {unembeddedCount} memor{unembeddedCount === 1 ? "y" : "ies"} not
+              indexed for retrieval.
+            </div>
+            <button
+              type="button"
+              onClick={handleBackfill}
+              className="rounded-md border border-aether-border bg-transparent px-2.5 py-1 text-[11.5px] text-aether-text hover:border-aether-text"
+              title={`Re-index ${unembeddedCount} memories using ${model.name}`}
+            >
+              Backfill now
+            </button>
+          </div>
+        )}
+        {backfillRunning && backfill && (
+          <BackfillProgressView
+            backfill={backfill}
+            onCancel={handleCancel}
+            modelName={model.name}
+          />
+        )}
+        {!backfillRunning && backfill && backfill.finished && backfill.completed > 0 && (
+          <div className="text-aether-muted text-xs">
+            Last backfill: {backfill.completed} indexed
+            {backfill.failures > 0 ? `, ${backfill.failures} failed` : ""}
+            {backfill.cancelled ? " (cancelled)" : ""}.
+          </div>
+        )}
       </div>
     );
   }
@@ -168,6 +271,49 @@ export function RetrievalTab({ refreshKey }: Props) {
         Tier: <strong>{tier?.selected_tier ?? "unknown"}</strong>. Target
         model: <code>{model.name}</code> (~{model.size_gb} GB).
       </div>
+    </div>
+  );
+}
+
+interface BackfillProgressViewProps {
+  backfill: BackfillProgress;
+  onCancel: () => void;
+  modelName: string;
+}
+
+function BackfillProgressView({
+  backfill,
+  onCancel,
+  modelName,
+}: BackfillProgressViewProps) {
+  const pct =
+    backfill.total > 0
+      ? Math.round((backfill.completed / backfill.total) * 100)
+      : 0;
+  return (
+    <div className="space-y-1">
+      <div className="text-aether-muted text-sm">
+        Indexing with <code>{modelName}</code>: {backfill.completed} of{" "}
+        {backfill.total}
+        {backfill.current_domain ? ` (${backfill.current_domain})` : ""}.
+      </div>
+      <div className="h-1 w-full overflow-hidden rounded bg-aether-bg/40">
+        <div
+          className="h-full bg-aether-ok transition-all"
+          style={{ width: `${pct}%` }}
+          role="progressbar"
+          aria-valuenow={pct}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        />
+      </div>
+      <button
+        type="button"
+        onClick={onCancel}
+        className="rounded-md border border-aether-border bg-transparent px-2.5 py-1 text-[11.5px] text-aether-muted hover:border-aether-text hover:text-aether-text"
+      >
+        Cancel
+      </button>
     </div>
   );
 }
