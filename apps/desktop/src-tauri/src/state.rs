@@ -1242,12 +1242,89 @@ impl AppState {
             memory_config::save(path, &snapshot)
                 .map_err(|e| format!("persist memory config: {e}"))?;
         }
+        // ADR-0007: hot-swap the actual embedding_provider Arc when
+        // the user changes embeddings.provider via Settings. Without
+        // this, the readiness probe correctly reports "ready for
+        // bge-m3" but real embed calls still use whatever model the
+        // boot-time env-loaded provider was configured with — silent
+        // drift between what UI says and what backend does.
+        //
+        // Today this handles the `ollama:` prefix (and bare names,
+        // treated as ollama). `hf:` and `stub:` prefixes are recognised
+        // but only swapped when feature support exists; unknown
+        // prefixes warn and leave the existing provider in place so a
+        // typo can't brick retrieval.
+        if let Some(provider_str) = snapshot.embeddings.provider.as_deref() {
+            self.swap_embedding_provider_for_config(provider_str);
+        }
         // ADR-0007 D3 — settings-change probe. Re-evaluate readiness
         // whenever the user touches the memory policy; flag flips,
         // provider swaps, and disk reservations all surface here.
         // Light-usage: same HTTP probe as boot, no model loads.
         let _ = self.probe_readiness_now();
         Ok(snapshot)
+    }
+
+    /// Hot-swap the embedding_provider Arc to honor a new
+    /// `memory.embeddings.provider` value. Called from set_memory_config.
+    ///
+    /// Provider-string parsing matches the readiness probe's
+    /// `parse_model_name` rules:
+    /// - `ollama:<model>` -> `OllamaEmbeddingProvider::new(base, model)`
+    /// - bare `<model>` (no prefix) -> assume ollama, same as above
+    /// - `hf:org:repo:tag` -> NOT YET SUPPORTED; logs warn, no swap
+    /// - `stub:<dim>` -> NOT swapped from runtime (test-only seam)
+    /// - unknown prefix -> logs warn, no swap
+    ///
+    /// Empty strings are no-ops (the writer rejects empty providers
+    /// when embeddings.enabled = true via set_memory_config's earlier
+    /// check, but bare `embeddings.enabled = false` may carry an
+    /// empty provider legitimately — silent here).
+    fn swap_embedding_provider_for_config(&self, provider_str: &str) {
+        let trimmed = provider_str.trim();
+        if trimmed.is_empty() {
+            return;
+        }
+        let (prefix, rest) = match trimmed.split_once(':') {
+            Some((p, r)) => (p, r),
+            None => ("ollama", trimmed),
+        };
+        match prefix {
+            "ollama" => {
+                let base = std::env::var("AETHER_EMBED_OLLAMA_BASE_URL")
+                    .unwrap_or_else(|_| {
+                        aether_l2_memory::DEFAULT_OLLAMA_BASE_URL.to_string()
+                    });
+                let new_provider: Arc<dyn EmbeddingProvider> =
+                    Arc::new(OllamaEmbeddingProvider::new(base, rest));
+                if let Ok(mut w) = self.embedding_provider.write() {
+                    *w = new_provider;
+                    tracing::info!("embedding provider swapped to ollama:{rest}");
+                } else {
+                    tracing::warn!("embedding provider lock poisoned; swap skipped");
+                }
+            }
+            "hf" => {
+                tracing::warn!(
+                    "hf: prefix embedding provider is not yet supported \
+                     (configured: {provider_str}); existing provider unchanged. \
+                     See ADR-0007 D7 §Tuning notes for the substitution context."
+                );
+            }
+            "stub" => {
+                // Stub providers are test-only; the runtime path doesn't
+                // swap to them. Production set_memory_config calls with
+                // stub: prefix only happen in tests that explicitly want
+                // to leave the test-injected stub in place.
+                tracing::debug!("stub: prefix provider — no swap (test seam)");
+            }
+            other => {
+                tracing::warn!(
+                    "unknown embedding provider prefix '{other}' \
+                     (configured: {provider_str}); existing provider unchanged"
+                );
+            }
+        }
     }
 
     /// Access the per-domain read counter for the Memory V2 sampled
@@ -2348,6 +2425,81 @@ humor: "playful"
         assert_eq!(
             state.presence_history_recent(usize::MAX).len(),
             PRESENCE_HISTORY_CAPACITY
+        );
+    }
+
+    #[test]
+    fn set_memory_config_swaps_embedding_provider_for_ollama_prefix() {
+        // ADR-0007 hot-swap: configuring a new ollama: provider via
+        // memory_config must replace the in-memory embedding_provider
+        // Arc, not just persist the string. Verifies the label of the
+        // active provider changes after the swap.
+        let state = AppState::new().expect("state");
+        let initial_label = state
+            .embedding_provider
+            .read()
+            .expect("provider read lock")
+            .label();
+        let mut cfg = state.memory_config();
+        cfg.embeddings.enabled = true;
+        cfg.embeddings.provider = Some("ollama:bge-m3-test-marker".into());
+        state.set_memory_config(cfg).expect("set_memory_config");
+        let new_label = state
+            .embedding_provider
+            .read()
+            .expect("provider read lock")
+            .label();
+        assert_ne!(
+            initial_label, new_label,
+            "provider label must change after ollama: swap"
+        );
+        assert!(
+            new_label.contains("bge-m3-test-marker"),
+            "new label should reflect the configured model name; got {new_label}"
+        );
+    }
+
+    #[test]
+    fn set_memory_config_swap_handles_bare_model_name_as_ollama() {
+        // No prefix → assumed ollama. The provider should still swap.
+        let state = AppState::new().expect("state");
+        let mut cfg = state.memory_config();
+        cfg.embeddings.enabled = true;
+        cfg.embeddings.provider = Some("snowflake-arctic-test".into());
+        state.set_memory_config(cfg).expect("set_memory_config");
+        let label = state
+            .embedding_provider
+            .read()
+            .expect("provider read lock")
+            .label();
+        assert!(
+            label.contains("snowflake-arctic-test"),
+            "bare name should swap to ollama:<name>; got {label}"
+        );
+    }
+
+    #[test]
+    fn set_memory_config_does_not_swap_for_hf_prefix() {
+        // hf: support is not yet wired; swap should be a no-op (warn
+        // logged separately). Provider label remains the default.
+        let state = AppState::new().expect("state");
+        let initial_label = state
+            .embedding_provider
+            .read()
+            .expect("provider read lock")
+            .label();
+        let mut cfg = state.memory_config();
+        cfg.embeddings.enabled = true;
+        cfg.embeddings.provider = Some("hf:BAAI:bge-small-en-v1.5".into());
+        state.set_memory_config(cfg).expect("set_memory_config");
+        let after_label = state
+            .embedding_provider
+            .read()
+            .expect("provider read lock")
+            .label();
+        assert_eq!(
+            initial_label, after_label,
+            "hf: provider must not swap (unsupported prefix); existing provider preserved"
         );
     }
 
