@@ -102,6 +102,36 @@ class Scenario:
         raw = self.raw.get("expectations")
         return raw if isinstance(raw, list) else []
 
+    @property
+    def requires_composition(self) -> bool:
+        """A scenario "requires composition" when its `setup` block
+        carries inputs that the live `--backend ollama` minimal mode
+        does NOT compose into the prompt: prior memory, presence
+        state, vision frames, voice audio. Running such scenarios
+        through the minimal backend produces false failures (the
+        model has no way to know it's Away, has no fridge image to
+        describe, etc.).
+
+        On-hardware validation 2026-04-24 confirmed: 4 of 6 scenarios
+        in the v1 suite failed under `--backend ollama` for exactly
+        this reason. They are now skipped with a clear note rather
+        than silently fail.
+
+        See `planning/validation_2026-04-24/VALIDATION_REPORT.md` §6
+        for the data and `DECISIONS_LOG.md` D-006 for the design
+        rationale.
+        """
+        setup = self.raw.get("setup")
+        if not isinstance(setup, dict):
+            return False
+        if isinstance(setup.get("memory"), list) and setup["memory"]:
+            return True
+        if isinstance(setup.get("presence"), dict) and setup["presence"]:
+            return True
+        if "frame" in setup or "audio" in setup:
+            return True
+        return False
+
 
 @dataclass
 class ScenarioResult:
@@ -265,6 +295,14 @@ def _resolve_actual(
         assert replay_dir is not None, "replay backend requires --replay-from"
         return _load_replay_capture(replay_dir, s.id)
     if backend == "ollama":
+        if s.requires_composition:
+            # Composition-dependent scenarios (memory / presence / vision /
+            # voice context) cannot be tested through the minimal --backend
+            # ollama path that only forwards the last user turn. Surface as
+            # skip with a clear note rather than producing a false-failure.
+            # On-hardware validation 2026-04-24 confirmed every such
+            # scenario in v1 failed for this reason.
+            return None, "requires composition (memory/presence/vision/voice setup) — skipped (ollama backend; needs Quality-Eval V2 composition support)"
         prompt = _last_user_prompt(s)
         if prompt is None:
             return None, "scenario has no user turn — skipped (ollama backend)"
