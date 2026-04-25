@@ -103,6 +103,14 @@ Provisional reservation so ADR-0008 inherits a stable envelope:
 
 These reservations are envelope placeholders, not implementation commitments; consuming ADRs must treat them as soft ceilings pending ADR-0008. The numbers themselves are provisional — ADR-0008 finalises them against the actual Rust avatar stack once that's scoped. Until then, consuming ADRs (ADR-0007 in particular) size their own budgets so they fit within `effective_budget - reserved`.
 
+#### Operational tunable: `OLLAMA_MAX_LOADED_MODELS` (added 2026-04-25)
+
+The numerical reservations above survive intact, but on-hardware validation surfaced a second axis of pressure that is not VRAM-shaped. **`OLLAMA_MAX_LOADED_MODELS` is a first-class tier-tunable for Forge.** Stock Ollama default is 3 concurrent models — once a 4th model loads, Ollama evicts the LRU regardless of how much VRAM is free. On a 24 GB Forge card running the Aether baseline trio (`gemma4:e4b` + `bge-m3` + `nomic-embed-text`, ~17 GB resident), the remaining ~7 GB of headroom is *stranded* under stock config: Ollama caps the slot count, not the byte budget.
+
+**Forge recommended value: `OLLAMA_MAX_LOADED_MODELS=4`** — preserves the baseline trio and reserves one warm slot for the future avatar (ADR-0008) without forcing eviction churn between the trio and the avatar runtime. Spark/Flame keep the stock default of 3 (their VRAM budgets bind first; the slot cap is non-binding on those tiers).
+
+Empirical evidence: Phase 3C 2026-04-25 — loading `qwen3:1.7b` as a 4th model (1.36 GB on disk) evicted `gemma4:e4b` at step 4 despite ~7.8 GB free VRAM at the eviction moment. Full timeline and headroom math in `planning/session_2026-04-25/MULTI_MODEL_CEILING_REPORT.md`. The avatar slot reservation cross-references ADR-0008, which finalises the avatar's VRAM and slot footprint against the actual Rust stack.
+
 ### 7. Storage. `tier.json` sibling to `memory.json`, same contract.
 
 - Serde additive, default-safe on read, unknown fields silently ignored, unknown fields dropped on rewrite.

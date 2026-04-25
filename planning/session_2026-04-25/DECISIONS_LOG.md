@@ -216,3 +216,7 @@ isolation, upsert-replace+delete, persistence roundtrip). desktop
 src-tauri 275 → 278 (+3: second-pass full-skip, mixed
 completed/skipped, cancel during skip walk). Frontend vitest
 217 → 218 (+1: post-run summary surfaces skip count).
+
+## D-007 — ADR-0006 §6 ratification: `OLLAMA_MAX_LOADED_MODELS` surfaced as Forge tier-tunable
+
+**Context + decision.** Following Phase 3C's empirical finding (D-006: stock Ollama caps coexistence at 3 models, stranding ~7 GB on the 24 GB Forge card), the proposed §6 delta from `MULTI_MODEL_CEILING_REPORT.md` was ratified into ADR-0006 as a §6 amendment (status remains Accepted). The amendment adds an "Operational tunable" subsection naming `OLLAMA_MAX_LOADED_MODELS` as a first-class tier-tunable, recommending `=4` on Forge (baseline trio + future avatar slot per ADR-0008) while leaving Spark/Flame on the stock default of 3 (VRAM binds first on those tiers). Numerical reservations (~4 GB Flame, ~8 GB Forge) were left intact; only the operational framing shifted. §1–5 and §7+ untouched. Atomic commit, pushed to `dev`.
