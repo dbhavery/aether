@@ -36,6 +36,7 @@ use aether_l5_policy::common::{MonotonicTimestamp, RequestId, TurnId};
 use aether_l5_policy::decision::Decision;
 use aether_l5_policy::policy_engine::ActionRequest;
 use aether_l5_policy::PersonaId;
+use serde::{Deserialize, Serialize};
 
 use crate::memory_config::MemoryDomain as ShellDomain;
 use crate::state::AppState;
@@ -43,6 +44,75 @@ use crate::state::AppState;
 /// Default hard deadline for the full embed + query + fetch pipeline.
 /// Per ADR-0005 §Decision 1.
 pub const DEFAULT_RETRIEVAL_DEADLINE: Duration = Duration::from_secs(5);
+
+/// ADR-0007 §Decision 3 readiness state machine. Updated by every
+/// invocation of `run_retrieval_context` (event-driven symmetric
+/// cadence — failure paths flip to `NotReady`, success path flips
+/// back to `Ready`), plus by boot probes and settings-change probes.
+///
+/// The shell exposes the current state via the `embeddings_readiness`
+/// Tauri command; the UI renders a Trust-drawer indicator + drawer-
+/// icon attention badge + transition toast per ADR-0007 §Decision 6.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ReadinessState {
+    /// Pre-probe; the shell has not yet attempted to determine
+    /// retrieval readiness. Distinct from `Disabled` (intentionally
+    /// off) and `Ready` (proven working). Boot wires the first probe
+    /// before any user-visible turn, so this state is normally only
+    /// observed during the first ~250ms of process lifetime.
+    Unknown,
+
+    /// `embeddings.enabled = false`. Retrieval is intentionally off;
+    /// no probes run, no warnings are surfaced. This is the ship
+    /// default per ADR-0002 §Decision 5 / ADR-0007 §Decision 1.
+    Disabled,
+
+    /// Last probe or `run_retrieval_context` invocation succeeded.
+    /// Retrieval is firing on real turns.
+    Ready,
+
+    /// Last probe or `run_retrieval_context` invocation failed.
+    /// `reason` carries the structured detail the UI uses to compose
+    /// the surfaced-warning copy.
+    NotReady { reason: NotReadyReason },
+}
+
+impl Default for ReadinessState {
+    fn default() -> Self {
+        Self::Unknown
+    }
+}
+
+/// Structured reason for `NotReady`. Stable wire form so the UI can
+/// branch on `kind` without parsing free text. Each variant carries
+/// the minimum context the UI needs to build the message ("model
+/// `bge-m3` not installed — run `ollama pull bge-m3` (~1.2 GB)").
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum NotReadyReason {
+    /// Provider HTTP probe failed (daemon not running, wrong port,
+    /// etc.). `detail` is a short diagnostic string — not stable wire
+    /// vocabulary.
+    ProviderUnreachable { detail: String },
+    /// Provider reachable but the configured embedding model is not
+    /// in the list returned by `/api/tags`. Most common first-time
+    /// failure.
+    ModelNotInstalled { model: String },
+    /// L5 policy gate returned non-Allow for `Capability::RetrievalContext`.
+    PolicyDenied,
+    /// Embedder produced an error mid-call (rare — usually catches
+    /// adversarial text or transient model state).
+    EmbedFailed { detail: String },
+    /// Wall-clock deadline exceeded (5s default per ADR-0005 D1).
+    /// Distinct from `EmbedFailed` so the UI can show the right
+    /// remediation copy ("provider is reachable but slow").
+    Bailout,
+    /// Disk space below the threshold required to safely pull the
+    /// configured model + working space (ADR-0007 §Decision 8).
+    /// Surfaced before any pull instruction or backfill affordance.
+    LowDisk { needed_gb: u32, available_gb: u32 },
+}
 
 /// One resolved retrieval row — content + score + provenance. What
 /// the prompt builder consumes. Scores are raw cosine similarity in
@@ -83,10 +153,14 @@ pub fn run_retrieval_context(
     deadline: Duration,
 ) -> Vec<RetrievalHit> {
     if max_items == 0 {
+        // Treat as Disabled — caller chose to suppress retrieval
+        // without flipping the master flag. Same observable state.
+        state.set_retrieval_readiness(ReadinessState::Disabled);
         return Vec::new();
     }
     let cfg = state.memory_config();
     if !cfg.embeddings.enabled {
+        state.set_retrieval_readiness(ReadinessState::Disabled);
         return Vec::new();
     }
 
@@ -116,12 +190,18 @@ pub fn run_retrieval_context(
             Ok(d) => d,
             Err(e) => {
                 tracing::warn!("retrieval policy evaluate: {e}");
+                state.set_retrieval_readiness(ReadinessState::NotReady {
+                    reason: NotReadyReason::PolicyDenied,
+                });
                 return Vec::new();
             }
         }
     };
     if !matches!(decision, Decision::Allow { .. }) {
         tracing::warn!("retrieval gate non-Allow; skipping");
+        state.set_retrieval_readiness(ReadinessState::NotReady {
+            reason: NotReadyReason::PolicyDenied,
+        });
         return Vec::new();
     }
 
@@ -138,6 +218,17 @@ pub fn run_retrieval_context(
             TimedResult::Ok(Ok(v)) => v,
             TimedResult::Ok(Err(e)) => {
                 tracing::warn!("retrieval embed failed: {e}");
+                // Distinguish "provider unreachable" (HTTP transport
+                // failure) from "embed call returned an error" (model
+                // present but produced an error). The error string is
+                // diagnostic only; the variant decides UI copy.
+                let detail = e.to_string();
+                let reason = if detail.contains("transport") || detail.contains("Connection") {
+                    NotReadyReason::ProviderUnreachable { detail }
+                } else {
+                    NotReadyReason::EmbedFailed { detail }
+                };
+                state.set_retrieval_readiness(ReadinessState::NotReady { reason });
                 return Vec::new();
             }
             TimedResult::Timeout => {
@@ -145,6 +236,9 @@ pub fn run_retrieval_context(
                     "retrieval embed phase exceeded {}s deadline",
                     deadline.as_secs()
                 );
+                state.set_retrieval_readiness(ReadinessState::NotReady {
+                    reason: NotReadyReason::Bailout,
+                });
                 return Vec::new();
             }
         }
@@ -158,6 +252,9 @@ pub fn run_retrieval_context(
                 "retrieval deadline exceeded before querying {}",
                 domain.label()
             );
+            state.set_retrieval_readiness(ReadinessState::NotReady {
+                reason: NotReadyReason::Bailout,
+            });
             return Vec::new();
         }
         match state
@@ -179,6 +276,9 @@ pub fn run_retrieval_context(
     for (domain, hit) in all_hits {
         if Instant::now() >= deadline_at {
             tracing::warn!("retrieval deadline exceeded during fetch phase");
+            state.set_retrieval_readiness(ReadinessState::NotReady {
+                reason: NotReadyReason::Bailout,
+            });
             return Vec::new();
         }
         let Some((sid, seq)) = parse_memory_id(&hit.memory_id) else {
@@ -213,6 +313,11 @@ pub fn run_retrieval_context(
         Some(ord) => ord,
     });
     resolved.truncate(max_items);
+    // Reaching the end of the function means every phase succeeded
+    // (embed, query, fetch, rank). State flips to Ready whether or
+    // not we found any hits — empty results are not a failure mode;
+    // they just mean nothing matched semantically.
+    state.set_retrieval_readiness(ReadinessState::Ready);
     resolved
 }
 
@@ -386,6 +491,95 @@ mod tests {
         assert_eq!(parse_memory_id(&MemoryId::new("mem-s1")), None);
         assert_eq!(parse_memory_id(&MemoryId::new("s1-42")), None);
         assert_eq!(parse_memory_id(&MemoryId::new("mem-s1-abc")), None);
+    }
+
+    #[test]
+    fn readiness_starts_unknown_and_flips_to_disabled_when_off() {
+        // ADR-0007 D3 invariant: pre-probe is Unknown; an invocation
+        // with embeddings off transitions to Disabled (not NotReady —
+        // off is intentional, not a failure).
+        let state = setup_state();
+        assert_eq!(state.retrieval_readiness(), ReadinessState::Unknown);
+        let _ = run_retrieval_context(&state, "s1", "x", 5, DEFAULT_RETRIEVAL_DEADLINE);
+        assert_eq!(state.retrieval_readiness(), ReadinessState::Disabled);
+    }
+
+    #[test]
+    fn readiness_max_items_zero_treated_as_disabled() {
+        let state = setup_state();
+        let _ = run_retrieval_context(&state, "s1", "x", 0, DEFAULT_RETRIEVAL_DEADLINE);
+        assert_eq!(state.retrieval_readiness(), ReadinessState::Disabled);
+    }
+
+    #[test]
+    fn readiness_flips_to_ready_after_successful_invocation() {
+        let state = setup_state();
+        swap_stub_embedder(&state, 16);
+        enable_embeddings(&state);
+        seed_durable(&state, "s1", 1, "the quick brown fox", 1_000);
+        let _ = run_retrieval_context(
+            &state,
+            "s1",
+            "the quick brown fox",
+            5,
+            DEFAULT_RETRIEVAL_DEADLINE,
+        );
+        assert_eq!(state.retrieval_readiness(), ReadinessState::Ready);
+    }
+
+    #[test]
+    fn readiness_flips_to_bailout_when_deadline_expires() {
+        let state = setup_state();
+        swap_stub_embedder(&state, 16);
+        enable_embeddings(&state);
+        seed_durable(&state, "s1", 1, "x", 1);
+        let _ = run_retrieval_context(&state, "s1", "x", 5, Duration::from_millis(0));
+        assert!(matches!(
+            state.retrieval_readiness(),
+            ReadinessState::NotReady {
+                reason: NotReadyReason::Bailout
+            }
+        ));
+    }
+
+    #[test]
+    fn readiness_recovers_from_not_ready_to_ready_on_next_success() {
+        // Symmetric event-driven cadence — failure → not_ready, then
+        // a successful invocation flips back to ready. Verifies the
+        // indicator self-heals once Ollama recovers, without a
+        // background poll.
+        let state = setup_state();
+        swap_stub_embedder(&state, 16);
+        enable_embeddings(&state);
+        seed_durable(&state, "s1", 1, "alpha", 1);
+        // First: zero-duration deadline -> Bailout.
+        let _ = run_retrieval_context(&state, "s1", "alpha", 5, Duration::from_millis(0));
+        assert!(matches!(
+            state.retrieval_readiness(),
+            ReadinessState::NotReady { .. }
+        ));
+        // Second: full deadline -> Ready.
+        let _ = run_retrieval_context(&state, "s1", "alpha", 5, DEFAULT_RETRIEVAL_DEADLINE);
+        assert_eq!(state.retrieval_readiness(), ReadinessState::Ready);
+    }
+
+    #[test]
+    fn readiness_state_serialises_to_stable_wire_form() {
+        // The Tauri command surface relies on this shape — UI uses
+        // `kind` to switch between rendering paths.
+        let s = serde_json::to_string(&ReadinessState::Disabled).unwrap();
+        assert_eq!(s, r#"{"kind":"disabled"}"#);
+        let s = serde_json::to_string(&ReadinessState::Ready).unwrap();
+        assert_eq!(s, r#"{"kind":"ready"}"#);
+        let s = serde_json::to_string(&ReadinessState::NotReady {
+            reason: NotReadyReason::ModelNotInstalled {
+                model: "bge-m3".into(),
+            },
+        })
+        .unwrap();
+        assert!(s.contains(r#""kind":"not_ready""#));
+        assert!(s.contains(r#""kind":"model_not_installed""#));
+        assert!(s.contains(r#""model":"bge-m3""#));
     }
 
     #[test]

@@ -46,6 +46,7 @@ use crate::memory_router::MemoryAwareRouter;
 use crate::mic_permissions::{self, MicPermission};
 use crate::presence_config::{self, PresenceConfig};
 use crate::provider::ProviderMode;
+use crate::retrieval::ReadinessState;
 
 /// The single active session id for v0. One conversation per app instance.
 pub const SESSION_ID: &str = "desktop-session";
@@ -199,6 +200,12 @@ pub struct AppState {
     /// The active selection is persisted via `voice_registry`'s
     /// attached file.
     voice: RwLock<VoiceRegistry>,
+    /// ADR-0007 §Decision 3 retrieval readiness state. Updated by every
+    /// invocation of `run_retrieval_context` (event-driven symmetric
+    /// cadence) plus boot probes and settings-change probes. Read by
+    /// the `embeddings_readiness` Tauri command for the Trust drawer
+    /// indicator + drawer-icon attention badge.
+    retrieval_readiness: RwLock<ReadinessState>,
 }
 
 /// Error surface for the cached vision model-list helpers. Lets the
@@ -509,6 +516,7 @@ impl AppState {
             vision: RwLock::new(VisionRegistry::empty()),
             vision_model_cache: ModelListCache::from_env(),
             voice: RwLock::new(VoiceRegistry::empty()),
+            retrieval_readiness: RwLock::new(ReadinessState::Unknown),
         })
     }
 
@@ -1004,6 +1012,29 @@ impl AppState {
             .read()
             .expect("memory cfg read lock")
             .clone()
+    }
+
+    /// Snapshot of the current ADR-0007 retrieval readiness state.
+    /// Read by the `embeddings_readiness` Tauri command and by tests.
+    pub fn retrieval_readiness(&self) -> ReadinessState {
+        self.retrieval_readiness
+            .read()
+            .expect("retrieval readiness read lock")
+            .clone()
+    }
+
+    /// Replace the retrieval readiness state. Called by
+    /// `run_retrieval_context` on every invocation outcome
+    /// (event-driven symmetric cadence per ADR-0007 §Decision 3) and
+    /// by the boot / settings-change probes (wired by future commit).
+    /// Returns the previous state so callers can detect transitions
+    /// and decide whether to emit a Trust-drawer toast.
+    pub fn set_retrieval_readiness(&self, next: ReadinessState) -> ReadinessState {
+        let mut w = self
+            .retrieval_readiness
+            .write()
+            .expect("retrieval readiness write lock");
+        std::mem::replace(&mut *w, next)
     }
 
     /// Replace the memory policy and persist atomically when a path
