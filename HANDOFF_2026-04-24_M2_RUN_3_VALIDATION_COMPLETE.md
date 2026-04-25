@@ -1,8 +1,27 @@
-# Handoff — 2026-04-24 M2 Run 3 Validation + Session B Scaffold (Autonomous Run)
+# Handoff — 2026-04-24 M2 Run 3 Validation + Session B Implementation (Autonomous Run)
 
-**Written:** 2026-04-24 end of autonomous validation window (Don granted ~12 hr full-autonomy run).
-**Branch:** `dev`. Commits to be pushed in the wrap commit batch following this handoff.
-**Working tree at handoff write time:** uncommitted validation artifacts + Session B scaffolds + ADR updates + ADR-0008 (Proposed).
+**Written:** 2026-04-24 end of autonomous run (Don granted ~12 hr initial window, then extended to 10 hours of further autonomy with full decision authority on remaining items).
+**Branch:** `dev`. Tip after wrap: `35ea921` (or later). All commits pushed.
+**Working tree at handoff write time:** clean.
+
+## Post-handoff extension — Don ratified all 5 action items mid-run, granted full decision authority
+
+After the initial validation report, Don granted further autonomy with full blocker-decision authority. The actions in §2 below moved from "awaiting Don" to "implemented and shipped" during the same run. Specifically:
+
+- **Action A (ADR-0008 ratification + impl)** — Don ratified in chat, implementation landed in commit `6038a28` (and ADR status flipped Proposed → Accepted in same commit).
+- **Action B (Spark default substitution to nomic-embed-text)** — Ratified, no code change required (already documented in ADR-0007 D7 §Tuning notes).
+- **Action C (Quality-Eval re-baselining)** — Don's authority decision: don't re-baseline per model; implement composition-aware skip so the eval honestly reports 2 pass / 4 skip rather than 2 pass / 4 false-fail. Landed in commit `8342068`.
+- **Action D (Session B visual landings)** — Authority delegated; locked decisions and shipped in commits `8300d92` (RetrievalTab as 4th tab + ReadinessIndicator on Trust button), `a4c51f2` (backfill backend + UI integration), `0a5dc69` (toast infrastructure).
+- **Action E (lib.rs refactor)** — Skipped per cost-benefit (decision logged in DECISIONS_LOG D-002).
+
+Two follow-on bugs surfaced during implementation and were also fixed:
+
+- Provider-display drift: RetrievalTab showed tier-default model even when user had explicitly configured `embeddings.provider`. Fixed in commit `90c5335`.
+- Provider hot-swap drift: `set_memory_config` persisted the new provider but didn't swap the runtime `embedding_provider` Arc. Fixed in commits `67e8c8e` (runtime path) + `35ea921` (boot path).
+
+ADR-0009 was proposed (`4719512`) for the carried-over Risk B (augmented-utterance audit reach) — explicitly marked Proposed because the implementation is cross-layer and requires its own focused session per CLAUDE.md doctrine.
+
+ADR-0006 D5 `tier_changed` event bus was implemented (`20caa1d`), retiring Session A handoff §4.F follow-up.
 
 This handoff supersedes `HANDOFF_2026-04-24_M2_RUN_3_SESSION_A_COMPLETE.md`'s "next session prompt" §6. Session A backend was the foundation; this run **validates the backend on real hardware, locks ADR-0007 D7 estimates against measured reality, surfaces a critical flaw in ADR-0006 §4.C as ADR-0008 (Proposed), and ships Session B scaffolds typecheck-clean** so visual decisions can land on Don's return without further backend work.
 
