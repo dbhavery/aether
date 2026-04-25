@@ -119,3 +119,115 @@ describe("TrustDrawer.initialTab", () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// ADR-0009 — version-aware AuditRow rendering.
+//
+// Locks the contract that:
+//   - v1 rows show a "pre-ADR-0009" badge and DO NOT render the
+//     user-utterance headline (because v1 had no field to render).
+//   - v2 rows render the user's text prominently, demote
+//     capability/scope to a secondary line, and surface the
+//     retrieval-block summary in a collapsed details/summary.
+//   - The "model_input_utterance" string itself is NOT rendered
+//     (Open Item #3, deferred per DECISIONS_LOG.md D-001).
+// ---------------------------------------------------------------------------
+
+import {
+  AUDIT_SCHEMA_VERSION_V1,
+  AUDIT_SCHEMA_VERSION_V2,
+  AuditRow,
+} from "./TrustDrawer";
+import type { TrustAuditRow } from "../lib/types";
+
+function v1Row(overrides: Partial<TrustAuditRow> = {}): TrustAuditRow {
+  return {
+    audit_id: "row-v1",
+    decision: "allow",
+    capability: "files.read",
+    scope: "/tmp/x",
+    change_id: "c-v1",
+    at_mono_ns: 1_000,
+    at_epoch_s: 1_700_000_000,
+    schema_version: AUDIT_SCHEMA_VERSION_V1,
+    ...overrides,
+  };
+}
+
+function v2Row(overrides: Partial<TrustAuditRow> = {}): TrustAuditRow {
+  return {
+    audit_id: "row-v2",
+    decision: "allow",
+    capability: "conversation",
+    scope: "session",
+    change_id: "c-v2",
+    at_mono_ns: 2_000,
+    at_epoch_s: 1_700_000_500,
+    schema_version: AUDIT_SCHEMA_VERSION_V2,
+    original_utterance: "what about sourdough?",
+    retrieval_provenance: {
+      block_present: true,
+      hits: [
+        { memory_id: "mem-12", domain: "durable", score: 0.81 },
+        { memory_id: "mem-44", domain: "facts", score: 0.72 },
+      ],
+    },
+    ...overrides,
+  };
+}
+
+describe("AuditRow — ADR-0009 version-aware rendering", () => {
+  it("v1 row shows the pre-ADR-0009 badge and no user-utterance headline", () => {
+    render(<AuditRow row={v1Row()} />);
+    expect(screen.getByTestId("schema-v1-badge")).toBeTruthy();
+    expect(screen.queryByTestId("audit-user-utterance")).toBeNull();
+    // capability text remains the primary line on v1.
+    expect(screen.getByText("files.read")).toBeTruthy();
+  });
+
+  it("v2 row hoists the user's text and hides the v1 badge", () => {
+    render(<AuditRow row={v2Row()} />);
+    const utter = screen.getByTestId("audit-user-utterance");
+    expect(utter.textContent).toContain("what about sourdough?");
+    expect(screen.queryByTestId("schema-v1-badge")).toBeNull();
+  });
+
+  it("v2 row exposes a model-saw disclosure summarizing retrieval hit count + domains", () => {
+    render(<AuditRow row={v2Row()} />);
+    const details = screen.getByTestId("audit-model-saw");
+    // Summary text is the visible top-line of <details>.
+    expect(details.textContent).toContain("2 memories");
+    expect(details.textContent).toContain("durable");
+    expect(details.textContent).toContain("facts");
+  });
+
+  it("v2 row with empty retrieval reports 'nothing matched' honestly", () => {
+    render(
+      <AuditRow
+        row={v2Row({
+          retrieval_provenance: { block_present: false, hits: [] },
+        })}
+      />,
+    );
+    const details = screen.getByTestId("audit-model-saw");
+    expect(details.textContent).toContain("nothing matched");
+  });
+
+  it("v2 row with no retrieval_provenance omits the model-saw disclosure entirely", () => {
+    render(
+      <AuditRow row={v2Row({ retrieval_provenance: undefined })} />,
+    );
+    expect(screen.queryByTestId("audit-model-saw")).toBeNull();
+  });
+
+  it("v2 row never renders the augmented model-input string itself", () => {
+    // ADR-0009 Open Item #3 (deferred). The rendered DOM must not
+    // contain the synthetic "Relevant context (retrieval):" prefix
+    // that the prompt builder uses, because the row only carries
+    // `original_utterance`, not `model_input_utterance`.
+    const { container } = render(<AuditRow row={v2Row()} />);
+    expect(container.textContent).not.toContain(
+      "Relevant context (retrieval):",
+    );
+  });
+});

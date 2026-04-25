@@ -547,9 +547,27 @@ pub fn clear_session(state: State<'_, AppState>, app: AppHandle) -> Result<(), S
     Ok(())
 }
 
-/// Audit row projected for the UI. Tiny subset of `AuditRecordEvent` —
-/// enough for a trust panel showing "what did Aether decide, when, and
-/// about what".
+/// One retrieval hit projected for the UI audit-row renderer. Mirrors
+/// `aether_l5_policy::RetrievedMemoryRef` 1:1 — kept as its own Serde
+/// type rather than re-exporting so the shell controls the wire shape
+/// the webview consumes.
+#[derive(Debug, Clone, Serialize)]
+pub struct TrustRetrievalHit {
+    pub memory_id: String,
+    pub domain: String,
+    pub score: f32,
+}
+
+/// Retrieval provenance projected for the UI. ADR-0009 §Decision 2.
+#[derive(Debug, Clone, Serialize)]
+pub struct TrustRetrievalProvenance {
+    pub block_present: bool,
+    pub hits: Vec<TrustRetrievalHit>,
+}
+
+/// Audit row projected for the UI. Subset of `AuditRecordEvent` —
+/// enough for a trust panel showing "what did Aether decide, when,
+/// about what, and (post-ADR-0009) what did the user say".
 #[derive(Debug, Clone, Serialize)]
 pub struct TrustAuditRow {
     pub audit_id: String,
@@ -559,6 +577,17 @@ pub struct TrustAuditRow {
     pub change_id: String,
     pub at_mono_ns: u64,
     pub at_epoch_s: i64,
+    /// ADR-0009 schema version. v1 rows omit user-phrasing fields;
+    /// v2 rows populate them when the capability is conversational.
+    pub schema_version: u32,
+    /// User's typed/spoken text. v1 rows leave this `None`; v2 rows
+    /// populate it for conversation capabilities, leave it `None` for
+    /// file ops, media frames, etc.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub original_utterance: Option<String>,
+    /// Retrieval block summary. `None` when retrieval did not run.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub retrieval_provenance: Option<TrustRetrievalProvenance>,
 }
 
 #[tauri::command]
@@ -582,6 +611,20 @@ pub fn audit_recent(
             change_id: r.change_id.0,
             at_mono_ns: r.timestamp_monotonic.0,
             at_epoch_s: r.timestamp_wall.epoch_s,
+            schema_version: r.schema_version,
+            original_utterance: r.original_utterance,
+            retrieval_provenance: r.retrieval_provenance.map(|p| TrustRetrievalProvenance {
+                block_present: p.block_present,
+                hits: p
+                    .hits
+                    .into_iter()
+                    .map(|h| TrustRetrievalHit {
+                        memory_id: h.memory_id,
+                        domain: h.domain,
+                        score: h.score,
+                    })
+                    .collect(),
+            }),
         })
         .collect())
 }

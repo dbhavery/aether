@@ -90,6 +90,19 @@ export type AuditDecisionLabel =
   | "draft_only_system"
   | "draft_only_user_choice";
 
+/** ADR-0009 §Decision 2: one ranked memory hit shown on the audit row. */
+export interface TrustRetrievalHit {
+  memory_id: string;
+  domain: string;
+  score: number;
+}
+
+/** ADR-0009 §Decision 2: retrieval-block summary shown on the audit row. */
+export interface TrustRetrievalProvenance {
+  block_present: boolean;
+  hits: TrustRetrievalHit[];
+}
+
 export interface TrustAuditRow {
   audit_id: string;
   decision: AuditDecisionLabel;
@@ -98,6 +111,19 @@ export interface TrustAuditRow {
   change_id: string;
   at_mono_ns: number;
   at_epoch_s: number;
+  /**
+   * ADR-0009 audit-row schema version. `1` for pre-2026-04-25 rows
+   * (no user-phrasing fields populated); `2` for post-ADR-0009.
+   * Backend stamps this on every projection; the renderer uses it
+   * to choose between the legacy "schema badge + capability only"
+   * view and the v2 "user-phrasing prominent, model-saw expandable"
+   * view.
+   */
+  schema_version: number;
+  /** ADR-0009 §Decision 1. v2 conversation rows only. */
+  original_utterance?: string;
+  /** ADR-0009 §Decision 2. v2 conversation rows where retrieval ran. */
+  retrieval_provenance?: TrustRetrievalProvenance;
 }
 
 export interface PersonaCatalogEntry {

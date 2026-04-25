@@ -73,11 +73,18 @@ ANCHORS: list[tuple[str, str, str | None, str]] = [
     ("string", "apps/desktop/src-tauri/src/commands.rs", "retrieval_provenance: Some(retrieval_provenance_for", "Shell: stamps provenance on conversation TurnRequest"),
 
     # ---- Frontend: version-aware AuditList rendering ----
-    # NOTE: TrustDrawer anchors land in the commit that ships the
-    # version-aware AuditList rendering. Keep the file anchor as a
-    # tripwire so a frontend renderer rewrite without an ADR-0009
-    # follow-up is at least visible.
     ("file",   "apps/desktop/src/components/TrustDrawer.tsx", None, "Frontend: TrustDrawer"),
+    ("symbol", "apps/desktop/src/components/TrustDrawer.tsx", "AUDIT_SCHEMA_VERSION_V1", "Frontend: v1 constant"),
+    ("symbol", "apps/desktop/src/components/TrustDrawer.tsx", "AUDIT_SCHEMA_VERSION_V2", "Frontend: v2 constant"),
+    ("symbol", "apps/desktop/src/components/TrustDrawer.tsx", "function AuditRow", "Frontend: AuditRow renderer"),
+    ("string", "apps/desktop/src/components/TrustDrawer.tsx", "schema_version", "Frontend: AuditList consumes schema_version"),
+    ("string", "apps/desktop/src/components/TrustDrawer.tsx", "original_utterance", "Frontend: AuditList renders original_utterance"),
+    ("string", "apps/desktop/src/components/TrustDrawer.tsx", "retrieval_provenance", "Frontend: AuditList renders provenance summary"),
+    ("string", "apps/desktop/src/components/TrustDrawer.tsx", "pre-ADR-0009", "Frontend: v1 schema badge copy"),
+
+    # ---- Frontend: TS types for the projected audit row ----
+    ("string", "apps/desktop/src/lib/types.ts", "TrustRetrievalProvenance", "Frontend: TS provenance shape"),
+    ("string", "apps/desktop/src/lib/types.ts", "TrustRetrievalHit", "Frontend: TS hit shape"),
 
     # ---- ADR doc itself ----
     ("file",   "docs/adr/ADR-0009-retrieval-augmented-utterance-audit-reach.md", None, "ADR-0009 doc"),

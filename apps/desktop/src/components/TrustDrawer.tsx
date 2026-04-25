@@ -301,6 +301,142 @@ function TabButton({
   );
 }
 
+/**
+ * ADR-0009 §Decision 6: schema version constants used by `AuditList`
+ * to branch between legacy and v2 rendering. Module-level so the
+ * vitest can pin them rather than inlining magic numbers in tests.
+ */
+export const AUDIT_SCHEMA_VERSION_V1 = 1;
+export const AUDIT_SCHEMA_VERSION_V2 = 2;
+
+/**
+ * One audit row.
+ *
+ * ## Layout, by schema_version
+ *
+ * **v1 (legacy, pre-2026-04-25)** — capability + scope as before, plus
+ * a small "pre-ADR-0009 schema" badge. v1 rows had no
+ * `original_utterance` field, so the user-phrasing surface stays
+ * absent rather than rendered as an empty quote.
+ *
+ * **v2 (ADR-0009)** — the user's typed text is the headline. The
+ * capability + scope drop to a secondary line. A details/summary
+ * disclosure surfaces "what Aether also saw" — currently just the
+ * retrieval-block summary (`N memories from {domains}`); the full
+ * model-input string is intentionally NOT rendered (Open Item #3,
+ * deferred to a future ADR per `DECISIONS_LOG.md` D-001).
+ *
+ * Patterns referenced: GitHub PR review timeline (single dominant
+ * line + collapsed metadata) and Linear's audit log (timestamp +
+ * actor minimal). Both keep dense logs scannable by giving every
+ * row exactly one strong signal.
+ */
+function AuditRow({ row }: { row: TrustAuditRow }) {
+  const meta = DECISION_META[row.decision];
+  const isV2 = row.schema_version >= AUDIT_SCHEMA_VERSION_V2;
+  const utterance = row.original_utterance?.trim();
+  const provenance = row.retrieval_provenance;
+  const showUserHeadline = isV2 && utterance && utterance.length > 0;
+
+  return (
+    <div
+      data-testid={`audit-row-${row.audit_id}`}
+      data-schema-version={row.schema_version}
+      className="rounded-md border border-aether-border bg-aether-bg/50 px-3 py-2"
+    >
+      <div className="flex items-baseline justify-between gap-2">
+        <span
+          className={`text-[11px] font-mono uppercase tracking-wider ${meta.color}`}
+        >
+          {meta.label}
+        </span>
+        <div className="flex items-center gap-2">
+          {!isV2 && (
+            <span
+              data-testid="schema-v1-badge"
+              title="Pre-2026-04-25 audit schema. The user's exact phrasing is not recorded for this row; the row may include retrieval context that was prepended to the model input."
+              className="rounded-full border border-aether-warn/40 bg-aether-warn/5 px-1.5 py-0.5 text-[10px] text-aether-warn"
+            >
+              pre-ADR-0009
+            </span>
+          )}
+          <span className="text-[10px] font-mono text-aether-dim">
+            {row.audit_id}
+          </span>
+        </div>
+      </div>
+
+      {showUserHeadline ? (
+        <>
+          <div
+            data-testid="audit-user-utterance"
+            className="mt-1.5 text-[12.5px] text-aether-text break-words"
+          >
+            <span className="text-aether-dim mr-1.5">&ldquo;</span>
+            {utterance}
+            <span className="text-aether-dim ml-1">&rdquo;</span>
+          </div>
+          <div className="mt-1 text-[11px] font-mono text-aether-muted break-all">
+            {row.capability}
+            {row.scope ? <span className="text-aether-dim"> · {row.scope}</span> : null}
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="mt-1 font-mono text-[12px] text-aether-text break-all">
+            {row.capability}
+          </div>
+          <div className="text-[11.5px] font-mono text-aether-muted break-all">
+            {row.scope}
+          </div>
+        </>
+      )}
+
+      {isV2 && provenance && (
+        <details
+          data-testid="audit-model-saw"
+          className="mt-1.5 group"
+        >
+          <summary className="cursor-pointer text-[11px] text-aether-muted hover:text-aether-text select-none">
+            {provenance.block_present
+              ? `Aether also saw ${provenance.hits.length} memor${
+                  provenance.hits.length === 1 ? "y" : "ies"
+                } from ${formatDomains(provenance.hits)}`
+              : "Aether ran retrieval; nothing matched"}
+          </summary>
+          {provenance.block_present && provenance.hits.length > 0 && (
+            <ul className="mt-1.5 ml-4 space-y-0.5 text-[10.5px] font-mono text-aether-muted">
+              {provenance.hits.map((h) => (
+                <li key={h.memory_id}>
+                  <span className="text-aether-dim">{h.domain}</span>
+                  {" · "}
+                  <span title={h.memory_id}>
+                    {truncateMiddleForDisplay(h.memory_id, 24)}
+                  </span>
+                  {" · "}
+                  <span className="text-aether-dim">
+                    score {h.score.toFixed(2)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </details>
+      )}
+    </div>
+  );
+}
+
+/** Compact "(2 domains: durable, facts)" rendering for the
+ * provenance summary. Deduplicates and sorts so the line is stable
+ * across renders. */
+function formatDomains(hits: { domain: string }[]): string {
+  const uniq = Array.from(new Set(hits.map((h) => h.domain))).sort();
+  if (uniq.length === 0) return "no domain";
+  if (uniq.length === 1) return uniq[0];
+  return uniq.join(", ");
+}
+
 function AuditList({ rows }: { rows: TrustAuditRow[] }) {
   if (rows.length === 0) {
     return (
@@ -312,35 +448,17 @@ function AuditList({ rows }: { rows: TrustAuditRow[] }) {
   }
   return (
     <div className="flex flex-col gap-2">
-      {rows.map((r) => {
-        const meta = DECISION_META[r.decision];
-        return (
-          <div
-            key={r.audit_id}
-            className="rounded-md border border-aether-border bg-aether-bg/50 px-3 py-2"
-          >
-            <div className="flex items-baseline justify-between gap-2">
-              <span
-                className={`text-[11px] font-mono uppercase tracking-wider ${meta.color}`}
-              >
-                {meta.label}
-              </span>
-              <span className="text-[10px] font-mono text-aether-dim">
-                {r.audit_id}
-              </span>
-            </div>
-            <div className="mt-1 font-mono text-[12px] text-aether-text break-all">
-              {r.capability}
-            </div>
-            <div className="text-[11.5px] font-mono text-aether-muted break-all">
-              {r.scope}
-            </div>
-          </div>
-        );
-      })}
+      {rows.map((r) => (
+        <AuditRow key={r.audit_id} row={r} />
+      ))}
     </div>
   );
 }
+
+// Exported for the vitest in TrustDrawer.test.tsx — keep the
+// component itself private to this module and only widen the test
+// surface intentionally.
+export { AuditRow };
 
 function HistoryView({
   entries,
