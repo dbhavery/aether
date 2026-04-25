@@ -28,6 +28,9 @@ pub mod sqlite_session;
 #[cfg(feature = "embeddings")]
 pub mod embeddings;
 
+#[cfg(feature = "embeddings")]
+pub mod hf_provider;
+
 pub use domain::MemoryDomain;
 pub use error::L2Error;
 
@@ -36,6 +39,12 @@ pub use embeddings::{
     EmbeddingProvider, EmbeddingRow, EmbeddingStore, FlatFileEmbeddingStore, MemoryId,
     OllamaEmbeddingProvider, SimilarityHit, StubEmbedder, DEFAULT_OLLAMA_BASE_URL,
     DEFAULT_OLLAMA_EMBED_MODEL, EMBED_ELIGIBLE_DOMAINS,
+};
+
+#[cfg(feature = "embeddings")]
+pub use hf_provider::{
+    HfEmbeddingProvider, DEFAULT_HF_HELPER_PYTHON, DEFAULT_HF_HELPER_SCRIPT, ENV_HF_HELPER_PYTHON,
+    ENV_HF_HELPER_SCRIPT,
 };
 pub use session::{
     render_transcript, InMemorySessionMemoryStore, MemoryRole, RecentMemoryConfig,

@@ -334,3 +334,318 @@ fn canonical_bytes_for_future_versions_uses_v2_shape() {
     assert!(s.contains("original_utterance"));
     assert!(s.contains("retrieval_provenance"));
 }
+
+// ---------------------------------------------------------------------------
+// ADR-0009 code-review finding #1 — mixed v1/v2 audit-DB integration tests.
+//
+// The pre-existing `cross_schema_chain_replay_verifies_v1_then_v2` test
+// exercises the seal/verify path for a v1→v2 sequence but never reads the
+// rows back through `AuditStore::query`. The `audit_recent` Trust-drawer
+// projection (apps/desktop/src-tauri/src/commands.rs) is fed by exactly
+// that projection, so a defect in v1 deserialization on the read path —
+// e.g. a future serde-attribute change that broke the implicit-v1 default —
+// would slip past every existing test.
+//
+// These tests close that gap by:
+//   1. Putting both a v1 row (engine-sealed v1) and a v2 row (engine-sealed
+//      v2 with populated `original_utterance` + `retrieval_provenance`)
+//      into the same audit DB, then reading them back via `query` and
+//      asserting per-row `schema_version` + field population.
+//   2. Splicing a true legacy on-disk payload — the JSON literally lacks
+//      `schema_version` / `original_utterance` / `retrieval_provenance`,
+//      mirroring a row written by a pre-ADR-0009 build before the writer
+//      ever stamped v2 — alongside an engine-sealed v2 row, then querying
+//      both back. This pins the wire-shape contract: absent fields ⇒ v1.
+//   3. Tampering with the v1 and v2 payloads independently and asserting
+//      `verify_chain` reports the break, exercising the security-fix
+//      branching in `canonical_bytes` from both sides (review §6 #4).
+// ---------------------------------------------------------------------------
+
+/// Engine-sealed v1 + engine-sealed v2 in the same DB read back through
+/// `query` with per-row schema awareness preserved.
+#[test]
+fn mixed_v1_v2_rows_query_back_with_correct_schema_versions() {
+    use aether_l5_policy::{
+        AuditFilter, RetrievalProvenance, RetrievedMemoryRef,
+    };
+
+    let (_tmp, path) = temp("mixed_v1_v2_query.db");
+
+    // Write phase.
+    {
+        let b = DurableBackends::open(&path).unwrap();
+
+        // v1 row — pre-ADR-0009 shape; the writer's canonical_bytes
+        // dispatches on schema_version, so this row is sealed under
+        // CanonicalAuditPayloadV1.
+        b.audit
+            .append(&make_row_v1("legacy-row", 100))
+            .expect("append v1");
+
+        // v2 row — current shape with both new fields populated, sealed
+        // under CanonicalAuditPayloadV2.
+        let mut v2 = make_row("modern-row", 200);
+        v2.original_utterance = Some(String::from("did i pay rent?"));
+        v2.retrieval_provenance = Some(RetrievalProvenance::new(
+            true,
+            vec![RetrievedMemoryRef {
+                memory_id: String::from("mem-rent-42"),
+                domain: String::from("durable"),
+                score: 0.93,
+            }],
+        ));
+        b.audit.append(&v2).expect("append v2");
+
+        b.audit
+            .verify_chain()
+            .expect("mixed v1+v2 chain verifies under writer-side seal");
+    }
+
+    // Read phase — reopen to prove durability + projection round-trip.
+    let b = DurableBackends::open(&path).unwrap();
+    let rows = b.audit.query(&AuditFilter::default(), 100);
+    assert_eq!(rows.len(), 2, "both rows must surface through query");
+
+    let legacy = rows
+        .iter()
+        .find(|r| r.audit_id == AuditId("legacy-row".into()))
+        .expect("v1 row present");
+    assert_eq!(
+        legacy.schema_version,
+        aether_l5_policy::AUDIT_SCHEMA_VERSION_V1,
+        "v1 row must report schema_version=1 after read-back",
+    );
+    assert!(
+        legacy.original_utterance.is_none(),
+        "v1 row must not carry original_utterance",
+    );
+    assert!(
+        legacy.retrieval_provenance.is_none(),
+        "v1 row must not carry retrieval_provenance",
+    );
+
+    let modern = rows
+        .iter()
+        .find(|r| r.audit_id == AuditId("modern-row".into()))
+        .expect("v2 row present");
+    assert_eq!(
+        modern.schema_version,
+        aether_l5_policy::AUDIT_SCHEMA_VERSION_V2,
+        "v2 row must report schema_version=2 after read-back",
+    );
+    assert_eq!(
+        modern.original_utterance.as_deref(),
+        Some("did i pay rent?"),
+        "v2 row must round-trip original_utterance verbatim",
+    );
+    let prov = modern
+        .retrieval_provenance
+        .as_ref()
+        .expect("v2 row must carry retrieval_provenance");
+    assert!(prov.block_present);
+    assert_eq!(prov.hits.len(), 1);
+    assert_eq!(prov.hits[0].memory_id, "mem-rent-42");
+
+    // Chain still verifies after restart — exercises canonical_bytes
+    // dispatch on the verify side, per row, with mixed schema versions.
+    b.audit
+        .verify_chain()
+        .expect("mixed-schema chain re-verifies across restart");
+}
+
+/// True legacy on-disk payload — JSON literally lacks the three new
+/// fields, mirroring what a pre-ADR-0009 writer actually wrote — read
+/// back alongside a modern v2 row.
+///
+/// The engine-sealed v1 test above proves the dispatch covers
+/// `schema_version: 1` set explicitly. This test proves the dispatch
+/// also covers the *implicit* v1 case: a payload where the field is
+/// missing entirely. That's the actual upgrade scenario for users
+/// running a build prior to commit `f378ea5`.
+#[test]
+fn legacy_on_disk_payload_without_v2_fields_queries_back_as_v1() {
+    use aether_l5_policy::AuditFilter;
+
+    let (_tmp, path) = temp("legacy_payload_strip.db");
+
+    // Seed: write a v1 row through the engine, then a v2 row, so the
+    // chain head + hashes are valid.
+    {
+        let b = DurableBackends::open(&path).unwrap();
+        b.audit
+            .append(&make_row_v1("legacy-strip", 1))
+            .expect("seed v1");
+        b.audit
+            .append(&make_row("modern-strip", 2))
+            .expect("seed v2");
+
+        // Now strip the three v2 fields from the v1 row's stored
+        // payload, mimicking a row written by a pre-ADR-0009 build that
+        // never knew the fields existed. The chain hash remains valid
+        // because the v1 canonical form already excludes all three.
+        //
+        // We have to drop the append-only triggers to do this — the
+        // production system would never run this UPDATE; it's a stand-in
+        // for "what's actually on disk in a user's pre-upgrade DB".
+        let conn = b.conn.lock().unwrap();
+        conn.execute_batch(
+            "DROP TRIGGER IF EXISTS policy_audit_log_no_update; \
+             DROP TRIGGER IF EXISTS policy_audit_log_no_delete;",
+        )
+        .unwrap();
+
+        let payload: String = conn
+            .query_row(
+                "SELECT payload FROM policy_audit_log WHERE audit_id = 'legacy-strip'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        let mut value: serde_json::Value = serde_json::from_str(&payload).unwrap();
+        let obj = value.as_object_mut().unwrap();
+        obj.remove("schema_version");
+        obj.remove("original_utterance");
+        obj.remove("retrieval_provenance");
+        let stripped = serde_json::to_string(&value).unwrap();
+        // Sanity — the on-disk payload now matches the legacy wire shape.
+        assert!(!stripped.contains("schema_version"));
+        assert!(!stripped.contains("original_utterance"));
+        assert!(!stripped.contains("retrieval_provenance"));
+        conn.execute(
+            "UPDATE policy_audit_log SET payload = ?1 WHERE audit_id = 'legacy-strip'",
+            aether_storage::rusqlite::params![stripped],
+        )
+        .unwrap();
+    }
+
+    // Read-back: query both rows and prove the projection deserializes
+    // the legacy payload as v1 implicitly while preserving v2 fields on
+    // the modern row.
+    let b = DurableBackends::open(&path).unwrap();
+    let rows = b.audit.query(&AuditFilter::default(), 100);
+    assert_eq!(rows.len(), 2, "both rows surface through query");
+
+    let legacy = rows
+        .iter()
+        .find(|r| r.audit_id == AuditId("legacy-strip".into()))
+        .expect("legacy row present");
+    assert_eq!(
+        legacy.schema_version,
+        aether_l5_policy::AUDIT_SCHEMA_VERSION_V1,
+        "absent schema_version on the wire must default to v1",
+    );
+    assert!(legacy.original_utterance.is_none());
+    assert!(legacy.retrieval_provenance.is_none());
+
+    let modern = rows
+        .iter()
+        .find(|r| r.audit_id == AuditId("modern-strip".into()))
+        .expect("modern row present");
+    assert_eq!(
+        modern.schema_version,
+        aether_l5_policy::AUDIT_SCHEMA_VERSION_V2,
+    );
+}
+
+/// Tamper detection on a v1 row — mutating the payload in place must
+/// break the chain even though v1 canonicalization excludes the v2
+/// fields. Exercises the `canonical_bytes` dispatch on the v1 branch
+/// from the verify side.
+#[test]
+fn tampering_v1_row_payload_breaks_chain() {
+    use aether_l5_policy::storage_hooks::AuditVerifyError;
+
+    let (_tmp, path) = temp("mixed_tamper_v1.db");
+    {
+        let b = DurableBackends::open(&path).unwrap();
+        b.audit.append(&make_row_v1("v1-victim", 1)).unwrap();
+        b.audit.append(&make_row("v2-follower", 2)).unwrap();
+        b.audit.verify_chain().expect("clean mixed chain");
+
+        // Tamper: mutate the v1 row's audit_id inside the stored
+        // payload. Drop append-only triggers to simulate out-of-band
+        // tampering.
+        let conn = b.conn.lock().unwrap();
+        conn.execute_batch(
+            "DROP TRIGGER IF EXISTS policy_audit_log_no_update; \
+             DROP TRIGGER IF EXISTS policy_audit_log_no_delete;",
+        )
+        .unwrap();
+        let tampered = serde_json::to_string(&make_row_v1("v1-FORGED", 1)).unwrap();
+        conn.execute(
+            "UPDATE policy_audit_log SET payload = ?1 WHERE audit_id = 'v1-victim'",
+            aether_storage::rusqlite::params![tampered],
+        )
+        .unwrap();
+    }
+
+    let b = DurableBackends::open(&path).unwrap();
+    let err = b
+        .audit
+        .verify_chain()
+        .expect_err("tampered v1 payload must fail chain verify");
+    assert!(
+        matches!(err, AuditVerifyError::ChainBreak { .. }),
+        "expected ChainBreak on v1 tamper, got {err:?}",
+    );
+}
+
+/// Tamper detection on a v2 row's `original_utterance` field — the
+/// HIGH-1 fix put this field inside the canonical payload so a mutation
+/// here must break the chain. Locks review §6 #4 explicitly: HMAC
+/// coverage of the new ADR-0009 fields is no longer "implicit by
+/// bytes-changing", it's a named contract.
+#[test]
+fn tampering_v2_original_utterance_breaks_chain() {
+    use aether_l5_policy::storage_hooks::AuditVerifyError;
+
+    let (_tmp, path) = temp("mixed_tamper_v2.db");
+    {
+        let b = DurableBackends::open(&path).unwrap();
+        b.audit.append(&make_row_v1("v1-anchor", 1)).unwrap();
+
+        let mut v2 = make_row("v2-victim", 2);
+        v2.original_utterance = Some(String::from("the truth"));
+        b.audit.append(&v2).unwrap();
+        b.audit.verify_chain().expect("clean chain");
+
+        // Tamper: rewrite the v2 row's original_utterance to a different
+        // string. record_hmac stays the same — that's the whole point;
+        // the verifier should detect the divergence between stored hmac
+        // and re-computed hmac over the mutated canonical bytes.
+        let conn = b.conn.lock().unwrap();
+        conn.execute_batch(
+            "DROP TRIGGER IF EXISTS policy_audit_log_no_update; \
+             DROP TRIGGER IF EXISTS policy_audit_log_no_delete;",
+        )
+        .unwrap();
+        let payload: String = conn
+            .query_row(
+                "SELECT payload FROM policy_audit_log WHERE audit_id = 'v2-victim'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        let mut value: serde_json::Value = serde_json::from_str(&payload).unwrap();
+        value
+            .as_object_mut()
+            .unwrap()
+            .insert("original_utterance".into(), serde_json::json!("a lie"));
+        let mutated = serde_json::to_string(&value).unwrap();
+        conn.execute(
+            "UPDATE policy_audit_log SET payload = ?1 WHERE audit_id = 'v2-victim'",
+            aether_storage::rusqlite::params![mutated],
+        )
+        .unwrap();
+    }
+
+    let b = DurableBackends::open(&path).unwrap();
+    let err = b
+        .audit
+        .verify_chain()
+        .expect_err("v2 original_utterance mutation must fail chain verify");
+    assert!(
+        matches!(err, AuditVerifyError::ChainBreak { .. }),
+        "expected ChainBreak on v2 original_utterance tamper, got {err:?}",
+    );
+}
