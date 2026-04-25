@@ -14,6 +14,7 @@ import type { ReadinessState, TierConfig } from "../lib/types";
 vi.mock("../lib/api", () => ({
   embeddingsReadiness: vi.fn(),
   getTier: vi.fn(),
+  getMemoryConfig: vi.fn(),
   backfillCount: vi.fn(),
   backfillStatus: vi.fn(),
   cancelBackfill: vi.fn(),
@@ -28,6 +29,7 @@ import * as api from "../lib/api";
 const mockedApi = api as unknown as {
   embeddingsReadiness: ReturnType<typeof vi.fn>;
   getTier: ReturnType<typeof vi.fn>;
+  getMemoryConfig: ReturnType<typeof vi.fn>;
   backfillCount: ReturnType<typeof vi.fn>;
   backfillStatus: ReturnType<typeof vi.fn>;
   cancelBackfill: ReturnType<typeof vi.fn>;
@@ -62,6 +64,13 @@ beforeEach(() => {
   mockedApi.onBackfillProgress.mockReset();
   mockedApi.onBackfillDone.mockReset();
   mockedApi.getTier.mockResolvedValue(TIER_FLAME);
+  mockedApi.getMemoryConfig.mockReset();
+  mockedApi.getMemoryConfig.mockResolvedValue({
+    retention_days: {},
+    default_risk: {},
+    embeddings: { enabled: true, provider: null },
+    retrieval: { max_items: 5 },
+  });
   mockedApi.backfillCount.mockResolvedValue(0);
   mockedApi.backfillStatus.mockResolvedValue({
     finished: true,

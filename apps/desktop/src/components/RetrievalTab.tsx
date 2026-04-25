@@ -4,6 +4,7 @@ import {
   backfillStatus,
   cancelBackfill,
   embeddingsReadiness,
+  getMemoryConfig,
   getTier,
   onBackfillDone,
   onBackfillProgress,
@@ -11,7 +12,12 @@ import {
   startBackfill,
   type BackfillProgress,
 } from "../lib/api";
-import type { ReadinessState, NotReadyReason, TierConfig } from "../lib/types";
+import type {
+  MemoryConfig,
+  ReadinessState,
+  NotReadyReason,
+  TierConfig,
+} from "../lib/types";
 
 /**
  * ADR-0007 Session B scaffold: Trust drawer Retrieval tab.
@@ -48,20 +54,66 @@ import type { ReadinessState, NotReadyReason, TierConfig } from "../lib/types";
 
 const POLL_INTERVAL_MS = 2_000;
 
-const SPARK_MODEL = { name: "nomic-embed-text", size_gb: 0.3 };
-const FLAME_MODEL = { name: "bge-m3", size_gb: 1.2 };
-const FORGE_MODEL = { name: "bge-m3", size_gb: 1.2 };
+// Per-tier defaults from ADR-0007 D7 (validated 2026-04-24): the
+// model that ships when the user has not explicitly configured a
+// `memory.embeddings.provider`. The active model surfaced in the UI
+// reflects either the explicit configuration OR this default,
+// whichever wins (configuration always takes precedence).
+const SPARK_DEFAULT = { name: "nomic-embed-text", size_gb: 0.3 };
+const FLAME_DEFAULT = { name: "bge-m3", size_gb: 1.2 };
+const FORGE_DEFAULT = { name: "bge-m3", size_gb: 1.2 };
 
-function tierModel(tier: TierConfig | null) {
-  if (!tier) return FLAME_MODEL;
+/** Approximate disk size for known embedding models. Mirrors the
+ * Rust `required_disk_gb_for_provider` heuristic in retrieval.rs.
+ * Returned as a soft estimate; the actual UI should not crash on
+ * unknown models — falls back to the tier default size. */
+function knownModelSize(modelName: string, fallback: number): number {
+  if (modelName.includes("bge-m3")) return 1.2;
+  if (modelName.includes("bge-small") || modelName.includes("bge-mini"))
+    return 0.13;
+  if (modelName.includes("nomic-embed")) return 0.3;
+  return fallback;
+}
+
+/** Strip provider prefixes ("ollama:", "hf:org:repo:") to get the bare
+ * model name. Mirrors `parse_model_name` in retrieval.rs. */
+function bareModelName(provider: string): string {
+  const parts = provider.split(":");
+  return parts[parts.length - 1] || provider;
+}
+
+function tierDefaultModel(tier: TierConfig | null) {
+  if (!tier) return FLAME_DEFAULT;
   switch (tier.selected_tier) {
     case "spark":
-      return SPARK_MODEL;
+      return SPARK_DEFAULT;
     case "flame":
-      return FLAME_MODEL;
+      return FLAME_DEFAULT;
     case "forge":
-      return FORGE_MODEL;
+      return FORGE_DEFAULT;
   }
+}
+
+/** Resolve the active embedding model for display: the user's
+ * explicit `memory.embeddings.provider` if set, otherwise the
+ * tier default. Mirrors the resolution logic that the Rust readiness
+ * probe uses, so the UI shows what the backend will actually use. */
+function activeModel(
+  tier: TierConfig | null,
+  cfg: MemoryConfig | null,
+): { name: string; size_gb: number; configured: boolean } {
+  const provider = cfg?.embeddings.provider;
+  if (provider && provider.length > 0) {
+    const name = bareModelName(provider);
+    const tierDefault = tierDefaultModel(tier);
+    return {
+      name,
+      size_gb: knownModelSize(name, tierDefault.size_gb),
+      configured: true,
+    };
+  }
+  const d = tierDefaultModel(tier);
+  return { ...d, configured: false };
 }
 
 function reasonCopy(reason: NotReadyReason, modelName: string): string {
@@ -90,6 +142,7 @@ interface Props {
 export function RetrievalTab({ refreshKey }: Props) {
   const [readiness, setReadiness] = useState<ReadinessState | null>(null);
   const [tier, setTier] = useState<TierConfig | null>(null);
+  const [memoryCfg, setMemoryCfg] = useState<MemoryConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [unembeddedCount, setUnembeddedCount] = useState<number | null>(null);
   const [backfill, setBackfill] = useState<BackfillProgress | null>(null);
@@ -133,6 +186,12 @@ export function RetrievalTab({ refreshKey }: Props) {
         if (mounted) setTier(t);
       } catch (e) {
         if (mounted) setError(`tier load error: ${String(e)}`);
+      }
+      try {
+        const cfg = await getMemoryConfig();
+        if (mounted) setMemoryCfg(cfg);
+      } catch {
+        // Memory config is best-effort here; UI falls back to tier defaults.
       }
       await refresh();
       interval = setInterval(refresh, POLL_INTERVAL_MS);
@@ -199,7 +258,7 @@ export function RetrievalTab({ refreshKey }: Props) {
     return <div className="text-aether-muted text-sm">Loading retrieval status…</div>;
   }
 
-  const model = tierModel(tier);
+  const model = activeModel(tier, memoryCfg);
 
   if (readiness.kind === "disabled") {
     return (
