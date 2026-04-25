@@ -161,7 +161,7 @@ Two implementation sessions, with on-hardware validation as the first step:
 - Background safety-net poll (Decision 3 explicit).
 - Hard-block posture mode (Decision 1 explicit).
 - Per-retrieval telemetry shape (needs its own ADR; depends on History tab UX).
-- L1 audit cleanup for retrieval-augmented utterance (Risk G from HANDOFF_2026-04-24, needs its own cross-layer ADR).
+- L1 audit cleanup for retrieval-augmented utterance (Risk G from HANDOFF_2026-04-24) — **landed as ADR-0009** (Accepted 2026-04-25, commit `b577105`). `TurnRequest` now carries `original_utterance` + `model_input_utterance`; audit rows bumped to schema v2 with `retrieval_provenance`.
 - Granular backfill scope (Decision 5 future refinement).
 - Avatar / TTS / vision tier manifests (future ADRs).
 

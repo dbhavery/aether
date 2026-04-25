@@ -19,7 +19,7 @@ Two follow-on bugs surfaced during implementation and were also fixed:
 - Provider-display drift: RetrievalTab showed tier-default model even when user had explicitly configured `embeddings.provider`. Fixed in commit `90c5335`.
 - Provider hot-swap drift: `set_memory_config` persisted the new provider but didn't swap the runtime `embedding_provider` Arc. Fixed in commits `67e8c8e` (runtime path) + `35ea921` (boot path).
 
-ADR-0009 was proposed (`4719512`) for the carried-over Risk B (augmented-utterance audit reach) — explicitly marked Proposed because the implementation is cross-layer and requires its own focused session per CLAUDE.md doctrine.
+ADR-0009 was proposed (`4719512`) for the carried-over Risk B (augmented-utterance audit reach) — explicitly marked Proposed because the implementation is cross-layer and requires its own focused session per CLAUDE.md doctrine. **Update 2026-04-25:** ADR-0009 was implemented and ratified to **Accepted** in the autonomous session that followed this handoff (tip `b577105`). Audit row schema v2 with `original_utterance` + `retrieval_provenance`; `TurnRequest` split into `original_utterance` + `model_input_utterance`.
 
 ADR-0006 D5 `tier_changed` event bus was implemented (`20caa1d`), retiring Session A handoff §4.F follow-up.
 

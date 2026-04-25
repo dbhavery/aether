@@ -6,6 +6,7 @@
 - **Supersedes:** nothing.
 - **Superseded by:** nothing.
 - **Related:** `docs/adr/ADR-0002-embeddings-provider-and-vector-backend.md` (embedding store shape), `docs/adr/ADR-0003-model-defaults-supersession.md` (bge-m3 default), `docs/adr/ADR-0004-durable-store-shape.md` (Durable lane), `ROADMAP_2026-04-24_MILESTONE_2.md` (Run 2), `HANDOFF_2026-04-25_M2_RUN_1_COMPLETE.md` §§5, 7.
+- **Cleanup follow-up:** `docs/adr/ADR-0009-retrieval-augmented-utterance-audit-reach.md` (Accepted 2026-04-25, commit `b577105`) cleaned up the audit-row asymmetry this ADR introduced — specifically, `submit_turn` here passes the augmented `router_utterance` as a single field, but the L5 audit row should record the user's *original* utterance, not the augmented form. ADR-0009 splits `TurnRequest` into `original_utterance` + `model_input_utterance` and bumps the audit row to schema v2 with `retrieval_provenance`. The pipeline described in this ADR is otherwise unchanged.
 
 ## Context
 

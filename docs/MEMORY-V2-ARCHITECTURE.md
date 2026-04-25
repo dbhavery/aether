@@ -443,6 +443,23 @@ Each step is a session of work.
    `apps/desktop/src-tauri/src/retrieval.rs` and
    `docs/adr/ADR-0005-retrieval-wiring.md`.
 
+   **Audit-row schema v2 (ADR-0009, Accepted 2026-04-25, commit
+   `b577105`).** ADR-0005 left `TurnRequest` with a single
+   `utterance` field carrying the augmented string, which then
+   reached the L5 audit row. ADR-0009 cleaned that up:
+   `TurnRequest` now carries `original_utterance` (audit truth —
+   what the user typed) and `model_input_utterance`
+   (reproducibility truth — what the router saw). The L5
+   `AuditRecordEvent` is bumped to `schema_version = 2` and
+   gains optional `original_utterance: Option<String>` plus
+   `retrieval_provenance: Option<RetrievalProvenance>` fields;
+   pre-2026-04-25 rows on disk deserialize implicitly as v1 via
+   `serde(default)`. The frontend `AuditRow` component renders
+   v1 with a "pre-ADR-0009" schema badge and v2 with the user's
+   text as the headline plus a collapsed retrieval-summary
+   disclosure. See `docs/adr/ADR-0009-retrieval-augmented-utterance-audit-reach.md`
+   and `planning/session_2026-04-25/DECISIONS_LOG.md` D-001.
+
 ---
 
 ## 11. How this doc stays honest

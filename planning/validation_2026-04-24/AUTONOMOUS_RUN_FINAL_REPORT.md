@@ -16,7 +16,7 @@ This report consolidates the full autonomous run that began with on-hardware val
 | `python lint-memory-doc/check.py` | 100 anchors / 24 files | **112 / 25** | +12 anchors, +1 file (backfill.rs) |
 | `tsc --noEmit` | clean | clean | unchanged |
 | ADRs (Accepted) | 7 | **8** (ADR-0008 ratified + impl) | +1 |
-| ADRs (Proposed) | 0 | **1** (ADR-0009 audit reach) | +1 |
+| ADRs (Proposed) | 0 | **1** (ADR-0009 audit reach — subsequently Accepted 2026-04-25, commit `b577105`) | +1 |
 | Tauri commands | 30+ | **34+** (backfill_status, backfill_count, start_backfill, cancel_backfill) | +4 |
 | Frontend components | 24 | **27** (RetrievalTab, ReadinessIndicator, Toast, ToastContainer) | +3 (Toast pair counts as 2) |
 
@@ -41,7 +41,7 @@ Don ratified all 5 items mid-run with delegation of remaining decisions. Impleme
 4. **Backfill backend + UI + tests** (`a4c51f2`) — full ADR-0007 D5: orchestrator module, 4 Tauri commands, AppState atomics + progress shape, RetrievalTab integration with progress strip + cancel button.
 5. **`tier:changed` event bus** (`20caa1d`) — ADR-0006 D5 follow-up retired. Tier-aware components re-read on event, no polling.
 6. **Toast infrastructure** (`0a5dc69`) — ADR-0007 D6 transient toast on state transitions. Mounted at App root, polls readiness + listens for backfill done.
-7. **ADR-0009 propose** (`4719512`) — formalised the carried-over Risk B (augmented-utterance audit reach) as a Proposed ADR. Cross-layer fix awaits Don.
+7. **ADR-0009 propose** (`4719512`) — formalised the carried-over Risk B (augmented-utterance audit reach) as a Proposed ADR. Cross-layer fix awaits Don. **Update 2026-04-25:** ratified to Accepted and implemented in the next autonomous session (tip `b577105`).
 8. **RetrievalTab tests** (`9164c62`) — 3 new tests for the backfill UI surfacing logic.
 9. **activeModel display fix** (`90c5335`) — bug: UI showed tier-default model even when user had configured a different provider. Now reads memory_config.embeddings.provider in the UI.
 10. **Provider hot-swap runtime** (`67e8c8e`) — bug: set_memory_config persisted new provider but didn't swap the runtime Arc. Now swaps for `ollama:` and bare-name prefixes.
@@ -92,7 +92,7 @@ Both were silent — the validation surface caught them.
 | ADR-0006 (hardware tier model) | Accepted (cross-referenced ADR-0008 in §3) | `ff34e2f` |
 | ADR-0007 (embeddings onboarding) | Accepted, D7 tuned | `fa1cc41` |
 | **ADR-0008** (tier detection from device_type + RAM) | **Accepted** (was Proposed; implemented) | `a46ef28` (propose), `6038a28` (implement + accept) |
-| **ADR-0009** (retrieval-augmented utterance audit reach) | **Proposed** (cross-layer; needs focused session) | `4719512` |
+| **ADR-0009** (retrieval-augmented utterance audit reach) | **Accepted 2026-04-25** (was Proposed in this run; ratified + implemented in the next autonomous session, schema v2 audit row with `original_utterance` + `retrieval_provenance`) | `4719512` (propose), `b577105` (ratify + impl) |
 
 ---
 
@@ -103,7 +103,7 @@ Both were silent — the validation surface caught them.
 | Tier auto-detection wrong by accident (D-004) | **RESOLVED** by ADR-0008 implementation | `6038a28` |
 | Backfill rapid-fire Ollama 500 | **RESOLVED** by per-row pacing (50 ms default) in `backfill.rs` | `a4c51f2` |
 | First-ever post-pull cold start 10× ADR estimate | DOCUMENTED in ADR-0007 D7 §Tuning notes | indicator copy already sets expectations |
-| Augmented-utterance audit reach (Risk B from Session A) | DOCUMENTED in ADR-0009 (Proposed) | Implementation gated on Don ratification + cross-layer session |
+| Augmented-utterance audit reach (Risk B from Session A) | **RESOLVED** by ADR-0009 (Accepted + implemented 2026-04-25) | `b577105` — schema v2 audit row split into `original_utterance` + `model_input_utterance` + `retrieval_provenance` |
 | `set_tier` doesn't emit `tier_changed` | **RESOLVED** by `20caa1d` | Frontend subscribers in place |
 | Heavy-usage protocol observed | RETIRED | This run was heavy-usage by design |
 

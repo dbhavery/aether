@@ -39,9 +39,9 @@ Produce a **system-design document** at `plans/L5_policy_engine_system_design.md
 1. **Scope recap + non-goals.** One page max. Explicitly list what L5 does and does not own (mirror `plans/L5_policy_engine.md` "Boundaries"; do not redefine).
 
 2. **Capability taxonomy — concrete.**
-   - Enumerate every capability and sub-capability from `12_permissions_autonomy.md §9.4` as typed identifiers (`files.read`, `files.write`, `browser.submit`, `email.send`, `system.shell`, `memory.write.durable`, etc.).
+   - Enumerate every capability and sub-capability from `12_permissions_autonomy.md` "Capability groups" (Files / Browser / Email / System & tools / Memory & data / Media / Integrations) as typed identifiers (`files.read`, `files.write`, `browser.submit`, `email.send`, `system.shell`, `memory.write.durable`, etc.). (Anchor `§9.4` as cited in earlier drafts of this prompt does not exist in `12`; the "Capability groups" section is the canonical enumeration — corrected 2026-04-25 per OPEN_QUESTIONS doc-anchor-drift item.)
    - For each: default risk class, default approval mode per autonomy preset, default grant duration, resource-scope shape (path glob / URL pattern / mailbox folder / memory scope), and which executor layer claims it (L2 / L4 / media engine / L7 / shell).
-   - Include the hardcoded non-negotiable blocks (`13` §5; finance/healthcare/password-manager domains, unrestricted disk, silent upload) with rationale.
+   - Include the hardcoded non-negotiable blocks from `12_permissions_autonomy.md` "Non-negotiable blocks (hardcoded platform rules)" plus the red-team focus areas in `13_trust_security_redteam.md` "Red-team focus areas" §3 Browser misuse, §4 File/data exfiltration, §5 Permission bypass, §6 Harmful autonomous actions (finance/healthcare/password-manager domains, unrestricted disk, silent upload) with rationale. (Anchor `13 §10.3` as cited in earlier drafts does not exist; the named sections above are canonical — corrected 2026-04-25.)
    - Deliverable format: a table plus a Rust-leaning pseudotype block (`enum Capability { ... }`).
 
 3. **Five-layer permission evaluator — state machine + pseudocode.**
@@ -120,10 +120,10 @@ Produce a **system-design document** at `plans/L5_policy_engine_system_design.md
 
 1. New file: `plans/L5_policy_engine_system_design.md` with sections 1–14 above.
 2. A closing self-review checklist at the end of the doc:
-   - [ ] Every capability in `12_permissions_autonomy.md §9.4` appears in §2's table.
+   - [ ] Every capability in `12_permissions_autonomy.md` "Capability groups" appears in §2's table. (Corrected anchor — old `§9.4` did not exist; see 2026-04-25 doc-anchor-drift fix.)
    - [ ] Every event in `plans/L5_policy_engine.md` "Owns" bullet appears in §4 with typed fields.
    - [ ] Every command in `plans/X3_tauri_architecture.md` §2.2 "L5" appears in §5 with typed request/response.
-   - [ ] Every non-negotiable block from `13_trust_security_redteam.md` §10.3 is either addressed or listed in §14.
+   - [ ] Every non-negotiable block from `12_permissions_autonomy.md` "Non-negotiable blocks (hardcoded platform rules)" plus `13_trust_security_redteam.md` "Red-team focus areas" §3–§6 is either addressed or listed in §14. (Corrected anchors — old `13 §10.3` did not exist; see 2026-04-25 doc-anchor-drift fix.)
    - [ ] §12 gives L1 / L2 / L4 / L7 enough to stub against.
    - [ ] Open questions in §14 do not silently resolve doctrine conflicts.
 

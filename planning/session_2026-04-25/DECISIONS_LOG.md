@@ -98,3 +98,28 @@ plumbing.
 established pattern (lint-memory-doc, lint-presence-doc,
 lint-quality-doc, lint-vision-doc, lint-voice-doc). Adding it now
 prevents the new symbols from drifting under future renames.
+
+## D-005 — Doc-anchor drift: update prompt citations rather than add anchors
+
+**Context.** `planning/OPEN_QUESTIONS.md` line 167 carried an [OPEN]
+flag: prompt `planning/prompts/L5_policy_engine_system_design.md`
+cited `12_permissions_autonomy.md §9.4` and
+`13_trust_security_redteam.md §10.3`, neither of which exist.
+Both `planning/plans/L5_policy_engine_system_design.md` and
+`planning/plans/implementation_prep/L5_interface_pack.md` already
+work around this by treating the actual existing sections as
+canonical and flagging the drift in their respective §14.
+
+**Decision.** Update the prompt to reference the actually-existing
+sections: `12_permissions_autonomy.md` "Capability groups" + "Non-
+negotiable blocks (hardcoded platform rules)" and
+`13_trust_security_redteam.md` "Red-team focus areas" §3–§6.
+OPEN_QUESTIONS line 167 flipped to [DECIDED 2026-04-25] with this
+log as provenance.
+
+**Why update prompts not source files.** Adding back-fill anchors
+(`§9.4`, `§10.3`) to `12` and `13` would force a renumber of every
+section after the insertion point, cascading to every other prompt
+and plan that cites the canonical files. Updating the citation is
+local and surgical; the system-design plan already proves these
+new anchor paths work.

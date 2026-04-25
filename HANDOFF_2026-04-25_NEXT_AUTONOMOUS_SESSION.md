@@ -38,7 +38,7 @@ ff5d65d test(frontend): ToastContainer backfill-done event branches
 ### 1.3 What just shipped (compressed; full detail in `planning/validation_2026-04-24/AUTONOMOUS_RUN_FINAL_REPORT.md`)
 
 - ADR-0008 (tier detection from `device_type + total_ram_gb`) — Accepted + implemented.
-- ADR-0009 (retrieval-augmented utterance audit reach) — Proposed (cross-layer; awaits this session or a Don-ratification).
+- ADR-0009 (retrieval-augmented utterance audit reach) — **Accepted 2026-04-25** (implemented + ratified in the autonomous session this handoff opened; tip `b577105` on `dev`). Audit row at schema v2 with `original_utterance` + `retrieval_provenance`; `TurnRequest` carries split `original_utterance` / `model_input_utterance`.
 - Backfill backend + RetrievalTab UI integration with progress + cancel.
 - `tier:changed` event bus (ADR-0006 D5 follow-up retired).
 - Toast infrastructure for ADR-0007 D6 transition surfacing.
