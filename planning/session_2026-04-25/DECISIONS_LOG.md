@@ -443,3 +443,129 @@ modifications happen when implementing the ADR's decisions, not as
 side-effect of validation. The proposed delta is propose-only — Don
 ratifies (or a future session that lands F1's retry-on-500 ratifies as
 part of that change).
+
+## D-014 — Phase 4C: HuggingFace embedder via persistent Python helper subprocess (Path X)
+
+**Context.** ADR-0007 D7 named `bge-small-en-v1.5` as the Spark-tier
+embedding default; DECISIONS_LOG D-001 substituted `nomic-embed-text`
+via Ollama because no HF loader existed. Phase 4C closes that gap.
+The handoff scope (HANDOFF §4C) named three architectural paths:
+**Path X** = subprocess to a Python helper using
+`sentence-transformers`; **Path Y** = native Rust via
+`candle-transformers`; **Path Z** = HF Inference API (out of scope —
+local-only).
+
+**Decision.** Path X.
+
+**Why Path X over Path Y.** Path Y (candle) is in-process and zero-
+Python but pulls a ~50-crate dependency tree (candle-core, candle-nn,
+candle-transformers, plus tokenizer crates) and requires per-model-
+family BERT pipeline code. The build-time cost (~5 min cold cargo
+build) and the per-model code lift are both larger than the
+subprocess overhead this provider eats. Path X matches existing repo
+infrastructure (`tools/evals/`, `planning/session_2026-04-25/bench_*.py`
+all use Python helpers for AI workloads), reuses the user's existing
+`sentence-transformers` install if present, and lets `bge-small-en-v1.5`
+work today.
+
+**Cost shape Path X eats.**
+- First helper spawn: ~2 s Python import.
+- First model load (cold cache): ~10 s download + ~5 s warm.
+- Subsequent embeds against same loaded model: <100 ms.
+- Per-embed protocol overhead: ~5 ms stdin write + stdout read.
+
+These numbers make the helper viable for the 1000-row backfill
+workload (estimated 1-2 min wall-clock) and the everyday per-turn
+retrieval embed (single-text, well under the user-perceptible
+threshold).
+
+**Wire protocol.** Newline-delimited JSON over stdin/stdout. One
+request per line, one response per line. Request shape:
+`{"op":"embed","model":"<id>","text":"<text>"}`. Response shape:
+`{"ok":true,"vector":[...],"dim":<n>}` or
+`{"ok":false,"error":"<msg>","kind":"load|embed|protocol"}`. The
+`kind` field lets the Rust caller distinguish recoverable load
+failures from protocol catastrophes.
+
+**Model-cache strategy.** The helper holds a `dict[model_id ->
+SentenceTransformer]` in process memory. Lazy-loaded on first request
+per model. A long-lived helper that sees 5 different models will hold
+all 5 in RAM (~130 MB each for bge-small-class). For Aether's
+single-active-provider design this is at most one model at a time.
+
+**Env-gating for tests.** The unit test
+`embed_against_live_helper_returns_expected_dim` requires
+`AETHER_HF_TEST=1` to run — without the gate, every cargo test run
+would download 130 MB and pay 15 s on first invocation. The gate
+keeps the dim-check available as a smoke test without poisoning CI.
+
+**Smoke-test result.** `embed_against_live_helper_returns_expected_dim`
+runs green with `AETHER_HF_TEST=1` set; bge-small-en-v1.5 returns
+384-dim vectors as expected. (Logged as part of the Phase 4C
+verification — vector dim was the only assertion needed; semantic
+quality is established by ADR-0007 / DECISIONS_LOG D-001 for this
+model class.)
+
+**Deferred follow-up.** Native-Rust path (Path Y) tracked here as
+next-window work. Triggers: (a) build-system PR that drops Python
+runtime entirely, or (b) sentence-transformers becomes maintenance-
+unfriendly (pip-install pain on Don's hardware tier in the wild).
+Neither is current.
+
+**Forward note for handoff.** The provider is wired but Don has not
+flipped his `memory.json::embeddings.provider` to the hf: form. The
+default Spark substitution (D-001 → nomic-embed-text via Ollama)
+remains in effect for fresh installs; switching is opt-in.
+
+## D-015 — Phase 3A: rank-function recall@1 fell 25.6 pp at 842-passage scale; ADR-0010 drafted (Proposed)
+
+**Context.** Phase 3A per HANDOFF §3A required real-corpus calibration
+of the production rank function in `apps/desktop/src-tauri/src/retrieval.rs::run_retrieval_context`
+(cosine desc, recency tiebreak, truncate). 150-passage Block 5
+baseline was 95% recall@1 / 0.975 MRR on bge-m3. (Numbered D-015
+because two earlier writers both used D-007 in this log; the next
+free integer keeps log arrival deterministic.)
+
+**Corpus generated.** 60 synthetic conversation threads via
+gemma4:e4b, 848 turns total, 72 cross-thread reference pairs as
+ground truth. 6 rows NaN-skipped at embed time (U+FFFD characters
+from the generator's en-dash output round-tripping through Windows
+cp1252). Final embedded corpus: 842 turns × 1024d on bge-m3.
+
+**Result.** recall@1 = 0.694, recall@3 = 0.833, recall@5 = 0.875,
+recall@10 = 0.903, recall@20 = 0.958, MRR = 0.776. Both decision
+triggers (recall@1 < 90%, MRR drop > 5%) fired.
+
+**Decision.** Drafted `docs/adr/ADR-0010-rank-function-recency-weighted-combine.md`
+as **Proposed** (NOT Accepted, per Phase 3A constraint). The ADR
+sketches three options:
+- Option A — recency-weighted combine (handoff's suggested fix)
+- Option B — cross-encoder re-rank pass (bge-reranker-v2-m3)
+- Option C — defer + document the recall@1 = 0.694 floor
+
+**Why three not one.** Miss-pattern analysis (in
+`planning/session_2026-04-25/RETRIEVAL_CALIBRATION_REPORT.md` §4)
+shows the dominant failure mode is within-thread top-1 confusion
+(the rank function correctly identifies the right thread but picks
+topic-establishing intro turns over the specifically referenced
+turn). This is NOT a recency-bias failure. Option A is unlikely to
+be the right fix on its own. Option B (re-ranker) is the natural
+remedy for within-thread specificity but is heavier to land.
+Honest report rather than a reflexive recency-weighted commit.
+
+**Did NOT modify `retrieval.rs`.** Calibration-only per Phase 3A
+constraints. Don ratifies ADR-0010 (or directs an alternative path)
+on return.
+
+**Did NOT modify ADR-0007 D7 §Tuning notes.** The handoff's
+"otherwise: report-only with one-line addendum" branch did not fire;
+the ADR-trigger branch fired instead. Tuning addendum becomes
+relevant only after the chosen ADR-0010 option is measured.
+
+**Sanitization side-finding.** The 6 NaN-skipped rows were caused by
+U+FFFD replacement characters in the embed input. The same pattern
+will surface in production if the real Aether corpus ever carries
+mojibake. Recommended follow-up (out of scope here): add
+`text.replace('�', ' ')` to the production embedding path
+in `packages/l2-memory/src/embeddings.rs` before the next backfill
+iteration.
