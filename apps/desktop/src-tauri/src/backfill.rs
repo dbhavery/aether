@@ -55,7 +55,7 @@ use aether_l5_policy::decision::Decision;
 use aether_l5_policy::policy_engine::ActionRequest;
 use aether_l5_policy::PersonaId;
 use serde::Serialize;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Runtime};
 
 use crate::memory_config::MemoryDomain as ShellDomain;
 use crate::state::{AppState, BackfillProgress};
@@ -155,9 +155,21 @@ fn count_memory_rows_for_domain(state: &AppState, domain: L2Domain) -> usize {
 ///
 /// Error tolerance: per-row embed failures are counted, not fatal.
 /// The L5 gate IS fatal — if policy denies, the job aborts cleanly.
-pub fn run_backfill_worker(
+/// Headless variant for unit tests — runs the worker without a Tauri
+/// runtime (no event emission). Production callers go through
+/// [`run_backfill_worker`].
+#[cfg(test)]
+pub fn run_backfill_worker_headless(
     state: &AppState,
-    app: Option<&AppHandle>,
+    job_id: String,
+    options: BackfillOptions,
+) {
+    run_backfill_worker::<tauri::test::MockRuntime>(state, None, job_id, options);
+}
+
+pub fn run_backfill_worker<R: Runtime>(
+    state: &AppState,
+    app: Option<&AppHandle<R>>,
     job_id: String,
     options: BackfillOptions,
 ) {
@@ -319,7 +331,7 @@ fn bump_skipped(state: &AppState) {
     p.skipped_already_embedded += 1;
 }
 
-fn finalize(state: &AppState, app: Option<&AppHandle>, job_id: &str, cancelled: bool) {
+fn finalize<R: Runtime>(state: &AppState, app: Option<&AppHandle<R>>, job_id: &str, cancelled: bool) {
     {
         let mut p = state.backfill_progress.lock().expect("backfill progress lock");
         p.finished = true;
@@ -332,7 +344,7 @@ fn finalize(state: &AppState, app: Option<&AppHandle>, job_id: &str, cancelled: 
     emit_done(app, job_id, state);
 }
 
-fn emit_progress(app: Option<&AppHandle>, job_id: &str, state: &AppState) {
+fn emit_progress<R: Runtime>(app: Option<&AppHandle<R>>, job_id: &str, state: &AppState) {
     if let Some(a) = app {
         let snapshot = state
             .backfill_progress
@@ -347,7 +359,7 @@ fn emit_progress(app: Option<&AppHandle>, job_id: &str, state: &AppState) {
     }
 }
 
-fn emit_done(app: Option<&AppHandle>, job_id: &str, state: &AppState) {
+fn emit_done<R: Runtime>(app: Option<&AppHandle<R>>, job_id: &str, state: &AppState) {
     if let Some(a) = app {
         let snapshot = state
             .backfill_progress
@@ -364,21 +376,32 @@ fn emit_done(app: Option<&AppHandle>, job_id: &str, state: &AppState) {
 
 /// Spawn the backfill worker on the Tauri runtime. Returns a job id
 /// the caller can use to correlate progress events. Returns `None`
-/// (and emits a `tracing::warn`) if a backfill is already in
-/// progress — only one job at a time.
+/// if a backfill is already in progress — only one job at a time per
+/// ADR-0007 D5.
 ///
-/// Currently UNUSED: the live `start_backfill` Tauri command runs
-/// the worker synchronously per the v1 design (commands.rs). This
-/// function remains as the future-async-spawn shape that will be
-/// wired once Tauri-managed `Arc<AppState>` is available — keeping
-/// it compiled prevents the Arc-clone shape from drifting.
-#[allow(dead_code)]
-pub fn spawn_backfill(
+/// Phase 4D wired this into the live `start_backfill` Tauri command
+/// (commands.rs). The worker runs on `tauri::async_runtime::spawn_blocking`
+/// because `run_backfill_worker` is sync (per-row `provider.embed`
+/// is a blocking HTTP call and the per-row pacing pause is
+/// `std::thread::sleep`); placing it on `spawn` would starve the
+/// async runtime instead. The double-start guard checks
+/// `backfill_in_progress` atomically before reset to give
+/// `cancel_backfill` a stable signal.
+pub fn spawn_backfill<R: Runtime>(
     state_handle: Arc<AppState>,
-    app: AppHandle,
+    app: AppHandle<R>,
     options: BackfillOptions,
 ) -> Option<String> {
-    if state_handle.backfill_in_progress.load(Ordering::SeqCst) {
+    // Compare-and-swap so a racing pair of `start_backfill` IPC calls
+    // can't both pass the guard. `compare_exchange` returns Err with
+    // the existing value if the swap failed — that's our
+    // "already running" signal. SeqCst matches every other access on
+    // this atomic in this module to keep the visibility model simple.
+    if state_handle
+        .backfill_in_progress
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
         tracing::warn!("backfill already in progress; new job rejected");
         return None;
     }
@@ -448,9 +471,8 @@ mod tests {
         enable_embeddings(&state);
         seed_durable_only(&state, "s1", 3);
         // Drive without an AppHandle (unit test).
-        run_backfill_worker(
+        run_backfill_worker_headless(
             &state,
-            None,
             "test-job".into(),
             BackfillOptions { per_row_pause_ms: 0 },
         );
@@ -469,9 +491,8 @@ mod tests {
         enable_embeddings(&state);
         seed_durable_only(&state, "s1", 2);
         assert!(!state.backfill_in_progress.load(Ordering::SeqCst));
-        run_backfill_worker(
+        run_backfill_worker_headless(
             &state,
-            None,
             "test-job".into(),
             BackfillOptions { per_row_pause_ms: 0 },
         );
@@ -490,9 +511,8 @@ mod tests {
         // Pre-cancel: the very first cancel-check trips and the worker
         // exits before embedding the first row.
         state.backfill_cancel.store(true, Ordering::SeqCst);
-        run_backfill_worker(
+        run_backfill_worker_headless(
             &state,
-            None,
             "test-job".into(),
             BackfillOptions { per_row_pause_ms: 0 },
         );
@@ -511,9 +531,8 @@ mod tests {
         enable_embeddings(&state);
         seed_durable_only(&state, "s1", 4);
 
-        run_backfill_worker(
+        run_backfill_worker_headless(
             &state,
-            None,
             "first".into(),
             BackfillOptions { per_row_pause_ms: 0 },
         );
@@ -526,9 +545,8 @@ mod tests {
 
         // Second invocation — the FlatFile store now has all four ids
         // for Durable, so every row should land in the skip path.
-        run_backfill_worker(
+        run_backfill_worker_headless(
             &state,
-            None,
             "second".into(),
             BackfillOptions { per_row_pause_ms: 0 },
         );
@@ -579,9 +597,8 @@ mod tests {
                 .unwrap();
         }
 
-        run_backfill_worker(
+        run_backfill_worker_headless(
             &state,
-            None,
             "mixed".into(),
             BackfillOptions { per_row_pause_ms: 0 },
         );
@@ -606,9 +623,8 @@ mod tests {
         seed_durable_only(&state, "s1", 6);
 
         // First pass: embed everything.
-        run_backfill_worker(
+        run_backfill_worker_headless(
             &state,
-            None,
             "warmup".into(),
             BackfillOptions { per_row_pause_ms: 0 },
         );
@@ -616,9 +632,8 @@ mod tests {
         // Now pre-cancel and run again. Every row would be a skip, but
         // the cancel must short-circuit the loop.
         state.backfill_cancel.store(true, Ordering::SeqCst);
-        run_backfill_worker(
+        run_backfill_worker_headless(
             &state,
-            None,
             "cancelled".into(),
             BackfillOptions { per_row_pause_ms: 0 },
         );
@@ -626,6 +641,128 @@ mod tests {
         assert!(p.finished);
         assert!(p.cancelled, "cancel during skip walk must still surface");
         assert_eq!(p.completed, 0);
+    }
+
+    // ----- Phase 4D: spawn_backfill async semantics -----
+    //
+    // These tests use `tauri::test::mock_app()` to build a real
+    // `AppHandle` against `MockRuntime` so the worker can `app.emit`
+    // without a webview. The MockRuntime owns its own tokio runtime
+    // and runs `spawn_blocking` on a dedicated thread pool — the
+    // tests therefore exercise the actual async wiring, not a stub.
+
+    /// Block on the in-progress flag flipping back to false. Spins
+    /// at 5 ms granularity which is below the 200 ms cancel-latency
+    /// budget; returns `Err` once the timeout elapses so the test
+    /// fails loud rather than hanging the suite.
+    fn wait_until_idle(state: &Arc<AppState>, timeout_ms: u64) -> Result<(), String> {
+        let start = std::time::Instant::now();
+        while state.backfill_in_progress.load(Ordering::SeqCst) {
+            if start.elapsed() > Duration::from_millis(timeout_ms) {
+                return Err(format!("worker did not idle within {timeout_ms} ms"));
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn spawn_backfill_returns_immediately_under_50ms_with_100_rows() {
+        // 100 rows × 0 ms pause × stub embedder is still ~ms of CPU
+        // when run synchronously. The contract is that the spawn
+        // call itself returns within ~50 ms regardless: the worker
+        // must run on the runtime, not on the calling thread.
+        let app = tauri::test::mock_app();
+        let raw = AppState::new().expect("state");
+        swap_stub_embedder(&raw, 8);
+        enable_embeddings(&raw);
+        seed_durable_only(&raw, "s1", 100);
+        let state = Arc::new(raw);
+
+        let t0 = std::time::Instant::now();
+        let job_id = spawn_backfill(
+            state.clone(),
+            app.handle().clone(),
+            BackfillOptions { per_row_pause_ms: 0 },
+        )
+        .expect("first start must succeed");
+        let elapsed = t0.elapsed();
+        assert!(
+            elapsed < Duration::from_millis(50),
+            "spawn_backfill should return in <50 ms, took {elapsed:?}"
+        );
+        assert!(job_id.starts_with("backfill-"));
+        // Drain the worker so we don't leak a background thread into
+        // the next test (in-progress flag stays sticky otherwise).
+        wait_until_idle(&state, 5_000).expect("worker should finish");
+    }
+
+    #[test]
+    fn double_spawn_backfill_returns_none_on_second_call() {
+        // The second start request must NOT spawn a parallel worker
+        // and must NOT clear the in-progress flag of the first.
+        let app = tauri::test::mock_app();
+        let raw = AppState::new().expect("state");
+        swap_stub_embedder(&raw, 8);
+        enable_embeddings(&raw);
+        // 200 rows × 5 ms pause keeps the worker alive long enough to
+        // race the second spawn against it.
+        seed_durable_only(&raw, "s1", 200);
+        let state = Arc::new(raw);
+
+        let first = spawn_backfill(
+            state.clone(),
+            app.handle().clone(),
+            BackfillOptions { per_row_pause_ms: 5 },
+        );
+        assert!(first.is_some(), "first spawn must succeed");
+
+        // Second call while the first is still running.
+        let second = spawn_backfill(
+            state.clone(),
+            app.handle().clone(),
+            BackfillOptions { per_row_pause_ms: 0 },
+        );
+        assert!(second.is_none(), "second spawn must be rejected");
+        // Cancel so the test doesn't have to wait for natural
+        // completion (200 rows × 5 ms = 1 sec).
+        state.backfill_cancel.store(true, Ordering::SeqCst);
+        wait_until_idle(&state, 5_000).expect("worker should drain after cancel");
+    }
+
+    #[test]
+    fn cancel_during_spawned_run_exits_within_200ms_with_cancelled_flag() {
+        // Worker runs against a long row set (200 × 5 ms = 1 sec
+        // natural duration). Flipping cancel mid-run must surface
+        // `cancelled = true` and the worker must idle within 200 ms.
+        let app = tauri::test::mock_app();
+        let raw = AppState::new().expect("state");
+        swap_stub_embedder(&raw, 8);
+        enable_embeddings(&raw);
+        seed_durable_only(&raw, "s1", 200);
+        let state = Arc::new(raw);
+
+        spawn_backfill(
+            state.clone(),
+            app.handle().clone(),
+            BackfillOptions { per_row_pause_ms: 5 },
+        )
+        .expect("spawn must succeed");
+        // Give the worker a real chance to enter the row loop. 50 ms
+        // is well above the spawn_blocking dispatch latency on every
+        // platform we ship to.
+        std::thread::sleep(Duration::from_millis(50));
+        let cancel_at = std::time::Instant::now();
+        state.backfill_cancel.store(true, Ordering::SeqCst);
+        wait_until_idle(&state, 200).expect("worker must exit within 200 ms of cancel");
+        let cancel_latency = cancel_at.elapsed();
+        assert!(
+            cancel_latency < Duration::from_millis(200),
+            "cancel-to-idle should be <200 ms, was {cancel_latency:?}"
+        );
+        let p = state.backfill_progress.lock().unwrap();
+        assert!(p.finished);
+        assert!(p.cancelled, "cancelled flag must surface in final progress");
     }
 
     #[test]
@@ -640,9 +777,8 @@ mod tests {
         swap_stub_embedder(&state, 8);
         enable_embeddings(&state);
         seed_durable_only(&state, "s1", 1);
-        run_backfill_worker(
+        run_backfill_worker_headless(
             &state,
-            None,
             "test-job".into(),
             BackfillOptions { per_row_pause_ms: 0 },
         );

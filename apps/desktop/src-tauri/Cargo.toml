@@ -75,6 +75,11 @@ sqlite-backend = []
 
 [dev-dependencies]
 tempfile = "3"
+# `tauri/test` exposes `mock_app()` + `MockRuntime`. Phase 4D backfill
+# tests need a live `AppHandle` to drive `spawn_backfill` end-to-end
+# (timing, double-start guard, cancel cadence). Enabled only for tests
+# so the bin build never carries the mock runtime.
+tauri = { version = "2", features = ["test"] }
 
 [[bin]]
 name = "aether-desktop"

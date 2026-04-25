@@ -205,6 +205,15 @@ export function RetrievalTab({ refreshKey }: Props) {
         if (!mounted) return;
         setBackfill(payload);
         setBackfillRunning(false);
+        // Phase 4D — refresh the un-embedded count so the
+        // "Backfill ~N items" copy reflects post-backfill reality.
+        // Best-effort; the next periodic refresh will pick it up
+        // anyway if this throws.
+        backfillCount()
+          .then((n) => {
+            if (mounted) setUnembeddedCount(n);
+          })
+          .catch(() => {});
       });
       // ADR-0006 D5: re-read tier on tier:changed without polling.
       const offTier = await onTierChanged((next) => {
@@ -226,16 +235,14 @@ export function RetrievalTab({ refreshKey }: Props) {
     setError(null);
     setBackfillRunning(true);
     try {
-      const finalProgress = await startBackfill();
-      setBackfill(finalProgress);
-      setBackfillRunning(false);
-      // Refresh count so the "~N items" copy reflects post-backfill reality.
-      try {
-        const n = await backfillCount();
-        setUnembeddedCount(n);
-      } catch {
-        // best-effort
-      }
+      // Phase 4D — `start_backfill` now returns immediately with the
+      // initial progress snapshot once the worker is spawned. The
+      // running flag is cleared by the `onBackfillDone` listener and
+      // the post-run count refresh is triggered there too. Treating
+      // the return value as the final progress would clobber the
+      // live event stream with a zeroed snapshot.
+      const initialProgress = await startBackfill();
+      setBackfill(initialProgress);
     } catch (e) {
       setError(`backfill error: ${String(e)}`);
       setBackfillRunning(false);

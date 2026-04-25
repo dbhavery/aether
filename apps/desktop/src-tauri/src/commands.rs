@@ -2329,39 +2329,37 @@ pub fn backfill_count(state: State<'_, std::sync::Arc<AppState>>) -> usize {
     crate::backfill::estimate_unembedded_count(state.inner().as_ref())
 }
 
-/// Run a backfill job synchronously. Returns the final
-/// `BackfillProgress` snapshot on success or an error when a job is
+/// Spawn a backfill job and return immediately with the initial
+/// `BackfillProgress` snapshot. Returns an error when a job is
 /// already in progress (only one job at a time per ADR-0007 D5).
 ///
-/// Synchronous-execution caveat: this command blocks the IPC thread
-/// for the full duration of the backfill (~30-60 sec for typical
-/// personal-scale histories at bge-m3 throughput). Async spawn is a
-/// future refinement once Tauri-managed `Arc<AppState>` is wired —
-/// for v1 the simpler sync-block model trades responsiveness for
-/// correctness. Cancel via `cancel_backfill` from another command
-/// invocation works because the worker checks the atomic flag at
-/// every row boundary.
+/// Phase 4D (ADR-0007 §Decision 5 + AUTONOMOUS_RUN_FINAL_REPORT §9
+/// shortcut #1): the worker now runs on Tauri's tokio runtime via
+/// `tauri::async_runtime::spawn_blocking`, so the IPC thread is
+/// freed within milliseconds instead of blocking for the full
+/// 30-60 sec backfill duration. Live progress flows through the
+/// existing `backfill:progress` Tauri event stream and through
+/// `backfill_status` polling — both are already consumed by
+/// `RetrievalTab.tsx`. Cancel via `cancel_backfill` from another
+/// command invocation; the worker observes the atomic at the
+/// next row boundary.
 #[tauri::command]
 pub fn start_backfill(
     state: State<'_, std::sync::Arc<AppState>>,
     app: AppHandle,
 ) -> Result<crate::state::BackfillProgress, String> {
-    if state
-        .backfill_in_progress
-        .load(std::sync::atomic::Ordering::SeqCst)
-    {
-        return Err("backfill already in progress".to_string());
-    }
-    state
-        .backfill_cancel
-        .store(false, std::sync::atomic::Ordering::SeqCst);
-    let job_id = format!("backfill-{}", state.next_ts());
-    crate::backfill::run_backfill_worker(
-        &state,
-        Some(&app),
-        job_id,
+    let job_id = crate::backfill::spawn_backfill(
+        state.inner().clone(),
+        app,
         crate::backfill::BackfillOptions::default(),
-    );
+    )
+    .ok_or_else(|| "backfill already in progress".to_string())?;
+    tracing::info!("backfill spawned: job_id={job_id}");
+    // Return the just-initialised progress snapshot. The worker may
+    // not have written to it yet (it spawns on another task), so the
+    // shape is the prior run's `finished=true` snapshot or a default.
+    // The frontend disregards it in favour of the live event stream
+    // and the periodic poll — see RetrievalTab.tsx::handleBackfill.
     Ok(state
         .backfill_progress
         .lock()
