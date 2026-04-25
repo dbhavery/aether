@@ -26,7 +26,7 @@
 //! The module compiles only when the `embeddings` cargo feature is
 //! enabled. Default builds pay zero compile or binary cost.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
@@ -121,6 +121,27 @@ pub trait EmbeddingStore: Send + Sync {
         query: &[f32],
         k: usize,
     ) -> Result<Vec<SimilarityHit>, L2Error>;
+
+    /// Return the set of memory ids that already have an embedding
+    /// stored for `domain`. Implementations should be cheap (an
+    /// in-memory map snapshot or filesystem scan), not embedding-side
+    /// I/O — callers use this to skip already-embedded rows during a
+    /// second-pass backfill.
+    ///
+    /// `HashSet` (rather than `Vec`/`BTreeSet`) is the chosen return
+    /// shape because the consumer pattern is `set.contains(&id)`
+    /// inside a hot per-row loop; `HashSet` gives O(1) per probe and
+    /// the keys are owned `MemoryId`s the store already holds.
+    ///
+    /// Default impl returns an empty set so existing implementations
+    /// do not have to opt in immediately. The semantic contract of an
+    /// empty set is "skip nothing", which preserves the prior
+    /// brute-force-re-embed behaviour — safer than an over-eager
+    /// "everything is already embedded" default that would silently
+    /// drop work. Implementations SHOULD override.
+    fn embedded_ids(&self, _domain: MemoryDomain) -> Result<HashSet<MemoryId>, L2Error> {
+        Ok(HashSet::new())
+    }
 }
 
 /// In-process, domain-partitioned embedding store. Optional JSONL
@@ -274,6 +295,18 @@ impl EmbeddingStore for FlatFileEmbeddingStore {
             .lock()
             .map_err(|e| L2Error::Internal(format!("embedding lock poisoned: {e}")))?;
         Ok(guard.rows.get(&domain).map(|m| m.len()).unwrap_or(0))
+    }
+
+    fn embedded_ids(&self, domain: MemoryDomain) -> Result<HashSet<MemoryId>, L2Error> {
+        let guard = self
+            .inner
+            .lock()
+            .map_err(|e| L2Error::Internal(format!("embedding lock poisoned: {e}")))?;
+        Ok(guard
+            .rows
+            .get(&domain)
+            .map(|m| m.keys().cloned().collect())
+            .unwrap_or_default())
     }
 
     fn query_nearest(
@@ -649,6 +682,82 @@ mod tests {
             ab > ac,
             "similar sentences should score higher: ab={ab} ac={ac}"
         );
+    }
+
+    #[test]
+    fn embedded_ids_empty_store_returns_empty_set() {
+        let store = FlatFileEmbeddingStore::in_memory();
+        let ids = store.embedded_ids(MemoryDomain::Durable).unwrap();
+        assert!(ids.is_empty());
+    }
+
+    #[test]
+    fn embedded_ids_returns_only_requested_domain() {
+        let store = FlatFileEmbeddingStore::in_memory();
+        store
+            .upsert(row(MemoryDomain::Durable, "d-a", vec![1.0, 0.0]))
+            .unwrap();
+        store
+            .upsert(row(MemoryDomain::Durable, "d-b", vec![0.0, 1.0]))
+            .unwrap();
+        store
+            .upsert(row(MemoryDomain::Projects, "p-a", vec![1.0, 0.0]))
+            .unwrap();
+
+        let durable = store.embedded_ids(MemoryDomain::Durable).unwrap();
+        assert_eq!(durable.len(), 2);
+        assert!(durable.contains(&MemoryId::new("d-a")));
+        assert!(durable.contains(&MemoryId::new("d-b")));
+        assert!(!durable.contains(&MemoryId::new("p-a")));
+
+        let projects = store.embedded_ids(MemoryDomain::Projects).unwrap();
+        assert_eq!(projects.len(), 1);
+        assert!(projects.contains(&MemoryId::new("p-a")));
+
+        // A domain with no rows ever inserted returns an empty set
+        // rather than erroring — the consumer treats "no entry" and
+        // "empty entry" the same way.
+        let artifacts = store.embedded_ids(MemoryDomain::Artifacts).unwrap();
+        assert!(artifacts.is_empty());
+    }
+
+    #[test]
+    fn embedded_ids_reflects_upsert_replace_and_delete() {
+        let store = FlatFileEmbeddingStore::in_memory();
+        store
+            .upsert(row(MemoryDomain::Durable, "a", vec![1.0, 0.0]))
+            .unwrap();
+        store
+            .upsert(row(MemoryDomain::Durable, "a", vec![0.5, 0.5]))
+            .unwrap();
+        // Replace must not duplicate.
+        let after_replace = store.embedded_ids(MemoryDomain::Durable).unwrap();
+        assert_eq!(after_replace.len(), 1);
+        // Delete removes from the set.
+        store
+            .delete(MemoryDomain::Durable, &MemoryId::new("a"))
+            .unwrap();
+        let after_delete = store.embedded_ids(MemoryDomain::Durable).unwrap();
+        assert!(after_delete.is_empty());
+    }
+
+    #[test]
+    fn embedded_ids_persistence_roundtrip() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        {
+            let store = FlatFileEmbeddingStore::with_persistence(tmp.path()).unwrap();
+            store
+                .upsert(row(MemoryDomain::Durable, "a", vec![0.3, 0.4]))
+                .unwrap();
+            store
+                .upsert(row(MemoryDomain::Durable, "b", vec![0.1, 0.9]))
+                .unwrap();
+        }
+        let reopened = FlatFileEmbeddingStore::with_persistence(tmp.path()).unwrap();
+        let ids = reopened.embedded_ids(MemoryDomain::Durable).unwrap();
+        assert_eq!(ids.len(), 2);
+        assert!(ids.contains(&MemoryId::new("a")));
+        assert!(ids.contains(&MemoryId::new("b")));
     }
 
     #[test]
