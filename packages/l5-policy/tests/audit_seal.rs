@@ -246,3 +246,91 @@ fn v2_row_without_provenance_round_trips_through_serde() {
     assert!(back.original_utterance.is_none());
     assert!(back.retrieval_provenance.is_none());
 }
+
+// ---------------------------------------------------------------------------
+// HIGH-1 regression — version-aware canonical_bytes preserves v1 chains.
+//
+// Before the fix in this commit, `canonical_bytes` always serialized the
+// wide ADR-0009 shape (with `schema_version`, `original_utterance`,
+// `retrieval_provenance`). A row sealed pre-`f378ea5` was hashed over the
+// narrow shape and would re-verify to a different hash post-deploy →
+// false-positive `AuditVerifyError` on every legacy row.
+//
+// These tests pin the fix:
+//   1. v1 rows hash over a narrow canonical payload that omits the three
+//      ADR-0009 v2 fields entirely.
+//   2. A chain whose first row is v1 and second row is v2 verifies cleanly
+//      end-to-end (cross-schema replay).
+//   3. Future schema versions (v3+) are treated as wide for forward-compat.
+// ---------------------------------------------------------------------------
+
+fn make_row_v1(id: &str, t: u64) -> AuditRecordEvent {
+    let mut row = make_row(id, t);
+    row.schema_version = aether_l5_policy::AUDIT_SCHEMA_VERSION_V1;
+    row.original_utterance = None;
+    row.retrieval_provenance = None;
+    row
+}
+
+#[test]
+fn canonical_bytes_for_v1_row_omits_adr0009_fields() {
+    use aether_l5_policy::canonical_bytes;
+    let row = make_row_v1("v1-narrow", 1);
+    let bytes = canonical_bytes(&row).expect("canonicalize v1");
+    let s = std::str::from_utf8(&bytes).expect("utf8");
+    assert!(
+        !s.contains("schema_version"),
+        "v1 canonical bytes must not contain 'schema_version': {s}"
+    );
+    assert!(
+        !s.contains("original_utterance"),
+        "v1 canonical bytes must not contain 'original_utterance': {s}"
+    );
+    assert!(
+        !s.contains("retrieval_provenance"),
+        "v1 canonical bytes must not contain 'retrieval_provenance': {s}"
+    );
+}
+
+#[test]
+fn canonical_bytes_for_v2_row_includes_adr0009_fields() {
+    use aether_l5_policy::canonical_bytes;
+    let row = make_row("v2-wide", 1);
+    let bytes = canonical_bytes(&row).expect("canonicalize v2");
+    let s = std::str::from_utf8(&bytes).expect("utf8");
+    assert!(s.contains("schema_version"));
+    assert!(s.contains("original_utterance"));
+    assert!(s.contains("retrieval_provenance"));
+}
+
+#[test]
+fn cross_schema_chain_replay_verifies_v1_then_v2() {
+    // Simulates the production migration scenario: a row was sealed
+    // before ADR-0009 (v1, narrow canonicalization), then a row is
+    // sealed after the upgrade (v2, wide canonicalization). Both must
+    // re-verify under the post-fix verifier.
+    let (_tmp, path) = temp("seal_cross_schema.db");
+    let b = DurableBackends::open(&path).unwrap();
+    b.audit.append(&make_row_v1("legacy-v1", 1)).unwrap();
+    b.audit.append(&make_row("modern-v2", 2)).unwrap();
+    b.audit
+        .verify_chain()
+        .expect("v1→v2 chain must verify after HIGH-1 fix");
+}
+
+/// Forward-compatibility: a hypothetical v3 row (or any version > v2)
+/// canonicalizes through the wide path. A v3-aware deserializer that
+/// dropped unknown fields would land here. This locks the
+/// "anything-not-v1 is wide" dispatch so a future schema bump does not
+/// silently revert to the narrow shape and break v2 chains.
+#[test]
+fn canonical_bytes_for_future_versions_uses_v2_shape() {
+    use aether_l5_policy::canonical_bytes;
+    let mut row = make_row("future-v3", 1);
+    row.schema_version = 3;
+    let bytes = canonical_bytes(&row).expect("canonicalize v3-as-v2");
+    let s = std::str::from_utf8(&bytes).expect("utf8");
+    assert!(s.contains("\"schema_version\":3"));
+    assert!(s.contains("original_utterance"));
+    assert!(s.contains("retrieval_provenance"));
+}
