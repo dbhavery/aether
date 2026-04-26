@@ -485,8 +485,8 @@ def phase_train_lora() -> None:
     sft_cfg = SFTConfig(
         output_dir=str(out_dir),
         num_train_epochs=1,
-        per_device_train_batch_size=2,
-        gradient_accumulation_steps=8,
+        per_device_train_batch_size=4,
+        gradient_accumulation_steps=4,
         learning_rate=2e-4,
         warmup_ratio=0.03,
         logging_steps=20,
@@ -495,9 +495,9 @@ def phase_train_lora() -> None:
         save_total_limit=3,
         eval_strategy="steps",
         eval_steps=500,
-        per_device_eval_batch_size=2,
+        per_device_eval_batch_size=4,
         bf16=True,
-        max_length=2048,
+        max_length=1024,
         packing=False,
         dataset_text_field=None,  # we provide formatting_func
         gradient_checkpointing=True,
