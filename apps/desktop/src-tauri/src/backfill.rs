@@ -48,7 +48,9 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
-use aether_l2_memory::{EmbeddingRow, MemoryDomain as L2Domain, MemoryId, EMBED_ELIGIBLE_DOMAINS};
+use aether_l2_memory::{
+    EmbeddingRow, L2Error, MemoryDomain as L2Domain, MemoryId, EMBED_ELIGIBLE_DOMAINS,
+};
 use aether_l5_policy::capability::{Capability, ResourceScope};
 use aether_l5_policy::common::{MonotonicTimestamp, RequestId, TurnId};
 use aether_l5_policy::decision::Decision;
@@ -66,6 +68,20 @@ use crate::state::{AppState, BackfillProgress};
 /// floor — measured throughput at this rate sustains ~5 rows/sec for
 /// bge-m3 on Don's 3090 Ti, matching the Block 5 sustained warm rate.
 pub const DEFAULT_PER_ROW_PAUSE_MS: u64 = 50;
+
+/// Maximum number of retry attempts for a transient embed failure
+/// before the row is counted as a permanent failure. Phase 3B
+/// observed a ~1.3% sustained 500 rate even with 50 ms pacing in
+/// place; three retries with exponential backoff (50/100/200 ms by
+/// default) covers that residue without unbounded latency.
+const MAX_EMBED_RETRIES: u32 = 3;
+
+/// Granularity for the cancel-aware backoff sleep. The retry sleep
+/// is sliced into chunks of this size so the worker observes a
+/// pending cancel within ~one chunk rather than waiting for the full
+/// backoff window. 10 ms keeps cancel-to-exit comfortably inside the
+/// 200 ms latency budget exercised by the spawn-cancel tests.
+const RETRY_SLEEP_CHUNK_MS: u64 = 10;
 
 /// One-shot backfill configuration. Future runs may add per-domain
 /// scope, "last 30 days only" filters, etc. — held simple for now.
@@ -286,8 +302,49 @@ pub fn run_backfill_worker<R: Runtime>(
                 // No pause on skip — the whole point is the cheap path.
                 continue;
             }
-            match provider.embed(&content) {
-                Ok(vector) => {
+            // Phase 3B F1: per-row retry-on-transient-failure loop.
+            // Initial attempt + up to MAX_EMBED_RETRIES additional
+            // tries; backoff doubles each time, starting at the
+            // configured per-row pacing pause. 4xx-class errors and
+            // non-transient failures (e.g. payload shape) bail out
+            // immediately — retrying them is pure waste.
+            let mut attempts: u32 = 0;
+            let mut backoff = pause;
+            let embed_outcome = loop {
+                attempts += 1;
+                match provider.embed(&content) {
+                    Ok(vector) => break EmbedOutcome::Success { vector, attempts },
+                    Err(e) => {
+                        let transient = is_transient_embed_failure(&e);
+                        let exhausted = attempts > MAX_EMBED_RETRIES;
+                        if !transient || exhausted {
+                            break EmbedOutcome::Failed {
+                                err: e,
+                                transient,
+                                attempts,
+                            };
+                        }
+                        tracing::warn!(
+                            "backfill embed {} seq {} transient (attempt {}/{}): {e}",
+                            domain.label(),
+                            seq,
+                            attempts,
+                            MAX_EMBED_RETRIES + 1
+                        );
+                        if !cancel_aware_sleep(state, backoff) {
+                            // Cancel observed during backoff. Surface
+                            // as cancelled at the loop boundary; do
+                            // not count this row as a failure since
+                            // we never made the final decision.
+                            break EmbedOutcome::CancelledDuringBackoff;
+                        }
+                        backoff = backoff.saturating_mul(2);
+                    }
+                }
+            };
+
+            match embed_outcome {
+                EmbedOutcome::Success { vector, attempts } => {
                     let row = EmbeddingRow {
                         memory_id: memory_id.clone(),
                         domain,
@@ -298,17 +355,31 @@ pub fn run_backfill_worker<R: Runtime>(
                         bump_failures(state);
                     } else {
                         bump_completed(state);
+                        if attempts > 1 {
+                            bump_recovered(state);
+                        }
                     }
                 }
-                Err(e) => {
-                    tracing::warn!("backfill embed {} seq {}: {e}", domain.label(), seq);
+                EmbedOutcome::Failed { err, .. } => {
+                    tracing::warn!("backfill embed {} seq {}: {err}", domain.label(), seq);
                     bump_failures(state);
+                }
+                EmbedOutcome::CancelledDuringBackoff => {
+                    // Cancel flag is already set; the next loop
+                    // iteration's head-check will exit cleanly.
+                    emit_progress(app, &job_id, state);
+                    continue;
                 }
             }
             emit_progress(app, &job_id, state);
             // Pacing pause to avoid Ollama queue 500s under sustained
-            // bge-m3 load (ADR-0007 D7 §Tuning notes).
-            std::thread::sleep(pause);
+            // bge-m3 load (ADR-0007 D7 §Tuning notes). Cancel-aware
+            // so a flip during the inter-row pause exits within one
+            // RETRY_SLEEP_CHUNK_MS slice rather than holding the
+            // worker for the full pause.
+            if !cancel_aware_sleep(state, pause) {
+                continue;
+            }
         }
     }
 
@@ -329,6 +400,126 @@ fn bump_failures(state: &AppState) {
 fn bump_skipped(state: &AppState) {
     let mut p = state.backfill_progress.lock().expect("backfill progress lock");
     p.skipped_already_embedded += 1;
+}
+
+fn bump_recovered(state: &AppState) {
+    let mut p = state.backfill_progress.lock().expect("backfill progress lock");
+    p.recovered_failures += 1;
+}
+
+/// Outcome of one row's embed attempt-and-retry sequence.
+enum EmbedOutcome {
+    /// `attempts` is the total tries consumed (>=1). Anything > 1
+    /// means at least one transient failure was recovered from.
+    Success { vector: Vec<f32>, attempts: u32 },
+    /// Embed call failed permanently. `transient` distinguishes a
+    /// non-retryable client error (false) from an exhausted retry
+    /// budget on a transient failure (true) — surfaced for tracing
+    /// so operators can disambiguate Ollama queue pressure from
+    /// genuinely-bad input.
+    Failed {
+        err: L2Error,
+        #[allow(dead_code)]
+        transient: bool,
+        #[allow(dead_code)]
+        attempts: u32,
+    },
+    /// Cancel flag flipped during a backoff sleep. The outer loop's
+    /// head-check will catch this on the next iteration; the row
+    /// counters are not bumped because the row was never finally
+    /// decided.
+    CancelledDuringBackoff,
+}
+
+/// Phase 3B F1: classify an `L2Error` from the embed call as
+/// transient (worth retrying) or terminal. The Ollama provider
+/// (`packages/l2-memory/src/embeddings.rs::OllamaEmbedder::embed`)
+/// folds every transport / status / payload failure into
+/// `L2Error::Embedding(String)` carrying the underlying message.
+/// We classify by string-substring on that message — fragile but
+/// localised, and the alternative would require restructuring the
+/// provider trait's error surface across every consumer.
+///
+/// **Transient (retry):**
+/// - HTTP 5xx: `status code 500`, `status: 500`, also 502 / 503 / 504.
+/// - Network timeouts: any message containing `timeout` / `timed out`.
+/// - Connection refused: spelled `connection refused` (lowercase) or
+///   `Connection refused` (initial cap) by `ureq`'s underlying io.
+/// - Generic `transport:` prefix the provider attaches to ureq errors
+///   that don't carry a discrete status — covers DNS failure, TLS
+///   handshake, mid-stream resets, all of which are worth one retry.
+///
+/// **Terminal (no retry):**
+/// - HTTP 4xx (`status code 4`xx): the request itself is bad — bad
+///   model name, malformed body, oversize input. Retrying just burns
+///   wall-clock.
+/// - Payload-shape errors (`missing 'embedding' array`, `non-numeric
+///   entry`, `empty vector`): the server answered, the answer is
+///   broken — input or model issue, not pressure.
+/// - Storage / Internal variants: not from the network at all.
+fn is_transient_embed_failure(err: &L2Error) -> bool {
+    let L2Error::Embedding(msg) = err else {
+        return false;
+    };
+    let lower = msg.to_lowercase();
+
+    // 4xx is always terminal — check before the generic 5xx /
+    // transport heuristics so a stray "transport: ... 400" doesn't
+    // get pulled into the retry path.
+    if lower.contains("status code 4") || lower.contains("status: 4") {
+        return false;
+    }
+
+    // 5xx HTTP status — Ollama queue pressure, internal error,
+    // restart-in-progress. Worth at least one retry.
+    let http_5xx = ["status code 500", "status code 502", "status code 503",
+                    "status code 504", "status: 500", "status: 502",
+                    "status: 503", "status: 504"];
+    if http_5xx.iter().any(|needle| lower.contains(needle)) {
+        return true;
+    }
+
+    // Timeouts and connection-refused are pure transport faults —
+    // Ollama either hadn't bound the port yet, evicted the model
+    // mid-request, or the OS is under load. One retry is cheap
+    // insurance.
+    if lower.contains("timeout") || lower.contains("timed out") {
+        return true;
+    }
+    if lower.contains("connection refused") {
+        return true;
+    }
+
+    // Generic transport prefix the OllamaEmbedder attaches to every
+    // ureq::Error. If we got here we already filtered out the
+    // discrete 4xx cases above, so a residual "transport:" most
+    // commonly carries a network-level fault (DNS, TLS, reset).
+    if lower.contains("transport:") {
+        return true;
+    }
+
+    false
+}
+
+/// Sleep for `total` while polling the cancel atomic every
+/// `RETRY_SLEEP_CHUNK_MS`. Returns `true` if the sleep completed
+/// without observing a cancel; returns `false` immediately once
+/// cancel flips, so the caller can take the cancellation path.
+fn cancel_aware_sleep(state: &AppState, total: Duration) -> bool {
+    if total.is_zero() {
+        return !state.backfill_cancel.load(Ordering::SeqCst);
+    }
+    let chunk = Duration::from_millis(RETRY_SLEEP_CHUNK_MS);
+    let mut remaining = total;
+    while !remaining.is_zero() {
+        if state.backfill_cancel.load(Ordering::SeqCst) {
+            return false;
+        }
+        let step = if remaining < chunk { remaining } else { chunk };
+        std::thread::sleep(step);
+        remaining = remaining.saturating_sub(step);
+    }
+    !state.backfill_cancel.load(Ordering::SeqCst)
 }
 
 fn finalize<R: Runtime>(state: &AppState, app: Option<&AppHandle<R>>, job_id: &str, cancelled: bool) {
@@ -763,6 +954,271 @@ mod tests {
         let p = state.backfill_progress.lock().unwrap();
         assert!(p.finished);
         assert!(p.cancelled, "cancelled flag must surface in final progress");
+    }
+
+    // ----- Phase 3B F1: retry-on-transient-failure -----
+    //
+    // These tests exercise the retry loop in run_backfill_worker by
+    // swapping in a programmable mock embedder that returns a
+    // configurable script of (Err | Ok) outcomes per call.
+
+    use std::sync::Mutex;
+
+    /// Mock embedder that returns a scripted sequence of results. The
+    /// script is consumed front-to-back; if the worker calls more
+    /// times than the script has entries, the last entry repeats so
+    /// tests fail loudly via assertion rather than panicking inside
+    /// the embedder. Keeps an internal call counter test code can
+    /// inspect to confirm retry shape.
+    struct ScriptedEmbedder {
+        script: Mutex<Vec<Result<Vec<f32>, L2Error>>>,
+        calls: std::sync::atomic::AtomicUsize,
+    }
+
+    impl ScriptedEmbedder {
+        fn new(script: Vec<Result<Vec<f32>, L2Error>>) -> Self {
+            Self {
+                script: Mutex::new(script),
+                calls: std::sync::atomic::AtomicUsize::new(0),
+            }
+        }
+        fn calls(&self) -> usize {
+            self.calls.load(Ordering::SeqCst)
+        }
+    }
+
+    impl EmbeddingProvider for ScriptedEmbedder {
+        fn embed_raw(&self, _text: &str) -> Result<Vec<f32>, L2Error> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            let mut s = self.script.lock().unwrap();
+            let entry = if s.len() > 1 {
+                s.remove(0)
+            } else if let Some(last) = s.first() {
+                clone_script_entry(last)
+            } else {
+                Err(L2Error::Embedding("scripted embedder ran dry".into()))
+            };
+            entry
+        }
+        fn label(&self) -> String {
+            "scripted".into()
+        }
+    }
+
+    /// Clone a script entry by manually recreating each variant so
+    /// adding a new `L2Error` arm upstream is a localised compile
+    /// error here rather than a silent fallback.
+    fn clone_script_entry(
+        entry: &Result<Vec<f32>, L2Error>,
+    ) -> Result<Vec<f32>, L2Error> {
+        match entry {
+            Ok(v) => Ok(v.clone()),
+            Err(e) => Err(clone_l2_error(e)),
+        }
+    }
+
+    fn clone_l2_error(e: &L2Error) -> L2Error {
+        match e {
+            L2Error::Embedding(m) => L2Error::Embedding(m.clone()),
+            L2Error::Storage(m) => L2Error::Storage(m.clone()),
+            L2Error::Internal(m) => L2Error::Internal(m.clone()),
+            L2Error::NotFound => L2Error::NotFound,
+            L2Error::PrivacyViolation(m) => L2Error::PrivacyViolation(m.clone()),
+        }
+    }
+
+    fn install_scripted(state: &AppState, scripted: Arc<ScriptedEmbedder>) {
+        let provider: Arc<dyn EmbeddingProvider> = scripted;
+        *state.embedding_provider.write().unwrap() = provider;
+    }
+
+    fn ollama_500() -> L2Error {
+        L2Error::Embedding(
+            "ollama embeddings transport: http://127.0.0.1:11434/api/embeddings: status code 500"
+                .into(),
+        )
+    }
+
+    fn ollama_400() -> L2Error {
+        L2Error::Embedding(
+            "ollama embeddings transport: http://127.0.0.1:11434/api/embeddings: status code 400"
+                .into(),
+        )
+    }
+
+    #[test]
+    fn single_500_then_success_increments_recovered_count() {
+        // First call: transient 500. Second call: ok. Worker must
+        // count the row as completed (with a recovered failure),
+        // not as a failure.
+        let state = AppState::new().expect("state");
+        enable_embeddings(&state);
+        seed_durable_only(&state, "s1", 1);
+        let scripted = Arc::new(ScriptedEmbedder::new(vec![
+            Err(ollama_500()),
+            Ok(vec![0.1f32; 8]),
+        ]));
+        install_scripted(&state, scripted.clone());
+
+        run_backfill_worker_headless(
+            &state,
+            "f1-recover".into(),
+            BackfillOptions { per_row_pause_ms: 0 },
+        );
+        let p = state.backfill_progress.lock().unwrap();
+        assert!(p.finished);
+        assert!(!p.cancelled);
+        assert_eq!(p.completed, 1, "row must land in completed after retry");
+        assert_eq!(p.failures, 0, "transient recovered: failures unchanged");
+        assert_eq!(
+            p.recovered_failures, 1,
+            "recovered_failures must increment exactly once"
+        );
+        assert_eq!(scripted.calls(), 2, "exactly one retry consumed");
+    }
+
+    #[test]
+    fn three_500s_then_giveup_increments_failures() {
+        // Initial attempt + 3 retries = 4 calls, all 500. Row must
+        // be counted as a permanent failure, recovered_failures
+        // unchanged.
+        let state = AppState::new().expect("state");
+        enable_embeddings(&state);
+        seed_durable_only(&state, "s1", 1);
+        let scripted = Arc::new(ScriptedEmbedder::new(vec![Err(ollama_500())]));
+        install_scripted(&state, scripted.clone());
+
+        run_backfill_worker_headless(
+            &state,
+            "f1-giveup".into(),
+            BackfillOptions { per_row_pause_ms: 0 },
+        );
+        let p = state.backfill_progress.lock().unwrap();
+        assert!(p.finished);
+        assert!(!p.cancelled);
+        assert_eq!(p.completed, 0);
+        assert_eq!(p.failures, 1, "permanent failure counted once");
+        assert_eq!(p.recovered_failures, 0);
+        assert_eq!(
+            scripted.calls(),
+            (MAX_EMBED_RETRIES as usize) + 1,
+            "initial attempt + MAX_EMBED_RETRIES retries"
+        );
+    }
+
+    #[test]
+    fn cancel_during_retry_backoff_exits_cleanly() {
+        // First call: 500. Worker enters backoff sleep. Test thread
+        // flips cancel during the sleep window. Worker must exit
+        // without consuming more attempts and without bumping
+        // failures (the row was never finally decided).
+        let state = Arc::new({
+            let s = AppState::new().expect("state");
+            enable_embeddings(&s);
+            seed_durable_only(&s, "s1", 1);
+            s
+        });
+        let scripted = Arc::new(ScriptedEmbedder::new(vec![Err(ollama_500())]));
+        install_scripted(&state, scripted.clone());
+
+        // 100 ms pause guarantees the backoff sleep is long enough
+        // for the canceller thread to land its flip during the
+        // first slice. cancel_aware_sleep polls every
+        // RETRY_SLEEP_CHUNK_MS (10 ms) so the worker observes the
+        // flip well before the 100 ms window elapses.
+        let canceller_state = state.clone();
+        let canceller = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(20));
+            canceller_state.backfill_cancel.store(true, Ordering::SeqCst);
+        });
+
+        run_backfill_worker_headless(
+            &state,
+            "f1-cancel".into(),
+            BackfillOptions { per_row_pause_ms: 100 },
+        );
+        canceller.join().unwrap();
+
+        let p = state.backfill_progress.lock().unwrap();
+        assert!(p.finished);
+        assert!(p.cancelled, "cancelled flag must surface");
+        assert_eq!(p.failures, 0, "cancelled-during-backoff is not a failure");
+        assert_eq!(p.completed, 0);
+        assert_eq!(p.recovered_failures, 0);
+        assert_eq!(
+            scripted.calls(),
+            1,
+            "no further attempts after cancel during backoff"
+        );
+    }
+
+    #[test]
+    fn four_hundred_class_errors_not_retried() {
+        // 400 is a client error — no amount of retrying will fix
+        // bad input. Worker must give up after the first attempt
+        // and count the row as a failure with zero retries
+        // consumed.
+        let state = AppState::new().expect("state");
+        enable_embeddings(&state);
+        seed_durable_only(&state, "s1", 1);
+        let scripted = Arc::new(ScriptedEmbedder::new(vec![Err(ollama_400())]));
+        install_scripted(&state, scripted.clone());
+
+        run_backfill_worker_headless(
+            &state,
+            "f1-no-retry-on-400".into(),
+            BackfillOptions { per_row_pause_ms: 0 },
+        );
+        let p = state.backfill_progress.lock().unwrap();
+        assert!(p.finished);
+        assert_eq!(p.failures, 1);
+        assert_eq!(p.completed, 0);
+        assert_eq!(p.recovered_failures, 0);
+        assert_eq!(
+            scripted.calls(),
+            1,
+            "4xx must not trigger any retry attempts"
+        );
+    }
+
+    #[test]
+    fn classifier_recognises_5xx_timeout_and_refused_as_transient() {
+        for needle in [
+            "ollama embeddings transport: target: status code 500",
+            "ollama embeddings transport: target: status code 502",
+            "ollama embeddings transport: target: status code 503",
+            "ollama embeddings transport: target: status code 504",
+            "ollama embeddings transport: read timeout exceeded",
+            "ollama embeddings transport: connection refused (os error 111)",
+            "ollama embeddings transport: dns lookup failed",
+        ] {
+            let err = L2Error::Embedding(needle.into());
+            assert!(
+                is_transient_embed_failure(&err),
+                "expected transient: {needle}"
+            );
+        }
+    }
+
+    #[test]
+    fn classifier_rejects_4xx_and_payload_shape_errors() {
+        for needle in [
+            "ollama embeddings transport: status code 400",
+            "ollama embeddings transport: status code 404",
+            "ollama embeddings transport: status code 422",
+            "ollama embeddings response missing `embedding` array: {}",
+            "ollama embeddings non-numeric entry: null",
+            "ollama embeddings returned empty vector",
+        ] {
+            let err = L2Error::Embedding(needle.into());
+            assert!(
+                !is_transient_embed_failure(&err),
+                "expected NOT transient: {needle}"
+            );
+        }
+        // Non-Embedding variants are never transient.
+        assert!(!is_transient_embed_failure(&L2Error::Storage("disk full".into())));
+        assert!(!is_transient_embed_failure(&L2Error::Internal("poisoned".into())));
     }
 
     #[test]

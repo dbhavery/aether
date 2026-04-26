@@ -646,3 +646,142 @@ OK (122 anchors / 28 files).
 means the retrieval/backfill call sites pick up sanitization
 without code changes. Other parallel agents own those files this
 session.
+
+---
+
+## D-017 — Phase 3B F1: per-row retry-on-transient with exponential backoff (3 retries, base = pacing pause)
+
+**Date.** 2026-04-25 (autonomous session, after D-013 stress-bench landed
+the BACKFILL_STRESS_REPORT § "Headline numbers" 1.3 % HTTP 500 floor).
+
+**Context.** D-013 measured a sustained ~1.3 % HTTP 500 failure rate
+on Forge running bge-m3 through Ollama 0.21.2 at the 50 ms pacing
+default, and showed that bumping to 100 ms reduced but did not
+eliminate the cadence (failures cluster at ~50-row intervals,
+suggesting an internal Ollama pressure boundary not addressable by
+pacing alone). The pre-F1 backfill worker counted these as per-row
+failures and continued — correct behavior, but the un-embedded
+residue only got re-embedded on the next backfill invocation via
+the Phase 2 `embedded_ids` skip-path. The §6 "proposed" addendum
+to ADR-0007 D7 §Tuning notes flagged retry-on-500 with one
+exponential-backoff retry as the natural F1 follow-up. F1 is now
+landed; this entry documents the non-obvious schedule + counter
+choices.
+
+**Decision.**
+1. **Retry budget = 3 (initial attempt + up to 3 retries = 4 total
+   tries).** §6 of the stress report sketched "one retry"; F1
+   landed three. Rationale: 1.3 % per attempt is large enough that
+   one retry leaves a meaningful ~0.017 % residue, but three drops
+   it to ~3 × 10⁻⁷ if attempts are independent. Independence is the
+   weak link in that math (the 50-row cadence implies they are not
+   independent), but the wall-clock cost of three retries is
+   bounded — 50 + 100 + 200 = 350 ms added per *failed* row, which
+   on Phase 3B's 13 failures is +4.55 s on a 4.71-min run. Cheap
+   insurance.
+2. **Exponential schedule, base = configured per-row pacing pause.**
+   First retry waits `per_row_pause_ms`, doubles each subsequent
+   retry. At the 50 ms default this is 50 / 100 / 200 ms; at a
+   100 ms pause it would be 100 / 200 / 400 ms. Tying base to the
+   pacing pause means a user who tuned pacing up because of queue
+   pressure also tunes the backoff up — single knob, not two.
+3. **Bounded, not unbounded.** Considered: backoff to N seconds,
+   then declare host down. Rejected: the user-visible UX is "this
+   row failed, the worker continued, you'll re-run later." Adding
+   minute-scale stalls inside a single row obscures that contract.
+   Three retries is the sweet spot between recovery rate and
+   "worker is stuck."
+4. **`recovered_failures` as a separate counter on `BackfillProgress`.**
+   Considered: bump only `failures` or only `completed`. Rejected:
+   conflating recoveries with un-retried successes hides the
+   diagnostic signal that Ollama is under pressure; conflating
+   them with permanent failures triggers UI false alarms ("X rows
+   failed, re-run") for rows that already succeeded. Separate
+   counter — increments once per recovered row regardless of how
+   many of the 3 retries were consumed — gives the UI a clean
+   "Y rows recovered after retry" line without double-counting
+   `completed`. The post-run UX (F2) will surface this in a future
+   commit; the field shipping ahead of the consumer is intentional
+   so the wire shape is stable when F2 lands.
+5. **4xx is never retried.** A `status code 4xx` substring on the
+   embed error short-circuits the loop after one attempt. Bad
+   model name, malformed body, oversize input — retrying just
+   wastes wall-clock and clobbers the diagnostic signal.
+   Implementation: classifier checks the 4xx prefix *before* the
+   5xx / transport heuristics so a stray "transport: ... 400"
+   takes the no-retry path.
+6. **Cancel-respecting backoff.** The retry sleep cannot be a
+   plain `std::thread::sleep` — that would extend the cancel-to-
+   exit window from one row to one row + 200 ms in the worst case.
+   Implemented as `cancel_aware_sleep`: chunked 10 ms polls of the
+   cancel atomic, returns `false` immediately on flip. The
+   `EmbedOutcome::CancelledDuringBackoff` arm exits without
+   bumping any counter — the row was never finally decided, so
+   counting it as a failure (or worse, a recovery) would lie.
+
+**Alternatives considered & rejected.**
+- **Restructure `EmbeddingProvider` error surface to carry HTTP
+  status discretely** (replace `L2Error::Embedding(String)` with
+  a structured variant). Rejected: massive blast radius across
+  every L2 consumer; the string-classifier in `is_transient_embed_failure`
+  is localised to the backfill worker and is regression-tested for
+  the seven concrete Ollama error shapes that exist today. When
+  the provider trait gets restructured for other reasons, the
+  classifier collapses to a `match` over the new variant.
+- **Skip-path on retry exhaustion (don't count as failure either).**
+  Rejected: silently dropping rows would let the user think
+  backfill completed when 1 % of their corpus is missing. The
+  `failures` counter is the load-bearing signal — F2 surfaces it
+  in the UI summary ("X rows failed; re-run if needed").
+- **Global retry budget instead of per-row.** Rejected: a single
+  Ollama hiccup that takes 50 rows down would consume the budget
+  on the first burst and leave the rest of the run un-resilient.
+  Per-row budget keeps each row independent.
+
+**Verification.** Six new unit tests in `apps/desktop/src-tauri/src/backfill.rs::tests`:
+1. `single_500_then_success_increments_recovered_count` — scripted
+   embedder returns 500 once, then OK. Asserts `completed += 1`,
+   `failures` unchanged, `recovered_failures += 1`, total of 2
+   embed calls.
+2. `three_500s_then_giveup_increments_failures` — scripted embedder
+   returns 500 forever. Asserts `failures += 1`, `recovered_failures`
+   unchanged, exactly `MAX_EMBED_RETRIES + 1` calls consumed.
+3. `cancel_during_retry_backoff_exits_cleanly` — scripted 500;
+   canceller thread flips the atomic during the 100 ms backoff
+   sleep. Asserts `cancelled = true`, `failures = 0`, `completed = 0`,
+   `recovered_failures = 0`, exactly 1 call.
+4. `four_hundred_class_errors_not_retried` — scripted 400. Asserts
+   `failures += 1` after exactly 1 call, no retries.
+5. `classifier_recognises_5xx_timeout_and_refused_as_transient` —
+   table test over 7 transient error shapes (500/502/503/504,
+   read-timeout, connection-refused, dns-lookup-failed).
+6. `classifier_rejects_4xx_and_payload_shape_errors` — table test
+   over 6 terminal shapes (400/404/422, missing-array,
+   non-numeric, empty-vector) plus `Storage` and `Internal`
+   variants.
+
+`cargo test --all-features` from `apps/desktop/src-tauri`: 283
+passed (was 277 pre-F1, +6). `cargo test --workspace`: green.
+`python tools/lint-policy-doc/check.py`: OK. `python tools/lint-memory-doc/check.py`: OK.
+
+**ADR-0007 D7 §Tuning notes.** Ratified the §6 propose-only
+addendum from BACKFILL_STRESS_REPORT in the same commit train
+(separate `docs(adr)` commit). The §Tuning notes block now reads
+"F1 landed in commit <hash>; sustained backfill recovers transient
+failures via 3-retry exponential backoff; residual permanent
+failures handled by Phase 2 `embedded_ids` skip-path on next
+invocation."
+
+**Files touched.**
+- `apps/desktop/src-tauri/src/backfill.rs` — retry loop, classifier,
+  cancel-aware sleep, scripted-embedder test scaffold, 6 tests.
+- `apps/desktop/src-tauri/src/state.rs` — `BackfillProgress::recovered_failures: usize`.
+- `docs/adr/ADR-0007-embeddings-onboarding.md` — D7 §Tuning notes
+  ratification (separate commit).
+- `planning/session_2026-04-25/DECISIONS_LOG.md` — this entry.
+
+**Did NOT modify** `packages/l2-memory/src/embeddings.rs`
+(parallel bge-m3 sanitization agent owns it; D-016) or
+`apps/desktop/src-tauri/tests/` (parallel test-engineer agent
+finding #2 owns it). All F1 tests live inline in
+`backfill::tests` per the scope guard.

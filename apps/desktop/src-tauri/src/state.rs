@@ -253,7 +253,20 @@ pub struct BackfillProgress {
     pub completed: usize,
     /// Rows that errored mid-embed and were skipped. Worker continues
     /// past failures so a single bad row doesn't kill the job.
+    /// Counts only rows that exhausted every retry attempt — a row
+    /// that succeeded on a retry is counted in `completed`, with the
+    /// retry surfaced separately in `recovered_failures` (Phase 3B F1).
     pub failures: usize,
+    /// Rows that hit at least one transient embed failure (HTTP
+    /// 5xx / timeout / connection-refused) but succeeded on a
+    /// subsequent retry. Increments once per recovered row regardless
+    /// of how many retries were consumed; the row itself is also
+    /// counted in `completed`. Surfaced separately so the UI and
+    /// post-run summary can highlight Ollama queue-pressure recovery
+    /// without conflating it with un-retried success. Phase 3B F1
+    /// landed this against ADR-0007 D7's documented ~1.3% sustained
+    /// HTTP 500 rate at 50 ms pacing.
+    pub recovered_failures: usize,
     /// Rows skipped because an embedding already exists for the
     /// (domain, memory_id) pair. Surfaced separately from `completed`
     /// so the UI can show "skipped X already-embedded rows" rather
