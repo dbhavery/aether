@@ -211,8 +211,8 @@ def phase_normalize() -> None:
                 log(f"  {name}: load_from_disk FAIL — {e}")
                 continue
             # Per-source caps to keep training tractable on one GPU.
-            # SODA is 1.5M; we sample 80k. Others uncapped.
-            cap = {"soda": 80000}.get(name)
+            # SODA is 1.5M; we sample 200k for the 12h budget.
+            cap = {"soda": 200000}.get(name)
             n_src = 0
             from datasets import DatasetDict
             splits = ds if isinstance(ds, DatasetDict) else {"train": ds}
