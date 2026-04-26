@@ -577,3 +577,72 @@ mojibake. Recommended follow-up (out of scope here): add
 `text.replace('�', ' ')` to the production embedding path
 in `packages/l2-memory/src/embeddings.rs` before the next backfill
 iteration.
+
+## D-016 — Sanitize U+FFFD at the embedding-provider boundary (closes D-015 follow-up)
+
+**Context.** D-015 surfaced six bge-m3 embed failures during Phase 3A
+calibration: any input containing the U+FFFD REPLACEMENT CHARACTER
+came back from Ollama as a NaN-vector, and downstream cosine
+similarity over a NaN vector is NaN — silently breaking retrieval
+ranking. The same mojibake pattern is reachable in production any
+time the user types or pastes text that round-tripped through a
+mismatched codec, or any time a model-generated memory contains a
+U+FFFD token (gemma4:e4b's en-dash output through Windows cp1252 is
+the demonstrated repro).
+
+**Hook point chosen.** Trait-default method on
+`EmbeddingProvider::embed`. The required impl method is renamed to
+`embed_raw`; the default `embed()` calls `sanitize_for_embed(text)`
+and forwards to `embed_raw`. Public callers (`retrieval.rs`,
+`backfill.rs`, `memory_service.rs`, tests) keep calling `.embed()`
+unchanged. Sanitization is a single source of truth — every present
+and future `EmbeddingProvider` impl (Ollama, Stub, Hf, plus any
+candle-native follow-up under D-012) inherits it for free.
+
+**Why not the other options.**
+- *Standalone helper invoked at every call site.* Four call sites
+  today, easy to miss the fifth — the failure mode of the missed
+  call site is silent NaN, not a build error.
+- *Sanitize at the upsert/write boundary only.* Misses the query
+  path; a user-typed query carrying U+FFFD would still produce a
+  NaN query vector and a wrecked retrieval.
+- *Sanitize inside each provider impl.* Same drift risk as the
+  standalone helper; trait default is strictly better.
+
+**Sanitization shape.** `sanitize_for_embed(&str) -> Cow<'_, str>`:
+returns `Cow::Borrowed(text)` when no U+FFFD is present (zero
+allocation on the hot path — tested), otherwise `Cow::Owned` of
+`text.replace('\u{FFFD}', " ")`. Replaced with ASCII space rather
+than stripped, to preserve token boundaries the surrounding text
+relies on.
+
+**Scope held tight.** Only U+FFFD is scrubbed. Other zero-width and
+non-character codepoints considered and explicitly excluded:
+U+FEFF (BOM), U+200B–U+200F (ZWSP/ZWNJ/ZWJ/RTL/LTR marks),
+U+2028/U+2029 (line/paragraph separators). None has a demonstrated
+NaN-on-embed reproducer; widening now is speculation that silently
+mutates user text. A regression test pins the narrow scope so any
+future widening is a deliberate, reviewed change.
+
+**Verification.** Six new unit tests in
+`packages/l2-memory/src/embeddings.rs` (l2-memory test count rose
+44 → 51 with `--features embeddings`):
+1. Replaces U+FFFD with space in the Phase 3A repro shape.
+2. Clean text returns `Cow::Borrowed` (no allocation).
+3. Multiple U+FFFD all replaced.
+4. Empty string borrowed.
+5. Other zero-width codepoints (BOM, ZWJ, line separator) untouched
+   — pins the narrow scope.
+6. Trait-default `embed()` runs sanitization before reaching
+   `embed_raw` (uses an in-test `CapturingProvider` to inspect what
+   the provider actually saw).
+7. Trait-default `embed()` passes clean text through unchanged.
+
+`cargo test --workspace` green. `python tools/lint-memory-doc/check.py`
+OK (122 anchors / 28 files).
+
+**Did NOT modify** `apps/desktop/src-tauri/src/retrieval.rs` or
+`apps/desktop/src-tauri/src/backfill.rs`. Trait-default approach
+means the retrieval/backfill call sites pick up sanitization
+without code changes. Other parallel agents own those files this
+session.

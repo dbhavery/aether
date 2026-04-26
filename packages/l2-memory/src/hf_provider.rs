@@ -213,7 +213,7 @@ impl HfEmbeddingProvider {
 }
 
 impl EmbeddingProvider for HfEmbeddingProvider {
-    fn embed(&self, text: &str) -> Result<Vec<f32>, L2Error> {
+    fn embed_raw(&self, text: &str) -> Result<Vec<f32>, L2Error> {
         let mut guard = self
             .helper
             .lock()

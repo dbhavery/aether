@@ -26,6 +26,7 @@
 //! The module compiles only when the `embeddings` cargo feature is
 //! enabled. Default builds pay zero compile or binary cost.
 
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 
@@ -87,14 +88,64 @@ pub struct SimilarityHit {
 /// easier to reason about than a split async surface; the request
 /// itself is single-digit milliseconds to Ollama on localhost.
 pub trait EmbeddingProvider: Send + Sync {
-    /// Return the embedding vector for `text`. Providers are
-    /// expected to return a stable dimension per invocation;
-    /// callers may reject a mismatch.
-    fn embed(&self, text: &str) -> Result<Vec<f32>, L2Error>;
+    /// Return the embedding vector for `text` after input sanitization
+    /// (see [`sanitize_for_embed`]). This is the entry point all
+    /// callers should use; concrete providers implement [`Self::embed_raw`]
+    /// instead. Implemented as a default method so every present and
+    /// future `EmbeddingProvider` impl inherits sanitization for free —
+    /// single source of truth, no missed call sites.
+    ///
+    /// Sanitization context: bge-m3 (Ollama) is documented to return
+    /// NaN-vector embeddings when the input contains the U+FFFD
+    /// replacement character (Phase 3A surfaced this on 6 of 848
+    /// synthetic-corpus rows; see DECISIONS_LOG D-015 / D-016 in
+    /// `planning/session_2026-04-25/`). Cosine similarity over a NaN
+    /// vector is NaN and silently breaks retrieval ranking — the
+    /// boundary scrub is the cheapest, most defensible fix.
+    fn embed(&self, text: &str) -> Result<Vec<f32>, L2Error> {
+        let sanitized = sanitize_for_embed(text);
+        self.embed_raw(sanitized.as_ref())
+    }
+
+    /// Provider-specific embedding call. Implementors do the actual
+    /// work here (HTTP, subprocess, hash, …). Callers MUST NOT invoke
+    /// this directly — use [`Self::embed`] so input sanitization is
+    /// always applied. Marked `#[doc(hidden)]`-style only by
+    /// convention; the trait is `pub` because the embedding feature
+    /// crosses crate boundaries.
+    fn embed_raw(&self, text: &str) -> Result<Vec<f32>, L2Error>;
 
     /// Provider-identifying label for logs + config validation
     /// (e.g. `"ollama:bge-m3"`).
     fn label(&self) -> String;
+}
+
+/// Strip characters that have been observed to break downstream
+/// embedding providers, returning a borrowed `Cow` for the common
+/// (already-clean) case so the hot path pays no allocation cost.
+///
+/// Currently strips:
+/// - `U+FFFD` REPLACEMENT CHARACTER. bge-m3 over Ollama returns
+///   NaN-vector embeddings for inputs containing this codepoint
+///   (Phase 3A finding; DECISIONS_LOG D-015). U+FFFD is the canonical
+///   marker for mojibake — text that was decoded with the wrong
+///   codec (e.g. cp1252-bytes-as-utf8 round-trip from a generator
+///   model on Windows). Replaced with ASCII space, which preserves
+///   token boundaries that the surrounding text relies on.
+///
+/// Other zero-width / non-character codepoints (U+FEFF BOM,
+/// U+200B–U+200F joiners, U+2028/U+2029 line separators) are
+/// **deliberately not** stripped here. They are speculation as a
+/// failure source; only U+FFFD has a demonstrated NaN-on-embed
+/// reproducer in the synthetic corpus. Tightening scope keeps the
+/// fix auditable and avoids silently mutating user text. Adding
+/// further classes is a follow-up if and when a new failure is
+/// observed.
+pub fn sanitize_for_embed(text: &str) -> Cow<'_, str> {
+    if !text.contains('\u{FFFD}') {
+        return Cow::Borrowed(text);
+    }
+    Cow::Owned(text.replace('\u{FFFD}', " "))
 }
 
 /// Persist + query embedding vectors. Domain-partitioned — a query
@@ -417,7 +468,7 @@ impl OllamaEmbeddingProvider {
 }
 
 impl EmbeddingProvider for OllamaEmbeddingProvider {
-    fn embed(&self, text: &str) -> Result<Vec<f32>, L2Error> {
+    fn embed_raw(&self, text: &str) -> Result<Vec<f32>, L2Error> {
         let url = format!("{}/api/embeddings", self.base_url.trim_end_matches('/'));
         let body = serde_json::json!({
             "model": self.model,
@@ -485,7 +536,7 @@ impl StubEmbedder {
 }
 
 impl EmbeddingProvider for StubEmbedder {
-    fn embed(&self, text: &str) -> Result<Vec<f32>, L2Error> {
+    fn embed_raw(&self, text: &str) -> Result<Vec<f32>, L2Error> {
         if self.dim == 0 {
             return Err(L2Error::Embedding("stub dim must be > 0".to_string()));
         }
@@ -764,5 +815,98 @@ mod tests {
     fn ollama_provider_label_includes_model() {
         let p = OllamaEmbeddingProvider::new("http://localhost:11434", "bge-m3");
         assert_eq!(p.label(), "ollama:bge-m3");
+    }
+
+    // -----------------------------------------------------------------
+    // Sanitization (DECISIONS_LOG D-016 / Phase 3A NaN-on-U+FFFD fix)
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn sanitize_replaces_ffffd_with_space() {
+        // The exact case Phase 3A surfaced: an en-dash mojibaked into
+        // U+FFFD between two words. Result must contain neither U+FFFD
+        // nor a token-merging artefact (so we replace, not strip).
+        let out = sanitize_for_embed("hello\u{FFFD}world");
+        assert_eq!(out.as_ref(), "hello world");
+        assert!(!out.contains('\u{FFFD}'));
+    }
+
+    #[test]
+    fn sanitize_clean_text_is_borrowed_no_alloc() {
+        let input = "perfectly clean utf-8 text — with an em dash";
+        let out = sanitize_for_embed(input);
+        // Cow::Borrowed for the common case: input pointer equals
+        // output pointer.
+        assert!(matches!(out, Cow::Borrowed(_)));
+        assert_eq!(out.as_ref(), input);
+    }
+
+    #[test]
+    fn sanitize_multiple_ffffd_all_replaced() {
+        let out = sanitize_for_embed("a\u{FFFD}b\u{FFFD}c\u{FFFD}");
+        assert_eq!(out.as_ref(), "a b c ");
+        assert!(!out.contains('\u{FFFD}'));
+    }
+
+    #[test]
+    fn sanitize_empty_string_is_borrowed() {
+        let out = sanitize_for_embed("");
+        assert!(matches!(out, Cow::Borrowed(_)));
+        assert_eq!(out.as_ref(), "");
+    }
+
+    #[test]
+    fn sanitize_leaves_other_unicode_alone() {
+        // Scope is intentionally narrow: BOM, ZWJ, line separators are
+        // NOT touched. They are speculative as a failure source; only
+        // U+FFFD has a demonstrated repro. This test pins that scope so
+        // a future widening is a deliberate, reviewed change.
+        let input = "bom\u{FEFF}zwj\u{200D}sep\u{2028}end";
+        let out = sanitize_for_embed(input);
+        assert_eq!(out.as_ref(), input);
+        assert!(matches!(out, Cow::Borrowed(_)));
+    }
+
+    /// Test-only embed provider that records the exact text it
+    /// receives, so we can verify the trait-default `embed` runs
+    /// sanitization before reaching `embed_raw`.
+    struct CapturingProvider {
+        last_seen: Mutex<Option<String>>,
+    }
+
+    impl CapturingProvider {
+        fn new() -> Self {
+            Self {
+                last_seen: Mutex::new(None),
+            }
+        }
+    }
+
+    impl EmbeddingProvider for CapturingProvider {
+        fn embed_raw(&self, text: &str) -> Result<Vec<f32>, L2Error> {
+            *self.last_seen.lock().unwrap() = Some(text.to_string());
+            Ok(vec![0.0, 1.0])
+        }
+        fn label(&self) -> String {
+            "capturing".to_string()
+        }
+    }
+
+    #[test]
+    fn trait_default_embed_sanitizes_before_calling_embed_raw() {
+        let p = CapturingProvider::new();
+        // Public entry point — not embed_raw.
+        let _ = p.embed("clean\u{FFFD}input").unwrap();
+        let seen = p.last_seen.lock().unwrap().clone().unwrap();
+        assert_eq!(seen, "clean input");
+        assert!(!seen.contains('\u{FFFD}'));
+    }
+
+    #[test]
+    fn trait_default_embed_passes_clean_text_through_unchanged() {
+        let p = CapturingProvider::new();
+        let _ = p.embed("already clean").unwrap();
+        let seen = p.last_seen.lock().unwrap().clone().unwrap();
+        assert_eq!(seen, "already clean");
     }
 }
