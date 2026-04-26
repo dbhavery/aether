@@ -261,4 +261,56 @@ If you dispatch parallel subagents:
 
 ---
 
-(end of handoff)
+## 9. Wave 2 — extended autonomy (Don ratified mid-run)
+
+After §1-§8 was written (tip `fd31aef`), Don woke, asked "what's left?", then said "lets get everything done. keep going." Wave 2 landed the items §3 said were awaiting Don. **22 additional commits**, tip moves from `fd31aef` → `3ca3df1`.
+
+### 9.1 Wave 2 check matrix (final)
+
+| Check | Result | Δ from §1.2 |
+| --- | --- | --- |
+| `cargo test --all-features` (apps/desktop/src-tauri) | **293 / 293** | +11 (was 282) |
+| `cargo test --workspace` | all green | +14 various |
+| `tsc --noEmit` (apps/desktop) | clean | unchanged |
+| `vitest run` (apps/desktop) | **232 / 232** | +14 (was 218) |
+| `python tools/lint-memory-doc/check.py` | OK 122 / 28 | unchanged |
+| `python tools/lint-policy-doc/check.py` | OK 34 / 9 | unchanged |
+| `python tools/lint-quality-doc/check.py` | OK 60 / 19 | unchanged |
+
+### 9.2 Wave 2 deliverables
+
+| Item | Status | Commits |
+| --- | --- | --- |
+| **D — DECISIONS_LOG D-007 dedup** (renumbered ADR-0006 §6 entry to D-006a) | DONE | `b2b1ddf` |
+| **A — Code review #2 end-to-end submit_turn → audit_recent test** | DONE | `66fb51a` |
+| **B — bge-m3 NaN U+FFFD sanitization** (trait-default `embed()` calls `sanitize_for_embed`; +7 tests) | DONE | `064fc49`, `94c620e` |
+| **C — Backfill F1 retry-on-500** (50/100/200ms backoff, `recovered_failures` counter, +6 tests, ADR-0007 D7 ratified) | DONE | `9768c17`, `7871de7` |
+| **F2 — UI failure surface** (chip strip with red failures badge, toast branches on failures/recovered) | DONE | `4e47828`, `15e82ec`, `a0cee4e` |
+| **F3 — Ollama upstream bug report draft** (Wave 1 finding RECONTEXTUALIZED — not load-related, content-deterministic NaN, prior art at ollama#13572) | DONE | `3e86d98` |
+| **E — Phase 6 live UX QA** (8 screenshots, 2 MAJOR + 1 MINOR findings) | DONE | `cbf8ea8` |
+| **UX fixes** (header responsive at 1024px, focus trap on Trust drawer, audit chevron hidden when empty) | DONE | `deb0c3a`, `2c18a5e`, `3ca3df1` |
+| **ADR-0010 implementation** (Option A REJECTED — recall@1 −16.7pp; Option B ACCEPTED — recall@1 +2.8pp via bge-reranker-v2-m3 cross-encoder) | RATIFIED | `b2051d9`, `afdf74c`, `0cacbea`, `4c1784e`, `88fdaed`, `0ef71b2` |
+| **Eval scenario broadening draft** (Path A — rewrite expectations to match Aurora persona discipline) | DRAFTED — Don ratifies | `f9e9d19` |
+
+### 9.3 Notable Wave 2 findings
+
+- **Ollama 500 rate is content-deterministic NaN, not load** (F3 finding — overrides BACKFILL_STRESS_REPORT framing). Workaround: `OLLAMA_FLASH_ATTENTION=false`. Existing prior art at github.com/ollama/ollama/issues/13572. F1 retry-on-500 still useful for genuine transient errors but cannot fix content-deterministic NaN. The B sanitization (U+FFFD strip) handles one concrete cause.
+- **ADR-0010 Option A REJECTED with empirical evidence.** Phase 3A miss-pattern analysis predicted this; recency-weighted combine made recall@1 *worse* (−16.7 pp) on the synthetic corpus because uniformly ascending timestamps make recency bias pull rank toward late-thread non-references. Option A primitives left in `retrieval.rs` as documented dead-end helpers.
+- **ADR-0010 Option B ACCEPTED in principle, production wiring deferred to ADR-0011.** Cross-encoder re-rank gives +2.8 pp recall@1 / +1.6 MRR. Modest lift; ADR-0011 will scope the production integration including reranker config, latency budget, and tier eligibility.
+- **UX audit found 2 MAJORs at default 976 px window width** — header overflow + focus escape into chat input. Both fixed in the same wave.
+
+### 9.4 Open items still awaiting Don
+
+1. **ADR-0011 production-wire of cross-encoder re-rank** — heavier session; ADR scoping needed first.
+2. **Backfill 500 workaround test** — does `OLLAMA_FLASH_ATTENTION=false` actually eliminate the 1.3% rate? Documented in F3 report but not measured.
+3. **Eval scenario broadening ratification** — Path A rewrites are drafted in `EVAL_SCENARIO_BROADENING.md`; Don signs off and applies (touches `tools/evals/__main__.py` + `personas/aurora/persona.yaml` review).
+4. **fridge_open.jpg fixture** — Don needs to commit a real fixture for the vision_response_quality scenario.
+5. **Aurora-strict canary suite** — F2 of EVAL_SCENARIO_BROADENING.md proposes a parallel non-gating literal-token test suite to detect persona drift.
+
+### 9.5 Total session count
+
+55 commits since `4614ae7` (start-of-session handoff). Tip `3ca3df1` on origin/dev. Working tree clean. cargo +18 tests, vitest +21 tests, both lints unchanged (already at target).
+
+---
+
+(end of handoff — Wave 2 close)
