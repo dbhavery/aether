@@ -785,3 +785,73 @@ invocation."
 `apps/desktop/src-tauri/tests/` (parallel test-engineer agent
 finding #2 owns it). All F1 tests live inline in
 `backfill::tests` per the scope guard.
+
+---
+
+## D-018 — ADR-0010 ratification: Option B Accepted (production deferred), Option A Rejected
+
+**Date:** 2026-04-25
+**Trigger:** Don's autonomous-session brief authorised "land everything"
+including ADR-0010 ratification; both Option A (recency-weighted combine)
+and Option B (cross-encoder re-rank) implemented and benched against the
+842-passage Phase 3A corpus.
+
+**Outcome.**
+
+| Metric    | Baseline | Option A | Option B |
+| --------- | -------- | -------- | -------- |
+| recall@1  | 0.6944   | 0.5278   | 0.7222   |
+| recall@10 | 0.9028   | 0.9028   | 0.9306   |
+| MRR       | 0.7755   | 0.6420   | 0.7920   |
+
+- **Option A — Rejected.** Actively harmful: recall@1 −16.7 pp, MRR
+  −13.4 pp. The Phase 3A miss-pattern analysis (D-015) predicted this
+  precisely — the dominant failure mode is within-thread top-1 confusion,
+  not recency bias, and on a corpus with monotonically ascending
+  timestamps a recency weight biases toward late-thread rows that are
+  systematically not the references. The combined-score helpers
+  (`combined_rank_score`, `recency_decay`, `RECENCY_WEIGHT_ALPHA`,
+  `RECENCY_HALF_LIFE`) stay in `retrieval.rs` with their unit tests as
+  documented dead-end primitives for possible future tertiary use, but
+  production Phase 4 is reverted to baseline cosine + strict-tiebreak.
+- **Option B — Accepted in principle.** Real but modest lift: recall@1
+  +2.8 pp, recall@10 +2.8 pp, MRR +1.6 pp. recall@3 regressed 1.4 pp
+  (the reranker sometimes pushes correct candidates past rank-1 to
+  rank-3+ then back out — bge-reranker-v2-m3 is not a perfect
+  discriminator on the within-thread specificity failure mode). Smaller
+  than the original ADR's "toward 90%+" hope but still the only direction
+  that improved any metric.
+
+**Why Option B's production wiring deferred to ADR-0011.**
+
+The +2.8 pp recall@1 lift does not yet justify the engineering complexity
+of a Reranker trait, AppState plumbing, `memory.json::retrieval.reranker.enabled`
+config field, and Ollama / HF helper provider plumbing vs other M2
+priorities. Three concrete triggers documented in ADR-0010 for re-opening:
+(1) a re-bench on a more "real" corpus reproduces or amplifies the lift,
+(2) a larger reranker (e.g. bge-reranker-v2.5-gemma2-lightweight) shows
+>5 pp lift on the same corpus, or (3) a user-visible quality regression
+in production retrieval makes the recall@1 floor a P1.
+
+**What landed in this session.**
+- `tools/hf_embed_helper/embed.py` — new `rerank` op (CrossEncoder
+  via sentence-transformers); wire-shape stable.
+- `apps/desktop/src-tauri/src/retrieval.rs` — Option A primitives
+  (helpers + 4 unit tests) added then production rank reverted; net
+  effect is the helpers are public + tested but not wired into
+  `run_retrieval_context` Phase 4.
+- `planning/session_2026-04-25/bench_recall_option_a.py` + JSON.
+- `planning/session_2026-04-25/bench_recall_option_b.py` + JSON.
+- `docs/adr/ADR-0010-rank-function-recency-weighted-combine.md` —
+  Status flipped Proposed → Accepted, new §Empirical Validation
+  section with all three result tables and the decision narrative.
+
+**Verification.** `cargo test --all-features` from
+`apps/desktop/src-tauri`: 293 passed, 0 failed (4 new Option-A-primitive
+tests retained even after the production revert, since the helpers are
+public). Bench scripts produce JSON outputs matching the documented
+schema.
+
+**Did NOT modify** `apps/desktop/src-tauri/src/backfill.rs`,
+`apps/desktop/src-tauri/src/state.rs`, or `apps/desktop/src-tauri/tests/`
+— parallel agents own those scopes per the autonomous-session brief.
