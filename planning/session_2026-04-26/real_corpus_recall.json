@@ -1,0 +1,370 @@
+{
+  "summary": {
+    "model": "bge-m3:latest",
+    "episode_id": 4,
+    "corpus_size": 417,
+    "query_count": 45,
+    "recall_at_1": 0.1111,
+    "recall_at_3": 0.2222,
+    "recall_at_5": 0.3333,
+    "recall_at_10": 0.4444,
+    "recall_at_20": 0.4889,
+    "mrr": 0.1981,
+    "mean_multi_target_recall_at_5": 0.3111,
+    "complete_misses": 23,
+    "ground_truth": {
+      "turns": 417,
+      "eligible_terms": 76,
+      "max_df": 4,
+      "min_df": 2,
+      "min_gap": 10,
+      "min_query_words": 12,
+      "use_bigrams": true,
+      "queries": 45,
+      "targets_per_query_distribution": {
+        "1": 39,
+        "2": 6
+      }
+    },
+    "rank_function": "cosine_desc__then_seq_desc__truncate(max_items)",
+    "ground_truth_method": "structural_lexical_reuse"
+  },
+  "miss_samples": [
+    {
+      "query_turn_id": "ep4.t0091",
+      "query_text": "to tune architectures and explore all kinds of tweaks to make the current state of the art",
+      "expected": [
+        "ep4.t0040"
+      ],
+      "expected_terms": [
+        "('current', 'state')"
+      ],
+      "top5": [
+        {
+          "turn_id": "ep4.t0403",
+          "score": 0.6352643489302459,
+          "seq": 403,
+          "text": "go in order to build models that can generalize faster and better like to new distributions"
+        },
+        {
+          "turn_id": "ep4.t0059",
+          "score": 0.6307461150299691,
+          "seq": 59,
+          "text": "Of course, data sets and architectures are something you want to always play with. But"
+        },
+        {
+          "turn_id": "ep4.t0093",
+          "score": 0.6205306676349172,
+          "seq": 93,
+          "text": "changes in the way that we're considering learning to achieve the goal that these learners actually"
+        },
+        {
+          "turn_id": "ep4.t0332",
+          "score": 0.6096386904896935,
+          "seq": 332,
+          "text": "with the human in the loop. And I think understanding how to make this work better, all the problems"
+        },
+        {
+          "turn_id": "ep4.t0278",
+          "score": 0.6087022577010159,
+          "seq": 278,
+          "text": "proposed and I think will continue to be improved and maybe alternatives will come up to take"
+        }
+      ]
+    },
+    {
+      "query_turn_id": "ep4.t0128",
+      "query_text": "uncertainty, I would say something more subtle, which we understand better now, but I think still",
+      "expected": [
+        "ep4.t0009"
+      ],
+      "expected_terms": [
+        "('understand', 'better')"
+      ],
+      "top5": [
+        {
+          "turn_id": "ep4.t0092",
+          "score": 0.679746526328899,
+          "seq": 92,
+          "text": "slightly ever slightly better. But I don't think that's going to be nearly enough. I think we need"
+        },
+        {
+          "turn_id": "ep4.t0278",
+          "score": 0.6768528921972277,
+          "seq": 278,
+          "text": "proposed and I think will continue to be improved and maybe alternatives will come up to take"
+        },
+        {
+          "turn_id": "ep4.t0357",
+          "score": 0.6700159166200697,
+          "seq": 357,
+          "text": "at some things, but in the grand scheme of things, where we're trying to understand how"
+        },
+        {
+          "turn_id": "ep4.t0251",
+          "score": 0.6609075284738885,
+          "seq": 251,
+          "text": "It's possible, but it's unlikely. It's not how it is done now. It's not how I can foresee"
+        },
+        {
+          "turn_id": "ep4.t0390",
+          "score": 0.6591562337055581,
+          "seq": 390,
+          "text": "people like me. So I would say this is something where we're going to see more progress, even"
+        }
+      ]
+    },
+    {
+      "query_turn_id": "ep4.t0148",
+      "query_text": "the relationships between the variables, those high level semantic variables. They're not going",
+      "expected": [
+        "ep4.t0062"
+      ],
+      "expected_terms": [
+        "('relationships', 'between')"
+      ],
+      "top5": [
+        {
+          "turn_id": "ep4.t0173",
+          "score": 0.7086617705142001,
+          "seq": 173,
+          "text": "The information, like the variables are completely interdependent in very complicated ways."
+        },
+        {
+          "turn_id": "ep4.t0054",
+          "score": 0.6662398307021057,
+          "seq": 54,
+          "text": "doesn't give rise to high level representations that are as powerful as the ones we're getting"
+        },
+        {
+          "turn_id": "ep4.t0133",
+          "score": 0.6647613900916135,
+          "seq": 133,
+          "text": "it's the opposite. You have this big blob of parameters which work intensely together to"
+        },
+        {
+          "turn_id": "ep4.t0169",
+          "score": 0.6595866618535383,
+          "seq": 169,
+          "text": "other and not just the variables that are disentangled from each other."
+        },
+        {
+          "turn_id": "ep4.t0174",
+          "score": 0.6571872357934943,
+          "seq": 174,
+          "text": "And also computation, like it's not just the variables, it's also how they are related to"
+        }
+      ]
+    },
+    {
+      "query_turn_id": "ep4.t0156",
+      "query_text": "in a rule based system, you also need to disentangle the mechanisms that relate those",
+      "expected": [
+        "ep4.t0126"
+      ],
+      "expected_terms": [
+        "('rule', 'based')"
+      ],
+      "top5": [
+        {
+          "turn_id": "ep4.t0168",
+          "score": 0.6549641794023136,
+          "seq": 168,
+          "text": "in a way that can be neatly disentangled. So now it's the rules that are disentangled from each"
+        },
+        {
+          "turn_id": "ep4.t0169",
+          "score": 0.639333365602113,
+          "seq": 169,
+          "text": "other and not just the variables that are disentangled from each other."
+        },
+        {
+          "turn_id": "ep4.t0162",
+          "score": 0.6111127375384136,
+          "seq": 162,
+          "text": "factorized and separated, disentangled, then you would avoid a lot of that."
+        },
+        {
+          "turn_id": "ep4.t0157",
+          "score": 0.6025235363304047,
+          "seq": 157,
+          "text": "variables to each other. So like the rules. So the rules are neatly separated. Like each rule is,"
+        },
+        {
+          "turn_id": "ep4.t0174",
+          "score": 0.5958934890615166,
+          "seq": 174,
+          "text": "And also computation, like it's not just the variables, it's also how they are related to"
+        }
+      ]
+    },
+    {
+      "query_turn_id": "ep4.t0212",
+      "query_text": "So I think you're putting it right. There's a big difference between the sort of discussion",
+      "expected": [
+        "ep4.t0000"
+      ],
+      "expected_terms": [
+        "('difference', 'between')"
+      ],
+      "top5": [
+        {
+          "turn_id": "ep4.t0188",
+          "score": 0.6812863849642857,
+          "seq": 188,
+          "text": "very different from the training distributions, they have things in common. So let me give you"
+        },
+        {
+          "turn_id": "ep4.t0192",
+          "score": 0.668827439493995,
+          "seq": 192,
+          "text": "what's going on. So the distribution is very different. But because you can transport"
+        },
+        {
+          "turn_id": "ep4.t0356",
+          "score": 0.6634508876752371,
+          "seq": 356,
+          "text": "Yeah, of course, there are differences between languages, and maybe some are slightly better"
+        },
+        {
+          "turn_id": "ep4.t0223",
+          "score": 0.6512053192502201,
+          "seq": 223,
+          "text": "Yes, I don't mean that's right."
+        },
+        {
+          "turn_id": "ep4.t0196",
+          "score": 0.6336844571463912,
+          "seq": 196,
+          "text": "things are totally different."
+        }
+      ]
+    },
+    {
+      "query_turn_id": "ep4.t0264",
+      "query_text": "mine. I am more than fine. I think it's important. I and my friends don't claim we have universal",
+      "expected": [
+        "ep4.t0140"
+      ],
+      "expected_terms": [
+        "(\"it's\", 'important')"
+      ],
+      "top5": [
+        {
+          "turn_id": "ep4.t0092",
+          "score": 0.6827139337089677,
+          "seq": 92,
+          "text": "slightly ever slightly better. But I don't think that's going to be nearly enough. I think we need"
+        },
+        {
+          "turn_id": "ep4.t0145",
+          "score": 0.6527760224913672,
+          "seq": 145,
+          "text": "about the things we care about. And I still think this is important, but I think this is missing out"
+        },
+        {
+          "turn_id": "ep4.t0390",
+          "score": 0.6500621708984157,
+          "seq": 390,
+          "text": "people like me. So I would say this is something where we're going to see more progress, even"
+        },
+        {
+          "turn_id": "ep4.t0262",
+          "score": 0.6492405943579557,
+          "seq": 262,
+          "text": "focus on different directions. And this is not just good, it's essential. So I'm totally"
+        },
+        {
+          "turn_id": "ep4.t0043",
+          "score": 0.6457944898982687,
+          "seq": 43,
+          "text": "as our understanding. Okay, so that doesn't tell us how to fix things. But I think it encourages"
+        }
+      ]
+    },
+    {
+      "query_turn_id": "ep4.t0275",
+      "query_text": "beings means. But how do we instill that into machine learning systems, do you think?",
+      "expected": [
+        "ep4.t0115"
+      ],
+      "expected_terms": [
+        "('learning', 'systems')"
+      ],
+      "top5": [
+        {
+          "turn_id": "ep4.t0272",
+          "score": 0.6591010963524582,
+          "seq": 272,
+          "text": "The idea of bias in the human sense of bias. How do you think about instilling in machine"
+        },
+        {
+          "turn_id": "ep4.t0282",
+          "score": 0.6135886367051878,
+          "seq": 282,
+          "text": "And we can use machine learning techniques to try to build predictors, classifiers that"
+        },
+        {
+          "turn_id": "ep4.t0093",
+          "score": 0.607441792962629,
+          "seq": 93,
+          "text": "changes in the way that we're considering learning to achieve the goal that these learners actually"
+        },
+        {
+          "turn_id": "ep4.t0317",
+          "score": 0.6015384725047305,
+          "seq": 317,
+          "text": "that deserves a lot more attention from the machine learning community. So there are people"
+        },
+        {
+          "turn_id": "ep4.t0303",
+          "score": 0.6013568392739217,
+          "seq": 303,
+          "text": "ways and then some situations trigger an emotion. I think we could train machines to detect"
+        }
+      ]
+    },
+    {
+      "query_turn_id": "ep4.t0276",
+      "query_text": "So I think there are short term things that are already happening and then there are long",
+      "expected": [
+        "ep4.t0217"
+      ],
+      "expected_terms": [
+        "('short', 'term')"
+      ],
+      "top5": [
+        {
+          "turn_id": "ep4.t0291",
+          "score": 0.7637122268076807,
+          "seq": 291,
+          "text": "All right, so this is short term. Long term, I'm really interested in thinking how we can"
+        },
+        {
+          "turn_id": "ep4.t0277",
+          "score": 0.7367790903581345,
+          "seq": 277,
+          "text": "term things that we need to do. In the short term, there are techniques that have been"
+        },
+        {
+          "turn_id": "ep4.t0083",
+          "score": 0.7305185619100805,
+          "seq": 83,
+          "text": "I think increasing the size of the things that have been increasing a lot in the past few years"
+        },
+        {
+          "turn_id": "ep4.t0224",
+          "score": 0.7041669115987077,
+          "seq": 224,
+          "text": "So I think these short and medium term concerns should be important parts of the public debate."
+        },
+        {
+          "turn_id": "ep4.t0051",
+          "score": 0.6814631898091508,
+          "seq": 51,
+          "text": "going on in the world. And I think we need language input to help provide clues about"
+        }
+      ]
+    }
+  ]
+}

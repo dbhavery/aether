@@ -89,3 +89,6 @@ node_modules/
 
 # Local env overlays specific to monorepo agents
 .aether-local/
+
+# Bench corpora (re-downloadable; too large for repo)
+planning/session_*/lexfridman.parquet
