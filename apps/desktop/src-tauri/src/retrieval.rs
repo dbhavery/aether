@@ -25,7 +25,7 @@
 //!   plus a `warn!`.
 
 use std::cmp::Ordering;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use aether_l2_memory::{
     EmbeddingStore, MemoryDomain, MemoryId, SessionMemoryStore, SimilarityHit,
@@ -44,6 +44,61 @@ use crate::state::AppState;
 /// Default hard deadline for the full embed + query + fetch pipeline.
 /// Per ADR-0005 §Decision 1.
 pub const DEFAULT_RETRIEVAL_DEADLINE: Duration = Duration::from_secs(5);
+
+/// ADR-0010 Option A — recency-weighted combine.
+///
+/// Phase 4 ranks by `cosine + RECENCY_WEIGHT_ALPHA * recency_decay`
+/// where `recency_decay = exp(-Δt / τ)` is normalised to `[0, 1]`
+/// (1.0 = "now", → 0 as Δt → ∞).
+///
+/// Default `α = 0.1` is intentionally small: cosine remains dominant,
+/// recency breaks near-ties and offers a modest nudge for fresh content
+/// rather than overpowering the semantic signal. The Phase 3A miss-
+/// pattern analysis (`planning/session_2026-04-25/RETRIEVAL_CALIBRATION_REPORT.md`
+/// §4) showed the dominant failure mode is within-thread top-1
+/// confusion — not recency bias — so a heavy α would underperform.
+pub const RECENCY_WEIGHT_ALPHA: f32 = 0.1;
+
+/// Half-life for `recency_decay` in ADR-0010 Option A. 7 days mirrors
+/// the timescale at which "fresh" / "still relevant" content gives
+/// way to "older context" in typical Aether usage. Tunable per tier
+/// in a follow-up if calibration shows a different curve helps.
+pub const RECENCY_HALF_LIFE: Duration = Duration::from_secs(7 * 24 * 60 * 60);
+
+/// Compute the recency-decayed weight for a row at `row_ts_ms`,
+/// observed from `now_ms`. Returns a value in `[0.0, 1.0]`:
+///
+/// - 1.0 when the row is at or after `now_ms` (clock skew / future
+///   timestamp — treat as fully fresh rather than letting the decay
+///   blow up).
+/// - `exp(-Δt / τ)` otherwise.
+///
+/// Pure function so the bench harness can mirror it byte-for-byte.
+pub fn recency_decay(row_ts_ms: u64, now_ms: u64, half_life: Duration) -> f32 {
+    if row_ts_ms >= now_ms {
+        return 1.0;
+    }
+    let delta_ms = (now_ms - row_ts_ms) as f64;
+    let half_life_ms = half_life.as_millis() as f64;
+    if half_life_ms <= 0.0 {
+        return 0.0;
+    }
+    // exp(-Δt / τ) normalised to [0, 1].
+    (-delta_ms / half_life_ms).exp() as f32
+}
+
+/// Combine cosine + recency per ADR-0010 Option A. Pure function so
+/// both the production rank (Phase 4) and the bench harness use the
+/// same arithmetic.
+pub fn combined_rank_score(
+    cosine: f32,
+    row_ts_ms: u64,
+    now_ms: u64,
+    alpha: f32,
+    half_life: Duration,
+) -> f32 {
+    cosine + alpha * recency_decay(row_ts_ms, now_ms, half_life)
+}
 
 /// ADR-0007 §Decision 3 readiness state machine. Updated by every
 /// invocation of `run_retrieval_context` (event-driven symmetric
@@ -308,10 +363,35 @@ pub fn run_retrieval_context(
         });
     }
 
-    // Phase 4 — rank: score desc, recency desc, truncate to max_items.
-    resolved.sort_by(|a, b| match b.score.partial_cmp(&a.score) {
-        Some(Ordering::Equal) | None => b.timestamp_ms.cmp(&a.timestamp_ms),
-        Some(ord) => ord,
+    // Phase 4 — rank per ADR-0010 Option A:
+    //   final_score = cosine + RECENCY_WEIGHT_ALPHA * recency_decay(ts)
+    // Sort by final_score desc; recency_ms desc retained as a hard
+    // tiebreak when the combined scores are exactly equal (vanishingly
+    // rare with f32 arithmetic but kept so the rank is total-ordered
+    // and deterministic). Truncate to max_items.
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+    resolved.sort_by(|a, b| {
+        let sa = combined_rank_score(
+            a.score,
+            a.timestamp_ms,
+            now_ms,
+            RECENCY_WEIGHT_ALPHA,
+            RECENCY_HALF_LIFE,
+        );
+        let sb = combined_rank_score(
+            b.score,
+            b.timestamp_ms,
+            now_ms,
+            RECENCY_WEIGHT_ALPHA,
+            RECENCY_HALF_LIFE,
+        );
+        match sb.partial_cmp(&sa) {
+            Some(Ordering::Equal) | None => b.timestamp_ms.cmp(&a.timestamp_ms),
+            Some(ord) => ord,
+        }
     });
     resolved.truncate(max_items);
     // Reaching the end of the function means every phase succeeded
@@ -831,6 +911,78 @@ mod tests {
         assert_eq!(hits[0].content, "the quick brown fox");
         assert_eq!(hits[0].domain, MemoryDomain::Durable);
         assert!(hits[0].score > 0.9, "same-string cosine should be ~1.0");
+    }
+
+    #[test]
+    fn recency_decay_is_one_at_now_and_monotonically_decreases() {
+        let now = 1_000_000_000_000u64;
+        let one_day = 24 * 60 * 60 * 1000u64;
+        let d_now = recency_decay(now, now, RECENCY_HALF_LIFE);
+        let d_one_day = recency_decay(now - one_day, now, RECENCY_HALF_LIFE);
+        let d_half = recency_decay(now - 7 * one_day, now, RECENCY_HALF_LIFE);
+        let d_two = recency_decay(now - 14 * one_day, now, RECENCY_HALF_LIFE);
+        assert!((d_now - 1.0).abs() < 1e-6);
+        assert!(d_one_day < 1.0 && d_one_day > d_half);
+        // 7-day half-life → exp(-1) ≈ 0.3679 at the half-life mark.
+        assert!((d_half - (-1.0f32).exp()).abs() < 1e-3);
+        assert!(d_two < d_half);
+    }
+
+    #[test]
+    fn recency_decay_clamps_to_one_for_future_timestamps() {
+        let now = 1_000_000_000_000u64;
+        let future = now + 60_000;
+        assert_eq!(recency_decay(future, now, RECENCY_HALF_LIFE), 1.0);
+    }
+
+    #[test]
+    fn combined_rank_score_keeps_cosine_dominant_with_default_alpha() {
+        // ADR-0010 Option A invariant: a higher cosine wins against a
+        // lower cosine even when the lower-cosine row is fresher,
+        // provided the cosine gap > α (the maximum recency lift).
+        let now = 1_000_000_000_000u64;
+        let one_day = 24 * 60 * 60 * 1000u64;
+        let high_cos_old = combined_rank_score(
+            0.80,
+            now - 30 * one_day,
+            now,
+            RECENCY_WEIGHT_ALPHA,
+            RECENCY_HALF_LIFE,
+        );
+        let low_cos_fresh = combined_rank_score(
+            0.65, // 0.15 cosine gap > α (0.1 max recency contribution)
+            now,
+            now,
+            RECENCY_WEIGHT_ALPHA,
+            RECENCY_HALF_LIFE,
+        );
+        assert!(
+            high_cos_old > low_cos_fresh,
+            "cosine must dominate when gap > α: {high_cos_old} vs {low_cos_fresh}"
+        );
+    }
+
+    #[test]
+    fn combined_rank_score_breaks_near_ties_in_favour_of_recency() {
+        // Near-ties get nudged toward the fresher row. This is the
+        // behavioural lift Option A buys vs the old strict tiebreak.
+        let now = 1_000_000_000_000u64;
+        let one_day = 24 * 60 * 60 * 1000u64;
+        let stale = combined_rank_score(
+            0.70,
+            now - 30 * one_day,
+            now,
+            RECENCY_WEIGHT_ALPHA,
+            RECENCY_HALF_LIFE,
+        );
+        let fresh = combined_rank_score(
+            0.70,
+            now,
+            now,
+            RECENCY_WEIGHT_ALPHA,
+            RECENCY_HALF_LIFE,
+        );
+        assert!(fresh > stale, "fresh must outrank stale at equal cosine");
     }
 
     #[test]
