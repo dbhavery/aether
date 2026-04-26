@@ -108,9 +108,21 @@ export function ToastContainer() {
           "info",
         );
       } else if (payload.failures > 0) {
+        // Phase 3B F2: hard failures get the warn tone and a re-run
+        // hint. The user has to decide whether to retry, so the toast
+        // says so explicitly.
         emit(
-          `Backfill complete — ${payload.completed} indexed, ${payload.failures} failed.`,
+          `Backfill complete — ${payload.completed} indexed, ${payload.failures} failed. Re-run to retry.`,
           "warn",
+        );
+      } else if (payload.recovered_failures > 0 && payload.completed > 0) {
+        // Phase 3B F2: zero hard failures + non-zero recovered means
+        // the retry loop did its job. Stay on the ok tone so the user
+        // understands the system self-healed; the parenthetical names
+        // the recovery so it isn't a silent surprise.
+        emit(
+          `Backfill complete — ${payload.completed} indexed (${payload.recovered_failures} transient ${payload.recovered_failures === 1 ? "error" : "errors"} recovered).`,
+          "ok",
         );
       } else if (payload.completed > 0) {
         emit(`Backfill complete — ${payload.completed} memories indexed.`, "ok");
