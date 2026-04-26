@@ -488,18 +488,16 @@ function AuditRow({ row }: { row: TrustAuditRow }) {
       )}
 
       {isV2 && provenance && (
-        <details
-          data-testid="audit-model-saw"
-          className="mt-1.5 group"
-        >
-          <summary className="cursor-pointer text-[11px] text-aether-muted hover:text-aether-text select-none">
-            {provenance.block_present
-              ? `Aether also saw ${provenance.hits.length} memor${
-                  provenance.hits.length === 1 ? "y" : "ies"
-                } from ${formatDomains(provenance.hits)}`
-              : "Aether ran retrieval; nothing matched"}
-          </summary>
-          {provenance.block_present && provenance.hits.length > 0 && (
+        provenance.block_present && provenance.hits.length > 0 ? (
+          <details
+            data-testid="audit-model-saw"
+            className="mt-1.5 group"
+          >
+            <summary className="cursor-pointer text-[11px] text-aether-muted hover:text-aether-text select-none">
+              {`Aether also saw ${provenance.hits.length} memor${
+                provenance.hits.length === 1 ? "y" : "ies"
+              } from ${formatDomains(provenance.hits)}`}
+            </summary>
             <ul className="mt-1.5 ml-4 space-y-0.5 text-[10.5px] font-mono text-aether-muted">
               {provenance.hits.map((h) => (
                 <li key={h.memory_id}>
@@ -515,8 +513,21 @@ function AuditRow({ row }: { row: TrustAuditRow }) {
                 </li>
               ))}
             </ul>
-          )}
-        </details>
+          </details>
+        ) : (
+          // Phase 6 UX audit Bug 5.3 / AUDIT_ROW_UI_RESEARCH §2.3:
+          // when retrieval ran but matched nothing, do NOT render the
+          // <details>/<summary> chevron. The chevron suggests "click
+          // to expand" but there is nothing to expand, so the click
+          // is wasted and the affordance lies. Render the same
+          // sentence inline as plain text instead.
+          <div
+            data-testid="audit-model-saw-empty"
+            className="mt-1.5 text-[11px] text-aether-muted select-none"
+          >
+            Aether ran retrieval; nothing matched
+          </div>
+        )
       )}
     </div>
   );

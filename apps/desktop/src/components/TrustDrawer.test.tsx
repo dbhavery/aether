@@ -201,7 +201,7 @@ describe("AuditRow — ADR-0009 version-aware rendering", () => {
     expect(details.textContent).toContain("facts");
   });
 
-  it("v2 row with empty retrieval reports 'nothing matched' honestly", () => {
+  it("v2 row with empty retrieval reports 'nothing matched' honestly without a misleading disclosure (Phase 6 Bug 5.3)", () => {
     render(
       <AuditRow
         row={v2Row({
@@ -209,8 +209,26 @@ describe("AuditRow — ADR-0009 version-aware rendering", () => {
         })}
       />,
     );
-    const details = screen.getByTestId("audit-model-saw");
-    expect(details.textContent).toContain("nothing matched");
+    // The empty-retrieval message is rendered as inline text, NOT as
+    // a <details>/<summary> chevron — clicking a chevron that
+    // reveals nothing is the exact misleading affordance Phase 6
+    // flagged. AUDIT_ROW_UI_RESEARCH §2.3 anticipated this.
+    const empty = screen.getByTestId("audit-model-saw-empty");
+    expect(empty.textContent).toContain("nothing matched");
+    expect(empty.tagName.toLowerCase()).toBe("div");
+    expect(screen.queryByTestId("audit-model-saw")).toBeNull();
+  });
+
+  it("v2 row with block_present:false does NOT render the disclosure chevron (Phase 6 Bug 5.3)", () => {
+    render(
+      <AuditRow
+        row={v2Row({
+          retrieval_provenance: { block_present: false, hits: [] },
+        })}
+      />,
+    );
+    expect(screen.queryByTestId("audit-model-saw")).toBeNull();
+    expect(screen.getByTestId("audit-model-saw-empty")).toBeTruthy();
   });
 
   it("v2 row with no retrieval_provenance omits the model-saw disclosure entirely", () => {
