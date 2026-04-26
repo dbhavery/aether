@@ -873,3 +873,68 @@ schema.
 - file:///C:/Users/dbhav/Projects/aether/planning/session_2026-04-25/bench_flash_attention_workaround.py
 - file:///C:/Users/dbhav/Projects/aether/planning/session_2026-04-25/flash_attention_workaround_results.json
 - file:///C:/Users/dbhav/Projects/aether/planning/session_2026-04-25/OLLAMA_UPSTREAM_BUG_REPORT.md (new "Workaround verification 2026-04-25" section)
+
+## D-020 — Path A (broaden eval expectations) applied; 1 of 3 scenarios flipped, 1 stayed FAIL on a tenth paraphrase variant
+
+**Context.** Don ratified Path A in
+`planning/session_2026-04-25/EVAL_SCENARIO_BROADENING.md`: the eval
+invariant becomes "Aurora behaves like Aurora-as-shipped" rather
+than "Aurora emits a v1-stub literal token". This entry documents
+what landed and what the re-run produced.
+
+**Decision A — implementation shape.** The broadening doc specified
+pattern SETS that the existing `requires` evaluator (case-insensitive
+substring AND-of-all) would render unsatisfiable (e.g. requiring
+both "forgot" AND "forgotten" AND "noted" simultaneously). Added a
+new expectation kind `requires_any` to
+`tools/evals/expectations.py`: case-insensitive regex alternation
+that passes if ANY pattern matches. Additive and non-breaking — the
+existing `requires` semantics are unchanged. Three failing scenarios
+were rewritten to use `requires_any` with the verbatim per-scenario
+pattern sets from the broadening doc §2 (modulo `\b` anchoring on
+short tokens to avoid sub-word matches like "noted" hitting
+"connoted"). See commit `aacee22`.
+
+**Decision B — accept the surprise FAIL as data, not a defect.**
+Memory scenario stayed FAIL because Aurora produced "Got it. Let's
+leave that out of it." in this run, vs the Phase 7 baseline's
+"Okay, let's put that aside." The broadening doc's nine-pattern set
+was sized against the single Phase 7 sample and missed the
+"leave (it|that) out" variant. Per the user's explicit instruction
+("if a scenario unexpectedly stays FAIL, that's data — document,
+don't pattern-hunt to make it pass"), no additional pattern was
+added. The `forbids` set DID pass; Aurora behaved correctly. The
+discrimination test — not the persona — is the gap.
+
+**Re-run results.** 6 scenarios; 3 PASS / 2 FAIL / 1 SKIP. Delta vs
+Phase 7: +1 PASS (`voice_transcription` flipped via referential
+paraphrase match on "that concept"). Memory FAIL on tenth variant
+(see Decision B). Vision FAIL as predicted by broadening doc §2.2 —
+no `fridge_open.jpg` fixture, composer substitutes Aurora portrait,
+no fridge-interior object class can match. Presence still SKIP — no
+presence composer in V2.
+
+**Outstanding action items** (full list in
+`planning/session_2026-04-25/QUALITY_EVAL_V2_POST_REWRITE_REPORT.md`
+§4):
+
+1. Don commits `tools/evals/fixtures/fridge_open.jpg` → vision flips
+   to PASS without further code change.
+2. Aurora-strict canary suite (broadening doc §5) — deferred.
+3. Capture N≥20 forget-scenario responses before any further
+   pattern broadening; the single-sample fit was provably
+   under-sized.
+4. Presence composer — unchanged, deferred.
+
+**Files touched:**
+- `tools/evals/expectations.py` (new `requires_any` kind)
+- `tools/evals/scenarios/memory_appropriateness/honors_forget.jsonl`
+- `tools/evals/scenarios/vision_response_quality/describes_actual_scene.jsonl`
+- `tools/evals/scenarios/voice_transcription/domain_vocab.jsonl`
+- `planning/session_2026-04-25/quality_eval_v2_real_models_post_rewrite.json` (new)
+- `planning/session_2026-04-25/quality_eval_v2_real_models_post_rewrite.md` (new)
+- `planning/session_2026-04-25/QUALITY_EVAL_V2_POST_REWRITE_REPORT.md` (new)
+
+**Scope guardrail.** `personas/aurora/persona.yaml` was NOT modified
+(locked per PERSONA-SCHEMA §6). No retrieval / Ollama / planning JSON
+files touched (parallel FLASH_ATTENTION agent owns that scope).
