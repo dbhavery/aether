@@ -3378,4 +3378,242 @@ mod tests {
         assert_eq!(window.records[0].content, text);
         assert!(window.records[0].content.contains("Sable"));
     }
+
+    // ----- ADR-0009 code review #2: end-to-end original-utterance survival -----
+
+    /// **ADR-0009 code-review-#2 closure.** Reproduces the path
+    /// `submit_turn` walks — run the retrieval orchestrator, build the
+    /// `format_retrieval_block` + `augment_utterance` augmented router
+    /// utterance, construct the same `TurnRequest` shape (with
+    /// `Some(retrieval_provenance_for(&hits))` stamped on the audit
+    /// extras), drive the policy engine, then read the resulting audit
+    /// row through the **same projection logic** `audit_recent` uses.
+    ///
+    /// What this locks:
+    /// 1. `original_utterance` on the projected row equals the user's
+    ///    distinctive phrase **byte-for-byte** (no augmentation leaks
+    ///    into the audit truth channel).
+    /// 2. `original_utterance != model_input_utterance` when retrieval
+    ///    fired — proving the two-channel split survives the round
+    ///    trip (the spec's whole point).
+    /// 3. The augmented router utterance carries the retrieval-block
+    ///    prefix `"Relevant context (retrieval):"` AND the user's
+    ///    original phrase.
+    /// 4. `retrieval_provenance.is_some()` AND `hits.len() > 0` —
+    ///    proves the orchestrator's hit list survives into the audit
+    ///    row's structured-metadata channel.
+    /// 5. `schema_version == AUDIT_SCHEMA_VERSION_V2` — locks the
+    ///    write-side stamping behaviour.
+    ///
+    /// We bypass `State<'_, Arc<AppState>>` plumbing (Tauri's command
+    /// macro can't be invoked from a unit test) by exercising the
+    /// internal helpers `submit_turn` itself uses: same `parse_command`,
+    /// same `run_retrieval_context`, same `format_retrieval_block`,
+    /// same `augment_utterance`, same `retrieval_provenance_for`, same
+    /// `engine.handle_turn`, then the same projection body as
+    /// `audit_recent`. If any of those internals diverge from the path
+    /// the live command takes, this test goes stale — that staleness is
+    /// itself a signal worth catching during review.
+    #[test]
+    fn submit_turn_audit_row_preserves_original_utterance_end_to_end() {
+        use crate::memory_config::MemoryDomain;
+        use crate::retrieval::DEFAULT_RETRIEVAL_DEADLINE;
+        use crate::state::{AppState, SESSION_ID};
+        use aether_l2_memory::embeddings::StubEmbedder;
+        use aether_l2_memory::{EmbeddingProvider, EmbeddingRow, MemoryId};
+        use aether_l5_policy::AUDIT_SCHEMA_VERSION_V2;
+
+        let phrase = "the Karpathy fix on tuesday";
+
+        let state = AppState::new().expect("AppState::new");
+
+        // Enable embeddings + swap to a deterministic stub embedder so
+        // the orchestrator returns hits without needing Ollama.
+        {
+            let stub: Arc<dyn EmbeddingProvider> = Arc::new(StubEmbedder::new(16));
+            *state.embedding_provider.write().unwrap() = stub;
+        }
+        {
+            let mut cfg = state.memory_config();
+            cfg.embeddings.enabled = true;
+            cfg.embeddings.provider = Some("stub:16".into());
+            state.set_memory_config(cfg).expect("set_memory_config");
+        }
+
+        // Seed a durable memory row whose content matches the phrase so
+        // the stub embedder ranks it highly. Pair it with an embedding
+        // row keyed off the same memory_id format the store emits.
+        state
+            .durable_memory
+            .append(TurnMemoryRecord {
+                session_id: SESSION_ID.into(),
+                sequence: 0, // recomputed by the store
+                role: MemoryRole::User,
+                content: phrase.into(),
+                timestamp_ms: 1_000,
+            })
+            .expect("seed durable");
+        let provider = state.embedding_provider.read().unwrap().clone();
+        let v = provider.embed(phrase).expect("seed embed");
+        state
+            .embedding_store
+            .upsert(EmbeddingRow {
+                memory_id: MemoryId::new(format!("mem-{SESSION_ID}-1")),
+                domain: MemoryDomain::Durable,
+                vector: v,
+            })
+            .expect("seed embedding row");
+
+        // ---- Mirror submit_turn's body, helper-for-helper. ----
+        let text = phrase.to_string();
+        let (capability, resource) = parse_command(&text);
+
+        let max_items = state.memory_config().retrieval.max_items as usize;
+        let hits = crate::retrieval::run_retrieval_context(
+            &state,
+            SESSION_ID,
+            &text,
+            max_items,
+            DEFAULT_RETRIEVAL_DEADLINE,
+        );
+        assert!(
+            !hits.is_empty(),
+            "retrieval should return hits for the seeded phrase; if this fires the \
+             stub-embedder seed path drifted",
+        );
+
+        let retrieval_block = crate::retrieval::format_retrieval_block(&hits);
+        let router_utterance =
+            crate::retrieval::augment_utterance(retrieval_block.as_deref(), &text);
+
+        // Sanity: the augmented router utterance is what submit_turn
+        // would forward — must differ from the original AND must carry
+        // both the retrieval-block prefix and the user's exact text.
+        assert_ne!(
+            router_utterance, text,
+            "router utterance should diverge from original when retrieval fires",
+        );
+        assert!(
+            router_utterance.contains("Relevant context (retrieval):"),
+            "augmented utterance missing retrieval-block prefix; got {router_utterance:?}",
+        );
+        assert!(
+            router_utterance.contains(phrase),
+            "augmented utterance lost the user's original phrase; got {router_utterance:?}",
+        );
+
+        let ts = state.next_ts();
+        let request = {
+            let a = state.active.read().expect("active read lock");
+            TurnRequest {
+                session_id: SessionId(SESSION_ID.into()),
+                persona: PersonaId(a.compiled.persona_id.0.clone()),
+                task_id: None,
+                original_utterance: text.clone(),
+                model_input_utterance: router_utterance.clone(),
+                capability,
+                resource,
+                emitted_at: MonotonicTimestamp(ts),
+                // Same `Some(retrieval_provenance_for(...))` shape as
+                // submit_turn — even an empty hits vec gets `Some(...)`
+                // here so absence-vs-empty stays distinguishable.
+                retrieval_provenance: Some(retrieval_provenance_for(&hits)),
+            }
+        };
+
+        // Drive the engine — this is what writes the audit row.
+        let result = {
+            let a = state.active.read().expect("active read lock");
+            a.engine.handle_turn(request).expect("handle_turn")
+        };
+        // Sanity: a `parse_command(phrase)` for plain chat resolves to
+        // FilesRead/None which the default policy Allows — engine should
+        // reach Completed and emit a route.
+        assert!(
+            matches!(result.policy_decision, Decision::Allow { .. }),
+            "expected Allow on plain chat, got {:?}",
+            result.policy_decision,
+        );
+
+        // ---- Read back via the same projection body audit_recent uses. ----
+        let filter = AuditFilter::default();
+        let rows = {
+            let a = state.active.read().expect("active read lock");
+            a.audit.query(&filter, 50)
+        };
+        // Find the row we just wrote — match on the change_id from the
+        // engine result so we don't pick up the retrieval-gate audit row
+        // (`Capability::RetrievalContext`) the orchestrator emits.
+        let written_change_id = match &result.policy_decision {
+            Decision::Allow { audit_id, .. } => audit_id.0.clone(),
+            other => panic!("unexpected decision: {other:?}"),
+        };
+        let raw = rows
+            .into_iter()
+            .find(|r| r.audit_id.0 == written_change_id)
+            .expect("audit row for the conversational turn");
+
+        // Project through the same shape audit_recent emits to the UI.
+        let projected = TrustAuditRow {
+            audit_id: raw.audit_id.0,
+            decision: decision_kind_label(raw.decision).to_string(),
+            capability: aether_l7_trust::human_capability(&raw.capability).to_string(),
+            scope: aether_l7_trust::human_scope(&raw.resource),
+            change_id: raw.change_id.0,
+            at_mono_ns: raw.timestamp_monotonic.0,
+            at_epoch_s: raw.timestamp_wall.epoch_s,
+            schema_version: raw.schema_version,
+            original_utterance: raw.original_utterance,
+            retrieval_provenance: raw.retrieval_provenance.map(|p| TrustRetrievalProvenance {
+                block_present: p.block_present,
+                hits: p
+                    .hits
+                    .into_iter()
+                    .map(|h| TrustRetrievalHit {
+                        memory_id: h.memory_id,
+                        domain: h.domain,
+                        score: h.score,
+                    })
+                    .collect(),
+            }),
+        };
+
+        // (1) Original utterance survives byte-for-byte.
+        assert_eq!(
+            projected.original_utterance.as_deref(),
+            Some(phrase),
+            "audit row's original_utterance must equal the user's exact text",
+        );
+
+        // (2) Schema version is v2 (write-side stamp).
+        assert_eq!(
+            projected.schema_version, AUDIT_SCHEMA_VERSION_V2,
+            "post-ADR-0009 writers must stamp schema_version=2",
+        );
+
+        // (3) Retrieval provenance is Some + non-empty hits.
+        let prov = projected
+            .retrieval_provenance
+            .as_ref()
+            .expect("retrieval_provenance must be Some when retrieval fired");
+        assert!(
+            prov.block_present,
+            "block_present should be true when hits were returned",
+        );
+        assert!(
+            !prov.hits.is_empty(),
+            "hits must be non-empty when the orchestrator returned non-empty hits",
+        );
+
+        // (4) Original utterance and the augmented router utterance
+        //     diverge — proving the two-channel split holds. The audit
+        //     row only stores the original; we reconstruct the
+        //     augmented form from `format_retrieval_block` + the
+        //     original utterance to assert the inequality.
+        assert_ne!(
+            projected.original_utterance.as_deref(),
+            Some(router_utterance.as_str()),
+            "audit row must NOT store the augmented model-input utterance",
+        );
+    }
 }
