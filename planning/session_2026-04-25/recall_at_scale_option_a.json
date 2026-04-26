@@ -1,0 +1,250 @@
+{
+  "summary": {
+    "model": "bge-m3",
+    "variant": "option_a__recency_weighted_combine",
+    "alpha": 0.1,
+    "half_life_days": 7,
+    "corpus_size": 842,
+    "query_count": 72,
+    "now_ms": 1701275420000,
+    "recall_at_1": 0.5278,
+    "recall_at_3": 0.7083,
+    "recall_at_5": 0.7917,
+    "recall_at_10": 0.9028,
+    "recall_at_20": 0.9167,
+    "mrr": 0.642,
+    "mean_reciprocal_target_rank": 0.7003,
+    "complete_misses": 6,
+    "rank_function": "cosine + alpha*exp(-dt/tau)__then_timestamp_ms_desc__truncate(max_items)"
+  },
+  "miss_samples": [
+    {
+      "query_turn_id": "t19_10",
+      "expected": [
+        "t12_4"
+      ],
+      "top5": [
+        {
+          "turn_id": "t55_11",
+          "score": 0.6409066734275292,
+          "combined_score": 0.7275428788816213,
+          "timestamp_ms": 1701188660000
+        },
+        {
+          "turn_id": "t59_13",
+          "score": 0.6205269545636507,
+          "combined_score": 0.7204872798964466,
+          "timestamp_ms": 1701275180000
+        },
+        {
+          "turn_id": "t55_5",
+          "score": 0.6259884185797291,
+          "combined_score": 0.7125730702088305,
+          "timestamp_ms": 1701188300000
+        },
+        {
+          "turn_id": "t57_4",
+          "score": 0.6080090249312262,
+          "combined_score": 0.7009953027582729,
+          "timestamp_ms": 1701231440000
+        },
+        {
+          "turn_id": "t5_1",
+          "score": 0.6846539059908603,
+          "combined_score": 0.6991664220824069,
+          "timestamp_ms": 1700108060000
+        }
+      ]
+    },
+    {
+      "query_turn_id": "t24_10",
+      "expected": [
+        "t5_3"
+      ],
+      "top5": [
+        {
+          "turn_id": "t58_4",
+          "score": 0.5491163971481636,
+          "combined_score": 0.6454836282726629,
+          "timestamp_ms": 1701253040000
+        },
+        {
+          "turn_id": "t57_7",
+          "score": 0.5424319337890686,
+          "combined_score": 0.6354458902221998,
+          "timestamp_ms": 1701231620000
+        },
+        {
+          "turn_id": "t58_11",
+          "score": 0.5339616271991372,
+          "combined_score": 0.6303958032539945,
+          "timestamp_ms": 1701253460000
+        },
+        {
+          "turn_id": "t57_10",
+          "score": 0.5364821148862975,
+          "combined_score": 0.6295237581644193,
+          "timestamp_ms": 1701231800000
+        },
+        {
+          "turn_id": "t56_4",
+          "score": 0.5358044915803428,
+          "combined_score": 0.6255284336634992,
+          "timestamp_ms": 1701209840000
+        }
+      ]
+    },
+    {
+      "query_turn_id": "t46_16",
+      "expected": [
+        "t13_17"
+      ],
+      "top5": [
+        {
+          "turn_id": "t53_10",
+          "score": 0.6172670655624969,
+          "combined_score": 0.6979228098767407,
+          "timestamp_ms": 1701145400000
+        },
+        {
+          "turn_id": "t58_4",
+          "score": 0.5861197575292942,
+          "combined_score": 0.6824869886537935,
+          "timestamp_ms": 1701253040000
+        },
+        {
+          "turn_id": "t33_4",
+          "score": 0.620976724131295,
+          "combined_score": 0.6604375754616663,
+          "timestamp_ms": 1700713040000
+        },
+        {
+          "turn_id": "t59_13",
+          "score": 0.5548152033560411,
+          "combined_score": 0.6547755286888369,
+          "timestamp_ms": 1701275180000
+        },
+        {
+          "turn_id": "t38_2",
+          "score": 0.5992022967577246,
+          "combined_score": 0.6463687116651886,
+          "timestamp_ms": 1700820920000
+        }
+      ]
+    },
+    {
+      "query_turn_id": "t49_2",
+      "expected": [
+        "t13_15"
+      ],
+      "top5": [
+        {
+          "turn_id": "t55_1",
+          "score": 0.6333594455326524,
+          "combined_score": 0.7199097449893701,
+          "timestamp_ms": 1701188060000
+        },
+        {
+          "turn_id": "t58_4",
+          "score": 0.5716724176641113,
+          "combined_score": 0.6680396487886106,
+          "timestamp_ms": 1701253040000
+        },
+        {
+          "turn_id": "t57_15",
+          "score": 0.5553254055997023,
+          "combined_score": 0.6484132119348175,
+          "timestamp_ms": 1701232100000
+        },
+        {
+          "turn_id": "t57_7",
+          "score": 0.5530735385170098,
+          "combined_score": 0.646087494950141,
+          "timestamp_ms": 1701231620000
+        },
+        {
+          "turn_id": "t55_11",
+          "score": 0.5580187500150671,
+          "combined_score": 0.6446549554691592,
+          "timestamp_ms": 1701188660000
+        }
+      ]
+    },
+    {
+      "query_turn_id": "t57_4",
+      "expected": [
+        "t59_11"
+      ],
+      "top5": [
+        {
+          "turn_id": "t59_0",
+          "score": 0.6922036940689505,
+          "combined_score": 0.7920351854108353,
+          "timestamp_ms": 1701274400000
+        },
+        {
+          "turn_id": "t59_13",
+          "score": 0.6758408368513327,
+          "combined_score": 0.7758011621841285,
+          "timestamp_ms": 1701275180000
+        },
+        {
+          "turn_id": "t58_16",
+          "score": 0.5921292637778671,
+          "combined_score": 0.6886112861111056,
+          "timestamp_ms": 1701253760000
+        },
+        {
+          "turn_id": "t59_16",
+          "score": 0.5885454578168667,
+          "combined_score": 0.6885355376740248,
+          "timestamp_ms": 1701275360000
+        },
+        {
+          "turn_id": "t59_15",
+          "score": 0.5845205907558804,
+          "combined_score": 0.6845007514542889,
+          "timestamp_ms": 1701275300000
+        }
+      ]
+    },
+    {
+      "query_turn_id": "t59_2",
+      "expected": [
+        "t34_9"
+      ],
+      "top5": [
+        {
+          "turn_id": "t34_7",
+          "score": 0.6206670984425785,
+          "combined_score": 0.6615749076765473,
+          "timestamp_ms": 1700734820000
+        },
+        {
+          "turn_id": "t58_13",
+          "score": 0.5584243119113582,
+          "combined_score": 0.6548776236296223,
+          "timestamp_ms": 1701253580000
+        },
+        {
+          "turn_id": "t58_4",
+          "score": 0.5570272404589492,
+          "combined_score": 0.6533944715834485,
+          "timestamp_ms": 1701253040000
+        },
+        {
+          "turn_id": "t57_4",
+          "score": 0.5559763985794581,
+          "combined_score": 0.6489626764065048,
+          "timestamp_ms": 1701231440000
+        },
+        {
+          "turn_id": "t34_6",
+          "score": 0.6059893261937855,
+          "combined_score": 0.6468930773146447,
+          "timestamp_ms": 1700734760000
+        }
+      ]
+    }
+  ]
+}
