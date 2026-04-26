@@ -37,20 +37,33 @@ export function Header({
   onSwitchPersona,
 }: Props) {
   return (
-    <header className="flex items-center justify-between border-b border-aether-border bg-aether-bg/95 px-5 py-3 backdrop-blur">
-      <div className="flex items-center gap-4">
-        <div className="flex flex-col">
-          <div className="text-[14px] font-medium tracking-tight text-aether-text">
+    // Responsive breakpoint at 1024 px (Tailwind `lg:`) collapses the
+    // header chrome to keep it on one line at the dev build's default
+    // 976 px window width. Phase 6 UX audit Bug 5.1 documented the
+    // pre-fix state: route badge wrapped to 3 lines, presence label
+    // clipped. Below the breakpoint we drop label gaps, shorten button
+    // padding, hide the persona select (still reachable via Settings),
+    // and shrink the provider badge — every chip stays single-line at
+    // 976 px and remains identical at >=1024 px. `flex-nowrap` +
+    // `min-w-0` propagate the shrink permission down to truncatable
+    // children (the provider label).
+    <header
+      data-testid="app-header"
+      className="flex flex-nowrap items-center justify-between gap-2 border-b border-aether-border bg-aether-bg/95 px-3 py-2 backdrop-blur lg:gap-3 lg:px-5 lg:py-3"
+    >
+      <div className="flex min-w-0 flex-nowrap items-center gap-2 lg:gap-4">
+        <div className="flex shrink-0 flex-col">
+          <div className="text-[13px] font-medium tracking-tight text-aether-text lg:text-[14px]">
             Aether
           </div>
-          <div className="text-[10.5px] font-mono uppercase tracking-wider text-aether-dim">
+          <div className="text-[10px] font-mono uppercase tracking-wider text-aether-dim lg:text-[10.5px]">
             · {banner.persona_name}
           </div>
         </div>
         {personas.length > 1 && (
           <>
-            <div className="h-5 w-px bg-aether-border" aria-hidden />
-            <label className="flex items-center gap-2 text-[11px] text-aether-muted">
+            <div className="hidden h-5 w-px bg-aether-border lg:block" aria-hidden />
+            <label className="hidden items-center gap-2 text-[11px] text-aether-muted lg:flex">
               <span className="hidden sm:inline">Persona</span>
               <select
                 value={banner.persona_id}
@@ -67,16 +80,20 @@ export function Header({
             </label>
           </>
         )}
-        <div className="h-5 w-px bg-aether-border" aria-hidden />
-        <PresenceDot state={presence.state} detail={presence.detail} />
+        <div className="hidden h-5 w-px shrink-0 bg-aether-border sm:block" aria-hidden />
+        <div className="min-w-0 shrink">
+          <PresenceDot state={presence.state} detail={presence.detail} />
+        </div>
       </div>
-      <div className="flex items-center gap-3">
-        <ProviderBadge banner={banner} />
-        <div className="h-5 w-px bg-aether-border" aria-hidden />
+      <div className="flex shrink-0 flex-nowrap items-center gap-1.5 lg:gap-3">
+        <div className="hidden max-w-[180px] sm:block">
+          <ProviderBadge banner={banner} />
+        </div>
+        <div className="hidden h-5 w-px bg-aether-border lg:block" aria-hidden />
         <button
           type="button"
           onClick={onOpenMemory}
-          className="rounded-md border border-transparent px-2.5 py-1 text-[11.5px] text-aether-muted transition-colors hover:border-aether-border hover:text-aether-text"
+          className="rounded-md border border-transparent px-2 py-1 text-[11px] text-aether-muted transition-colors hover:border-aether-border hover:text-aether-text lg:px-2.5 lg:text-[11.5px]"
           title="Inspect session memory"
         >
           Memory
@@ -85,7 +102,7 @@ export function Header({
           <button
             type="button"
             onClick={onOpenTrust}
-            className="rounded-md border border-transparent px-2.5 py-1 text-[11.5px] text-aether-muted transition-colors hover:border-aether-border hover:text-aether-text"
+            className="rounded-md border border-transparent px-2 py-1 text-[11px] text-aether-muted transition-colors hover:border-aether-border hover:text-aether-text lg:px-2.5 lg:text-[11.5px]"
             title="Review every decision Aether has made"
           >
             Trust
@@ -94,7 +111,7 @@ export function Header({
         <button
           type="button"
           onClick={onOpenCamera}
-          className="rounded-md border border-transparent px-2.5 py-1 text-[11.5px] text-aether-muted transition-colors hover:border-aether-border hover:text-aether-text"
+          className="rounded-md border border-transparent px-2 py-1 text-[11px] text-aether-muted transition-colors hover:border-aether-border hover:text-aether-text lg:px-2.5 lg:text-[11.5px]"
           title="Camera capture (preview + single-frame analysis)"
         >
           Camera
@@ -102,7 +119,7 @@ export function Header({
         <button
           type="button"
           onClick={onOpenScreen}
-          className="rounded-md border border-transparent px-2.5 py-1 text-[11.5px] text-aether-muted transition-colors hover:border-aether-border hover:text-aether-text"
+          className="rounded-md border border-transparent px-2 py-1 text-[11px] text-aether-muted transition-colors hover:border-aether-border hover:text-aether-text lg:px-2.5 lg:text-[11.5px]"
           title="Screen capture (single screenshot + analysis)"
         >
           Screen
@@ -110,7 +127,7 @@ export function Header({
         <button
           type="button"
           onClick={onOpenVoice}
-          className="rounded-md border border-transparent px-2.5 py-1 text-[11.5px] text-aether-muted transition-colors hover:border-aether-border hover:text-aether-text"
+          className="rounded-md border border-transparent px-2 py-1 text-[11px] text-aether-muted transition-colors hover:border-aether-border hover:text-aether-text lg:px-2.5 lg:text-[11.5px]"
           title="Voice capture (push-to-talk, single utterance)"
         >
           Voice
@@ -118,7 +135,7 @@ export function Header({
         <button
           type="button"
           onClick={onOpenSettings}
-          className="rounded-md border border-transparent px-2.5 py-1 text-[11.5px] text-aether-muted transition-colors hover:border-aether-border hover:text-aether-text"
+          className="rounded-md border border-transparent px-2 py-1 text-[11px] text-aether-muted transition-colors hover:border-aether-border hover:text-aether-text lg:px-2.5 lg:text-[11.5px]"
           title="Local settings (media permissions, etc.)"
         >
           Settings
@@ -126,7 +143,7 @@ export function Header({
         <button
           type="button"
           onClick={onClearSession}
-          className="rounded-md border border-transparent px-2.5 py-1 text-[11.5px] text-aether-muted transition-colors hover:border-aether-border hover:text-aether-text"
+          className="rounded-md border border-transparent px-2 py-1 text-[11px] text-aether-muted transition-colors hover:border-aether-border hover:text-aether-text lg:px-2.5 lg:text-[11.5px]"
           title="Clear the current session"
         >
           New session
@@ -134,7 +151,7 @@ export function Header({
         <button
           type="button"
           onClick={onReopenDisclosure}
-          className="rounded-md border border-transparent px-2.5 py-1 text-[11.5px] text-aether-muted transition-colors hover:border-aether-border hover:text-aether-text"
+          className="hidden rounded-md border border-transparent px-2 py-1 text-[11px] text-aether-muted transition-colors hover:border-aether-border hover:text-aether-text lg:inline-block lg:px-2.5 lg:text-[11.5px]"
           title="What does Aether do with my data?"
         >
           About
