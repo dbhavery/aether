@@ -327,6 +327,18 @@ in a form that reads like notes, not logs.
   `nomic-embed-text` substitution remains the zero-dependency
   default; users who install `sentence-transformers` may opt back
   into the original ADR-0007 D7 model.
+- **Input sanitization (added 2026-04-25, DECISIONS_LOG D-016).**
+  All embedding input is sanitized to strip the U+FFFD REPLACEMENT
+  CHARACTER before reaching the embedding provider, replaced with
+  ASCII space. bge-m3 over Ollama returns NaN-vector embeddings for
+  inputs containing U+FFFD (Phase 3A surfaced this on 6 of 848
+  synthetic-corpus rows; cosine over a NaN vector is NaN and
+  silently breaks retrieval ranking). Sanitization is implemented
+  as a default method on `EmbeddingProvider::embed` so every
+  present and future provider (Ollama, Stub, Hf, future
+  candle-native) inherits it without per-impl boilerplate. Scope
+  intentionally limited to U+FFFD — other zero-width / noncharacter
+  codepoints are not stripped without a demonstrated failure.
 - Vector index backend — SQLite + rusqlite extensions? A separate
   sqlite-vec file? Out of scope for design-only doc; decide at
   implementation time.
