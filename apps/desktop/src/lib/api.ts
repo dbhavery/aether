@@ -426,7 +426,20 @@ export interface BackfillProgress {
   cancelled: boolean;
   total: number;
   completed: number;
+  /** Rows that exhausted every retry attempt and were skipped. A row
+   * that succeeded on a retry is NOT counted here — it lands in
+   * `completed` plus `recovered_failures`. Phase 3B F1 tightened this
+   * definition. */
   failures: number;
+  /** Rows that hit at least one transient embed failure (HTTP 5xx /
+   * timeout / connection-refused) but succeeded on a subsequent retry.
+   * Increments once per recovered row regardless of how many retries
+   * were consumed; the row itself is also counted in `completed`.
+   * Surfaced separately so the UI can show transient-error recovery
+   * without conflating it with un-retried success. Mirrors the Rust
+   * `BackfillProgress::recovered_failures` field landed in commit
+   * 9768c17 (Phase 3B F1). */
+  recovered_failures: number;
   /** Rows skipped because an embedding already exists for the
    * (domain, memory_id) pair. Surfaced separately from `completed`
    * so the UI can render "skipped X already-embedded rows" rather
