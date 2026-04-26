@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   auditRecent,
@@ -84,6 +84,12 @@ const DECISION_META: Record<
  */
 export function TrustDrawer({ open, refreshKey, onClose, initialTab }: Props) {
   const [tab, setTab] = useState<Tab>(initialTab ?? "audit");
+  const drawerRef = useRef<HTMLDivElement>(null);
+  // Remember the element that had focus when the drawer opened so we
+  // can restore it on close (canonical modal-dialog pattern). Without
+  // restoration, closing the drawer leaves focus on `document.body`,
+  // which makes Ctrl+K (focus chat input) the only way back in.
+  const previousFocusRef = useRef<HTMLElement | null>(null);
 
   // Re-apply `initialTab` on each open transition so the header's
   // Memory button lands on Memory even after the user previously
@@ -149,6 +155,91 @@ export function TrustDrawer({ open, refreshKey, onClose, initialTab }: Props) {
     };
   }, [open]);
 
+  // Phase 6 UX audit Bug 5.2: keystrokes typed while the Trust drawer
+  // was open silently accumulated in the underlying chat input — a
+  // trust violation in a messaging UI. Fix is the canonical
+  // accessibility pattern for a modal-style surface: capture the
+  // previously-focused element on open, pull focus into the drawer,
+  // trap Tab inside the drawer subtree, swallow stray keystrokes
+  // whose target is outside the drawer, restore previous focus on
+  // close, and Escape closes.
+  useEffect(() => {
+    if (!open) return;
+    previousFocusRef.current =
+      (document.activeElement as HTMLElement | null) ?? null;
+    // Blur the chat input (or whatever owned focus) so accidental
+    // keystrokes between the open transition and the user's first
+    // click in the drawer do not land in the chat composer.
+    previousFocusRef.current?.blur?.();
+    // Move focus into the drawer. Targeting the wrapper (which is
+    // tabIndex=-1) keeps screen-reader announcement scoped to
+    // aria-label="Trust centre" rather than reading whichever
+    // element happens to be first in tab order.
+    const wrap = drawerRef.current;
+    if (wrap) wrap.focus();
+
+    const focusableSelector =
+      'a[href], area[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), iframe, object, embed, [tabindex="0"], [contenteditable]';
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const root = drawerRef.current;
+      if (!root) return;
+      const target = e.target as Node | null;
+      const insideDrawer = !!target && root.contains(target);
+
+      if (e.key === "Escape" && insideDrawer) {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+
+      // Tab: trap inside the drawer subtree.
+      if (e.key === "Tab" && insideDrawer) {
+        const focusables = Array.from(
+          root.querySelectorAll<HTMLElement>(focusableSelector),
+        ).filter((el) => !el.hasAttribute("disabled"));
+        if (focusables.length === 0) {
+          e.preventDefault();
+          return;
+        }
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        const active = document.activeElement as HTMLElement | null;
+        if (e.shiftKey && active === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && active === last) {
+          e.preventDefault();
+          first.focus();
+        }
+        return;
+      }
+
+      // Stray keystroke whose target is outside the drawer — could be
+      // a residual focus on the chat input. Swallow so it cannot
+      // accumulate as text in a hidden composer. Modifier-only
+      // shortcuts (Ctrl+K, Cmd+K, etc.) pass through so global
+      // hotkeys still work.
+      if (!insideDrawer && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown, true);
+      // Restore focus to whatever owned it before the drawer opened.
+      // Guard against the previous element being detached (e.g. a
+      // re-rendered chat input) by no-op'ing if focus would land on
+      // a disconnected node.
+      const prev = previousFocusRef.current;
+      if (prev && prev.isConnected) {
+        prev.focus?.();
+      }
+    };
+  }, [open, onClose]);
+
   if (!open) return null;
 
   const onClearTelemetry = async () => {
@@ -162,8 +253,12 @@ export function TrustDrawer({ open, refreshKey, onClose, initialTab }: Props) {
 
   return (
     <div
-      className="fixed inset-y-0 right-0 z-30 flex w-full max-w-md flex-col border-l border-aether-border bg-aether-surface shadow-neuRaised animate-fadeIn"
-      role="complementary"
+      ref={drawerRef}
+      tabIndex={-1}
+      data-testid="trust-drawer-root"
+      className="fixed inset-y-0 right-0 z-30 flex w-full max-w-md flex-col border-l border-aether-border bg-aether-surface shadow-neuRaised animate-fadeIn focus:outline-none"
+      role="dialog"
+      aria-modal="true"
       aria-label="Trust centre"
     >
       <div className="flex items-center justify-between border-b border-aether-border px-5 py-3">

@@ -231,3 +231,63 @@ describe("AuditRow — ADR-0009 version-aware rendering", () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 6 UX audit Bug 5.2 — focus trap.
+//
+// The drawer is now a modal (role="dialog" + aria-modal). When it
+// opens it must:
+//   - blur whatever previously held focus, so stray keystrokes do
+//     not accumulate in the chat input behind it,
+//   - swallow keystrokes whose target is outside the drawer subtree
+//     (modifier-only shortcuts pass through),
+//   - restore focus to the previously-focused element on close.
+// ---------------------------------------------------------------------------
+
+describe("TrustDrawer — Phase 6 Bug 5.2 focus trap", () => {
+  it("blurs the previously-focused chat input on open and swallows stray keystrokes", async () => {
+    // Stand-in chat input outside the drawer.
+    const chatInput = document.createElement("textarea");
+    chatInput.setAttribute("data-testid", "fake-chat-input");
+    document.body.appendChild(chatInput);
+    chatInput.focus();
+    expect(document.activeElement).toBe(chatInput);
+
+    const { unmount } = render(
+      <TrustDrawer open={true} refreshKey={0} onClose={() => {}} />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("trust-drawer-root")).toBeTruthy();
+    });
+
+    // After the open effect runs, focus must have left the chat
+    // input — otherwise keystrokes typed before the user clicks
+    // anywhere will land in the composer.
+    expect(document.activeElement).not.toBe(chatInput);
+
+    // Simulate a stray keystroke whose target is the chat input.
+    // The drawer's capture-phase keydown listener should call
+    // preventDefault on it, signalling that the keystroke would not
+    // produce text in the composer in a real browser.
+    const evt = new KeyboardEvent("keydown", {
+      key: "a",
+      bubbles: true,
+      cancelable: true,
+    });
+    chatInput.dispatchEvent(evt);
+    expect(evt.defaultPrevented).toBe(true);
+
+    unmount();
+    document.body.removeChild(chatInput);
+  });
+
+  it("uses role=dialog + aria-modal so assistive tech treats it as a modal surface", async () => {
+    render(<TrustDrawer open={true} refreshKey={0} onClose={() => {}} />);
+    await waitFor(() => {
+      const root = screen.getByTestId("trust-drawer-root");
+      expect(root.getAttribute("role")).toBe("dialog");
+      expect(root.getAttribute("aria-modal")).toBe("true");
+    });
+  });
+});
