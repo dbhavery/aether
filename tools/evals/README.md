@@ -133,6 +133,23 @@ All adversarial probes MUST fail. If one stops firing, the detector
 regressed. v1.1 ships one probe per domain (chat, tool-use, voice,
 memory, presence, vision).
 
+## Aurora-strict canaries (drift detector)
+
+`tools/evals/canaries/aurora_strict/` holds literal-token mirrors
+of the six production scenarios, frozen against Aurora's recorded
+`actual.text` on 2026-04-25. They are a NON-GATING drift signal —
+run them when validating model / prompt / composition changes,
+ignore the exit code, and read the report.
+
+```bash
+python tools/evals/__main__.py \
+  --scenarios-root tools/evals/canaries/aurora_strict --dry-run
+```
+
+See `tools/evals/canaries/aurora_strict/README.md` for the contract
+and update protocol. Do NOT replace `requires` with `requires_any`
+in canaries — that defeats the purpose.
+
 ## Roadmap
 
 Sequencing from the design doc §6:
