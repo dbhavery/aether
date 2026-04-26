@@ -222,3 +222,39 @@ Happy to share the exact 13 failing input strings on request — they are determ
 ---
 
 (end of draft)
+
+---
+
+## Workaround verification 2026-04-25
+
+**Verdict: WORKAROUND CONFIRMED.** `OLLAMA_FLASH_ATTENTION=false` eliminated the NaN-500 failure mode on every previously-failing input.
+
+**Method.**
+1. Killed both `ollama.exe` (server) and `ollama app.exe` (tray).
+2. Restarted `ollama app.exe` with `OLLAMA_FLASH_ATTENTION=false` exported in the parent shell environment.
+3. Verified daemon responsive at `http://127.0.0.1:11434/api/version` -> `0.21.2`.
+4. Re-embedded the 13 previously-failing rows from the original 1000-row run (rows 20, 70, 120, 170, 220, 270, 370, 470, 620, 670, 720, 770, 870), 5 attempts per row = 65 embed calls, 50 ms pacing.
+5. Restored Ollama to default flags after the bench (no `OLLAMA_FLASH_ATTENTION` in env).
+
+**Inputs.** Reconstructed deterministically via `bench_backfill_stress.make_row(i)` (pure index function over the same 50-template x 50-filler corpus).
+
+**Result.**
+
+| Metric | Original (FA on, default) | Workaround (FA=false) |
+|---|---|---|
+| Total attempts on the 13 failing rows | 13 (1 each) | 65 (5 each) |
+| HTTP 500 (`json: unsupported value: NaN`) | 13 / 13 (100 %) | 0 / 65 (0.0 %) |
+| Mean latency | n/a (single hits) | ~140 ms (small sample, no perf regression observed) |
+
+Per-row: every one of the 13 rows succeeded on all 5 attempts. Latencies clustered ~120-170 ms — comparable to the original run's 181.8 ms mean, no obvious throughput penalty from disabling flash attention on this workload.
+
+**Caveats.**
+- Sample is the previously-failing 13 inputs only; we did not re-run the full 1000-row bench. The 65 successes are sufficient to falsify "workaround has no effect" but do not prove zero failure rate over the full corpus.
+- A regression run on the full 1000-row corpus with FA=false would establish the new failure-rate ceiling. Recommended only if the 1.3% baseline becomes operationally important again.
+- Restoration confirmed: Ollama was restarted with default flags after the bench; daemon returns `0.21.2` on `/api/version`.
+
+**Artifacts.**
+- file:///C:/Users/dbhav/Projects/aether/planning/session_2026-04-25/bench_flash_attention_workaround.py
+- file:///C:/Users/dbhav/Projects/aether/planning/session_2026-04-25/flash_attention_workaround_results.json
+
+**Operational implication for Aether.** Setting `OLLAMA_FLASH_ATTENTION=false` in Don's Ollama startup environment would close the 1.3% backfill failure rate without a downstream code change. The D-017 retry-with-backoff defense (Phase 3B F1) remains valuable as belt-and-braces, but the env-var workaround is the cheaper fix and should be considered first.

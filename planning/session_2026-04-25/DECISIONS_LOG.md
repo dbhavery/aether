@@ -855,3 +855,21 @@ schema.
 **Did NOT modify** `apps/desktop/src-tauri/src/backfill.rs`,
 `apps/desktop/src-tauri/src/state.rs`, or `apps/desktop/src-tauri/tests/`
 — parallel agents own those scopes per the autonomous-session brief.
+
+---
+
+## D-019 — `OLLAMA_FLASH_ATTENTION=false` confirmed as workaround for the Phase 3B 1.3% bge-m3 NaN failure rate
+
+**Date:** 2026-04-25
+**Context:** Phase 3B follow-up F3 (BACKFILL_STRESS_REPORT.md) called out `OLLAMA_FLASH_ATTENTION=false` as untested. Ollama issues #14657 and #9639 cite it as the canonical workaround for `failed to encode response: json: unsupported value: NaN` on F16 embedders. Don gave a 5-min budget to verify.
+
+**Decision:** Workaround **CONFIRMED** for Aether's bge-m3 backfill workload. Recommendation: Don sets `OLLAMA_FLASH_ATTENTION=false` in his Ollama startup environment (system env var or Ollama service config). D-017's retry-with-backoff stays as belt-and-braces.
+
+**Evidence.** Mini-bench: 13 previously-failing rows × 5 attempts = 65 embed calls, all 200, zero NaN-500s. Original run: same 13 inputs all 500'd at least once. Latency comparable (~140 ms vs original 181.8 ms mean). Restoration to default flags verified after the bench.
+
+**Did NOT verify.** Full 1000-row regression with FA=false (out of 5-min budget). The 65/65 sample is sufficient to falsify "no effect" but not to prove zero failure rate at scale. Re-bench is cheap (~5 min) if/when operationally needed.
+
+**Artifacts.**
+- file:///C:/Users/dbhav/Projects/aether/planning/session_2026-04-25/bench_flash_attention_workaround.py
+- file:///C:/Users/dbhav/Projects/aether/planning/session_2026-04-25/flash_attention_workaround_results.json
+- file:///C:/Users/dbhav/Projects/aether/planning/session_2026-04-25/OLLAMA_UPSTREAM_BUG_REPORT.md (new "Workaround verification 2026-04-25" section)

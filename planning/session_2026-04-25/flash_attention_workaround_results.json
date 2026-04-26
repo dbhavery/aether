@@ -1,0 +1,493 @@
+{
+  "model": "bge-m3",
+  "ollama_env": "OLLAMA_FLASH_ATTENTION=false",
+  "failed_rows_tested": [
+    20,
+    70,
+    120,
+    170,
+    220,
+    270,
+    370,
+    470,
+    620,
+    670,
+    720,
+    770,
+    870
+  ],
+  "attempts_per_row": 5,
+  "total_attempts": 65,
+  "total_failures": 0,
+  "failure_rate_pct": 0.0,
+  "per_row": [
+    {
+      "row_idx": 20,
+      "text": "[seq 20] Today I learned that wgpu's max_buffer_size is not the same as Iceland.",
+      "attempts": [
+        {
+          "attempt": 0,
+          "status": 200,
+          "ms": 133.8,
+          "err": ""
+        },
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 107.5,
+          "err": ""
+        },
+        {
+          "attempt": 2,
+          "status": 200,
+          "ms": 104.4,
+          "err": ""
+        },
+        {
+          "attempt": 3,
+          "status": 200,
+          "ms": 104.1,
+          "err": ""
+        },
+        {
+          "attempt": 4,
+          "status": 200,
+          "ms": 105.5,
+          "err": ""
+        }
+      ]
+    },
+    {
+      "row_idx": 70,
+      "text": "[seq 70] Today I learned that wgpu's max_buffer_size is not the same as memory recall.",
+      "attempts": [
+        {
+          "attempt": 0,
+          "status": 200,
+          "ms": 109.5,
+          "err": ""
+        },
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 104.7,
+          "err": ""
+        },
+        {
+          "attempt": 2,
+          "status": 200,
+          "ms": 103.8,
+          "err": ""
+        },
+        {
+          "attempt": 3,
+          "status": 200,
+          "ms": 106.8,
+          "err": ""
+        },
+        {
+          "attempt": 4,
+          "status": 200,
+          "ms": 105.4,
+          "err": ""
+        }
+      ]
+    },
+    {
+      "row_idx": 120,
+      "text": "[seq 120] Today I learned that wgpu's max_buffer_size is not the same as retrieval.",
+      "attempts": [
+        {
+          "attempt": 0,
+          "status": 200,
+          "ms": 136.2,
+          "err": ""
+        },
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 105.8,
+          "err": ""
+        },
+        {
+          "attempt": 2,
+          "status": 200,
+          "ms": 124.9,
+          "err": ""
+        },
+        {
+          "attempt": 3,
+          "status": 200,
+          "ms": 112.4,
+          "err": ""
+        },
+        {
+          "attempt": 4,
+          "status": 200,
+          "ms": 105.3,
+          "err": ""
+        }
+      ]
+    },
+    {
+      "row_idx": 170,
+      "text": "[seq 170] Today I learned that wgpu's max_buffer_size is not the same as embedding.",
+      "attempts": [
+        {
+          "attempt": 0,
+          "status": 200,
+          "ms": 127.8,
+          "err": ""
+        },
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 106.6,
+          "err": ""
+        },
+        {
+          "attempt": 2,
+          "status": 200,
+          "ms": 123.1,
+          "err": ""
+        },
+        {
+          "attempt": 3,
+          "status": 200,
+          "ms": 104.3,
+          "err": ""
+        },
+        {
+          "attempt": 4,
+          "status": 200,
+          "ms": 105.9,
+          "err": ""
+        }
+      ]
+    },
+    {
+      "row_idx": 220,
+      "text": "[seq 220] Today I learned that wgpu's max_buffer_size is not the same as presence.",
+      "attempts": [
+        {
+          "attempt": 0,
+          "status": 200,
+          "ms": 127.4,
+          "err": ""
+        },
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 105.3,
+          "err": ""
+        },
+        {
+          "attempt": 2,
+          "status": 200,
+          "ms": 106.0,
+          "err": ""
+        },
+        {
+          "attempt": 3,
+          "status": 200,
+          "ms": 120.4,
+          "err": ""
+        },
+        {
+          "attempt": 4,
+          "status": 200,
+          "ms": 115.0,
+          "err": ""
+        }
+      ]
+    },
+    {
+      "row_idx": 270,
+      "text": "[seq 270] Today I learned that wgpu's max_buffer_size is not the same as sourdough.",
+      "attempts": [
+        {
+          "attempt": 0,
+          "status": 200,
+          "ms": 105.3,
+          "err": ""
+        },
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 119.1,
+          "err": ""
+        },
+        {
+          "attempt": 2,
+          "status": 200,
+          "ms": 104.9,
+          "err": ""
+        },
+        {
+          "attempt": 3,
+          "status": 200,
+          "ms": 103.8,
+          "err": ""
+        },
+        {
+          "attempt": 4,
+          "status": 200,
+          "ms": 119.5,
+          "err": ""
+        }
+      ]
+    },
+    {
+      "row_idx": 370,
+      "text": "[seq 370] Today I learned that wgpu's max_buffer_size is not the same as coffee.",
+      "attempts": [
+        {
+          "attempt": 0,
+          "status": 200,
+          "ms": 118.8,
+          "err": ""
+        },
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 106.2,
+          "err": ""
+        },
+        {
+          "attempt": 2,
+          "status": 200,
+          "ms": 118.6,
+          "err": ""
+        },
+        {
+          "attempt": 3,
+          "status": 200,
+          "ms": 119.6,
+          "err": ""
+        },
+        {
+          "attempt": 4,
+          "status": 200,
+          "ms": 120.3,
+          "err": ""
+        }
+      ]
+    },
+    {
+      "row_idx": 470,
+      "text": "[seq 470] Today I learned that wgpu's max_buffer_size is not the same as Tromso.",
+      "attempts": [
+        {
+          "attempt": 0,
+          "status": 200,
+          "ms": 120.2,
+          "err": ""
+        },
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 124.7,
+          "err": ""
+        },
+        {
+          "attempt": 2,
+          "status": 200,
+          "ms": 121.9,
+          "err": ""
+        },
+        {
+          "attempt": 3,
+          "status": 200,
+          "ms": 138.8,
+          "err": ""
+        },
+        {
+          "attempt": 4,
+          "status": 200,
+          "ms": 124.7,
+          "err": ""
+        }
+      ]
+    },
+    {
+      "row_idx": 620,
+      "text": "[seq 620] Today I learned that wgpu's max_buffer_size is not the same as bagels.",
+      "attempts": [
+        {
+          "attempt": 0,
+          "status": 200,
+          "ms": 121.9,
+          "err": ""
+        },
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 126.4,
+          "err": ""
+        },
+        {
+          "attempt": 2,
+          "status": 200,
+          "ms": 126.8,
+          "err": ""
+        },
+        {
+          "attempt": 3,
+          "status": 200,
+          "ms": 122.1,
+          "err": ""
+        },
+        {
+          "attempt": 4,
+          "status": 200,
+          "ms": 139.8,
+          "err": ""
+        }
+      ]
+    },
+    {
+      "row_idx": 670,
+      "text": "[seq 670] Today I learned that wgpu's max_buffer_size is not the same as expected.",
+      "attempts": [
+        {
+          "attempt": 0,
+          "status": 200,
+          "ms": 135.3,
+          "err": ""
+        },
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 126.0,
+          "err": ""
+        },
+        {
+          "attempt": 2,
+          "status": 200,
+          "ms": 146.7,
+          "err": ""
+        },
+        {
+          "attempt": 3,
+          "status": 200,
+          "ms": 140.0,
+          "err": ""
+        },
+        {
+          "attempt": 4,
+          "status": 200,
+          "ms": 153.4,
+          "err": ""
+        }
+      ]
+    },
+    {
+      "row_idx": 720,
+      "text": "[seq 720] Today I learned that wgpu's max_buffer_size is not the same as pour-over.",
+      "attempts": [
+        {
+          "attempt": 0,
+          "status": 200,
+          "ms": 141.5,
+          "err": ""
+        },
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 150.6,
+          "err": ""
+        },
+        {
+          "attempt": 2,
+          "status": 200,
+          "ms": 144.8,
+          "err": ""
+        },
+        {
+          "attempt": 3,
+          "status": 200,
+          "ms": 145.2,
+          "err": ""
+        },
+        {
+          "attempt": 4,
+          "status": 200,
+          "ms": 169.6,
+          "err": ""
+        }
+      ]
+    },
+    {
+      "row_idx": 770,
+      "text": "[seq 770] Today I learned that wgpu's max_buffer_size is not the same as dentist.",
+      "attempts": [
+        {
+          "attempt": 0,
+          "status": 200,
+          "ms": 150.9,
+          "err": ""
+        },
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 146.0,
+          "err": ""
+        },
+        {
+          "attempt": 2,
+          "status": 200,
+          "ms": 149.8,
+          "err": ""
+        },
+        {
+          "attempt": 3,
+          "status": 200,
+          "ms": 163.9,
+          "err": ""
+        },
+        {
+          "attempt": 4,
+          "status": 200,
+          "ms": 171.3,
+          "err": ""
+        }
+      ]
+    },
+    {
+      "row_idx": 870,
+      "text": "[seq 870] Today I learned that wgpu's max_buffer_size is not the same as expected.",
+      "attempts": [
+        {
+          "attempt": 0,
+          "status": 200,
+          "ms": 155.9,
+          "err": ""
+        },
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 151.5,
+          "err": ""
+        },
+        {
+          "attempt": 2,
+          "status": 200,
+          "ms": 152.4,
+          "err": ""
+        },
+        {
+          "attempt": 3,
+          "status": 200,
+          "ms": 144.9,
+          "err": ""
+        },
+        {
+          "attempt": 4,
+          "status": 200,
+          "ms": 152.9,
+          "err": ""
+        }
+      ]
+    }
+  ]
+}
