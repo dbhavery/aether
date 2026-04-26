@@ -78,6 +78,7 @@ beforeEach(() => {
     total: 0,
     completed: 0,
     failures: 0,
+    recovered_failures: 0,
     skipped_already_embedded: 0,
     current_domain: null,
     started_at_ms: 0,
@@ -223,6 +224,7 @@ describe("RetrievalTab", () => {
       total: 5,
       completed: 0,
       failures: 0,
+      recovered_failures: 0,
       skipped_already_embedded: 5,
       current_domain: null,
       started_at_ms: 0,
@@ -233,9 +235,87 @@ describe("RetrievalTab", () => {
     });
     await waitFor(() => {
       expect(
-        screen.getByText(/5 already-embedded skipped/),
-      ).toBeTruthy();
+        screen.getByTestId("backfill-skipped").textContent,
+      ).toMatch(/5 already embedded/);
     });
+  });
+
+  it("post-run summary surfaces failures and recovered counts when non-zero", async () => {
+    // Phase 3B F2: distinct counters for the three failure-modes.
+    mockedApi.embeddingsReadiness.mockResolvedValue({ kind: "ready" } as ReadinessState);
+    mockedApi.backfillCount.mockResolvedValue(0);
+    mockedApi.backfillStatus.mockResolvedValue({
+      finished: true,
+      cancelled: false,
+      total: 100,
+      completed: 95,
+      failures: 3,
+      recovered_failures: 2,
+      skipped_already_embedded: 0,
+      current_domain: null,
+      started_at_ms: 0,
+    });
+    render(<RetrievalTab refreshKey={0} />);
+    await waitFor(() => {
+      expect(screen.getByText(/Last backfill: 95 indexed/)).toBeTruthy();
+    });
+    expect(screen.getByTestId("backfill-failures").textContent).toMatch(
+      /3 failed/,
+    );
+    expect(screen.getByTestId("backfill-recovered").textContent).toMatch(
+      /2 recovered after retry/,
+    );
+  });
+
+  it("post-run summary omits failure + recovered chips on a clean happy-path run", async () => {
+    // Happy path stays terse — no clutter when there's nothing to flag.
+    mockedApi.embeddingsReadiness.mockResolvedValue({ kind: "ready" } as ReadinessState);
+    mockedApi.backfillCount.mockResolvedValue(0);
+    mockedApi.backfillStatus.mockResolvedValue({
+      finished: true,
+      cancelled: false,
+      total: 50,
+      completed: 50,
+      failures: 0,
+      recovered_failures: 0,
+      skipped_already_embedded: 0,
+      current_domain: null,
+      started_at_ms: 0,
+    });
+    render(<RetrievalTab refreshKey={0} />);
+    await waitFor(() => {
+      expect(screen.getByText(/Last backfill: 50 indexed/)).toBeTruthy();
+    });
+    expect(screen.queryByTestId("backfill-failures")).toBeNull();
+    expect(screen.queryByTestId("backfill-recovered")).toBeNull();
+    expect(screen.queryByTestId("backfill-skipped")).toBeNull();
+  });
+
+  it("failures chip carries error-tone class so attention is warranted", async () => {
+    // Per AUDIT_ROW_UI_RESEARCH discipline: lost-data is the headline,
+    // visually distinct from the informational counters.
+    mockedApi.embeddingsReadiness.mockResolvedValue({ kind: "ready" } as ReadinessState);
+    mockedApi.backfillCount.mockResolvedValue(0);
+    mockedApi.backfillStatus.mockResolvedValue({
+      finished: true,
+      cancelled: false,
+      total: 10,
+      completed: 9,
+      failures: 1,
+      recovered_failures: 0,
+      skipped_already_embedded: 0,
+      current_domain: null,
+      started_at_ms: 0,
+    });
+    render(<RetrievalTab refreshKey={0} />);
+    await waitFor(() => {
+      expect(screen.getByTestId("backfill-failures")).toBeTruthy();
+    });
+    const chip = screen.getByTestId("backfill-failures");
+    // Visual emphasis: must use the err-tone Tailwind classes, not the
+    // muted class the recovered/skipped counters share.
+    expect(chip.className).toMatch(/text-aether-err/);
+    expect(chip.className).not.toMatch(/text-aether-muted/);
   });
 
   it("strips provider prefix to display the bare model name", async () => {

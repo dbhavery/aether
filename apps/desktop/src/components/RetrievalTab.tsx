@@ -323,14 +323,7 @@ export function RetrievalTab({ refreshKey }: Props) {
           backfill &&
           backfill.finished &&
           (backfill.completed > 0 || backfill.skipped_already_embedded > 0) && (
-            <div className="text-aether-muted text-xs">
-              Last backfill: {backfill.completed} indexed
-              {backfill.skipped_already_embedded > 0
-                ? `, ${backfill.skipped_already_embedded} already-embedded skipped`
-                : ""}
-              {backfill.failures > 0 ? `, ${backfill.failures} failed` : ""}
-              {backfill.cancelled ? " (cancelled)" : ""}.
-            </div>
+            <BackfillSummaryLine backfill={backfill} />
           )}
       </div>
     );
@@ -366,8 +359,12 @@ function BackfillProgressView({
 }: BackfillProgressViewProps) {
   // Both newly-embedded rows and already-embedded skips count as
   // "processed" for the progress bar — skipping is the cheap path,
-  // not unfinished work.
-  const processed = backfill.completed + backfill.skipped_already_embedded;
+  // not unfinished work. Hard failures count as "advanced past" too;
+  // we don't re-attempt within a job.
+  const processed =
+    backfill.completed +
+    backfill.skipped_already_embedded +
+    backfill.failures;
   const pct =
     backfill.total > 0
       ? Math.round((processed / backfill.total) * 100)
@@ -376,11 +373,9 @@ function BackfillProgressView({
     <div className="space-y-1">
       <div className="text-aether-muted text-sm">
         Indexing with <code>{modelName}</code>: {processed} of {backfill.total}
-        {backfill.skipped_already_embedded > 0
-          ? ` (${backfill.skipped_already_embedded} already embedded)`
-          : ""}
         {backfill.current_domain ? ` — ${backfill.current_domain}` : ""}.
       </div>
+      <BackfillCounters backfill={backfill} />
       <div className="h-1 w-full overflow-hidden rounded bg-aether-bg/40">
         <div
           className="h-full bg-aether-ok transition-all"
@@ -398,6 +393,87 @@ function BackfillProgressView({
       >
         Cancel
       </button>
+    </div>
+  );
+}
+
+/**
+ * Stable always-visible counters for in-progress and post-run views.
+ *
+ * Per AUDIT_ROW_UI_RESEARCH.md (Linear / Stripe / Carbon discipline):
+ * critical state lives in a stable affordance, not a hover-only
+ * tooltip. The user must be able to see "did anything fail?" without
+ * interacting with the row.
+ *
+ * Tier of attention:
+ *   - failures (J): red badge — user attention warranted; lost data.
+ *   - recovered_failures (K): small grey text — informational; the
+ *     system self-healed. Reassures rather than alarms.
+ *   - skipped_already_embedded (M): small grey text — explains why
+ *     "indexed" might be lower than "total".
+ *
+ * Each counter is omitted when zero so the happy-path UI stays clean.
+ */
+function BackfillCounters({ backfill }: { backfill: BackfillProgress }) {
+  const { failures, recovered_failures, skipped_already_embedded } = backfill;
+  if (
+    failures === 0 &&
+    recovered_failures === 0 &&
+    skipped_already_embedded === 0
+  ) {
+    return null;
+  }
+  return (
+    <div className="flex flex-wrap gap-x-2 gap-y-1 text-[11px]">
+      {failures > 0 && (
+        <span
+          data-testid="backfill-failures"
+          className="rounded border border-aether-err/50 bg-aether-err/10 px-1.5 py-0.5 font-medium text-aether-err"
+        >
+          {failures} failed
+        </span>
+      )}
+      {recovered_failures > 0 && (
+        <span
+          data-testid="backfill-recovered"
+          className="text-aether-muted"
+        >
+          {recovered_failures} recovered after retry
+        </span>
+      )}
+      {skipped_already_embedded > 0 && (
+        <span
+          data-testid="backfill-skipped"
+          className="text-aether-muted"
+        >
+          {skipped_already_embedded} already embedded
+        </span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Post-run summary line for completed backfills. Stable affordance:
+ * the headline "N indexed" is always visible; the parenthetical
+ * counter strip uses BackfillCounters to surface non-zero failures /
+ * recovered / skipped with appropriate visual weight (failures get a
+ * red badge, the rest stay informational).
+ *
+ * Per quality standard #3 — don't lie to the user. Embedding losses
+ * (`failures`) get the highest visual weight because the user has to
+ * decide whether to re-run. Recovered transient blips get
+ * acknowledged so the user understands that "self-healed" is a
+ * deliberate behaviour, not a missed alert.
+ */
+function BackfillSummaryLine({ backfill }: { backfill: BackfillProgress }) {
+  return (
+    <div className="space-y-1">
+      <div className="text-aether-muted text-xs">
+        Last backfill: {backfill.completed} indexed
+        {backfill.cancelled ? " (cancelled)" : ""}.
+      </div>
+      <BackfillCounters backfill={backfill} />
     </div>
   );
 }
