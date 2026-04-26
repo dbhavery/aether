@@ -92,3 +92,10 @@ node_modules/
 
 # Bench corpora (re-downloadable; too large for repo)
 planning/session_*/lexfridman.parquet
+
+# Training pipeline scratch (corpora, models, checkpoints)
+planning/session_*/training/data/
+planning/session_*/training/models/
+planning/session_*/training/checkpoints/
+planning/session_*/training/eval/baseline_outputs.jsonl
+planning/session_*/training/eval/finetuned_outputs.jsonl

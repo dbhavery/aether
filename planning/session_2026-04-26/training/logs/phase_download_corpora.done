@@ -1,0 +1,58 @@
+{
+  "phase": "download_corpora",
+  "completed_at": "2026-04-26T06:13:01Z",
+  "personachat": {
+    "status": "cached",
+    "license": "shippable",
+    "role": "train+eval"
+  },
+  "blended_skill": {
+    "status": "ok",
+    "rows": 6808,
+    "license": "shippable",
+    "role": "train+eval",
+    "splits": [
+      "train",
+      "validation",
+      "test"
+    ]
+  },
+  "daily_dialog": {
+    "status": "fail",
+    "error": "RuntimeError: Dataset scripts are no longer supported, but found dailydialog.py",
+    "license": "eval_only",
+    "role": "eval"
+  },
+  "empathetic": {
+    "status": "ok",
+    "rows": 51234,
+    "license": "eval_only",
+    "role": "eval",
+    "splits": [
+      "train",
+      "validation",
+      "test"
+    ]
+  },
+  "topical_chat": {
+    "status": "ok",
+    "rows": 10784,
+    "license": "shippable",
+    "role": "train+eval",
+    "splits": [
+      "train",
+      "test"
+    ]
+  },
+  "soda": {
+    "status": "ok",
+    "rows": 1486896,
+    "license": "shippable",
+    "role": "train+eval",
+    "splits": [
+      "train",
+      "validation",
+      "test"
+    ]
+  }
+}
