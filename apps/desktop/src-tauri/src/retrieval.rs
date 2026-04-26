@@ -25,7 +25,7 @@
 //!   plus a `warn!`.
 
 use std::cmp::Ordering;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 use aether_l2_memory::{
     EmbeddingStore, MemoryDomain, MemoryId, SessionMemoryStore, SimilarityHit,
@@ -363,35 +363,21 @@ pub fn run_retrieval_context(
         });
     }
 
-    // Phase 4 — rank per ADR-0010 Option A:
-    //   final_score = cosine + RECENCY_WEIGHT_ALPHA * recency_decay(ts)
-    // Sort by final_score desc; recency_ms desc retained as a hard
-    // tiebreak when the combined scores are exactly equal (vanishingly
-    // rare with f32 arithmetic but kept so the rank is total-ordered
-    // and deterministic). Truncate to max_items.
-    let now_ms = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0);
-    resolved.sort_by(|a, b| {
-        let sa = combined_rank_score(
-            a.score,
-            a.timestamp_ms,
-            now_ms,
-            RECENCY_WEIGHT_ALPHA,
-            RECENCY_HALF_LIFE,
-        );
-        let sb = combined_rank_score(
-            b.score,
-            b.timestamp_ms,
-            now_ms,
-            RECENCY_WEIGHT_ALPHA,
-            RECENCY_HALF_LIFE,
-        );
-        match sb.partial_cmp(&sa) {
-            Some(Ordering::Equal) | None => b.timestamp_ms.cmp(&a.timestamp_ms),
-            Some(ord) => ord,
-        }
+    // Phase 4 — rank: score desc, recency desc, truncate to max_items.
+    //
+    // ADR-0010 §Empirical Validation: Option A (recency-weighted combine
+    // using the `combined_rank_score` / `recency_decay` helpers below)
+    // was measured against the 842-passage Phase 3A corpus and found to
+    // *harm* recall (recall@1 −16.7 pp, MRR −13.4 pp). Option A is
+    // Rejected; production retains the baseline cosine + strict-tiebreak
+    // shape. The helpers stay public because Option B (cross-encoder
+    // re-rank, +2.8 pp recall@1) is the ratified direction and may
+    // re-use the recency primitive as a tertiary signal in a future
+    // follow-up. See `planning/session_2026-04-25/recall_at_scale_option_a.json`
+    // for the empirical evidence.
+    resolved.sort_by(|a, b| match b.score.partial_cmp(&a.score) {
+        Some(Ordering::Equal) | None => b.timestamp_ms.cmp(&a.timestamp_ms),
+        Some(ord) => ord,
     });
     resolved.truncate(max_items);
     // Reaching the end of the function means every phase succeeded

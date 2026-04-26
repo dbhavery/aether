@@ -1,6 +1,6 @@
 # ADR-0010: Rank-function evolution beyond cosine + recency-tiebreak
 
-- **Status:** **Proposed** (drafted 2026-04-25 in the autonomous Phase 3A session per `HANDOFF_2026-04-25_NEXT_AUTONOMOUS_SESSION.md` §3A trigger logic — recall@1 dropped 25.6 pp below the 150-passage baseline at 842-passage scale, crossing the 90% threshold AND the >5% MRR threshold).
+- **Status:** **Accepted** (Option B, with Option A explicitly Rejected). Originally drafted 2026-04-25 as Proposed; ratified the same day after the empirical bench validation (see §Empirical Validation below). Production wiring deferred to a follow-up ADR-0011 (see §Open items).
 - **Date:** 2026-04-25
 - **Deciders:** Don ratifies. Claude proposes based on the Phase 3A calibration data in `planning/session_2026-04-25/RETRIEVAL_CALIBRATION_REPORT.md`.
 - **Supersedes:** nothing (this would augment, not replace, the rank function).
@@ -165,4 +165,96 @@ ADR-0005 §Decision 5 sets a 5s bailout for the retrieval pipeline. Adding 50-10
 1. **Does Don want to ratify the *experiment* (run both options in the bench), or pre-commit to one option now?** Recommend the former.
 2. **VRAM budget for Option B's reranker.** ADR-0006 §6 currently allocates ~4 GB for Flame embedders — bge-reranker-v2-m3 is 568M params (~600 MB Q4_K_M). Fits, but takes the Flame embedder pool to ~4.6 GB.
 3. **Should the calibration corpus be re-generated to be more "real"?** The current corpus is gemma4:e4b-generated synthetic. Real Aether usage may have a different surface-phrasing distribution. Future Phase 3A2 could replace with anonymized real conversation transcripts once consent + privacy story is settled.
-4. **Recency-decay shape (Option A only).** Exponential half-life vs linear vs sigmoid. The choice has measurable impact on the lift; the bench experiment should sweep at least 3 shapes.
+4. **Recency-decay shape (Option A only).** Exponential half-life vs linear vs sigmoid. The choice has measurable impact on the lift; the bench experiment should sweep at least 3 shapes. **Resolved 2026-04-25:** moot — Option A is Rejected (see §Empirical Validation).
+
+## Empirical Validation (2026-04-25)
+
+Both Option A and Option B were implemented and measured against the
+same 842-passage Phase 3A corpus (`synthetic_corpus_embedded.jsonl`,
+72 reference-pair queries) used to produce the baseline numbers in
+§Context. Honest data wins.
+
+### Bench setup
+
+- **Baseline:** `bench_recall.py` — production cosine + strict
+  timestamp-desc tiebreak. Output `recall_at_scale.json`.
+- **Option A:** `bench_recall_option_a.py` — `cosine + α * exp(-Δt/τ)`
+  with α = 0.1, τ = 7 days, "now" = max(timestamp_ms) over the
+  corpus. Mirrors the production helpers `combined_rank_score` /
+  `recency_decay` in `apps/desktop/src-tauri/src/retrieval.rs`
+  byte-for-byte. Output `recall_at_scale_option_a.json`.
+- **Option B:** `bench_recall_option_b.py` — bge-m3 cosine top-20,
+  then `BAAI/bge-reranker-v2-m3` (sentence-transformers `CrossEncoder`)
+  re-scores all 20 (query, candidate) pairs via the persistent
+  `tools/hf_embed_helper/embed.py` subprocess (`rerank` op added in
+  this session); sort by rerank score desc, recency tiebreak.
+  Output `recall_at_scale_option_b.json`.
+
+### Results
+
+| Metric    | Baseline | Option A | Δ vs base | Option B | Δ vs base |
+| --------- | -------- | -------- | --------- | -------- | --------- |
+| recall@1  | 0.6944   | 0.5278   | **−16.7** | 0.7222   | **+2.8**  |
+| recall@3  | 0.8333   | 0.7083   | −12.5     | 0.8194   | −1.4      |
+| recall@5  | 0.8750   | 0.7917   | −8.3      | 0.8889   | +1.4      |
+| recall@10 | 0.9028   | 0.9028   | 0.0       | 0.9306   | +2.8      |
+| recall@20 | 0.9583   | 0.9167   | −4.2      | 0.9583   | 0.0       |
+| MRR       | 0.7755   | 0.6420   | −13.4     | 0.7920   | +1.6      |
+
+### Decision
+
+- **Option A — Rejected.** The recency-weighted combine actively
+  harmed recall (recall@1 −16.7 pp, MRR −13.4 pp). The Phase 3A
+  miss-pattern analysis (§Context) predicted this: the dominant
+  failure mode is within-thread top-1 confusion, not recency bias.
+  On a corpus with monotonically ascending timestamps, a recency
+  weight biases the rank toward late-thread rows that are
+  systematically not the reference targets, displacing the correct
+  semantic match. The `combined_rank_score` and `recency_decay`
+  helpers stay in `retrieval.rs` (with their unit tests) as
+  documented dead-end primitives — they may yet earn their keep as
+  a tertiary tiebreak in a future hybrid scheme — but the
+  production rank in Phase 4 is reverted to baseline cosine +
+  strict-tiebreak. See `recall_at_scale_option_a.json`.
+- **Option B — Accepted (in principle).** The cross-encoder re-rank
+  produced a real but modest lift (+2.8 pp recall@1, +2.8 pp
+  recall@10, +1.6 pp MRR). The earlier "toward 90%+" hope in §1
+  Option B was optimistic; bge-reranker-v2-m3 is not a perfect
+  discriminator on this within-thread specificity failure mode and
+  recall@3 actually regressed 1.4 pp (the reranker sometimes pushes
+  correct candidates past rank-1 to rank-3+ then back out). Even so,
+  Option B is the only direction that improved any metric, and it
+  is the right architectural foundation. See
+  `recall_at_scale_option_b.json`.
+- **Option C — Rejected.** Option B beats deferral, modestly but
+  decisively.
+
+### What landed in this session
+
+- `tools/hf_embed_helper/embed.py` — new `rerank` op (CrossEncoder
+  via sentence-transformers), wire-shape stable.
+- `apps/desktop/src-tauri/src/retrieval.rs` — `combined_rank_score`,
+  `recency_decay`, `RECENCY_WEIGHT_ALPHA`, `RECENCY_HALF_LIFE` pub
+  primitives + unit tests; production Phase 4 reverted to baseline.
+- Three bench scripts + three JSON result artifacts under
+  `planning/session_2026-04-25/`.
+
+### What did NOT land (deferred to ADR-0011)
+
+The production wiring of Option B (Reranker trait in
+`packages/l4-router` or a new `packages/l2-rerank`, AppState wiring,
+`memory.json::retrieval.reranker.enabled` config field, Ollama / HF
+helper provider plumbing, the 5s deadline interaction) is non-trivial
+and the +2.8 pp recall@1 lift does not yet justify the engineering
+complexity vs other M2 priorities. Defer to ADR-0011 once one of:
+
+1. A second calibration on a more "real" corpus (per Open item 3
+   above) reproduces or amplifies the Option B lift.
+2. A larger / smarter reranker (e.g. bge-reranker-v2.5-gemma2-lightweight)
+   demonstrates >5 pp lift on the same 842-passage corpus.
+3. A user-visible quality regression in production retrieval makes
+   the recall@1 floor a P1.
+
+The bench infrastructure (`bench_recall_option_b.py` + the helper's
+`rerank` op) is the permanent regression-protection asset and stays
+runnable on demand.
