@@ -475,8 +475,11 @@ def phase_train_lora() -> None:
 
     log("  loading SFT datasets")
     ds_train = load_dataset("json", data_files=str(DATA / "sft_train.jsonl"), split="train")
-    ds_eval = load_dataset("json", data_files=str(DATA / "sft_eval.jsonl"), split="train")
-    log(f"  train: {len(ds_train)}  eval: {len(ds_eval)}")
+    ds_eval_full = load_dataset("json", data_files=str(DATA / "sft_eval.jsonl"), split="train")
+    # Truncate eval to 500 samples — full 25k eval set was burning
+    # 3.5h per eval cycle (eval dominated training time).
+    ds_eval = ds_eval_full.select(range(min(500, len(ds_eval_full))))
+    log(f"  train: {len(ds_train)}  eval: {len(ds_eval)} (truncated from {len(ds_eval_full)})")
 
     def format_func(example):
         return tok.apply_chat_template(example["messages"], tokenize=False, add_generation_prompt=False)
@@ -494,7 +497,7 @@ def phase_train_lora() -> None:
         save_steps=500,
         save_total_limit=3,
         eval_strategy="steps",
-        eval_steps=500,
+        eval_steps=2500,
         per_device_eval_batch_size=4,
         bf16=True,
         max_length=1024,
@@ -512,7 +515,14 @@ def phase_train_lora() -> None:
     )
     log("  training start")
     t0 = time.time()
-    trainer.train()
+    # Auto-resume from latest checkpoint if one exists in out_dir.
+    resume = False
+    if out_dir.exists():
+        ckpts = sorted(out_dir.glob("checkpoint-*"), key=lambda p: int(p.name.split("-")[1]))
+        if ckpts:
+            resume = True
+            log(f"  resuming from {ckpts[-1].name}")
+    trainer.train(resume_from_checkpoint=resume)
     log(f"  training done in {time.time()-t0:.0f}s")
     log("  saving final LoRA adapter")
     trainer.save_model(str(out_dir / "final"))
