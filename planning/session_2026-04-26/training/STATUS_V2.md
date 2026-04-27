@@ -1,7 +1,7 @@
 # Training Pipeline V2 Status
 
-**Updated:** 2026-04-27T02:35:18Z
-**Current phase:** format_sft — done
+**Updated:** 2026-04-27T04:21:46Z
+**Current phase:** train_lora — preparing
 
 ## Completed
 - [x] setup (at 2026-04-27T02:15:40Z)
@@ -10,7 +10,7 @@
 - [x] format_sft (at 2026-04-27T02:35:18Z)
 
 ## Pending
-- [ ] train_lora
+- [>] train_lora
 - [ ] train_discriminator
 - [ ] eval
 - [ ] writeup
