@@ -1,0 +1,44 @@
+{
+  "phase": "download_corpora",
+  "completed_at": "2026-04-27T02:15:49Z",
+  "blended_skill": {
+    "status": "cached",
+    "license": "shippable",
+    "role": "train+eval"
+  },
+  "topical_chat": {
+    "status": "cached",
+    "license": "shippable",
+    "role": "train+eval"
+  },
+  "soda": {
+    "status": "cached",
+    "license": "shippable",
+    "role": "train+eval"
+  },
+  "oasst2": {
+    "status": "cached",
+    "license": "shippable",
+    "role": "train+eval"
+  },
+  "ultrachat": {
+    "status": "cached",
+    "license": "shippable",
+    "role": "train+eval"
+  },
+  "daily_dialog": {
+    "status": "cached",
+    "license": "shippable",
+    "role": "train+eval"
+  },
+  "empathetic": {
+    "status": "cached",
+    "license": "eval_only",
+    "role": "eval"
+  },
+  "wildchat": {
+    "status": "cached",
+    "license": "eval_only",
+    "role": "eval"
+  }
+}

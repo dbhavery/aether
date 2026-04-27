@@ -1,0 +1,27 @@
+{
+  "phase": "normalize",
+  "completed_at": "2026-04-27T02:33:27Z",
+  "total_conversations": 458795,
+  "by_source": {
+    "blended_skill": 6808,
+    "topical_chat": 10245,
+    "soda": 250000,
+    "oasst2": 19868,
+    "ultrachat": 80000,
+    "daily_dialog": 10646,
+    "empathetic": 51228,
+    "wildchat": 30000
+  },
+  "dedup_drops": 1361,
+  "filters": {
+    "min_turns": 2,
+    "min_words": 1,
+    "max_words": 200,
+    "ascii_min_ratio": 0.95
+  },
+  "caps": {
+    "soda": 250000,
+    "ultrachat": 80000,
+    "wildchat": 30000
+  }
+}

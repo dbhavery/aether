@@ -1,0 +1,7 @@
+{
+  "phase": "format_sft",
+  "completed_at": "2026-04-27T02:35:18Z",
+  "train_samples": 710940,
+  "eval_samples": 18297,
+  "skipped_convos": 23760
+}
