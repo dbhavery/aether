@@ -1,0 +1,9 @@
+{
+  "phase": "train_lora",
+  "completed_at": "2026-04-27T13:37:53Z",
+  "ckpt_dir": "C:\\Users\\dbhav\\Projects\\aether\\planning\\session_2026-04-26\\training\\checkpoints_v2\\qwen25_3b_human_lora\\final",
+  "train_samples": 80000,
+  "eval_samples": 500,
+  "training_seconds": 33272,
+  "base_model": "Qwen/Qwen2.5-3B-Instruct"
+}

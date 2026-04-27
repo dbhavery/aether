@@ -1,0 +1,30 @@
+{
+  "phase": "normalize",
+  "completed_at": "2026-04-27T14:55:04Z",
+  "total_conversations": 604966,
+  "by_source": {
+    "cornell_movie": 29932,
+    "daily_dialog": 10646,
+    "blended_skill": 6808,
+    "topical_chat": 10245,
+    "oasst2": 19868,
+    "reddit_casual": 8221,
+    "yt_podcast": 19445,
+    "stemm_podcast": 408573,
+    "soda": 10000,
+    "empathetic": 51228,
+    "wildchat": 30000
+  },
+  "dedup_drops": 2187,
+  "filters": {
+    "min_turns": 2,
+    "min_words": 1,
+    "max_words": 200,
+    "ascii_min_ratio": 0.95
+  },
+  "caps": {
+    "cornell_movie": 30000,
+    "soda": 10000,
+    "wildchat": 30000
+  }
+}

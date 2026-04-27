@@ -1,0 +1,139 @@
+[2026-04-27T14:41:07Z] === V2 Pipeline driver invoked (setup) ===
+[2026-04-27T14:41:07Z] Phase 1 v2: setup — verifying environment
+[2026-04-27T14:41:22Z]   env: {
+  "torch": "2.11.0+cu128",
+  "cuda_available": true,
+  "gpu": "NVIDIA GeForce RTX 3090 Ti",
+  "vram_total_gb": 25.8,
+  "transformers": "4.57.6",
+  "peft": "0.19.1",
+  "trl": "1.3.0",
+  "datasets": "4.8.4",
+  "bitsandbytes": "0.49.2",
+  "accelerate": "1.13.0",
+  "base_model": "Qwen/Qwen2.5-3B-Instruct",
+  "discriminator_model": "distilbert-base-uncased",
+  "version": "v2"
+}
+[2026-04-27T14:41:22Z] === V2 Pipeline driver finished ===
+[2026-04-27T14:41:24Z] === V2 Pipeline driver invoked (download_corpora) ===
+[2026-04-27T14:41:24Z] Phase 2 v2: download_corpora
+[2026-04-27T14:41:25Z]   cornell_movie: cached, skipping
+[2026-04-27T14:41:25Z]   daily_dialog: cached, skipping
+[2026-04-27T14:41:25Z]   blended_skill: cached, skipping
+[2026-04-27T14:41:25Z]   topical_chat: cached, skipping
+[2026-04-27T14:41:25Z]   oasst2: cached, skipping
+[2026-04-27T14:41:25Z]   reddit_casual: cached, skipping
+[2026-04-27T14:41:25Z]   yt_podcast: cached, skipping
+[2026-04-27T14:41:25Z]   stemm_podcast: cached, skipping
+[2026-04-27T14:41:25Z]   soda: cached, skipping
+[2026-04-27T14:41:25Z]   empathetic: cached, skipping
+[2026-04-27T14:41:25Z]   wildchat: cached, skipping
+[2026-04-27T14:41:25Z]   download summary: {
+  "cornell_movie": {
+    "status": "cached",
+    "license": "shippable",
+    "role": "train+eval"
+  },
+  "daily_dialog": {
+    "status": "cached",
+    "license": "shippable",
+    "role": "train+eval"
+  },
+  "blended_skill": {
+    "status": "cached",
+    "license": "shippable",
+    "role": "train+eval"
+  },
+  "topical_chat": {
+    "status": "cached",
+    "license": "shippable",
+    "role": "train+eval"
+  },
+  "oasst2": {
+    "status": "cached",
+    "license": "shippable",
+    "role": "train+eval"
+  },
+  "reddit_casual": {
+    "status": "cached",
+    "license": "shippable",
+    "role": "train+eval"
+  },
+  "yt_podcast": {
+    "status": "cached",
+    "license": "shippable",
+    "role": "train+eval"
+  },
+  "stemm_podcast": {
+    "status": "cached",
+    "license": "shippable",
+    "role": "train+eval"
+  },
+  "soda": {
+    "status": "cached",
+    "license": "shippable",
+    "role": "train+eval"
+  },
+  "empathetic": {
+    "status": "cached",
+    "license": "eval_only",
+    "role": "eval"
+  },
+  "wildchat": {
+    "status": "cached",
+    "license": "eval_only",
+    "role": "eval"
+  }
+}
+[2026-04-27T14:41:25Z] === V2 Pipeline driver finished ===
+[2026-04-27T14:41:40Z] === V2 Pipeline driver invoked (normalize) ===
+[2026-04-27T14:41:40Z] Phase 3 v2: normalize
+[2026-04-27T14:42:00Z]   cornell_movie: 29932 normalized convos (cap=30000)
+[2026-04-27T14:42:08Z]   daily_dialog: 10646 normalized convos (cap=None)
+[2026-04-27T14:42:13Z]   blended_skill: 6808 normalized convos (cap=None)
+[2026-04-27T14:42:20Z]   topical_chat: 10245 normalized convos (cap=None)
+[2026-04-27T14:43:00Z]   oasst2: 19868 normalized convos (cap=None)
+[2026-04-27T14:43:02Z]   reddit_casual: 8221 normalized convos (cap=None)
+[2026-04-27T14:43:05Z]   yt_podcast: 19445 normalized convos (cap=None)
+[2026-04-27T14:43:46Z]   stemm_podcast: 408573 normalized convos (cap=None)
+[2026-04-27T14:43:49Z]   soda: 10000 normalized convos (cap=10000)
+[2026-04-27T14:43:56Z]   empathetic: 51228 normalized convos (cap=None)
+[2026-04-27T14:55:04Z]   wildchat: 30000 normalized convos (cap=30000)
+[2026-04-27T14:55:04Z]   total: {
+  "total_conversations": 604966,
+  "by_source": {
+    "cornell_movie": 29932,
+    "daily_dialog": 10646,
+    "blended_skill": 6808,
+    "topical_chat": 10245,
+    "oasst2": 19868,
+    "reddit_casual": 8221,
+    "yt_podcast": 19445,
+    "stemm_podcast": 408573,
+    "soda": 10000,
+    "empathetic": 51228,
+    "wildchat": 30000
+  },
+  "dedup_drops": 2187,
+  "filters": {
+    "min_turns": 2,
+    "min_words": 1,
+    "max_words": 200,
+    "ascii_min_ratio": 0.95
+  },
+  "caps": {
+    "cornell_movie": 30000,
+    "soda": 10000,
+    "wildchat": 30000
+  }
+}
+[2026-04-27T14:55:05Z] === V2 Pipeline driver finished ===
+[2026-04-27T14:55:38Z] === V2 Pipeline driver invoked (format_sft) ===
+[2026-04-27T14:55:38Z] Phase 4 v2: format_sft
+[2026-04-27T14:56:00Z]   formatted: {
+  "train_samples": 880521,
+  "eval_samples": 22516,
+  "skipped_convos": 25789
+}
+[2026-04-27T14:56:00Z] === V2 Pipeline driver finished ===

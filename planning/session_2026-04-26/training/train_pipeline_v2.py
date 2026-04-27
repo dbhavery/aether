@@ -718,26 +718,35 @@ def phase_train_discriminator() -> None:
                     txt = (t.get("text") or "").strip()
                     if 5 <= len(txt.split()) <= 50:
                         prompt_pool.append(txt)
-            if len(prompt_pool) >= 6000:
+            if len(prompt_pool) >= 12000:
                 break
     log(f"  prompt pool: {len(prompt_pool)}")
 
     import urllib.request
     def gen_one(prompt: str) -> str | None:
-        body = json.dumps({"model": "gemma4:e4b", "prompt": prompt, "stream": False, "options": {"num_predict": 80}}).encode("utf-8")
+        # gemma4:e4b is a reasoning model — without "think": false it
+        # spends all num_predict tokens on the thinking field and
+        # returns empty content. Fix: disable thinking for this use.
+        body = json.dumps({
+            "model": "gemma4:e4b",
+            "messages": [{"role": "user", "content": prompt}],
+            "stream": False,
+            "think": False,
+            "options": {"num_predict": 80},
+        }).encode("utf-8")
         try:
-            req = urllib.request.Request("http://127.0.0.1:11434/api/generate", data=body, headers={"Content-Type":"application/json"}, method="POST")
+            req = urllib.request.Request("http://127.0.0.1:11434/api/chat", data=body, headers={"Content-Type":"application/json"}, method="POST")
             with urllib.request.urlopen(req, timeout=30) as resp:
                 payload = json.loads(resp.read().decode("utf-8"))
-            return (payload.get("response") or "").strip()
+            return (payload.get("message", {}).get("content") or "").strip()
         except Exception:
             return None
 
     neg = []
-    target_neg = min(8000, len(pos))
-    log(f"  generating {target_neg} negatives via Ollama gemma4:e4b — slow")
+    target_neg = min(3000, len(pos))  # 3000 plenty for DistilBERT classifier
+    log(f"  generating {target_neg} negatives via Ollama gemma4:e4b (think=false)")
     t0 = time.time()
-    for i, p in enumerate(prompt_pool[:target_neg * 2]):
+    for i, p in enumerate(prompt_pool[:target_neg * 3]):
         if len(neg) >= target_neg:
             break
         if i % 200 == 0 and i > 0:
@@ -852,7 +861,7 @@ def phase_eval() -> None:
         for t in p["context"]:
             role = "user" if t["speaker"] == "A" else "assistant"
             msgs.append({"role": role, "content": t["text"]})
-        body = json.dumps({"model": "gemma4:e4b", "messages": msgs, "stream": False, "options": {"num_predict": 80}}).encode("utf-8")
+        body = json.dumps({"model": "gemma4:e4b", "messages": msgs, "stream": False, "think": False, "options": {"num_predict": 80}}).encode("utf-8")
         try:
             req = urllib.request.Request("http://127.0.0.1:11434/api/chat", data=body, headers={"Content-Type":"application/json"}, method="POST")
             with urllib.request.urlopen(req, timeout=60) as resp:

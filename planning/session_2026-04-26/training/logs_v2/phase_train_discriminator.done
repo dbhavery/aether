@@ -1,0 +1,9 @@
+{
+  "phase": "train_discriminator",
+  "completed_at": "2026-04-27T14:49:36Z",
+  "ckpt_dir": "C:\\Users\\dbhav\\Projects\\aether\\planning\\session_2026-04-26\\training\\checkpoints_v2\\discriminator_distilbert\\final",
+  "train_samples": 5400,
+  "eval_samples": 600,
+  "eval_accuracy": 0.9983333333333333,
+  "training_seconds": 30
+}

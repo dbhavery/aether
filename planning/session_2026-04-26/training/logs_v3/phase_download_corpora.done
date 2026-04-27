@@ -1,0 +1,59 @@
+{
+  "phase": "download_corpora",
+  "completed_at": "2026-04-27T14:41:25Z",
+  "cornell_movie": {
+    "status": "cached",
+    "license": "shippable",
+    "role": "train+eval"
+  },
+  "daily_dialog": {
+    "status": "cached",
+    "license": "shippable",
+    "role": "train+eval"
+  },
+  "blended_skill": {
+    "status": "cached",
+    "license": "shippable",
+    "role": "train+eval"
+  },
+  "topical_chat": {
+    "status": "cached",
+    "license": "shippable",
+    "role": "train+eval"
+  },
+  "oasst2": {
+    "status": "cached",
+    "license": "shippable",
+    "role": "train+eval"
+  },
+  "reddit_casual": {
+    "status": "cached",
+    "license": "shippable",
+    "role": "train+eval"
+  },
+  "yt_podcast": {
+    "status": "cached",
+    "license": "shippable",
+    "role": "train+eval"
+  },
+  "stemm_podcast": {
+    "status": "cached",
+    "license": "shippable",
+    "role": "train+eval"
+  },
+  "soda": {
+    "status": "cached",
+    "license": "shippable",
+    "role": "train+eval"
+  },
+  "empathetic": {
+    "status": "cached",
+    "license": "eval_only",
+    "role": "eval"
+  },
+  "wildchat": {
+    "status": "cached",
+    "license": "eval_only",
+    "role": "eval"
+  }
+}
