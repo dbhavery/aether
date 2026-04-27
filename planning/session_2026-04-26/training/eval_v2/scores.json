@@ -1,0 +1,6 @@
+{
+  "n_eval_prompts": 200,
+  "baseline_human_rate": 0.765,
+  "finetuned_human_rate": 1.0,
+  "delta": 0.235
+}
