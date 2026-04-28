@@ -1,0 +1,72 @@
+{
+  "v5_heldout_score": {
+    "n": 200,
+    "human_rate": 0.22,
+    "avg_human_confidence": 0.3168124734517187
+  },
+  "v5_wildchat_score": {
+    "n": 200,
+    "human_rate": 0.24,
+    "avg_human_confidence": 0.3214065194921568
+  },
+  "v5_self_test_summary": {
+    "n_seeds": 25,
+    "turns_per_convo": 8,
+    "by_turn_position": {
+      "turn_1": {
+        "n": 25,
+        "human_rate": 0.16,
+        "avg_human_confidence": 0.30933502346277236
+      },
+      "turn_2": {
+        "n": 25,
+        "human_rate": 0.28,
+        "avg_human_confidence": 0.40430445559322836
+      },
+      "turn_3": {
+        "n": 25,
+        "human_rate": 0.32,
+        "avg_human_confidence": 0.32727376990020274
+      },
+      "turn_4": {
+        "n": 25,
+        "human_rate": 0.24,
+        "avg_human_confidence": 0.3776223533600569
+      },
+      "turn_5": {
+        "n": 25,
+        "human_rate": 0.44,
+        "avg_human_confidence": 0.37743472754955293
+      },
+      "turn_6": {
+        "n": 25,
+        "human_rate": 0.28,
+        "avg_human_confidence": 0.3465754058584571
+      },
+      "turn_7": {
+        "n": 25,
+        "human_rate": 0.28,
+        "avg_human_confidence": 0.3431534879654646
+      },
+      "turn_8": {
+        "n": 25,
+        "human_rate": 0.24,
+        "avg_human_confidence": 0.38624251931905745
+      }
+    },
+    "all_generated_turns": {
+      "n": 200,
+      "human_rate": 0.28,
+      "avg_human_confidence": 0.35899270677939055
+    }
+  },
+  "comparison": {
+    "v3_partial_heldout": 0.265,
+    "v3_partial_wildchat": 0.16,
+    "v3_partial_selftest_avg": 0.275,
+    "v4_heldout": 0.22,
+    "v4_wildchat": 0.235,
+    "v4_selftest_avg": 0.35,
+    "human_ceiling_sanity": 0.871
+  }
+}
