@@ -1,0 +1,19 @@
+{
+  "v4_heldout_score": {
+    "n": 200,
+    "human_rate": 0.22,
+    "avg_human_confidence": 0.3227112234593369
+  },
+  "v4_wildchat_score": {
+    "n": 200,
+    "human_rate": 0.235,
+    "avg_human_confidence": 0.30448387094773355
+  },
+  "comparison_baseline": {
+    "raw_base_heldout": 0.065,
+    "v2_heldout": 0.215,
+    "v3_partial_heldout": 0.265,
+    "gemma4_heldout": 0.01,
+    "human_ceiling_sanity": 0.871
+  }
+}

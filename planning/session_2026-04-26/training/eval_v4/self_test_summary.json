@@ -1,0 +1,42 @@
+{
+  "n_seeds": 25,
+  "turns_per_convo": 8,
+  "by_turn_position": {
+    "turn_1": {
+      "n": 25,
+      "human_rate": 0.4
+    },
+    "turn_2": {
+      "n": 25,
+      "human_rate": 0.4
+    },
+    "turn_3": {
+      "n": 25,
+      "human_rate": 0.2
+    },
+    "turn_4": {
+      "n": 25,
+      "human_rate": 0.32
+    },
+    "turn_5": {
+      "n": 25,
+      "human_rate": 0.44
+    },
+    "turn_6": {
+      "n": 25,
+      "human_rate": 0.32
+    },
+    "turn_7": {
+      "n": 25,
+      "human_rate": 0.28
+    },
+    "turn_8": {
+      "n": 25,
+      "human_rate": 0.44
+    }
+  },
+  "all_generated_turns": {
+    "n": 200,
+    "human_rate": 0.35
+  }
+}
