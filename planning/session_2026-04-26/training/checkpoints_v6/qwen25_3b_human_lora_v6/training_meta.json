@@ -1,0 +1,25 @@
+{
+  "base_model": "Qwen/Qwen2.5-3B-Instruct",
+  "starting_lora": "C:\\Users\\dbhav\\Projects\\aether\\planning\\session_2026-04-26\\training\\checkpoints_v4\\qwen25_3b_human_lora_v4\\final",
+  "data_format": "multi-turn windows (4-8 turns)",
+  "max_steps": 1500,
+  "lr": 0.0001,
+  "max_len": 1024,
+  "effective_batch": 16,
+  "wallclock_seconds": 4892.954195976257,
+  "train_metrics": {
+    "train_runtime": 4892.6398,
+    "train_samples_per_second": 4.905,
+    "train_steps_per_second": 0.307,
+    "total_flos": 9.254663789661389e+16,
+    "train_loss": 1.379967367808024,
+    "epoch": 0.8163265306122449
+  },
+  "final_eval_metrics": {
+    "eval_loss": 1.347540259361267,
+    "eval_runtime": 36.6097,
+    "eval_samples_per_second": 16.389,
+    "eval_steps_per_second": 4.097,
+    "epoch": 0.8163265306122449
+  }
+}
