@@ -1,0 +1,8 @@
+{
+  "n_eval_prompts": 200,
+  "baseline_gemma4_human_rate": 0.765,
+  "v2_finetuned_human_rate": 1.0,
+  "v3_partial_3000_human_rate": 1.0,
+  "delta_v3p_vs_baseline": 0.235,
+  "delta_v3p_vs_v2": 0.0
+}

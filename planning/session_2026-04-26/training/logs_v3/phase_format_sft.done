@@ -1,6 +1,6 @@
 {
   "phase": "format_sft",
-  "completed_at": "2026-04-27T14:56:00Z",
+  "completed_at": "2026-04-27T15:21:18Z",
   "train_samples": 880521,
   "eval_samples": 22516,
   "skipped_convos": 25789

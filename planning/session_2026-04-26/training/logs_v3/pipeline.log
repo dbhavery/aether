@@ -137,3 +137,22 @@
   "skipped_convos": 25789
 }
 [2026-04-27T14:56:00Z] === V2 Pipeline driver finished ===
+[2026-04-27T15:21:04Z] === V2 Pipeline driver invoked (format_sft) ===
+[2026-04-27T15:21:04Z] Phase 4 v2: format_sft
+[2026-04-27T15:21:18Z]   formatted: {
+  "train_samples": 880521,
+  "eval_samples": 22516,
+  "skipped_convos": 25789
+}
+[2026-04-27T15:21:18Z] === V2 Pipeline driver finished ===
+[2026-04-27T15:21:52Z] === V2 Pipeline driver invoked (all phases) ===
+[2026-04-27T15:21:52Z] phase setup: already done, skipping
+[2026-04-27T15:21:52Z] phase download_corpora: already done, skipping
+[2026-04-27T15:21:52Z] phase normalize: already done, skipping
+[2026-04-27T15:21:52Z] phase format_sft: already done, skipping
+[2026-04-27T15:21:52Z] Phase 5 v2: train_lora — Qwen2.5-3B-Instruct + QLoRA
+[2026-04-27T15:21:52Z]   stopping Ollama to free VRAM
+[2026-04-27T15:22:03Z]   loading tokenizer + 4-bit base model
+[2026-04-27T15:22:12Z]   loading SFT datasets
+[2026-04-27T15:22:15Z]   train: 64913  eval: 500 (truncated from 22516)
+[2026-04-27T15:23:00Z]   training start
