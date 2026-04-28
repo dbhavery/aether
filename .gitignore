@@ -99,3 +99,7 @@ planning/session_*/training/models/
 planning/session_*/training/checkpoints/
 planning/session_*/training/eval/baseline_outputs.jsonl
 planning/session_*/training/eval/finetuned_outputs.jsonl
+# Trainer state dirs are huge (optimizer.pt 500MB+); only final/ is tracked
+planning/session_*/training/checkpoints_*/**/trainer/
+*.pt
+*.pth
