@@ -43,3 +43,51 @@ Same as profile_left, head turned 30 degrees left (showing her right 3/4).
 
 See file:///C:/Users/dbhav/Projects/aether/personas/marcus_chen/avatar/README.md
 for full schema explanation. Same conventions apply.
+
+---
+
+## Generation log — 2026-04-28
+Generated end-to-end via scripts/persona_generator/generate_anchor_set.py.
+
+### anchor.png — generated 2026-04-28
+- backend: `fal.ai`
+- model: `fal-ai/flux-pro/v1.1-ultra`
+- aspect_ratio: `16:9`
+- request_id: `?`
+- source URL: https://v3b.fal.media/files/b/0a9828dc/FDdK1oNRkF295je-6aTAU_f6eef0ba8ce447c08ac40be9aaa3de8f.jpg
+- raw output: kept at `anchor_set_raw_2026-04-28/anchor_raw.jpg`
+
+### portrait.png — generated 2026-04-28
+- backend: `fal.ai`
+- model: `fal-ai/flux-pro/v1.1-ultra`
+- aspect_ratio: `16:9`
+- request_id: `?`
+- source URL: https://v3b.fal.media/files/b/0a9828dd/B83y1NyAUl_HA_EnWl9SD_fd674384f43d4e39abedd46d55dc148e.jpg
+- raw output: kept at `anchor_set_raw_2026-04-28/portrait_raw.jpg`
+
+### profile_left.png — generated 2026-04-28
+- backend: `fal.ai`
+- model: `fal-ai/flux-pro/v1.1-ultra`
+- aspect_ratio: `16:9`
+- request_id: `?`
+- source URL: https://v3b.fal.media/files/b/0a9828df/5ln6WQb4mvGEX8js62Cx2_a9d1814871334b67981c05b0627fd6da.jpg
+- raw output: kept at `anchor_set_raw_2026-04-28/profile_left_raw.jpg`
+
+### profile_right.png — generated 2026-04-28
+- backend: `fal.ai`
+- model: `fal-ai/flux-pro/v1.1-ultra`
+- aspect_ratio: `16:9`
+- request_id: `?`
+- source URL: https://v3b.fal.media/files/b/0a9828e0/1zSsgIY5L_b2f5uxrC7QW_444704688a184d9a83b313227d34d2eb.jpg
+- raw output: kept at `anchor_set_raw_2026-04-28/profile_right_raw.jpg`
+
+
+### anchor.png — REGENERATED 2026-04-28 (single-subject fix)
+First roll produced a double-subject composition (ghosted second face).
+Regenerated with an anti-doubling suffix appended to the prompt:
+"Single subject only, exactly one person in the entire frame, no
+second figure, no mirror, no reflection, no ghosted face, no double
+exposure, no twin, no companion." Second roll passed face-lock QA
+(clean single subject, characteristic features intact). The original
+PNG was overwritten; the v2 raw is at
+`anchor_set_raw_2026-04-28/anchor_raw_v2.jpg`.

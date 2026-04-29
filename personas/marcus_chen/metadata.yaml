@@ -7,35 +7,54 @@ last_updated: "2026-04-28"
 # Provenance for every shipped asset. Every row must carry a source +
 # license the audit tool can verify. See PERSONA-SCHEMA.md §4 and §8.
 assets:
+  anchor:
+    source: "ai_generated"
+    generator: "fal.ai fal-ai/flux-pro/v1.1-ultra"
+    generation_date: "2026-04-28"
+    license: "custom_aether"
+    description: >-
+      Canonical face-consistency reference at 2752×1536 raw 16:9 from
+      flux-pro/v1.1-ultra. Even diffuse light, neutral expression, mouth
+      softly closed, simple background, charcoal henley wardrobe. Full
+      prompt + request URL captured in avatar/README.md generation log
+      block. Raw JPG preserved at
+      avatar/anchor_set_raw_2026-04-28/anchor_raw.jpg.
+
   portrait:
     source: "ai_generated"
     generator: "fal.ai fal-ai/flux-pro/v1.1-ultra"
-    seed: 1182764741
-    post_processing: "center-square crop of 2752x1536 raw output to 1536x1536, Lanczos resize to 1024x1024 PNG via PIL"
-    source_url: "https://v3b.fal.media/files/b/0a9823d8/YUvg1Rag0w-NARUA8aIfD_3a7648cbcc51447890c971c0fcbb014e.jpg"
-    raw_file: "avatar/portrait_source_2026-04-28.jpg"
-    prompt: >-
-      Photorealistic candid portrait of an Asian American man in his late
-      30s, short well kept dark hair with a hint of grey at the temples,
-      sharp brown eyes behind thin wire frame glasses, light stubble,
-      slight asymmetric smile that reads as just got the answer, wearing
-      a charcoal henley with sleeves pushed to the elbows. Warm afternoon
-      study light, blurred bookshelf with a closed laptop on a wooden
-      desk. Slim athletic build, no jewelry except a simple steel watch.
-      Real skin texture with visible pores and natural imperfections.
-      Shot on 85mm at f/1.8. Reads as a thoughtful technical friend
-      across the table, not a stock photo. Avoid glamour pose, plastic
-      skin, perfect symmetry, anime, AI tropes.
+    generation_date: "2026-04-28"
     license: "custom_aether"
+    description: >-
+      Personality picker shot — second-pass anchor-schema regeneration.
+      Replaced the first-pass single-portrait pack (preserved at
+      ../_archived_2026-04-28_first_pass/). Full prompt + URL in
+      avatar/README.md generation log.
+
+  profile_left:
+    source: "ai_generated"
+    generator: "fal.ai fal-ai/flux-pro/v1.1-ultra"
+    generation_date: "2026-04-28"
+    license: "custom_aether"
+    description: >-
+      3/4 left angle, anchor-style lighting and wardrobe. Side view for
+      face-consistency pipelines. Full prompt + URL in avatar/README.md.
+
+  profile_right:
+    source: "ai_generated"
+    generator: "fal.ai fal-ai/flux-pro/v1.1-ultra"
+    generation_date: "2026-04-28"
+    license: "custom_aether"
+    description: >-
+      3/4 right angle, anchor-style lighting and wardrobe. Side view for
+      face-consistency pipelines. Full prompt + URL in avatar/README.md.
 
   state_images:
-    source: "STALE — pending regeneration"
+    source: "DEFERRED — to be rendered runtime, not pre-generated"
     note: >-
-      State images (idle / listening / thinking / speaking) are not yet
-      generated. Pipeline TBD per Aurora's STALE_AFTER_PORTRAIT_REGEN.md
-      (face-consistent generation via PuLID or FLUX redux). Marcus
-      ships with portrait-only avatar until that pipeline is verified
-      end-to-end.
+      Expression states are rendered runtime from anchor.png + visemes
+      via the Phase 4b lipsync pipeline. Pre-generated stills abandoned
+      per the 2026-04-28 anchor-schema redesign.
     license: "custom_aether"
 
   voice_reference:

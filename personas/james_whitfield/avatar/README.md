@@ -43,3 +43,40 @@ Same as profile_left, head turned 30 degrees left (showing his right 3/4).
 
 See file:///C:/Users/dbhav/Projects/aether/personas/marcus_chen/avatar/README.md
 for full schema explanation. Same conventions apply.
+
+---
+
+## Generation log — 2026-04-28
+Generated end-to-end via scripts/persona_generator/generate_anchor_set.py.
+
+### anchor.png — generated 2026-04-28
+- backend: `fal.ai`
+- model: `fal-ai/flux-pro/v1.1-ultra`
+- aspect_ratio: `16:9`
+- request_id: `?`
+- source URL: https://v3b.fal.media/files/b/0a9828cb/WbdlfZlt_apkFz0jPuh6I_18cc4070083e4152bbf2fdf399c18850.jpg
+- raw output: kept at `anchor_set_raw_2026-04-28/anchor_raw.jpg`
+
+### portrait.png — generated 2026-04-28
+- backend: `fal.ai`
+- model: `fal-ai/flux-pro/v1.1-ultra`
+- aspect_ratio: `16:9`
+- request_id: `?`
+- source URL: https://v3b.fal.media/files/b/0a9828cc/fPnKOjrPmDFiYt30UVkCk_9d783e2bad124a93b5825262a6bbaad1.jpg
+- raw output: kept at `anchor_set_raw_2026-04-28/portrait_raw.jpg`
+
+### profile_left.png — generated 2026-04-28
+- backend: `fal.ai`
+- model: `fal-ai/flux-pro/v1.1-ultra`
+- aspect_ratio: `16:9`
+- request_id: `?`
+- source URL: https://v3b.fal.media/files/b/0a9828cd/Sxus24Kw9jyyokrtKvfWZ_0e8228212b9e4e5d9d8cc369a3604f31.jpg
+- raw output: kept at `anchor_set_raw_2026-04-28/profile_left_raw.jpg`
+
+### profile_right.png — generated 2026-04-28
+- backend: `fal.ai`
+- model: `fal-ai/flux-pro/v1.1-ultra`
+- aspect_ratio: `16:9`
+- request_id: `?`
+- source URL: https://v3b.fal.media/files/b/0a9828ce/9sazcZbyAdOF3EQRRzmKn_a54f08b075dc456ca9acd1bc364cfdf1.jpg
+- raw output: kept at `anchor_set_raw_2026-04-28/profile_right_raw.jpg`

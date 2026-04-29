@@ -118,3 +118,40 @@ canonical Marcus — if it doesn't, every downstream inherits the error.
 
 See file:///C:/Users/dbhav/Projects/aether/personas/CHARACTERS.md
 for the full asset schema and trajectory.
+
+---
+
+## Generation log — 2026-04-28
+Generated end-to-end via scripts/persona_generator/generate_anchor_set.py.
+
+### anchor.png — generated 2026-04-28
+- backend: `fal.ai`
+- model: `fal-ai/flux-pro/v1.1-ultra`
+- aspect_ratio: `16:9`
+- request_id: `?`
+- source URL: https://v3b.fal.media/files/b/0a9828c0/-cqEaWZajeuJSdvfmUtBC_71638bd38e6742c8bfd0115d3fd906ce.jpg
+- raw output: kept at `anchor_set_raw_2026-04-28/anchor_raw.jpg`
+
+### portrait.png — generated 2026-04-28
+- backend: `fal.ai`
+- model: `fal-ai/flux-pro/v1.1-ultra`
+- aspect_ratio: `16:9`
+- request_id: `?`
+- source URL: https://v3b.fal.media/files/b/0a9828c1/mwtnmBFfxoJ57gDLh4Cgo_fecffe1f92f443c3af715bdb902f400c.jpg
+- raw output: kept at `anchor_set_raw_2026-04-28/portrait_raw.jpg`
+
+### profile_left.png — generated 2026-04-28
+- backend: `fal.ai`
+- model: `fal-ai/flux-pro/v1.1-ultra`
+- aspect_ratio: `16:9`
+- request_id: `?`
+- source URL: https://v3b.fal.media/files/b/0a9828c2/ztVIhh6e4Qj4TTQAc4dwz_71095515edae44648a4d30cb00a61a52.jpg
+- raw output: kept at `anchor_set_raw_2026-04-28/profile_left_raw.jpg`
+
+### profile_right.png — generated 2026-04-28
+- backend: `fal.ai`
+- model: `fal-ai/flux-pro/v1.1-ultra`
+- aspect_ratio: `16:9`
+- request_id: `?`
+- source URL: https://v3b.fal.media/files/b/0a9828c3/RxOVCSJqWwumh8bf_C_JB_d0fb39473fd642a29662f386f0909fd5.jpg
+- raw output: kept at `anchor_set_raw_2026-04-28/profile_right_raw.jpg`

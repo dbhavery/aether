@@ -45,3 +45,51 @@ Photorealistic 3/4 right profile of a Latina woman in her late 20s, shoulder len
 
 See file:///C:/Users/dbhav/Projects/aether/personas/marcus_chen/avatar/README.md
 for full schema explanation. Same conventions apply.
+
+---
+
+## Generation log — 2026-04-28
+Generated end-to-end via scripts/persona_generator/generate_anchor_set.py.
+
+### anchor.png — generated 2026-04-28
+- backend: `fal.ai`
+- model: `fal-ai/flux-pro/v1.1-ultra`
+- aspect_ratio: `16:9`
+- request_id: `?`
+- source URL: https://v3b.fal.media/files/b/0a9828c6/uHPtz-y1FptuUJQTircUz_00e75f89bff143bca24ada8499459320.jpg
+- raw output: kept at `anchor_set_raw_2026-04-28/anchor_raw.jpg`
+
+### portrait.png — generated 2026-04-28
+- backend: `fal.ai`
+- model: `fal-ai/flux-pro/v1.1-ultra`
+- aspect_ratio: `16:9`
+- request_id: `?`
+- source URL: https://v3b.fal.media/files/b/0a9828c7/L798cFRJqrt2B49ckN3bs_2733ff0fe637446485ac8987c2060018.jpg
+- raw output: kept at `anchor_set_raw_2026-04-28/portrait_raw.jpg`
+
+### profile_left.png — generated 2026-04-28
+- backend: `fal.ai`
+- model: `fal-ai/flux-pro/v1.1-ultra`
+- aspect_ratio: `16:9`
+- request_id: `?`
+- source URL: https://v3b.fal.media/files/b/0a9828c8/zV-4FHfR_M61jE0hrjO7b_b4046a97032c4e0887b8a33436f91ccb.jpg
+- raw output: kept at `anchor_set_raw_2026-04-28/profile_left_raw.jpg`
+
+### profile_right.png — generated 2026-04-28
+- backend: `fal.ai`
+- model: `fal-ai/flux-pro/v1.1-ultra`
+- aspect_ratio: `16:9`
+- request_id: `?`
+- source URL: https://v3b.fal.media/files/b/0a9828c9/6SdiLPwMw5c2rMzcHVWk5_e0ea1fe09d8741ffb5520728ef7de287.jpg
+- raw output: kept at `anchor_set_raw_2026-04-28/profile_right_raw.jpg`
+
+
+### anchor.png — REGENERATED 2026-04-28 (single-subject fix)
+First roll produced a double-subject composition (ghosted second face).
+Regenerated with an anti-doubling suffix appended to the prompt:
+"Single subject only, exactly one person in the entire frame, no
+second figure, no mirror, no reflection, no ghosted face, no double
+exposure, no twin, no companion." Second roll passed face-lock QA
+(clean single subject, characteristic features intact). The original
+PNG was overwritten; the v2 raw is at
+`anchor_set_raw_2026-04-28/anchor_raw_v2.jpg`.
