@@ -1,5 +1,11 @@
 # Companion Persona Cast — Design Doc
 
+> **Delivery model:** Personas are NOT all bundled with the desktop app.
+> The wizard shows lightweight previews; the chosen persona's full pack
+> downloads on selection. Switching characters later = uninstall +
+> install. See file:///C:/Users/dbhav/Projects/aether/PERSONA_DELIVERY.md
+> for the full architecture.
+
 > The roster of characters Companion ships with. Each persona is a complete
 > identity package — name, face, body, voice, personality archetype,
 > system prompt — that the user picks during onboarding and can switch
