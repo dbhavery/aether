@@ -90,9 +90,69 @@ The seven-layer architecture, Memory V2, retrieval orchestrator, audit chain, pr
 
 ---
 
+## Bare-metal parallelization (added 2026-04-28)
+
+Don's pushback this session: "We aren't using retail software. Can any of this be done in parallel? How about moving anything we don't need to RAM?"
+
+Right call. The prior arc treated GPU and CPU as serial phases. GPU sat at 24 GB during training but 6-10 GB during eval, and CPU was idle most of the time. This addendum locks the bare-metal parallelization rules.
+
+### Hardware envelope
+
+RTX 3090 Ti (24 GB VRAM) + 64 GB system RAM. The 64 GB RAM is currently underused — most sessions touch <8 GB. Use it.
+
+### Standing rules for V7+ training sessions
+
+| # | Rule | Why |
+|---|---|---|
+| 1 | **Discriminator inference → CPU permanently** | DistilBERT ~250 MB, runs ~17 docs/sec on CPU. Frees 0.5-1 GB VRAM for the main pipeline. |
+| 2 | **`optim="adamw_8bit"` always (bitsandbytes)** | Drops optimizer state from 4 GB to 0.5 GB. Same accuracy. Drop-in replacement. |
+| 3 | **`offload_optimizer=True` during training** | Frees 8-10 GB VRAM by moving Adam state to CPU RAM. Costs 5-15% step time. We have the RAM. |
+| 4 | **CPU work runs concurrently with GPU work** | Data prep, normalization, JSON writes, report scaffolds — always launch as background bash tasks during GPU pipelines. |
+| 5 | **Two-process GPU sharing when VRAM allows** | A generation process (~6 GB) + a training process (~14 GB w/ rules 2-3) shares one GPU via CUDA's stream scheduler. Saves ~25% session wallclock. |
+| 6 | **`PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512`** | Predictable allocation when two processes share GPU. Set as env var. |
+| 7 | **Pre-load eval datasets to CPU memory at session start** | GPU shouldn't wait on disk reads. `to_list()` and keep in Python. |
+| 8 | **Kill stray Ollama before GPU-heavy work** | 5 GB tax. Set `OLLAMA_KEEP_ALIVE=0` for short gens. |
+| 9 | **`PYTHONUTF8=1` always** | cp1252 surfaces in trl/transformers reading non-ASCII corpora on Windows. |
+| 10 | **`device_map="auto"` + `offload_folder` for big-model swap** | If V9 path B (7B base) lands, accelerate puts layers 0-15 GPU, 16-31 CPU. Slower but fits. |
+
+### Concrete VRAM accounting for V7 with these rules
+
+| Component | Without rules | With rules 2 & 3 |
+|---|---:|---:|
+| Qwen2.5-3B base in 4-bit | 2.0 GB | 2.0 GB |
+| LoRA adapter rank 16 (active params) | 0.5 GB | 0.5 GB |
+| Activations + gradients (batch 4, max_length 1024) | 4.5 GB | 4.5 GB |
+| Optimizer state (Adam fp32 momentum + variance) | **8-12 GB** | **0.5 GB** (rest on CPU) |
+| KV cache during inline eval | 2.5 GB | 2.5 GB |
+| **Training-phase total** | **~22 GB** | **~7.5 GB** |
+| **Eval-phase headroom** | ~14 GB | ~16 GB |
+
+The unlock: training uses only ~7.5 GB instead of ~22 GB. The other ~14-16 GB is available for a *concurrent* generation or training process. That's why pipelining V7 + V8 fits in one session.
+
+### Pipeline pattern for V7 onward
+
+```
+HOUR 0────1────2────3────4────5
+GPU [discrim train ~1h][V7 LoRA train ~3h───────][V7 gen + V8 train start ~1h]
+CPU [V8 data prep ~30m][rescore V*-arc on new discrim ~30m][V7 report ~30m]
+```
+
+GPU is busy 100% of the session. CPU is busy whenever GPU is busy. Sessions get ~25-40% more done per wallclock hour.
+
+### When to NOT pipeline
+
+Robustness wins over speed when:
+- Don is AFK and an OOM at hour 4 isn't recoverable for hours.
+- A new technique is introduced and we want clean attribution of what worked.
+- The session has a hard deadline (e.g. Don coming back) and a partial result beats a crashed pipeline.
+
+In those cases, fall back to serial training. Document the fallback choice in the session report.
+
+---
+
 ## Phase 2 sub-plan (where conversation training goes from here)
 
-You are looking at iteration counter `V6` of expected `V8-V12`.
+You are looking at iteration counter `V6` of expected `V8-V12`. **All V7+ sessions should default to pipelined execution per the rules above.**
 
 ### Why we can't just stop at V6
 
@@ -101,17 +161,24 @@ V6 is +12pp WildChat over V3-partial. Real progress, but:
 - Multi-turn discriminator does not exist yet, so we can't measure that failure precisely.
 - The single-turn ceiling for this base+rank+data is somewhere around 30-35% on the current discriminator. We're close to that ceiling on the current recipe.
 
-### V7 — Likeliest next step (1 session)
+### V7 — Pipelined dual experiment (1 session, ~5h, was ~9h serial)
 
-Two parallel sub-tracks:
+Default to **V7 + V8-partial in one session** using the pipeline pattern above. Three GPU sub-phases interleaved with three CPU sub-phases:
 
-**(a) Train the multi-turn discriminator.** ~1 hour. Generate 5-turn windows from V4/V5/V6/gemma4/raw-base, train DistilBERT to distinguish those from real-human 5-turn windows. This unlocks honest measurement of what V6's multi-turn weakness actually is.
+**(a) Multi-turn discriminator** (GPU, ~1h). 5-turn windows from V4/V5/V6/gemma4/raw-base + real-human 5-turn windows from `data/normalized_eval_v3.jsonl`. ~3000 each. 2 epochs DistilBERT. Save to `checkpoints_v7/multi_turn_discriminator/final/`.
 
-**(b) Continue multi-turn-format SFT from V6 with 2200 more steps.** ~3 hours. Tests whether V6's gain has more room (small expected payoff if it does, but it's the cheapest experiment).
+**(b) V7 LoRA continuation from V6** (GPU, ~3h). Same multi-turn-format SFT, lr 1e-4, max_length 1024. Use rules 2 & 3 above (8-bit optimizer + offload). Save to `checkpoints_v7/qwen25_3b_human_lora_v7/final/`.
 
-Together: ~4 hours. Done in one session.
+**(c) V8 rank-32 LoRA from base** (GPU, ~1h start; finishes in next session). Higher-rank capacity test. Overlapped with V7 generation in the final hour. Save to `checkpoints_v8/qwen25_3b_human_lora_v8/`.
 
-### V8 — Capacity test (1 session)
+**CPU pipelines run concurrently:**
+- V8 data prep during (a)
+- Re-score V*-arc against new multi-turn discriminator during (b)
+- V7 report scaffold during (c)
+
+Result: ~5h instead of ~9h serial. V7 fully done + V8 launched.
+
+### V8 — Capacity test (continued / completes in same or next session)
 
 Higher-rank LoRA (rank 32 or 64) trained from base (Qwen2.5-3B) on V6's multi-turn-format data. Tests "is rank 16 the bottleneck?" If V8 > V6 by ≥5pp, capacity matters and V9+ stays on higher-rank. If V8 ≈ V6, capacity isn't the limit — data is.
 

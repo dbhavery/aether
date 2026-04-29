@@ -117,46 +117,80 @@ Wait for Don to confirm or correct before acting.
 
 Default to (1) unless Don directs otherwise.
 
-### (1) RECOMMENDED — V7 dual experiment (~4h)
+### (1) RECOMMENDED — V7 + V8 pipelined experiment (~5h, was ~9h serial)
 
-Two parallel sub-tracks per PERSONA_ROADMAP.md §"V7 — Likeliest next step":
+**This is a pipelined plan.** GPU stays saturated 100% of the
+time. CPU does data prep, scoring, and report writes during GPU
+work. See §BARE-METAL PARALLELIZATION below for VRAM techniques.
 
-**(1a) Build a multi-turn discriminator** (~1h). The current
-multi-discriminator was trained on single-turn outputs. Self-test
-multi-turn scoring against it is weakly calibrated. Train a new
-DistilBERT on (5-turn-window, AI-or-human) pairs.
+Two GPU pipelines + three CPU pipelines, overlapped:
 
-  - Negatives: 5-turn windows from gemma4 / qwen3:8b / raw Qwen base /
-    V4 / V5 / V6 self-chats. Re-use the prior generation pipeline
-    structure from `gen_transformers_negatives.py` and
-    `gen_ollama_negatives.py`. ~500 windows per source = 3000 total
-    AI windows.
-  - Positives: 5-turn windows sliced from
-    `data/normalized_eval_v3.jsonl` real human conversations. ~3000.
-  - Train 2 epochs DistilBERT. Save to
-    `checkpoints_v7/multi_turn_discriminator/final/`.
+```
+HOUR 0────1────2────3────4────5
+GPU [discrim train ~1h][V7 LoRA train ~3h───────][V7 gen + V8 train start ~1h]
+CPU [V8 data prep ~30m][rescore V*-arc on new discrim ~30m][V7 report ~30m]
+```
 
-**(1b) V7 LoRA continuation from V6** (~3h). Same recipe as V6
-(multi-turn-format SFT, lr 1e-4, max_length 1024) but starting from
-V6's adapter and 2200 more steps. Tests whether multi-turn-format
-training has more room or has saturated.
+**(1a) Multi-turn discriminator** (GPU hour 0-1, ~1h). Negatives:
+5-turn windows from gemma4 / qwen3:8b / raw Qwen base / V4 / V5 /
+V6 self-chats. ~500 windows per source = 3000 total AI windows.
+Positives: 5-turn windows from `data/normalized_eval_v3.jsonl`
+~3000. 2 epochs DistilBERT. Save to
+`checkpoints_v7/multi_turn_discriminator/final/`.
 
-  - Save to `checkpoints_v7/qwen25_3b_human_lora_v7/final/`.
+**(1b) V8 data prep** (CPU, hour 0-0.5, runs concurrently with 1a).
+Build `data/sft_train_v8.jsonl` for rank-32 LoRA from base. Same
+multi-turn-window format as v6 but optionally larger windows
+(8-12 turns). This is pure JSON munging — no GPU.
 
-**Eval both:** score V6 and V7 against both old (single-turn) and
-new (multi-turn) discriminators. Report a 2x2 matrix in
-`V7_RESULTS.md`. Includes readable sample conversations in the
-report — DO NOT report numbers without conversations.
+**(1c) V7 LoRA training** (GPU hour 1-4, ~3h). LoRA continuation
+from V6 adapter. Same multi-turn-format SFT, lr 1e-4. Use
+`optim="adamw_8bit"` (saves 4-6 GB optimizer VRAM) and
+`offload_optimizer=True` (saves 8-10 GB more, costs ~10% step
+time). With ~14 GB free during training, you have headroom for
+generation overlap in (1e). Save to
+`checkpoints_v7/qwen25_3b_human_lora_v7/final/`.
 
-**Update PERSONA_ROADMAP.md cursor** to V7. Add a change-log entry.
-Push.
+**(1d) Re-score V*-arc on multi-turn discriminator** (CPU, hour
+1-2, runs concurrently with 1c). DistilBERT inference on CPU is
+~17 docs/sec — fast enough. Score V4, V5, V6 self-test
+transcripts against the new multi-turn discriminator. Establishes
+apples-to-apples baseline. No GPU contention.
 
-### (2) HEAVIER — V8 capacity test (~3.5h)
+**(1e) V7 generation + V8 training overlap** (GPU hour 4-5,
+~1h). V7 generation needs ~6 GB (model + KV cache, no
+optimizer). V8 LoRA training with 8-bit optimizer + offload
+needs ~14 GB. Total 20 GB fits 24 GB headroom. Run them in
+two Python processes against the same GPU; they share via
+CUDA's process scheduler. Save V8 to
+`checkpoints_v8/qwen25_3b_human_lora_v8/final/`.
+
+**(1f) V7 report scaffold** (CPU, hour 4-5, runs concurrently
+with 1e). Write `V7_RESULTS.md` skeleton with format from
+`V6_CONVERSATIONS.md` and `V6_RESULTS.md`. Fill in numbers + sample
+conversations after generation finishes.
+
+**(1g) Final scoring** (CPU + GPU, hour 5-5.5). Score V7 outputs
+against both discriminators. Pull representative conversation
+samples for the report. Final commit + push.
+
+**Hard-fail conditions and recovery:**
+- If V8 training OOMs at hour 4 (because V7 gen + V8 train overlap
+  fails): kill V8, finish V7 gen, then start V8 sequentially.
+  Adds ~3h to next session, doesn't lose V7 results.
+- If multi-turn discriminator accuracy is <70%: the discriminator
+  is too noisy to trust; report V7 against single-turn
+  discriminator only and flag.
+- If V7 plateaus (≤+2pp over V6 on multi-turn discriminator):
+  document the saturation and DEFER V8 to next session — V8
+  needs a new hypothesis if V7 saturated.
+
+### (2) HEAVIER — V8 alone capacity test (~3.5h)
 
 Higher-rank LoRA (rank 32) trained from base on V6's multi-turn-format
 data. Tests if rank-16 was the bottleneck. See PERSONA_ROADMAP.md
-§"V8 — Capacity test." Do this only if Don explicitly asks for V8
-and not V7, since V7 is cheaper and a better test of the recipe.
+§"V8 — Capacity test." Do this if (1) is too aggressive and Don
+wants only one new model this session.
 
 ### (3) PRODUCT-IMPACT — Ship V6 to Aurora (~6-10h, multi-session)
 
@@ -169,6 +203,74 @@ register) that need careful integration testing.
 This is the highest product-impact move per V6_RESULTS §6 and
 PERSONA_ROADMAP.md §3. **Do this only if Don explicitly authorizes
 it; not the default autonomous move.**
+
+================================================================
+§BARE-METAL PARALLELIZATION — read this before training
+================================================================
+
+Don pushed back this session: "We aren't using retail software."
+He's right. The prior arc treated GPU + CPU as serial phases and
+the GPU sat at 24 GB during training but 6-10 GB during eval —
+massive idle headroom. Use it.
+
+**Rules of thumb for this hardware (RTX 3090 Ti 24 GB + 64 GB RAM):**
+
+1. **Discriminator inference → CPU permanently.** DistilBERT is
+   ~250 MB; CPU runs ~17 docs/sec. Saves 0.5-1 GB VRAM. NEVER
+   load the discriminator on GPU during V* training or eval.
+
+2. **Optimizer 8-bit always.** `optim="adamw_8bit"` from
+   bitsandbytes drops optimizer state 4 GB → 0.5 GB. Same
+   accuracy. Drop-in replacement for `adamw_torch`.
+
+3. **Optimizer state offload to RAM during training.**
+   `offload_optimizer=True` in TrainingArguments (or
+   `accelerate` config). Frees 8-10 GB more. Costs 5-15% step
+   time. We have 64 GB system RAM. Use it.
+
+4. **`device_map="auto"` + `offload_folder` for big models.**
+   If a 7B model swap happens (V9 path B), use accelerate to put
+   layer 0-15 on GPU, 16-31 on CPU. Slower but fits.
+
+5. **CPU work runs in parallel with GPU.** Data prep,
+   normalization, JSON writes, report scaffolds, sample-pulling.
+   Always launch these in a background bash task while the GPU
+   pipeline is busy. Coordination rule: don't both touch the
+   same file from CPU and GPU procs.
+
+6. **Two-process GPU sharing.** When VRAM allows, a generation
+   process + a training process can share one GPU via CUDA's
+   stream scheduler. Saves session wallclock by ~25%. Hard fail
+   if combined VRAM exceeds 24 GB — set `PYTORCH_CUDA_ALLOC_CONF=
+   "max_split_size_mb:512"` to keep allocation predictable.
+
+7. **Pre-load eval datasets into CPU memory at session start.**
+   GPU shouldn't wait on disk reads during gen. `load_dataset(...).
+   to_list()` and keep in Python.
+
+8. **`torch.cuda.empty_cache()` between phases.** Already
+   habitual; keep doing it.
+
+9. **Stray Ollama is a 5 GB tax** — kill before any GPU-heavy
+   training. Set `OLLAMA_KEEP_ALIVE=0` for short-running gens to
+   stop it auto-respawning mid-session.
+
+10. **`PYTHONUTF8=1` always.** cp1252 surfaces in trl/transformers
+    on Windows reading non-ASCII corpora.
+
+**Concrete VRAM accounting for V7 training with these techniques:**
+
+| Component | VRAM | Notes |
+|---|---:|---|
+| Qwen2.5-3B base in 4-bit | 2.0 GB | bnb nf4 |
+| LoRA adapter rank 16 (active params) | 0.5 GB | fp16 |
+| Activations + gradients (max_length 1024, batch 4) | 4.5 GB | with grad checkpointing |
+| KV cache during gen | 2.5 GB | only during eval |
+| Optimizer state (adamw_8bit + offload) | 0.5 GB | most goes to CPU RAM |
+| **Total during V7 training** | **~7.5 GB** | down from ~22 GB w/o offload |
+| **Headroom for V8 train overlap** | **~16 GB** | enough for second model + activations |
+
+This is why pipelining V7 + V8 fits.
 
 ================================================================
 §DON 2-MIN ITEMS — surface these to Don early
