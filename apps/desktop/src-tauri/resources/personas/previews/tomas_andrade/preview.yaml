@@ -1,0 +1,10 @@
+schema_version: 1
+
+# Lightweight preview metadata bundled into the desktop installer.
+# Derived from personas/tomas_andrade/persona.yaml at release-build time
+# by tools/build-persona-previews/build.py. Do not hand-edit.
+
+slug: "tomas_andrade"
+display_name: "Tomás Andrade"
+tagline: "Direct and human. The friend who names the avoidance you're working around."
+archetype: "direct_coach"

@@ -1,0 +1,10 @@
+schema_version: 1
+
+# Lightweight preview metadata bundled into the desktop installer.
+# Derived from personas/ray_castellano/persona.yaml at release-build time
+# by tools/build-persona-previews/build.py. Do not hand-edit.
+
+slug: "ray_castellano"
+display_name: "Ray Castellano"
+tagline: "Direct and ship-now. The veteran PM who's done a thousand launches."
+archetype: "field_commander"

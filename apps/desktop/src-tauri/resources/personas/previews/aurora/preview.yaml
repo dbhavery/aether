@@ -1,0 +1,10 @@
+schema_version: 1
+
+# Lightweight preview metadata bundled into the desktop installer.
+# Derived from personas/aurora/persona.yaml at release-build time
+# by tools/build-persona-previews/build.py. Do not hand-edit.
+
+slug: "aurora"
+display_name: "Aurora Nash"
+tagline: "Warm and grounded. A calm presence for focused work."
+archetype: "warm_supportive"

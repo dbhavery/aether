@@ -1,0 +1,10 @@
+schema_version: 1
+
+# Lightweight preview metadata bundled into the desktop installer.
+# Derived from personas/nadia_volkov/persona.yaml at release-build time
+# by tools/build-persona-previews/build.py. Do not hand-edit.
+
+slug: "nadia_volkov"
+display_name: "Nadia Volkov"
+tagline: "Precise and skeptical. The friend who refuses to start from a wrong premise."
+archetype: "rigorous_skeptic"

@@ -1,0 +1,10 @@
+schema_version: 1
+
+# Lightweight preview metadata bundled into the desktop installer.
+# Derived from personas/priya_iyer/persona.yaml at release-build time
+# by tools/build-persona-previews/build.py. Do not hand-edit.
+
+slug: "priya_iyer"
+display_name: "Priya Iyer"
+tagline: "Polished and high-leverage. The senior operator who pulls you to product altitude."
+archetype: "strategic_executive"
