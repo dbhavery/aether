@@ -43,31 +43,45 @@ assets:
         generator: "OpenAI gpt-image-1.5 (via scripts/persona_generator/generate_states.py)"
 
   voice_reference:
-    source: "royalty_free"
-    attribution: "LibriVox Short Poetry Collection 009 — 'Old Fashioned Roses' by James Whitcomb Riley, read by LibriVox volunteer (reader initials 'ep')"
-    url: "https://ia800607.us.archive.org/23/items/short_poetry_009_librivox/old_fashioned_roses_riley_ep_64kb.mp3"
-    license: "CC0"
+    source: "ai_generated"
+    generator: "OpenAI gpt-4o-mini-tts (voice 'nova') with warm-conversational steering"
+    license: "custom_aether"
     description: >-
-      20.0s clean speech excerpt starting 6.0s into the LibriVox source
-      MP3; resampled to 24 kHz mono 16-bit PCM WAV via ffmpeg with light
-      loudness normalisation. LibriVox recordings are public domain
-      worldwide (CC0-equivalent); full catalog attribution preserved
-      above for audit purposes.
+      20.0s synthetic conversational speech generated 2026-04-28. Voice
+      'nova' steered with explicit instructions for warm, mid-pitch,
+      natural-paced female speech with a slight smile, like a friend
+      at a kitchen table. Output saved as 24 kHz mono 16-bit PCM WAV;
+      OpenAI's WAV header was malformed (nFrames field overflow) and
+      was re-encoded via soundfile, then padded to exact 20.0s. See
+      voice/SOURCE.md for the reference text + steering instructions.
+    prior_versions:
+      - date: "2026-04-17"
+        archived_at: "voice/_archived_2026-04-17/reference.wav"
+        source: "royalty_free"
+        attribution: "LibriVox Short Poetry Collection 009 — 'Old Fashioned Roses' by James Whitcomb Riley (reader 'ep')"
+        license: "CC0"
 
   voice_sample:
-    source: "royalty_free"
-    attribution: "LibriVox Short Poetry Collection 009 — 'Old Fashioned Roses' by James Whitcomb Riley (reader 'ep'), same source as voice_reference"
-    url: "https://ia800607.us.archive.org/23/items/short_poetry_009_librivox/old_fashioned_roses_riley_ep_64kb.mp3"
-    license: "CC0"
+    source: "ai_generated"
+    generator: "OpenAI gpt-4o-mini-tts (voice 'nova'), same steering as voice_reference"
+    license: "custom_aether"
     description: >-
-      4.0s wizard preview trimmed from the same LibriVox source as
-      voice_reference, starting 8.0s into the original; same resampling
-      pipeline.
+      4.0s synthetic conversational speech for the wizard preview.
+      Same generation parameters as voice_reference; trimmed to
+      exactly 4.0s after re-encoding.
+    prior_versions:
+      - date: "2026-04-17"
+        archived_at: "voice/_archived_2026-04-17/sample.wav"
+        source: "royalty_free"
+        attribution: "LibriVox Short Poetry Collection 009 (reader 'ep')"
+        license: "CC0"
 
 notes: |
-  Portrait and state images are AI-generated with no real-person likeness
-  reference. Voice reference + sample are sourced from a public-domain
-  LibriVox recording of a Riley poem; per LibriVox terms, recordings are
-  dedicated to the public domain worldwide. Derived cloned output from
-  Chatterbox is owned by Aether under the persona pack's custom_aether
-  license (bundled under the repo's MIT umbrella).
+  Portrait and state images are AI-generated with no real-person
+  likeness reference. Voice reference + sample as of 2026-04-28 are
+  AI-generated via OpenAI gpt-4o-mini-tts with voice 'nova' (synthetic,
+  not modeled on a specific real person). Derived cloned output from
+  Chatterbox / Zonos based on this reference is owned by Aether under
+  the persona pack's custom_aether license (bundled under the repo's
+  MIT umbrella). Prior 2026-04-17 LibriVox CC0 recital is archived for
+  provenance under voice/_archived_2026-04-17/.
