@@ -1,27 +1,38 @@
-"""V8: rank-128 LoRA from BASE on V6's multi-turn data — capacity test.
+"""V8: rank-96 LoRA from BASE on V6's multi-turn data — capacity test.
 
-Hypothesis: V6 reached rank 64 / alpha 128 capacity. If we double rank
-(rank 128, alpha 256) trained from base on the same multi-turn data,
+Hypothesis: V6 reached rank 64 / alpha 128 capacity. With +50% rank
+(rank 96, alpha 192) trained from base on the same multi-turn data,
 we test "is the V*-arc continuation chain leaving capacity on the
 table?" If V8 > V6 by ≥5pp, capacity matters for V9+. If V8 ≈ V6,
 data is the limit, not capacity.
 
-NOTE — corrected assumption: the next-session prompt described V8 as
-"rank-32 from base." Reading the V6 adapter_config.json shows V6 is
-already rank 64 (not rank 16 as the prompt assumed). Rank-32 from
-base would be a DOWN-rank, not a capacity test. V8 is set to rank
-128 to actually test the "capacity" hypothesis. Documented as a
-plan deviation in V7_RESULTS §scope-cuts.
+NOTE — TWO corrections from the original plan:
+
+1. Rank correction (repo beats prompt). The next-session prompt
+   described V8 as "rank-32 from base." V6's adapter_config.json
+   shows V6 is already rank 64. Rank-32 from base would be a
+   DOWN-rank, not a capacity test.
+
+2. VRAM correction (V7 telemetry beats theory). V7 (rank 64,
+   batch 4) ran with only ~240 MB VRAM headroom. Original V8 plan
+   was rank 128 batch 4 — would have OOM'd. Dropped to rank 96 +
+   batch 2 + grad_accum 8 (effective batch 16, matches V6 exactly)
+   for ~1 GB headroom. Still a meaningful capacity test (50% more
+   rank than V6) without the OOM risk during unattended overnight.
 
 Variables vs V6:
   Starting LoRA: NONE (fresh from base)         was V4 continuation
-  LoRA rank: 128                                was 64
-  LoRA alpha: 256                                was 128
-  Optimizer: adamw_8bit                          was adamw_torch
-  Steps: 2200 (matches V4's budget)              was 1500
+  LoRA rank: 96 (was 64)                         was 64
+  LoRA alpha: 192 (was 128)                      was 128
+  Optimizer: adamw_8bit                          was adamw_torch_fused
+  Steps: 1500 (matches V6/V7)                    was 1500
+  per_device_batch: 2 (was 4)                    was 4
+  grad_accum: 8 (was 4)                          was 4
+  effective_batch: 16                            was 16  (held constant)
 
-Held constant:
-  Base, target_modules, dropout, data, lr, max_len, batch.
+Held constant from V6:
+  Base, target_modules, dropout, data, lr, max_len 1024,
+  effective batch size 16, training step count 1500.
 
 Output: checkpoints_v8/qwen25_3b_human_lora_v8/final/
 """
@@ -42,21 +53,26 @@ BASE_MODEL = "Qwen/Qwen2.5-3B-Instruct"
 TRAIN_FILE = DATA / "sft_train_v6.jsonl"
 EVAL_FILE = DATA / "sft_eval_v6.jsonl"
 
-LORA_R = 128
-LORA_ALPHA = 256
+LORA_R = 96
+LORA_ALPHA = 192
 LORA_DROPOUT = 0.05
 LORA_TARGETS = ["q_proj", "k_proj", "v_proj", "o_proj",
                 "gate_proj", "up_proj", "down_proj"]
 
-MAX_STEPS = 2200
-PER_DEVICE_BATCH = 4
-GRAD_ACCUM = 4
+# VRAM-aware config (in-flight V7 telemetry showed rank-64 + batch-4
+# leaves only ~240 MB free on RTX 3090 Ti). Dropping to batch 2 +
+# grad_accum 8 saves ~1 GB activations, paying for the rank bump.
+# Effective batch 16 matches V6 exactly. 1500 steps matches V6/V7
+# budget for apples-to-apples.
+MAX_STEPS = 1500
+PER_DEVICE_BATCH = 2
+GRAD_ACCUM = 8
 LR = 1e-4
 WARMUP_RATIO = 0.02
 MAX_LEN = 1024
 LOGGING_STEPS = 20
-EVAL_STEPS = 1000
-SAVE_STEPS = 1000
+EVAL_STEPS = 750
+SAVE_STEPS = 750
 
 
 def main() -> int:
