@@ -1,0 +1,26 @@
+schema_version: 1
+
+# Reference file for Chatterbox / Zonos voice cloning. Relative to this yaml.
+reference_wav: "reference.wav"
+
+# Short preview used in the wizard.
+sample_wav: "sample.wav"
+
+# Chatterbox knobs — Marcus is deliberate and grounded, not lively.
+# Lower exaggeration than Aurora; cfg slightly higher for stability;
+# temperature lower so the voice stays consistent across utterances.
+chatterbox:
+  exaggeration: 0.35
+  cfg_weight: 0.55
+  temperature: 0.65
+
+# ElevenLabs is opt-in per-user; leave voice_id blank until an
+# Marcus-equivalent voice is mapped by the shipping team. Model +
+# defaults kept so a user adding an id later does not have to
+# hand-edit the whole block.
+elevenlabs:
+  voice_id: ""
+  model_id: "eleven_flash_v2_5"
+  stability: 0.65
+  similarity_boost: 0.75
+  style: 0.10

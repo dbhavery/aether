@@ -1,0 +1,71 @@
+schema_version: 1
+
+creator: "Don Havery (cast expansion authorized 2026-04-28)"
+created: "2026-04-28"
+last_updated: "2026-04-28"
+
+# Provenance for every shipped asset. Every row must carry a source +
+# license the audit tool can verify. See PERSONA-SCHEMA.md §4 and §8.
+assets:
+  portrait:
+    source: "ai_generated"
+    generator: "fal.ai fal-ai/flux-pro/v1.1-ultra"
+    seed: 1182764741
+    post_processing: "center-square crop of 2752x1536 raw output to 1536x1536, Lanczos resize to 1024x1024 PNG via PIL"
+    source_url: "https://v3b.fal.media/files/b/0a9823d8/YUvg1Rag0w-NARUA8aIfD_3a7648cbcc51447890c971c0fcbb014e.jpg"
+    raw_file: "avatar/portrait_source_2026-04-28.jpg"
+    prompt: >-
+      Photorealistic candid portrait of an Asian American man in his late
+      30s, short well kept dark hair with a hint of grey at the temples,
+      sharp brown eyes behind thin wire frame glasses, light stubble,
+      slight asymmetric smile that reads as just got the answer, wearing
+      a charcoal henley with sleeves pushed to the elbows. Warm afternoon
+      study light, blurred bookshelf with a closed laptop on a wooden
+      desk. Slim athletic build, no jewelry except a simple steel watch.
+      Real skin texture with visible pores and natural imperfections.
+      Shot on 85mm at f/1.8. Reads as a thoughtful technical friend
+      across the table, not a stock photo. Avoid glamour pose, plastic
+      skin, perfect symmetry, anime, AI tropes.
+    license: "custom_aether"
+
+  state_images:
+    source: "STALE — pending regeneration"
+    note: >-
+      State images (idle / listening / thinking / speaking) are not yet
+      generated. Pipeline TBD per Aurora's STALE_AFTER_PORTRAIT_REGEN.md
+      (face-consistent generation via PuLID or FLUX redux). Marcus
+      ships with portrait-only avatar until that pipeline is verified
+      end-to-end.
+    license: "custom_aether"
+
+  voice_reference:
+    source: "ai_generated"
+    generator: "OpenAI gpt-4o-mini-tts (voice 'ash') with deliberate-pair-programmer steering"
+    license: "custom_aether"
+    description: >-
+      20.0s synthetic conversational speech generated 2026-04-28. Voice
+      'ash' steered for mid-low male voice, deliberate pacing with brief
+      micro-pauses, intelligent without being cold — like a senior
+      engineer thinking out loud during pair-programming. Output saved
+      as 24 kHz mono 16-bit PCM WAV; OpenAI's WAV header was malformed
+      (nFrames field overflow) and was re-encoded via soundfile, then
+      padded to exactly 20.0s. See voice/SOURCE.md for the reference
+      text + steering instructions.
+
+  voice_sample:
+    source: "ai_generated"
+    generator: "OpenAI gpt-4o-mini-tts (voice 'ash'), same steering as voice_reference"
+    license: "custom_aether"
+    description: >-
+      4.0s synthetic conversational speech for the wizard preview.
+      Same generation parameters as voice_reference; trimmed to
+      exactly 4.0s after re-encoding.
+
+notes: |
+  Portrait and voice are both AI-generated; no real-person likeness or
+  voice modeled. Voice 'ash' from OpenAI gpt-4o-mini-tts is synthetic.
+  Derived cloned output from Chatterbox / Zonos based on this reference
+  is owned by Aether under the persona pack's custom_aether license
+  (bundled under the repo's MIT umbrella).
+
+  Marcus is the second persona in the cast; see file:///C:/Users/dbhav/Projects/aether/personas/CHARACTERS.md for the full roster plan and design rationale.
