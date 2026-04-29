@@ -1,4 +1,4 @@
-# Free Aether — Community Edition (OSS Preview)
+# Free Companion — Community Edition (OSS Preview)
 
 > A local-first, desktop-native AI companion architecture. Rust-first engines, a
 > non-bypassable policy gate, explicit trust surfaces. Early preview — the
@@ -12,9 +12,9 @@ architectural tour, the seven layers, the trust model, and the end-product tease
 
 ---
 
-## 1. What Aether is
+## 1. What Companion is
 
-Aether is not a chatbot UI and not a general-purpose "AI app." It is an
+Companion is not a chatbot UI and not a general-purpose "AI app." It is an
 architecture for a **long-lived companion** that runs locally on a user's
 machine and treats the user relationship — memory, presence, timing, trust —
 as first-class engines, not afterthoughts.
@@ -36,16 +36,16 @@ Shared infrastructure (`event-bus`, `storage`, `telemetry`, `types`, `ui-kit`,
 `media-engine`) sits underneath. Everything routes through L5 for
 side-effectful actions — there is no back door.
 
-**Free Aether — Community Edition** is the open-source preview track. A
+**Free Companion — Community Edition** is the open-source preview track. A
 separate Pro flagship and a private build (Isabelle) exist in the doctrine
 but are out of scope for this repository.
 
 ---
 
-## 2. Why Aether
+## 2. Why Companion
 
 Most "AI companion" projects collapse into chat UIs on top of an LLM API.
-Aether refuses that shape on purpose:
+Companion refuses that shape on purpose:
 
 - **Companion, not chatbot.** Long-lived relationship, not single-session Q&A.
 - **Local-first.** User data, memory, and persona state live on the user's
@@ -66,7 +66,7 @@ offline, you're in the right place.
 ## 3. Current status — honest snapshot
 
 ```
-FREE AETHER — COMMUNITY EDITION — STATUS 2026-04-19
+FREE COMPANION — COMMUNITY EDITION — STATUS 2026-04-19
 
 FOUNDATION / DOCTRINE
 [##########] 100%  Vision & guardrails locked
@@ -387,4 +387,4 @@ responsibly. Do **not** file public issues for security problems.
 
 ## 10. License
 
-Aether Community Edition is released under the [MIT License](LICENSE).
+Companion Community Edition is released under the [MIT License](LICENSE).
