@@ -223,15 +223,15 @@ Persona-conditioning unlock — train Aurora-specific outputs, with system-promp
 
 These don't need to be decided this session, but each one gates a phase forward.
 
-| # | Decision | Gates |
-|---|---|---|
-| D1 | Aurora's face — what does she look like? | Phase 4 |
-| D2 | Aurora's voice — clone from whose audio? | Phase 3 |
-| D3 | RLHF Path A vs base swap Path B vs ship V6 Path C | Phase 2 V9+ |
-| D4 | Real-time video — pursue now or wait for tech? | Phase 5 |
-| D5 | Milestone 3 theme | infrastructure |
+| # | Decision | Gates | Status |
+|---|---|---|---|
+| D1 | Aurora's face — what does she look like? | Phase 4 | **RESOLVED 2026-04-28** — candidate 03 (FLUX-pro), see avatar/portrait.png |
+| D2 | Aurora's voice — clone from whose audio? | Phase 3 | **RESOLVED 2026-04-28** — gpt-4o-mini-tts voice 'nova', see voice/reference.wav |
+| D3 | RLHF Path A vs base swap Path B vs ship V6 Path C | Phase 2 V9+ | **DELEGATED to engineering agent** — pick after V7+V8 results land |
+| D4 | Real-time video — pursue now or wait for tech? | Phase 5 | **DEFERRED 2026-04-28** — Don directive: "improve training before video" |
+| D5 | Milestone 3 theme | infrastructure | open |
 
-D1 and D2 are creative calls Don should make. D3 is a strategy call. D4 is mostly external (state-of-the-art-dependent). D5 is project-management.
+Cast expansion (autonomous, per Don's 2026-04-28 directive "keep developing these characters using your own judgement"): see file:///C:/Users/dbhav/Projects/aether/personas/CHARACTERS.md for the planned 4-persona roster (Aurora + Marcus Chen + Sara Reyes + James Whitfield) covering ANALYTICAL/CREATIVE × SUPPORTIVE/PRACTICAL quadrants.
 
 ---
 
