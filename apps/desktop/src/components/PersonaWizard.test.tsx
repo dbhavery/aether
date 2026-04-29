@@ -242,4 +242,95 @@ describe("PersonaWizard", () => {
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toMatch(/no companions available yet/i);
   });
+
+  it("uses a roving tabindex so only one card is in the tab order", async () => {
+    vi.stubGlobal("fetch", mockFetchIndex(indexFixture()));
+    render(<PersonaWizard onCommit={() => {}} />);
+
+    const aurora = (await screen.findByRole("button", {
+      name: /pick aurora nash/i,
+    })) as HTMLButtonElement;
+    const marcus = screen.getByRole("button", {
+      name: /pick marcus chen/i,
+    }) as HTMLButtonElement;
+
+    // First card is the rover by default; the rest opt out of Tab.
+    expect(aurora.tabIndex).toBe(0);
+    expect(marcus.tabIndex).toBe(-1);
+  });
+
+  it("ArrowRight moves focus + roving tabindex to the next card", async () => {
+    vi.stubGlobal("fetch", mockFetchIndex(indexFixture()));
+    render(<PersonaWizard onCommit={() => {}} />);
+
+    const aurora = (await screen.findByRole("button", {
+      name: /pick aurora nash/i,
+    })) as HTMLButtonElement;
+    const marcus = screen.getByRole("button", {
+      name: /pick marcus chen/i,
+    }) as HTMLButtonElement;
+    const grid = screen.getByRole("grid");
+
+    aurora.focus();
+    fireEvent.keyDown(grid, { key: "ArrowRight" });
+
+    await waitFor(() => {
+      expect(marcus.tabIndex).toBe(0);
+      expect(aurora.tabIndex).toBe(-1);
+      expect(document.activeElement).toBe(marcus);
+    });
+  });
+
+  it("ArrowLeft from the first card wraps to the last", async () => {
+    vi.stubGlobal("fetch", mockFetchIndex(indexFixture()));
+    render(<PersonaWizard onCommit={() => {}} />);
+
+    const aurora = (await screen.findByRole("button", {
+      name: /pick aurora nash/i,
+    })) as HTMLButtonElement;
+    const marcus = screen.getByRole("button", {
+      name: /pick marcus chen/i,
+    }) as HTMLButtonElement;
+    const grid = screen.getByRole("grid");
+
+    aurora.focus();
+    fireEvent.keyDown(grid, { key: "ArrowLeft" });
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(marcus);
+    });
+  });
+
+  it("End jumps focus to the last card, Home returns it to the first", async () => {
+    vi.stubGlobal("fetch", mockFetchIndex(indexFixture()));
+    render(<PersonaWizard onCommit={() => {}} />);
+
+    const aurora = (await screen.findByRole("button", {
+      name: /pick aurora nash/i,
+    })) as HTMLButtonElement;
+    const marcus = screen.getByRole("button", {
+      name: /pick marcus chen/i,
+    }) as HTMLButtonElement;
+    const grid = screen.getByRole("grid");
+
+    aurora.focus();
+    fireEvent.keyDown(grid, { key: "End" });
+    await waitFor(() => expect(document.activeElement).toBe(marcus));
+
+    fireEvent.keyDown(grid, { key: "Home" });
+    await waitFor(() => expect(document.activeElement).toBe(aurora));
+  });
+
+  it("renders an aria-labelled voice-playing indicator while a clip plays", async () => {
+    vi.stubGlobal("fetch", mockFetchIndex(indexFixture()));
+    render(<PersonaWizard onCommit={() => {}} />);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: /pick aurora nash/i }),
+    );
+
+    expect(
+      await screen.findByLabelText(/voice preview playing/i),
+    ).toBeTruthy();
+  });
 });

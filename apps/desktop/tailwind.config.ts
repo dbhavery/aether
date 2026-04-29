@@ -67,10 +67,15 @@ const config: Config = {
           "0%": { opacity: "0", transform: "translateY(4px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
+        wizardBar: {
+          "0%, 100%": { transform: "scaleY(0.35)" },
+          "50%": { transform: "scaleY(1)" },
+        },
       },
       animation: {
         pulseDot: "pulseDot 1.6s ease-in-out infinite",
         fadeIn: "fadeIn 140ms ease-out",
+        wizardBar: "wizardBar 0.9s ease-in-out infinite",
       },
     },
   },

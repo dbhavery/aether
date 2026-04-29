@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 
 import {
   loadPersonaPreviews,
@@ -45,7 +52,12 @@ export function PersonaWizard({ onCommit, availableSlugs }: PersonaWizardProps) 
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [playingSlug, setPlayingSlug] = useState<string | null>(null);
+  // Roving-tabindex focus pointer — index into `visiblePersonas`. Only
+  // the focused card has `tabIndex=0`; the rest are `-1` so Tab moves
+  // through the wizard rather than each individual card.
+  const [focusIdx, setFocusIdx] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const cardRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -99,6 +111,45 @@ export function PersonaWizard({ onCommit, availableSlugs }: PersonaWizardProps) 
     setSelectedSlug(p.slug);
     playPreview(p);
   }
+
+  // Roving-tabindex grid keyboard handler. Arrow keys move focus
+  // linearly; Home/End jump to first/last; Enter picks the focused
+  // card (browsers fire native click on the button so we don't need
+  // a separate keydown→select branch). Vertical arrows alias to
+  // horizontal — the grid reflows responsively (1/2/3 cols), so
+  // computing a real "row above" requires layout introspection
+  // jsdom can't do anyway. Linear traversal is the conservative
+  // choice and matches how most users navigate small grids.
+  const onGridKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLDivElement>) => {
+      const list = cardRefs.current;
+      const len = list.length;
+      if (len === 0) return;
+      let next: number | null = null;
+      switch (e.key) {
+        case "ArrowRight":
+        case "ArrowDown":
+          next = (focusIdx + 1) % len;
+          break;
+        case "ArrowLeft":
+        case "ArrowUp":
+          next = (focusIdx - 1 + len) % len;
+          break;
+        case "Home":
+          next = 0;
+          break;
+        case "End":
+          next = len - 1;
+          break;
+        default:
+          return;
+      }
+      e.preventDefault();
+      setFocusIdx(next);
+      list[next]?.focus();
+    },
+    [focusIdx],
+  );
 
   if (loadError) {
     return (
@@ -206,19 +257,33 @@ export function PersonaWizard({ onCommit, availableSlugs }: PersonaWizardProps) 
         </p>
       </div>
 
-      <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {visiblePersonas.map((p) => {
+      <div
+        role="grid"
+        aria-label="Companion picker"
+        onKeyDown={onGridKeyDown}
+        className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
+      >
+        {visiblePersonas.map((p, i) => {
           const isSelected = selectedSlug === p.slug;
           const isPlaying = playingSlug === p.slug;
           return (
             <button
               key={p.slug}
               type="button"
-              onClick={() => selectPersona(p)}
+              ref={(el) => {
+                cardRefs.current[i] = el;
+              }}
+              tabIndex={i === focusIdx ? 0 : -1}
+              onClick={() => {
+                setFocusIdx(i);
+                selectPersona(p);
+              }}
+              onFocus={() => setFocusIdx(i)}
               aria-pressed={isSelected}
               aria-label={`Pick ${p.display_name}`}
               className={[
-                "group relative flex flex-col overflow-hidden rounded-lg border text-left transition-all",
+                "group relative flex flex-col overflow-hidden rounded-lg border text-left motion-safe:transition-all",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aether-accent focus-visible:ring-offset-2 focus-visible:ring-offset-aether-bg",
                 isSelected
                   ? "border-aether-accent bg-aether-elevated shadow-lg"
                   : "border-aether-border bg-aether-bg hover:border-aether-text/40 hover:bg-aether-elevated",
@@ -249,10 +314,24 @@ export function PersonaWizard({ onCommit, availableSlugs }: PersonaWizardProps) 
                 </p>
                 {isPlaying && (
                   <span
-                    className="text-[10px] font-mono uppercase tracking-wider text-aether-accent"
+                    className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-aether-accent"
                     aria-live="polite"
+                    aria-label="Voice preview playing"
                   >
-                    Playing voice…
+                    {/* Animated 3-bar VU indicator. Bars scale on the
+                     * Y axis via Tailwind's `animate-[*]` arbitrary
+                     * value; `motion-safe:` gates the keyframes so
+                     * users with prefers-reduced-motion get a static
+                     * trio of bars instead of a pulsing one. */}
+                    <span
+                      aria-hidden="true"
+                      className="inline-flex h-3 items-end gap-[2px]"
+                    >
+                      <span className="block h-full w-[2px] origin-bottom rounded-sm bg-aether-accent motion-safe:animate-wizardBar" />
+                      <span className="block h-full w-[2px] origin-bottom rounded-sm bg-aether-accent motion-safe:animate-wizardBar motion-safe:[animation-delay:0.15s]" />
+                      <span className="block h-full w-[2px] origin-bottom rounded-sm bg-aether-accent motion-safe:animate-wizardBar motion-safe:[animation-delay:0.3s]" />
+                    </span>
+                    Playing
                   </span>
                 )}
               </div>
