@@ -1,12 +1,12 @@
 [package]
 name = "aether-desktop-shell"
 version = "0.0.1"
-description = "Aether desktop shell v0 — Tauri backend that wraps the existing engine path."
+description = "Companion desktop shell v0 — Tauri backend that wraps the existing engine path."
 edition = "2021"
 rust-version = "1.78"
 license = "MIT"
 repository = "https://github.com/dbhavery/aether"
-authors = ["Aether contributors"]
+authors = ["Companion contributors"]
 publish = false
 
 # Standalone workspace so the heavy Tauri dep graph does not pollute the
