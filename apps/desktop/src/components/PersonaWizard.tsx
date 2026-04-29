@@ -25,11 +25,21 @@ import {
 export interface PersonaWizardProps {
   /** Called when the user confirms a persona pick. */
   onCommit: (slug: string) => void;
+  /**
+   * Restrict the rendered cast to slugs the backend persona catalog
+   * can actually deliver. When omitted, every preview from the bundled
+   * index renders — useful for standalone tests. When provided, only
+   * the intersection is shown so the user can never pick a persona
+   * that `switchPersona` would reject. The cast preview catalog is
+   * frozen at 9 today; the backend's live catalog grows as
+   * Tier-2 packs install (ADR-0012).
+   */
+  availableSlugs?: readonly string[];
 }
 
 type Step = "pick" | "confirm";
 
-export function PersonaWizard({ onCommit }: PersonaWizardProps) {
+export function PersonaWizard({ onCommit, availableSlugs }: PersonaWizardProps) {
   const [step, setStep] = useState<Step>("pick");
   const [personas, setPersonas] = useState<PersonaPreview[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -51,12 +61,19 @@ export function PersonaWizard({ onCommit }: PersonaWizardProps) {
     };
   }, []);
 
+  const visiblePersonas = useMemo(() => {
+    if (!personas) return null;
+    if (!availableSlugs) return personas;
+    const allow = new Set(availableSlugs);
+    return personas.filter((p) => allow.has(p.slug));
+  }, [personas, availableSlugs]);
+
   const selected = useMemo(
     () =>
-      selectedSlug && personas
-        ? personas.find((p) => p.slug === selectedSlug) ?? null
+      selectedSlug && visiblePersonas
+        ? visiblePersonas.find((p) => p.slug === selectedSlug) ?? null
         : null,
-    [selectedSlug, personas],
+    [selectedSlug, visiblePersonas],
   );
 
   function playPreview(p: PersonaPreview) {
@@ -102,10 +119,29 @@ export function PersonaWizard({ onCommit }: PersonaWizardProps) {
     );
   }
 
-  if (!personas) {
+  if (!personas || !visiblePersonas) {
     return (
       <div className="mx-auto mt-24 max-w-md text-center text-[13px] text-aether-muted">
         Loading companions…
+      </div>
+    );
+  }
+
+  if (visiblePersonas.length === 0) {
+    // The bundled previews were filtered down to nothing — typically
+    // means the backend persona catalog hasn't been populated yet
+    // (e.g. ADR-0012 Tier-2 install hasn't run for any cast member).
+    // Surface this honestly instead of rendering a ghost grid.
+    return (
+      <div
+        role="alert"
+        className="mx-auto mt-24 max-w-md rounded-lg border border-aether-border bg-aether-bg p-6 text-aether-text"
+      >
+        <h2 className="text-[15px] font-medium">No companions available yet</h2>
+        <p className="mt-2 text-[13px] text-aether-muted">
+          Your installation doesn't have any companion packs ready. Once
+          a pack is installed, the wizard will list it here.
+        </p>
       </div>
     );
   }
@@ -159,17 +195,19 @@ export function PersonaWizard({ onCommit }: PersonaWizardProps) {
           Pick your companion
         </div>
         <h1 className="mt-2 text-[22px] font-medium text-aether-text">
-          Nine companions, nine registers
+          {visiblePersonas.length === 1
+            ? "Meet your companion"
+            : "Distinct voices, distinct registers"}
         </h1>
         <p className="mx-auto mt-3 max-w-xl text-[13px] leading-relaxed text-aether-muted">
-          Each is a distinct character with their own voice, presence,
-          and way of thinking. Tap a card to hear them speak. You'll
-          stick with one — though you can switch later.
+          {visiblePersonas.length === 1
+            ? "Your installation ships with one companion ready to talk. More arrive as their packs install."
+            : "Each is a distinct character with their own voice, presence, and way of thinking. Tap a card to hear them speak. You'll stick with one — though you can switch later."}
         </p>
       </div>
 
       <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {personas.map((p) => {
+        {visiblePersonas.map((p) => {
           const isSelected = selectedSlug === p.slug;
           const isPlaying = playingSlug === p.slug;
           return (

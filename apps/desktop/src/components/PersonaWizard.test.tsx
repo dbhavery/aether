@@ -219,4 +219,27 @@ describe("PersonaWizard", () => {
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toMatch(/unexpected shape/i);
   });
+
+  it("filters the rendered cast to availableSlugs when provided", async () => {
+    vi.stubGlobal("fetch", mockFetchIndex(indexFixture()));
+    render(<PersonaWizard onCommit={() => {}} availableSlugs={["aurora"]} />);
+
+    expect(await screen.findByText("Aurora Nash")).toBeTruthy();
+    expect(screen.queryByText("Marcus Chen")).toBeNull();
+  });
+
+  it("uses the singular companion headline when only one persona is available", async () => {
+    vi.stubGlobal("fetch", mockFetchIndex(indexFixture()));
+    render(<PersonaWizard onCommit={() => {}} availableSlugs={["aurora"]} />);
+
+    expect(await screen.findByText(/meet your companion/i)).toBeTruthy();
+  });
+
+  it("renders the no-companions-available state when the filter empties the cast", async () => {
+    vi.stubGlobal("fetch", mockFetchIndex(indexFixture()));
+    render(<PersonaWizard onCommit={() => {}} availableSlugs={[]} />);
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/no companions available yet/i);
+  });
 });

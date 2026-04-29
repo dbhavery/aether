@@ -27,6 +27,7 @@ import { Disclosure } from "./components/Disclosure";
 import { Header } from "./components/Header";
 import { InputBar } from "./components/InputBar";
 import { PersonaCard } from "./components/PersonaCard";
+import { PersonaWizard } from "./components/PersonaWizard";
 import { PresetPicker, readStoredPreset } from "./components/PresetPicker";
 import { ScreenPanel } from "./components/ScreenPanel";
 import { SettingsDrawer } from "./components/SettingsDrawer";
@@ -78,6 +79,13 @@ export function App() {
   const [disclosureCloseNonce, setDisclosureCloseNonce] = useState(0);
   const [sessionNonce, setSessionNonce] = useState(0);
   const [personas, setPersonas] = useState<PersonaCatalogEntry[]>([]);
+  // Onboarding gate — first launch (no stored persona) shows the
+  // PersonaWizard instead of the chat shell. The boot effect still
+  // runs underneath so the catalog loads in time for the wizard's
+  // availability filter; the wizard only takes the foreground.
+  const [showWizard, setShowWizard] = useState<boolean>(
+    () => readStoredPersonaId() === null,
+  );
 
   // Boot — load banner, seed presence, subscribe to presence events.
   useEffect(() => {
@@ -252,6 +260,37 @@ export function App() {
     setMemoryRefreshKey((k) => k + 1);
   }, []);
 
+  const handleWizardCommit = useCallback(
+    async (slug: string) => {
+      // The wizard already filtered down to backend-available personas
+      // before exposing this slug, so switchPersona is expected to
+      // succeed. We still surface a friendly message on failure rather
+      // than crashing the wizard — the user can pick a different
+      // companion if the catalog drifted between mount and commit.
+      try {
+        const b = await apiSwitchPersona(slug);
+        setBanner(b);
+        writeStoredPersonaId(slug);
+        setShowWizard(false);
+        setSessionNonce((n) => n + 1);
+        setMemoryRefreshKey((k) => k + 1);
+      } catch (e) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `err-${Date.now()}`,
+            role: "system",
+            content: `Could not start companion: ${String(e)}`,
+            sequence: 0,
+            timestamp_ms: Date.now(),
+            meta: null,
+          },
+        ]);
+      }
+    },
+    [],
+  );
+
   const handleSwitchPersona = useCallback(
     async (id: string) => {
       if (busy) return;
@@ -322,6 +361,30 @@ export function App() {
         <div className="text-[12px] text-aether-muted">
           Starting Companion…
         </div>
+      </div>
+    );
+  }
+
+  if (showWizard) {
+    // Wait for the live catalog to land before rendering the wizard.
+    // The boot effect sets `banner` first and then awaits `listPersonas`;
+    // rendering with `availableSlugs=[]` mid-flight would flash the
+    // "no companions available" empty state instead of the cast.
+    if (personas.length === 0) {
+      return (
+        <div className="flex h-full items-center justify-center">
+          <div className="text-[12px] text-aether-muted">
+            Loading companions…
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div className="h-full overflow-y-auto bg-aether-bg">
+        <PersonaWizard
+          onCommit={handleWizardCommit}
+          availableSlugs={personas.map((p) => p.id)}
+        />
       </div>
     );
   }
