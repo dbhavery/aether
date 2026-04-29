@@ -1,6 +1,6 @@
 # `@aether/desktop` — Desktop shell (v0)
 
-First real desktop surface for Aether. Thin Tauri 2 shell over the Rust
+First real desktop surface for Companion. Thin Tauri 2 shell over the Rust
 engine path: L1 turn FSM + L2 session memory + L3 presence + L5 policy +
 L6 persona + L7 approval + L4 router (reflex stub by default, Ollama
 behind a feature).

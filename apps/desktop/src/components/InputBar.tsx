@@ -51,7 +51,7 @@ export function InputBar({ disabled, placeholder, onSubmit }: Props) {
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={onKeyDown}
             rows={1}
-            placeholder={placeholder || "Message Aether…"}
+            placeholder={placeholder || "Message Companion…"}
             className="allow-select w-full resize-none bg-transparent px-4 py-3 text-[13.5px] text-aether-text placeholder:text-aether-dim focus:outline-none disabled:opacity-50"
             style={{ minHeight: "44px", maxHeight: "160px" }}
           />

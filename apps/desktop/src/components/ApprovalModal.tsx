@@ -29,7 +29,7 @@ export function ApprovalModal({ payload, working, onApprove, onReject }: Props) 
           id="approval-title"
           className="mt-2 text-[15px] font-medium text-aether-text"
         >
-          Aether would like permission to continue.
+          Companion would like permission to continue.
         </h2>
 
         <dl className="mt-5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-[12.5px]">
@@ -53,7 +53,7 @@ export function ApprovalModal({ payload, working, onApprove, onReject }: Props) 
         </dl>
 
         <p className="mt-4 rounded-md border border-aether-border bg-aether-bg/60 px-3 py-2 text-[11.5px] leading-relaxed text-aether-muted">
-          {payload.risk_hint} If you decline, Aether will stop and let you know
+          {payload.risk_hint} If you decline, Companion will stop and let you know
           — nothing else will happen.
         </p>
 

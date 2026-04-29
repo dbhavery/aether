@@ -209,7 +209,7 @@ export function VisionBadge({ refreshKey, onRouteChanged }: Props) {
           <code className="font-mono">AETHER_OLLAMA_VISION_MODEL</code>{" "}
           (Ollama) or{" "}
           <code className="font-mono">AETHER_LLAMACPP_VISION_MODEL</code>{" "}
-          (llama-server) and restart Aether to enable.
+          (llama-server) and restart Companion to enable.
         </div>
       )}
 

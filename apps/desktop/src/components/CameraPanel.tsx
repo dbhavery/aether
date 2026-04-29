@@ -238,7 +238,7 @@ export function CameraPanel({ open, onClose, onFrameAnalyzed }: Props) {
               <span className="text-aether-warn">Ask</span>.
             </div>
             <p className="mt-1 text-[11.5px] text-aether-muted">
-              Allow camera access for this session so Aether can sample a
+              Allow camera access for this session so Companion can sample a
               frame. You can revert the choice at any time in Settings.
             </p>
             <button

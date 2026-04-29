@@ -199,7 +199,7 @@ export function VoiceBadge({ refreshKey, onRouteChanged }: Props) {
           No speech provider is registered. Set{" "}
           <code className="font-mono">AETHER_WHISPERCPP_SPEECH_MODEL</code>{" "}
           (and optionally <code className="font-mono">…_BASE_URL</code>)
-          and restart Aether to enable push-to-talk.
+          and restart Companion to enable push-to-talk.
         </div>
       )}
 

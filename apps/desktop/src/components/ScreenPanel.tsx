@@ -237,7 +237,7 @@ export function ScreenPanel({ open, onClose, onFrameAnalyzed }: Props) {
               <span className="text-aether-warn">Ask</span>.
             </div>
             <p className="mt-1 text-[11.5px] text-aether-muted">
-              Allow screen capture for this session so Aether can sample a
+              Allow screen capture for this session so Companion can sample a
               single screenshot. The OS picker still chooses what's
               shared.
             </p>

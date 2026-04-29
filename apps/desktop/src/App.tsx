@@ -298,7 +298,7 @@ export function App() {
     if (banner?.provider_mode === "ollama") {
       return `Message ${banner.persona_name}… (running local model)`;
     }
-    return `Message ${banner?.persona_name ?? "Aether"}…`;
+    return `Message ${banner?.persona_name ?? "Companion"}…`;
   }, [banner]);
 
   if (bootError) {
@@ -306,7 +306,7 @@ export function App() {
       <div className="flex h-full items-center justify-center p-8 text-center">
         <div>
           <div className="text-[13px] text-aether-err">
-            Aether failed to start.
+            Companion failed to start.
           </div>
           <pre className="mt-3 whitespace-pre-wrap text-[11px] font-mono text-aether-muted">
             {bootError}
@@ -320,7 +320,7 @@ export function App() {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="text-[12px] text-aether-muted">
-          Starting Aether…
+          Starting Companion…
         </div>
       </div>
     );

@@ -121,7 +121,7 @@ function reasonCopy(reason: NotReadyReason, modelName: string): string {
     case "provider_unreachable":
       return `Embedding provider unreachable. Is Ollama running? (${reason.detail})`;
     case "model_not_installed":
-      return `Embedding model ${reason.model || modelName} is not installed. Run \`ollama pull ${reason.model || modelName}\` in a terminal and Aether will activate retrieval automatically.`;
+      return `Embedding model ${reason.model || modelName} is not installed. Run \`ollama pull ${reason.model || modelName}\` in a terminal and Companion will activate retrieval automatically.`;
     case "policy_denied":
       return `Retrieval is currently blocked by your policy settings. Check the Trust drawer's policy section.`;
     case "embed_failed":

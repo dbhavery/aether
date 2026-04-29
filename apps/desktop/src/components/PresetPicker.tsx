@@ -135,7 +135,7 @@ export function PresetPicker({
           id="preset-picker-title"
           className="text-base font-medium tracking-tight text-aether-text"
         >
-          How much autonomy should Aether have?
+          How much autonomy should Companion have?
         </h2>
         <p className="mt-2 text-[12.5px] text-aether-muted">
           Pick a starting posture. You can change it any time in Settings.

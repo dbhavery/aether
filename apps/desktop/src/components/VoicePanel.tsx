@@ -297,7 +297,7 @@ export function VoicePanel({ open, onClose, onUtteranceTranscribed }: Props) {
               <span className="text-aether-warn">Ask</span>.
             </div>
             <p className="mt-1 text-[11.5px] text-aether-muted">
-              Allow microphone access for this session so Aether can hear
+              Allow microphone access for this session so Companion can hear
               a single utterance when you hold Record. You can revert the
               choice at any time in Settings.
             </p>

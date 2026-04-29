@@ -44,10 +44,10 @@ export function Disclosure({
           id="disclosure-title"
           className="text-base font-medium tracking-tight text-aether-text"
         >
-          Welcome to Aether
+          Welcome to Companion
         </h2>
         <p className="mt-3 text-[13px] leading-relaxed text-aether-muted">
-          Aether is a local-first, desktop-native AI companion. This is an
+          Companion is a local-first, desktop-native AI companion. This is an
           early preview — quiet, minimal, and under your control.
         </p>
         <ul className="mt-4 space-y-2 text-[12.5px] text-aether-muted">

@@ -54,7 +54,7 @@ export function Header({
       <div className="flex min-w-0 flex-nowrap items-center gap-2 lg:gap-4">
         <div className="flex shrink-0 flex-col">
           <div className="text-[13px] font-medium tracking-tight text-aether-text lg:text-[14px]">
-            Aether
+            Companion
           </div>
           <div className="text-[10px] font-mono uppercase tracking-wider text-aether-dim lg:text-[10.5px]">
             · {banner.persona_name}
@@ -103,7 +103,7 @@ export function Header({
             type="button"
             onClick={onOpenTrust}
             className="rounded-md border border-transparent px-2 py-1 text-[11px] text-aether-muted transition-colors hover:border-aether-border hover:text-aether-text lg:px-2.5 lg:text-[11.5px]"
-            title="Review every decision Aether has made"
+            title="Review every decision Companion has made"
           >
             Trust
           </button>
@@ -152,7 +152,7 @@ export function Header({
           type="button"
           onClick={onReopenDisclosure}
           className="hidden rounded-md border border-transparent px-2 py-1 text-[11px] text-aether-muted transition-colors hover:border-aether-border hover:text-aether-text lg:inline-block lg:px-2.5 lg:text-[11.5px]"
-          title="What does Aether do with my data?"
+          title="What does Companion do with my data?"
         >
           About
         </button>

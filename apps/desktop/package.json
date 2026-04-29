@@ -2,7 +2,7 @@
   "name": "aether-desktop",
   "private": true,
   "version": "0.0.1",
-  "description": "Aether desktop shell v0 — Tauri 2 + React + Vite. Wraps the Rust engine path.",
+  "description": "Companion desktop shell v0 — Tauri 2 + React + Vite. Wraps the Rust engine path.",
   "type": "module",
   "scripts": {
     "dev": "vite",

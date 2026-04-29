@@ -44,7 +44,7 @@ const STATE_COPY: Record<
   },
   ask: {
     label: "Ask",
-    hint: "Aether will request approval before each capture.",
+    hint: "Companion will request approval before each capture.",
     color: "text-aether-warn",
   },
   deny: {
@@ -57,11 +57,11 @@ const STATE_COPY: Record<
 const DEVICE_COPY: Record<MediaKind, { title: string; body: string }> = {
   camera: {
     title: "Camera",
-    body: "Webcam frames Aether may sample for visual context. Capture only happens after you press the capture control on the camera panel.",
+    body: "Webcam frames Companion may sample for visual context. Capture only happens after you press the capture control on the camera panel.",
   },
   screen: {
     title: "Screen",
-    body: "On-screen content Aether may sample for visual context. Screen capture is currently scaffolded but not wired to a capture surface.",
+    body: "On-screen content Companion may sample for visual context. Screen capture is currently scaffolded but not wired to a capture surface.",
   },
 };
 
@@ -192,7 +192,7 @@ export function SettingsDrawer({ open, onClose }: Props) {
             Settings
           </div>
           <div className="text-[13px] text-aether-text">
-            Local controls for what Aether may see
+            Local controls for what Companion may see
           </div>
         </div>
         <button
@@ -219,7 +219,7 @@ export function SettingsDrawer({ open, onClose }: Props) {
             Media
           </h2>
           <p className="mt-1 text-[12px] text-aether-muted">
-            These choices live only on this machine. Aether never sends
+            These choices live only on this machine. Companion never sends
             them anywhere. The OS-level permission prompt is still the
             final say.
           </p>
@@ -254,14 +254,14 @@ export function SettingsDrawer({ open, onClose }: Props) {
           </h2>
           <p className="mt-1 text-[12px] text-aether-muted">
             Mic consent is tracked separately from camera and screen.
-            Voice capture is push-to-talk only; Aether never listens
+            Voice capture is push-to-talk only; Companion never listens
             continuously.
           </p>
 
           <div className="mt-4">
             <PermissionRow
               title="Microphone"
-              body="Short push-to-talk utterances Aether may transcribe for voice input. Capture happens only while you hold the Record button on the Voice panel."
+              body="Short push-to-talk utterances Companion may transcribe for voice input. Capture happens only while you hold the Record button on the Voice panel."
               value={mic?.state ?? "ask"}
               busy={busyMic}
               onChange={(next) => handleMicChange(next)}
@@ -280,7 +280,7 @@ export function SettingsDrawer({ open, onClose }: Props) {
             Presence
           </h2>
           <p className="mt-1 text-[12px] text-aether-muted">
-            Aether tracks presence (Active / Idle / Away) to pace its
+            Companion tracks presence (Active / Idle / Away) to pace its
             responses. Presence signals are observational only — they
             do not trigger a capability gate or an audit row.
           </p>
@@ -288,7 +288,7 @@ export function SettingsDrawer({ open, onClose }: Props) {
           <div className="mt-4 flex flex-col gap-3">
             <ToggleRow
               title="Track presence"
-              body="When off, Aether pauses the presence controller entirely. No state is emitted until you flip it back."
+              body="When off, Companion pauses the presence controller entirely. No state is emitted until you flip it back."
               checked={presence?.enabled ?? true}
               busy={busyPresence || presence === null}
               onChange={(v) => updatePresence({ enabled: v })}
@@ -322,7 +322,7 @@ export function SettingsDrawer({ open, onClose }: Props) {
             Memory
           </h2>
           <p className="mt-1 text-[12px] text-aether-muted">
-            What Aether remembers, and whether each domain writes
+            What Companion remembers, and whether each domain writes
             automatically or asks first. User-sensitive domains
             (Facts, Artifacts) default to Ask. See the Memory
             architecture doc for the full rules.
@@ -621,7 +621,7 @@ function ThresholdEditor({
         Thresholds
       </div>
       <p className="mt-1 text-[11.5px] text-aether-muted">
-        How long of no keyboard / mouse activity before Aether considers
+        How long of no keyboard / mouse activity before Companion considers
         you Idle, then Away. Seconds; {PRESENCE_THRESHOLD_MIN_S}–
         {PRESENCE_THRESHOLD_MAX_S}.
       </p>

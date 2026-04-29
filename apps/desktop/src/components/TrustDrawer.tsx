@@ -268,11 +268,11 @@ export function TrustDrawer({ open, refreshKey, onClose, initialTab }: Props) {
           </div>
           <div className="text-[13px] text-aether-text">
             {tab === "audit"
-              ? "What Aether decided, in order"
+              ? "What Companion decided, in order"
               : tab === "memory"
-                ? "What Aether remembers, by domain"
+                ? "What Companion remembers, by domain"
                 : tab === "retrieval"
-                  ? "Whether Aether can find what it remembers"
+                  ? "Whether Companion can find what it remembers"
                   : "Recent turn timing and usage"}
           </div>
         </div>
@@ -494,7 +494,7 @@ function AuditRow({ row }: { row: TrustAuditRow }) {
             className="mt-1.5 group"
           >
             <summary className="cursor-pointer text-[11px] text-aether-muted hover:text-aether-text select-none">
-              {`Aether also saw ${provenance.hits.length} memor${
+              {`Companion also saw ${provenance.hits.length} memor${
                 provenance.hits.length === 1 ? "y" : "ies"
               } from ${formatDomains(provenance.hits)}`}
             </summary>
@@ -525,7 +525,7 @@ function AuditRow({ row }: { row: TrustAuditRow }) {
             data-testid="audit-model-saw-empty"
             className="mt-1.5 text-[11px] text-aether-muted select-none"
           >
-            Aether ran retrieval; nothing matched
+            Companion ran retrieval; nothing matched
           </div>
         )
       )}
