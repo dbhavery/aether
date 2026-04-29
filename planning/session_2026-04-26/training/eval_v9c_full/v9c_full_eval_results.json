@@ -1,0 +1,87 @@
+{
+  "variant": "v9c_full",
+  "checkpoint": "C:\\Users\\dbhav\\Projects\\aether\\planning\\session_2026-04-26\\training\\checkpoints_v9c\\qwen25_7b_human_lora_v9c\\final",
+  "base_model": "Qwen/Qwen2.5-7B-Instruct",
+  "v9c_heldout_score": {
+    "n": 200,
+    "human_rate": 0.18,
+    "avg_human_confidence": 0.3007082002144307
+  },
+  "v9c_wildchat_score": {
+    "n": 200,
+    "human_rate": 0.25,
+    "avg_human_confidence": 0.31304371160222216
+  },
+  "v9c_self_test_summary": {
+    "n_seeds": 25,
+    "turns_per_convo": 8,
+    "by_turn_position": {
+      "turn_1": {
+        "n": 25,
+        "human_rate": 0.32,
+        "avg_human_confidence": 0.4076931493356824
+      },
+      "turn_2": {
+        "n": 25,
+        "human_rate": 0.32,
+        "avg_human_confidence": 0.35165664918720724
+      },
+      "turn_3": {
+        "n": 25,
+        "human_rate": 0.32,
+        "avg_human_confidence": 0.33582042060792444
+      },
+      "turn_4": {
+        "n": 25,
+        "human_rate": 0.24,
+        "avg_human_confidence": 0.3204945943504572
+      },
+      "turn_5": {
+        "n": 25,
+        "human_rate": 0.28,
+        "avg_human_confidence": 0.31693440467119216
+      },
+      "turn_6": {
+        "n": 25,
+        "human_rate": 0.4,
+        "avg_human_confidence": 0.3980905471742153
+      },
+      "turn_7": {
+        "n": 25,
+        "human_rate": 0.32,
+        "avg_human_confidence": 0.3610644440352917
+      },
+      "turn_8": {
+        "n": 25,
+        "human_rate": 0.28,
+        "avg_human_confidence": 0.423076203763485
+      }
+    },
+    "all_generated_turns": {
+      "n": 200,
+      "human_rate": 0.31,
+      "avg_human_confidence": 0.36435379278380425
+    }
+  },
+  "comparison": {
+    "v3_partial_heldout": 0.265,
+    "v3_partial_wildchat": 0.16,
+    "v3_partial_selftest_avg": 0.275,
+    "v4_heldout": 0.22,
+    "v4_wildchat": 0.235,
+    "v4_selftest_avg": 0.35,
+    "v5_heldout": 0.22,
+    "v5_wildchat": 0.24,
+    "v5_selftest_avg": 0.28,
+    "v6_heldout": 0.23,
+    "v6_wildchat": 0.28,
+    "v6_selftest_avg": 0.33,
+    "v7_heldout": 0.195,
+    "v7_wildchat": 0.235,
+    "v7_selftest_avg": 0.34,
+    "v8_heldout": 0.24,
+    "v8_wildchat": 0.205,
+    "v8_selftest_avg": 0.195,
+    "human_ceiling_sanity": 0.871
+  }
+}
