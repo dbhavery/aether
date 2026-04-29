@@ -98,9 +98,12 @@ Each commit references this plan doc.
 | When | What | Why |
 |---|---|---|
 | 2026-04-28 night | Plan written | Don directive: public name = Companion |
-| TBD next session | §1 README rename committed | |
-| TBD next session | §2 Tauri productName rename committed | |
-| ... | | |
+| 2026-04-28 night | Commit 1: README.md renamed (2cc40d2) | public marketing surface |
+| 2026-04-28 night | Commit 2: Tauri productName + window title + index.html (8d480f3) | desktop app shell |
+| 2026-04-28 night | Commit 3: Persona pack YAML headers + metadata prose (cad2d0e) | persona pack public refs |
+| 2026-04-28 night | Commit 4: UI strings across apps/desktop/src/ (3ab5558) | wizard / drawer / modal copy |
+| 2026-04-28 night | Commit 5: personas/CHARACTERS.md heading + intro | persona cast design doc |
+| 2026-04-28 night | RENAME COMPLETE | All 5 commits landed on dev. Internal codename Aether preserved per scope split. |
 
 ---
 

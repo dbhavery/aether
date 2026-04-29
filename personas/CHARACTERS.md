@@ -1,6 +1,6 @@
-# Aether Persona Cast — Design Doc
+# Companion Persona Cast — Design Doc
 
-> The roster of characters Aether ships with. Each persona is a complete
+> The roster of characters Companion ships with. Each persona is a complete
 > identity package — name, face, body, voice, personality archetype,
 > system prompt — that the user picks during onboarding and can switch
 > between later.
