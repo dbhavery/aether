@@ -180,7 +180,9 @@ Result: ~5h instead of ~9h serial. V7 fully done + V8 launched.
 
 ### V8 — Capacity test (continued / completes in same or next session)
 
-Higher-rank LoRA (rank 32 or 64) trained from base (Qwen2.5-3B) on V6's multi-turn-format data. Tests "is rank 16 the bottleneck?" If V8 > V6 by ≥5pp, capacity matters and V9+ stays on higher-rank. If V8 ≈ V6, capacity isn't the limit — data is.
+Higher-rank LoRA trained from base (Qwen2.5-3B) on V6's multi-turn-format data. Tests "is rank 64 the bottleneck?" If V8 > V6 by ≥5pp, capacity matters and V9+ stays on higher rank. If V8 ≈ V6, capacity isn't the limit — data is.
+
+**Correction 2026-04-28:** prior versions of this section said "rank 16" / "rank 32" — both wrong. V6's `adapter_config.json` shows rank 64, alpha 128. V8 launched with rank 96 (was originally planned at rank 128, dropped after in-flight V7 telemetry showed only ~240 MB VRAM headroom on the 3090 Ti). Still a +50% capacity bump vs V6 — meaningful test.
 
 ### V9 — Either RLHF kickoff OR full SFT from base
 
@@ -283,5 +285,6 @@ Phase 6 Aurora-as-a-whole integration :  4 to 10 sessions    (1-3 weeks)
 | Date | What changed | Who |
 |---|---|---|
 | 2026-04-28 | File created. Phase 2 cursor at V6. Phase 1 closed. | autonomous V*-arc agent |
+| 2026-04-28 (eve) | V7+V8 pipeline launched unattended (~5-6h wallclock). V7 = LoRA continuation from V6 with adamw_8bit. V8 = rank-96 LoRA from base (corrected from "rank 32 from base" — V6 is already rank 64; rank-96 fits VRAM after rank-128 OOM risk surfaced from V7 telemetry). Multi-turn discriminator descoped to next session. Cursor moves to V7/V8 once results land. See HANDOFF_2026-04-28_V7_V8_PIPELINE_LAUNCHED.md. | V7+V8 launch agent |
 
 (Future agents append here.)
