@@ -38,7 +38,9 @@
       "icons/icon.png",
       "icons/icon.ico"
     ],
-    "resources": [],
+    "resources": [
+      "resources/personas/*.yaml"
+    ],
     "copyright": "",
     "category": "Productivity",
     "shortDescription": "Companion — local-first AI companion",

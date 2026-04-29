@@ -171,6 +171,12 @@ fn build_app_state(app: &tauri::AppHandle) -> Result<AppState, Box<dyn std::erro
                 // directory.
                 if std::env::var_os("AETHER_PERSONAS_DIR").is_none() {
                     let personas = dir.join("personas");
+                    if let Err(e) = seed_persona_pack_dir(app, &personas) {
+                        tracing::warn!(
+                            "persona pack seed failed: {e}; \
+                             pack dir will scan whatever already exists"
+                        );
+                    }
                     std::env::set_var("AETHER_PERSONAS_DIR", &personas);
                     tracing::info!("persona pack dir set to {}", personas.display());
                 }
@@ -228,6 +234,74 @@ fn build_app_state(app: &tauri::AppHandle) -> Result<AppState, Box<dyn std::erro
     wire_vision_registry(&state, None);
     wire_voice_registry(&state, None);
     Ok(state)
+}
+
+/// Seed the user-facing persona pack directory from Tauri-bundled
+/// resources on first launch.
+///
+/// The desktop installer ships flat-schema yaml packs at
+/// `resources/personas/*.yaml` (see `tauri.conf.json` `bundle.resources`
+/// and `scripts/persona_generator/generate_flat_packs.py`). Without
+/// this seeding step the user's `<app_data>/personas/` dir is empty
+/// at first launch and the persona-pack loader falls through to the
+/// 3 hard-coded built-ins, which means the wizard renders only one
+/// pickable cast member (aurora). Seeding promotes the bundled cast
+/// to live catalog entries the moment the shell boots.
+///
+/// **Idempotent.** Files that already exist in the destination are
+/// not overwritten — power users who hand-edit a pack keep their
+/// edits across launches. Only the first-launch (empty dir) case
+/// fully populates the cast. A new file added in a future release
+/// will land on every user's machine because the per-file copy
+/// check is "destination missing", not "directory missing".
+///
+/// Failures are non-fatal: the caller logs and continues with
+/// whatever YAMLs the user already has on disk.
+#[cfg(feature = "sqlite-backend")]
+fn seed_persona_pack_dir(
+    app: &tauri::AppHandle,
+    dest: &std::path::Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let resource_dir = app
+        .path()
+        .resolve("resources/personas", tauri::path::BaseDirectory::Resource)?;
+    if !resource_dir.is_dir() {
+        // Bundled resources weren't packaged (e.g. dev runs without
+        // `tauri build`, or a custom build that strips resources).
+        // Treat as a no-op rather than an error — the loader still
+        // works against whatever is on disk.
+        tracing::info!(
+            "no bundled persona resources at {}; skipping seed",
+            resource_dir.display()
+        );
+        return Ok(());
+    }
+    std::fs::create_dir_all(dest)?;
+    let mut copied = 0u32;
+    let mut skipped = 0u32;
+    for entry in std::fs::read_dir(&resource_dir)? {
+        let entry = entry?;
+        let src = entry.path();
+        let ext = src.extension().and_then(|e| e.to_str()).unwrap_or("");
+        if !matches!(ext, "yaml" | "yml") {
+            continue;
+        }
+        let Some(file_name) = src.file_name() else {
+            continue;
+        };
+        let target = dest.join(file_name);
+        if target.exists() {
+            skipped += 1;
+            continue;
+        }
+        std::fs::copy(&src, &target)?;
+        copied += 1;
+    }
+    tracing::info!(
+        "persona pack seed: copied {copied} new file(s), skipped {skipped} existing in {}",
+        dest.display()
+    );
+    Ok(())
 }
 
 /// Build the vision provider registry — register every provider whose
@@ -454,6 +528,67 @@ async fn run_retention_sweep_loop(app: tauri::AppHandle) {
             Ok(0) => tracing::trace!("retention sweep (tick): no evictions"),
             Ok(n) => tracing::info!("retention sweep (tick): evicted {n} row(s)"),
             Err(e) => tracing::warn!("retention sweep (tick) failed: {e}"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod bundled_persona_pack_tests {
+    //! Contract tests for the bundled flat-schema persona packs.
+    //!
+    //! `scripts/persona_generator/generate_flat_packs.py` emits one
+    //! v0-compatible YAML per cast member into
+    //! `resources/personas/`. These files are bundled by the desktop
+    //! installer (see `tauri.conf.json` `bundle.resources`) and
+    //! seeded into the user's `<app_data>/personas/` on first boot
+    //! by `seed_persona_pack_dir`. If the schemas drift apart these
+    //! tests fail at `cargo test` time rather than at user boot
+    //! time.
+
+    use std::path::PathBuf;
+
+    fn bundled_resource_dir() -> PathBuf {
+        // Tests run with cwd = `apps/desktop/src-tauri/`. The bundled
+        // resources live one level up under `resources/personas/`.
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/personas")
+    }
+
+    #[test]
+    fn every_bundled_persona_pack_loads_via_l6_loader() {
+        let dir = bundled_resource_dir();
+        assert!(
+            dir.is_dir(),
+            "bundled persona resource dir missing at {} — \
+             did `generate_flat_packs.py` get committed?",
+            dir.display()
+        );
+        let profiles = aether_l6_persona::load_pack_dir(&dir).unwrap_or_else(|e| {
+            panic!(
+                "bundled persona pack failed to load through l6 pack_loader: {e}; \
+                 schemas have drifted between generator and loader"
+            )
+        });
+        assert!(
+            profiles.len() >= 8,
+            "expected >=8 bundled persona packs (the v0 cast minus aurora collision), \
+             got {} in {}",
+            profiles.len(),
+            dir.display()
+        );
+    }
+
+    #[test]
+    fn bundled_persona_ids_are_unique_and_non_empty() {
+        let dir = bundled_resource_dir();
+        let profiles = aether_l6_persona::load_pack_dir(&dir).expect("load_pack_dir");
+        let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for p in &profiles {
+            assert!(!p.persona_id.0.trim().is_empty(), "empty persona_id");
+            assert!(
+                seen.insert(p.persona_id.0.clone()),
+                "duplicate persona_id {:?} in bundled packs",
+                p.persona_id.0
+            );
         }
     }
 }
