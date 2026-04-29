@@ -2,30 +2,45 @@ schema_version: 1
 
 creator: "Don Havery"
 created: "2026-04-17"
-last_updated: "2026-04-17"
+last_updated: "2026-04-28"
 
 # Provenance for every shipped asset. Every row must carry a source +
 # license the audit tool can verify. See PERSONA-SCHEMA.md §4 and §8.
 assets:
   portrait:
     source: "ai_generated"
-    generator: "OpenAI gpt-image-1.5 (via scripts/persona_generator/generate_portrait.py)"
+    generator: "fal.ai fal-ai/flux-pro/v1.1-ultra (Don picked candidate 03 of 4 on 2026-04-28)"
+    seed: 1181057909
+    post_processing: "center-square crop of 2752x1536 raw output to 1536x1536, Lanczos resize to 1024x1024 PNG via PIL"
     prompt: >-
-      Warm-supportive persona portrait — woman early 30s, warm hazel-brown
-      eyes, wavy shoulder-length auburn hair, cream knit sweater, soft
-      golden-hour window light from the left, neutral warm-beige background.
-      Photorealistic 85mm editorial headshot, 1024x1024 square.
+      Photorealistic candid portrait of a woman in her early 30s,
+      shoulder-length wavy honey-auburn hair tucked behind one ear,
+      green-hazel eyes, light freckles, easy mid-laugh smile, wearing
+      an oversized oatmeal cardigan over a thin t-shirt. Warm cafe
+      window light, blurred wood and brass background. Natural skin
+      texture with visible pores, no makeup, slim athletic frame, a
+      single thin gold chain. Shot on 85mm at f/1.8. Looks like a
+      friend across the table, not a model. Avoid: glamour pose,
+      plastic skin, perfect symmetry, anime, AI-girl tropes.
     license: "custom_aether"
+    prior_versions:
+      - date: "2026-04-17"
+        archived_at: "avatar/_archived_2026-04-17/portrait.png"
+        generator: "OpenAI gpt-image-1.5 (via scripts/persona_generator/generate_portrait.py)"
 
   state_images:
-    source: "ai_generated"
-    generator: "OpenAI gpt-image-1.5 (via scripts/persona_generator/generate_states.py)"
-    prompt: >-
-      Four expression variants (idle / listening / thinking / speaking) of
-      the Aurora base portrait, each generated with a per-state expression
-      modifier layered on the shared base description. See
-      avatar/README.md for the exact prompt per file.
+    source: "STALE — pending regeneration"
+    note: >-
+      The 4 state images (idle / listening / thinking / speaking) were
+      archived to avatar/_archived_2026-04-17/states/ when the
+      portrait was replaced on 2026-04-28. They no longer match the
+      current portrait and need a face-consistent regeneration pass
+      (PuLID or FLUX redux). See avatar/states/STALE_AFTER_PORTRAIT_REGEN.md.
     license: "custom_aether"
+    prior_versions:
+      - date: "2026-04-17"
+        archived_at: "avatar/_archived_2026-04-17/states/"
+        generator: "OpenAI gpt-image-1.5 (via scripts/persona_generator/generate_states.py)"
 
   voice_reference:
     source: "royalty_free"
