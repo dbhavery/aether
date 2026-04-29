@@ -1,0 +1,63 @@
+schema_version: 1
+
+creator: "Don Havery (cast expansion authorized 2026-04-28)"
+created: "2026-04-28"
+last_updated: "2026-04-28"
+
+# Provenance for every shipped asset. See PERSONA-SCHEMA.md §4 and §8.
+assets:
+  anchor:
+    source: "PENDING — anchor-set generation queued"
+    note: >-
+      Anchor + portrait + profile_left + profile_right not yet generated.
+      Prompt briefs ready at avatar/README.md. Gated on Don's eyeball-check
+      of Aurora's anchor set (face-consistency lock-before-scale rule).
+      Plan: 4 fal.ai fal-ai/flux-pro/v1.1-ultra calls, ~$0.20.
+    license: "custom_aether"
+
+  portrait:
+    source: "PENDING — see anchor entry above"
+    license: "custom_aether"
+
+  profile_left:
+    source: "PENDING — see anchor entry above"
+    license: "custom_aether"
+
+  profile_right:
+    source: "PENDING — see anchor entry above"
+    license: "custom_aether"
+
+  state_images:
+    source: "DEFERRED — to be rendered runtime, not pre-generated"
+    note: >-
+      Expression states are rendered runtime from anchor.png + visemes
+      via the Phase 4b lipsync pipeline. Pre-generated stills abandoned
+      per the 2026-04-28 anchor-schema redesign.
+    license: "custom_aether"
+
+  voice_reference:
+    source: "PENDING — voice generation queued"
+    note: >-
+      Voice WAVs not yet generated. Candidate voices to test (see
+      HANDOFF_2026-04-28_NIGHT_RENAME_PERSONAS_V9.md Priority 3):
+      OpenAI gpt-4o-mini-tts 'echo' or 'verse' steered for warm,
+      direct, grounded male voice — friend who has done his own
+      work and won't let you avoid yours, names what's underneath
+      without flinching. 3 candidates → Don picks.
+      Plan: 2 OpenAI gpt-4o-mini-tts calls per accepted candidate
+      (reference 20s + sample 4s), ~$0.10.
+    license: "custom_aether"
+
+  voice_sample:
+    source: "PENDING — see voice_reference entry above"
+    license: "custom_aether"
+
+notes: |
+  Tomás is the ninth persona in the cast (SUPPORTIVE × CHALLENGING
+  quadrant); see file:///C:/Users/dbhav/Projects/aether/personas/CHARACTERS.md
+  for the full roster plan and design rationale.
+
+  All shippable assets (anchor set + voice pack) are pending generation.
+  Once generated, voice/voice.yaml + voice/SOURCE.md will follow the
+  Sara/James template, and this metadata.yaml will graduate from PENDING
+  to ai_generated entries with full provenance.
