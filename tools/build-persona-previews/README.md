@@ -8,7 +8,7 @@ commits to downloading a full pack.
 
 ## Output
 
-Default output dir: `apps/desktop/src-tauri/resources/personas/previews/`.
+Default output dir: `apps/desktop/public/personas-previews/`.
 For each persona:
 
 ```

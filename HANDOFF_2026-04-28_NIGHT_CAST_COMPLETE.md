@@ -130,7 +130,7 @@ but no flag pre-emptively.
   — release-build artifact. Derives bundled Tier-1 preview bundle
   (256² webp + 3 s opus + minimal yaml) from each persona's full
   pack. Output is committed under
-  `apps/desktop/src-tauri/resources/personas/previews/`.
+  `apps/desktop/public/personas-previews/`.
 
 ---
 
@@ -219,7 +219,7 @@ build-persona-pack output is on-disk-correct but unreleasable.
 
 Once L6 install/switch trait methods exist (Priority 3), the
 `apps/desktop/src/` wizard can wire to the bundled previews at
-`apps/desktop/src-tauri/resources/personas/previews/` and trigger
+`apps/desktop/public/personas-previews/` and trigger
 downloads. UX flow is captured in PERSONA_DELIVERY.md §7.
 
 This is desktop-app work, not coordinator-gated.
@@ -252,7 +252,7 @@ These join the list from prior handoffs:
   consumer).
 
 - **Bundled previews are committed under
-  apps/desktop/src-tauri/resources/personas/previews/.** Re-derive
+  apps/desktop/public/personas-previews/.** Re-derive
   by re-running build-persona-previews if a persona's portrait,
   sample, or persona.yaml metadata fields change.
 
@@ -290,7 +290,7 @@ authority.
 - 5 × `personas/<id>/voice/{reference.wav, sample.wav, voice.yaml, SOURCE.md}`
 - 8 × `personas/<id>/avatar/{anchor,portrait,profile_left,profile_right}.png`
 - 8 × `personas/<id>/avatar/anchor_set_raw_2026-04-28/*.jpg`
-- 9 × `apps/desktop/src-tauri/resources/personas/previews/<id>/{preview.webp, preview_voice.opus, preview.yaml}`
+- 9 × `apps/desktop/public/personas-previews/<id>/{preview.webp, preview_voice.opus, preview.yaml}`
 
 ### Modified files
 - 9 × `personas/<id>/metadata.yaml` (graduated PENDING → ai_generated)

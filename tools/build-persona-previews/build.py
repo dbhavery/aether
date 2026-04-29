@@ -37,7 +37,7 @@ from PIL import Image  # type: ignore[import-not-found]
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_OUT = (
-    _REPO_ROOT / "apps" / "desktop" / "src-tauri" / "resources" / "personas" / "previews"
+    _REPO_ROOT / "apps" / "desktop" / "public" / "personas-previews"
 )
 
 # Tier-1 budget per persona (target, not enforced — log if exceeded).
@@ -227,8 +227,32 @@ def main() -> None:
             print(f"[{pid}] FAILED: {exc}", file=sys.stderr)
             failures.append(pid)
 
+    # Emit an index.json so the frontend can fetch a single file
+    # instead of N separate preview.yaml files. Sorted slug order
+    # for deterministic builds.
+    import json
+
+    index_entries: list[dict] = []
+    for pid in sorted(set(targets) - set(failures)):
+        persona_yaml = _REPO_ROOT / "personas" / pid / "persona.yaml"
+        index_entries.append({
+            "slug": pid,
+            "display_name": _read_field(persona_yaml, "display_name"),
+            "tagline": _read_field(persona_yaml, "tagline"),
+            "archetype": _read_archetype(persona_yaml),
+            "preview_webp": f"{pid}/preview.webp",
+            "preview_voice_opus": f"{pid}/preview_voice.opus",
+        })
+    index_path = args.out / "index.json"
+    index_path.write_text(
+        json.dumps({"schema_version": 1, "personas": index_entries},
+                   indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    print(f"\nWrote {index_path} ({len(index_entries)} entries)")
+
     print(
-        f"\nBuilt {len(targets) - len(failures)}/{len(targets)} preview "
+        f"Built {len(targets) - len(failures)}/{len(targets)} preview "
         f"bundles. Grand total bundled bytes: {grand_total} "
         f"({grand_total / 1024 / 1024:.2f} MB)."
     )

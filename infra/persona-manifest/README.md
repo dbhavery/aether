@@ -107,7 +107,7 @@ https://…/persona-manifest.json                     [live]
 
 In parallel, `tools/build-persona-previews/` writes the bundled
 Tier-1 previews under
-`apps/desktop/src-tauri/resources/personas/previews/`, which the
+`apps/desktop/public/personas-previews/`, which the
 installer build step picks up automatically.
 
 ## Why infra/ and not tools/
