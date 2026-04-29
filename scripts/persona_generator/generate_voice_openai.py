@@ -206,6 +206,53 @@ PERSONA_VOICE_PICKS: list[VoicePick] = [
 ]
 
 
+_REFERENCE_SECONDS = 20.0
+_SAMPLE_SECONDS = 4.0
+_TARGET_RATE = 24000
+
+
+def _fetch_and_repair(
+    client: OpenAI,
+    pick: VoicePick,
+    text: str,
+    target_seconds: float,
+    out_path: Path,
+) -> None:
+    """Fetch a TTS WAV, repair OpenAI's malformed header, trim/pad to
+    exact target duration, write 24 kHz mono 16-bit PCM.
+
+    OpenAI's gpt-4o-mini-tts returns a WAV whose data-chunk size field
+    is set to INT32_MAX (a streaming sentinel), which trips strict WAV
+    readers. Round-trip through soundfile to rewrite a clean header,
+    then enforce the exact duration so reference.wav is always 20.0 s
+    and sample.wav is always 4.0 s. Matches the Sara/James/Marcus
+    convention captured in their metadata.yaml provenance entries."""
+    import io
+
+    import numpy as np
+    import soundfile as sf
+
+    resp = client.audio.speech.create(
+        model="gpt-4o-mini-tts",
+        voice=pick.voice,
+        input=text,
+        instructions=pick.steering,
+        response_format="wav",
+    )
+    data, sr = sf.read(io.BytesIO(resp.read()), dtype="int16")
+    if sr != _TARGET_RATE:
+        raise RuntimeError(
+            f"unexpected sample rate {sr}; expected {_TARGET_RATE}"
+        )
+    target_frames = int(target_seconds * _TARGET_RATE)
+    if len(data) > target_frames:
+        data = data[:target_frames]
+    elif len(data) < target_frames:
+        pad = np.zeros(target_frames - len(data), dtype=np.int16)
+        data = np.concatenate([data, pad])
+    sf.write(out_path, data, _TARGET_RATE, subtype="PCM_16")
+
+
 def generate_one(client: OpenAI, pick: VoicePick) -> None:
     voice_dir = _REPO_ROOT / "personas" / pick.persona_id / "voice"
     voice_dir.mkdir(parents=True, exist_ok=True)
@@ -214,26 +261,12 @@ def generate_one(client: OpenAI, pick: VoicePick) -> None:
     sample_path = voice_dir / "sample.wav"
 
     print(f"[{pick.persona_id}] generating reference.wav (voice={pick.voice}) …")
-    ref_resp = client.audio.speech.create(
-        model="gpt-4o-mini-tts",
-        voice=pick.voice,
-        input=pick.reference_text,
-        instructions=pick.steering,
-        response_format="wav",
-    )
-    reference_path.write_bytes(ref_resp.read())
-    print(f"[{pick.persona_id}] wrote {reference_path} ({reference_path.stat().st_size} bytes)")
+    _fetch_and_repair(client, pick, pick.reference_text, _REFERENCE_SECONDS, reference_path)
+    print(f"[{pick.persona_id}] wrote {reference_path} ({reference_path.stat().st_size} bytes, {_REFERENCE_SECONDS:.1f}s)")
 
     print(f"[{pick.persona_id}] generating sample.wav …")
-    samp_resp = client.audio.speech.create(
-        model="gpt-4o-mini-tts",
-        voice=pick.voice,
-        input=pick.sample_text,
-        instructions=pick.steering,
-        response_format="wav",
-    )
-    sample_path.write_bytes(samp_resp.read())
-    print(f"[{pick.persona_id}] wrote {sample_path} ({sample_path.stat().st_size} bytes)")
+    _fetch_and_repair(client, pick, pick.sample_text, _SAMPLE_SECONDS, sample_path)
+    print(f"[{pick.persona_id}] wrote {sample_path} ({sample_path.stat().st_size} bytes, {_SAMPLE_SECONDS:.1f}s)")
 
     _write_voice_yaml(voice_dir, pick)
     _write_source_md(voice_dir, pick)
