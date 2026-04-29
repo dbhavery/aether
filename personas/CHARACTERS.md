@@ -159,19 +159,33 @@ needs to reproduce the face). Both are referenced from `metadata.yaml`.
 
 ## Trajectory — what gets generated when
 
-### Now (current session + immediate next sessions)
+### Status — Phase 4 asset schema COMPLETE 2026-04-28 night
 
-For each of the 9 personas, generate the Phase 4 asset schema:
-1. anchor.png (canonical face reference)
-2. portrait.png (personality picker shot)
-3. profile_left.png + profile_right.png (3/4 angles for lipsync support)
-4. voice/reference.wav + voice/sample.wav (TTS-cloning reference)
-5. persona.yaml (hand-authored system prompt)
-6. metadata.yaml + voice.yaml + voice/SOURCE.md + avatar/README.md
+All 9 personas now ship the full Phase 4 asset pack. Cast is closed
+on the v0 release; further iteration goes through regen-not-replace.
 
-That's 4 stills + 2 audio clips + ~5 docs per persona × 9 personas.
-The bottleneck is the hand-authored system prompts (each is a
-character bible and deserves real thought, not LLM generation).
+| # | slug | anchor + 3 stills | voice ref + sample | persona.yaml | metadata.yaml ai_generated |
+|---|---|---|---|---|---|
+| 1 | aurora           | ✓ | ✓ | ✓ | ✓ |
+| 2 | marcus_chen      | ✓ | ✓ | ✓ | ✓ |
+| 3 | sara_reyes       | ✓ (anchor regen for single-subject fix) | ✓ | ✓ | ✓ |
+| 4 | james_whitfield  | ✓ | ✓ | ✓ | ✓ |
+| 5 | nadia_volkov     | ✓ | ✓ | ✓ | ✓ |
+| 6 | priya_iyer       | ✓ | ✓ | ✓ | ✓ |
+| 7 | ray_castellano   | ✓ | ✓ | ✓ | ✓ |
+| 8 | hannah_park      | ✓ (anchor regen for single-subject fix) | ✓ | ✓ | ✓ |
+| 9 | tomas_andrade    | ✓ | ✓ | ✓ | ✓ |
+
+Generation tooling shipped this session:
+- file:///C:/Users/dbhav/Projects/aether/scripts/persona_generator/generate_voice_openai.py
+- file:///C:/Users/dbhav/Projects/aether/scripts/persona_generator/generate_anchor_set.py
+
+Both are idempotent (skip-if-exists, --force to regen). Re-run
+either to add a 10th persona or replace one.
+
+Voice picks were locked unilaterally by the cast creator (not Don)
+under the 2026-04-28 night directive. See each persona's
+`voice/SOURCE.md` for the steering text + reference text per pick.
 
 ### Phase 4 lipsync pipeline (after all 9 personas have anchor sets)
 
@@ -208,10 +222,20 @@ Reasoning preserved in archive notes per persona.
 
 - Persona-specific SFT fine-tunes vs shared base + system-prompt
   steering? (Default: shared base + system prompt; persona-specific
-  tune only if behavioral consistency falls short of bar after V9.)
+  tune only if behavioral consistency falls short of bar after V9.
+  ADR-0012 explicitly defers per-persona LoRAs.)
 - Inherit Aurora's V*-arc weights or start fresh per persona?
   (Default: inherit. Aurora's training is "natural conversational
   human"; that generalizes across archetypes.)
 - Personal "Don persona" for journal/scratchpad use? (Privacy
   lockdown applies — Don's likeness is private-only per locked
   feedback rule. Could exist for internal use, never public.)
+
+## Related architecture decisions
+
+- ADR-0012 — persona delivery (bundled previews + download-on-demand
+  full packs + atomic uninstall-then-install on switch). The cast
+  shipped here becomes the canonical source for v0 persona packs.
+  See file:///C:/Users/dbhav/Projects/aether/docs/adr/ADR-0012-persona-delivery-download-on-demand.md
+- PERSONA_DELIVERY.md — full design doc the ADR points back to for
+  rationale. See file:///C:/Users/dbhav/Projects/aether/PERSONA_DELIVERY.md

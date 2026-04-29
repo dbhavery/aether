@@ -1,8 +1,14 @@
-# Persona Delivery Model — Design Doc (DRAFT)
+# Persona Delivery Model — Design Doc
 
-> **Status:** Draft. Captures Don's directive 2026-04-28 night about persona
-> packaging and delivery. Subject to review before becoming load-bearing.
-> Once Don accepts, this should graduate to an ADR.
+> **Status:** GRADUATED to ADR-0012 on 2026-04-28 night. The decision is
+> Accepted; this doc remains as the rationale-rich source-of-truth that
+> the ADR points back to. Updates to the *decision* go through a new
+> ADR; updates to the *rationale documentation* update this file.
+>
+> **ADR:** file:///C:/Users/dbhav/Projects/aether/docs/adr/ADR-0012-persona-delivery-download-on-demand.md
+>
+> Originally captured Don's directive 2026-04-28 night about persona
+> packaging and delivery.
 >
 > **Scope:** How personas reach the user's machine, what's bundled in the
 > desktop app, what's downloaded later, how character switching works,
@@ -338,4 +344,4 @@ as: download-and-verify-then-swap, never delete-then-download.
 | When | What | Why |
 |---|---|---|
 | 2026-04-28 night | Doc written | Don directive: persona is download-on-demand, only one active at a time, switching is uninstall+install. Captured before architecture drift sets in. |
-| TBD | Don review + approval | Graduate to ADR, then implement |
+| 2026-04-28 night | Graduated to ADR-0012 (Accepted) | Cast creator authority under Don's "you choose" directive. ADR is the load-bearing decision; this doc remains as rationale source. Don retains override via new ADR or DECISION_LOCK_PASS. |
