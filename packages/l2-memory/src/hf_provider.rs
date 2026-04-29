@@ -197,12 +197,14 @@ impl HfEmbeddingProvider {
                 ))
             })?;
 
-        let stdin = child.stdin.take().ok_or_else(|| {
-            L2Error::Embedding("hf helper child stdin not captured".to_string())
-        })?;
-        let stdout = child.stdout.take().ok_or_else(|| {
-            L2Error::Embedding("hf helper child stdout not captured".to_string())
-        })?;
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| L2Error::Embedding("hf helper child stdin not captured".to_string()))?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| L2Error::Embedding("hf helper child stdout not captured".to_string()))?;
 
         Ok(HelperProcess {
             child,
@@ -270,7 +272,9 @@ impl EmbeddingProvider for HfEmbeddingProvider {
 
         if !response.ok {
             let kind = response.kind.as_deref().unwrap_or("unknown");
-            let error = response.error.unwrap_or_else(|| "(no error message)".into());
+            let error = response
+                .error
+                .unwrap_or_else(|| "(no error message)".into());
             return Err(L2Error::Embedding(format!(
                 "hf helper error ({kind}): {error}"
             )));

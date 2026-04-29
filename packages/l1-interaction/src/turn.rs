@@ -247,9 +247,9 @@ impl TurnEngine {
             Decision::Allow { .. } => {
                 trace.push(TurnState::RouterDispatched);
                 let started = Instant::now();
-                let mut outcome = self
-                    .router
-                    .dispatch(&turn_id, &request.model_input_utterance, &decision)?;
+                let mut outcome =
+                    self.router
+                        .dispatch(&turn_id, &request.model_input_utterance, &decision)?;
                 // Always stamp the engine-measured latency. If a router
                 // populated its own value we deliberately overwrite so the
                 // number is consistently "handle_turn round-trip" across

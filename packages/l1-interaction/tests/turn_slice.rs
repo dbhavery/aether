@@ -164,7 +164,12 @@ fn allow_path_forwards_model_input_utterance_not_original() {
     let result = engine.handle_turn(req).expect("allow path");
     assert_eq!(result.final_state, TurnState::Completed);
 
-    let prompt_seen = captured.0.lock().unwrap().clone().expect("router was called");
+    let prompt_seen = captured
+        .0
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("router was called");
     assert!(
         prompt_seen.starts_with("Relevant context (retrieval):"),
         "router must receive the augmented model_input, got: {prompt_seen:?}",

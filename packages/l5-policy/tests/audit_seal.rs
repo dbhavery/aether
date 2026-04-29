@@ -222,7 +222,10 @@ fn v2_row_with_provenance_round_trips_through_serde() {
 
     let bytes = serde_json::to_vec(&row).unwrap();
     let back: AuditRecordEvent = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(back.schema_version, aether_l5_policy::AUDIT_SCHEMA_VERSION_V2);
+    assert_eq!(
+        back.schema_version,
+        aether_l5_policy::AUDIT_SCHEMA_VERSION_V2
+    );
     assert_eq!(
         back.original_utterance.as_deref(),
         Some("what about sourdough?")
@@ -242,7 +245,10 @@ fn v2_row_without_provenance_round_trips_through_serde() {
     let row = make_row("v2-empty", 9);
     let bytes = serde_json::to_vec(&row).unwrap();
     let back: AuditRecordEvent = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(back.schema_version, aether_l5_policy::AUDIT_SCHEMA_VERSION_V2);
+    assert_eq!(
+        back.schema_version,
+        aether_l5_policy::AUDIT_SCHEMA_VERSION_V2
+    );
     assert!(back.original_utterance.is_none());
     assert!(back.retrieval_provenance.is_none());
 }
@@ -365,9 +371,7 @@ fn canonical_bytes_for_future_versions_uses_v2_shape() {
 /// `query` with per-row schema awareness preserved.
 #[test]
 fn mixed_v1_v2_rows_query_back_with_correct_schema_versions() {
-    use aether_l5_policy::{
-        AuditFilter, RetrievalProvenance, RetrievedMemoryRef,
-    };
+    use aether_l5_policy::{AuditFilter, RetrievalProvenance, RetrievedMemoryRef};
 
     let (_tmp, path) = temp("mixed_v1_v2_query.db");
 
