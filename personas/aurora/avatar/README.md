@@ -1,55 +1,92 @@
-# Avatar assets for persona 'aurora'
+# Avatar assets for persona 'aurora' (display_name: Aurora Nash)
 
 Each section below records exactly how one asset was generated.
 Add a new section any time an asset is regenerated — do not
-overwrite history. Schema: `docs/PERSONA-SCHEMA.md`.
+overwrite history.
 
-## `portrait.png` — current (2026-04-28)
+This is the **second-pass anchor-schema** avatar pack (2026-04-28
+night). The first-pass single-portrait pack is preserved at
+`../_archived_2026-04-28_first_pass/`.
+
+## Asset schema (Phase 4 — headshot + lipsync)
+
+- `anchor.png` — canonical face-consistency reference. Even diffuse
+  light, neutral relaxed expression, mouth softly closed, looking
+  forward, simple background. **This is the asset all downstream
+  face-consistent generation locks to** (PuLID, FLUX redux,
+  IP-Adapter, custom likeness LoRA).
+- `portrait.png` — personality picker shot. Cafe-candid, mid-laugh,
+  warm setting. Used in the persona-picker UI where personality
+  matters more than face geometry.
+- `profile_left.png` — 3/4 left angle, anchor-style lighting.
+  Supports lipsync animation by giving the consistency pipeline a
+  side view of the same face.
+- `profile_right.png` — 3/4 right angle, anchor-style lighting.
+
+All four are 2752×1536 raw FLUX output (the model ignores requested
+sizes and returns 16:9 landscape regardless). Sizing/cropping is
+deferred per Don's directive 2026-04-28: "we can deal with sizing
+later."
+
+Raw JPGs preserved at `anchor_set_raw_2026-04-28/` for re-cropping
+without quality loss.
+
+---
+
+## `anchor.png` — canonical face reference
 
 - backend: `fal.ai`
 - model: `fal-ai/flux-pro/v1.1-ultra`
 - generation date: `2026-04-28`
-- seed: `1181057909`
-- source URL: `https://v3b.fal.media/files/b/0a982359/4uk-BxXBCdnKiyowD1fqJ_72db72e5f8184e5188781c779817f062.jpg`
-- raw output: 2752 × 1536 (16:9 — model ignored requested portrait_4_3 size)
-- post-processing: center-square crop to 1536 × 1536, then Lanczos resize to 1024 × 1024 PNG via PIL
-- pre-crop file: `../candidates_2026-04-28/aurora_03_honey_auburn_cafe.jpg`
-- 1024-square file: `../candidates_2026-04-28/aurora_03_square_1024.png`
-- selection: Don picked candidate 03 of 4 generated under the "good-looking warm friend" brief on 2026-04-28
+- request_id: `019dd6f3...` (see logs)
+- source URL: `https://v3b.fal.media/files/b/0a982484/Ijui4cvhYR2Y9VvxNu5sT_47f1d510630f4393b4eb0bc98686dd28.jpg`
+- raw output: 2752 × 1536 (kept as-is, not cropped)
 - prompt:
 
 ```text
-Photorealistic candid portrait of a woman in her early 30s, shoulder-length wavy honey-auburn hair tucked behind one ear, green-hazel eyes, light freckles, easy mid-laugh smile, wearing an oversized oatmeal cardigan over a thin t-shirt. Warm cafe window light, blurred wood and brass background. Natural skin texture with visible pores, no makeup, slim athletic frame, a single thin gold chain. Shot on 85mm at f/1.8. Looks like a friend across the table, not a model. Avoid: glamour pose, plastic skin, perfect symmetry, anime, AI-girl tropes.
+Photorealistic neutral reference portrait of a woman in her early 30s with shoulder length wavy honey auburn hair tucked simply behind both ears, hazel green eyes, light freckles across the bridge of her nose, neutral relaxed expression, mouth softly closed with the very faintest hint of a smile, looking directly at the camera. Even diffuse soft light with no harsh shadows, very subtle warm undertone. Plain neutral pale beige background, no objects in frame, simple wardrobe of a thin neutral cream knit top with a high collar. Real skin texture with visible pores, no makeup, slim athletic build. Shot on 85mm at f/4 for clean focus across the face, sharp on the eyes. Square head and upper shoulders composition, anchor reference photo style: calm, present, not styled. Avoid plastic skin, perfect symmetry, glamour pose, anime, gradient backgrounds, side rim lighting, motion blur.
 ```
 
-## `states/*.png` — STALE (regeneration pending)
+## `portrait.png` — personality picker shot
 
-The 4 expression state images (idle / listening / thinking / speaking)
-were archived to `_archived_2026-04-17/states/` when the canonical
-portrait was replaced on 2026-04-28.
+- backend: `fal.ai`
+- model: `fal-ai/flux-pro/v1.1-ultra`
+- generation date: `2026-04-28`
+- source URL: `https://v3b.fal.media/files/b/0a982478/vdYJZCtKywYoZoowDNMml_431843d4228644f39874045d006a41e0.jpg`
+- raw output: 2752 × 1536
+- prompt: same brief as the archived first-pass candidate 03 (cafe candid mid-laugh) — re-rolled with a fresh seed under the same description so the personality shot stays a personality shot.
 
-See `states/STALE_AFTER_PORTRAIT_REGEN.md` for the regeneration plan
-(face-consistent pipeline via PuLID or FLUX redux + reference image).
+## `profile_left.png` — 3/4 left angle
 
-## `_archived_2026-04-17/` — prior portrait + states
+- source URL: `https://v3b.fal.media/files/b/0a982479/FLMG_JdVvAjB4NN4-40p7_0ff595c8fb4f4014a1f6e88695d31763.jpg`
+- prompt: anchor brief with head turned 30 degrees right (showing left 3/4 from camera).
 
-The original Aurora avatar pack from 2026-04-17 is preserved here
-for provenance. **Do not delete.** Schema audit tools may need to
-verify the lineage of any inference that depended on those assets.
+## `profile_right.png` — 3/4 right angle
 
-### Original `portrait.png` (archived)
+- source URL: `https://v3b.fal.media/files/b/0a982479/PGxnU-S6_oUkm1WesGnwV_386b6b9dd00641bcb4b79233973e4428.jpg`
+- prompt: anchor brief with head turned 30 degrees left (showing right 3/4 from camera).
 
-- backend: `openai`
-- model: `gpt-image-1.5`
-- prompt:
+## What's NOT in this pack yet
 
-```text
-Portrait of a woman in her early 30s with warm hazel-brown eyes, natural wavy shoulder-length auburn hair with subtle highlights, light natural makeup, gentle genuine smile suggesting warmth and calm intelligence. Wearing a soft cream-colored knit sweater with a wide neckline. Skin has natural warm undertones with light freckles across the bridge of the nose. Background: Out-of-focus neutral warm beige interior wall, hint of a soft terracotta-toned textured fabric in the blur. Lighting: Soft diffused golden-hour window light from the left at a 45-degree angle, producing gentle warm highlights on the cheekbone and a soft catchlight in the eyes. No harsh shadows. Photorealistic editorial portrait. Natural skin texture with visible pores and subtle skin variation — NOT airbrushed, NOT porcelain, NOT plastic. No magenta or purple rim light. No indigo gradient background. No cyberpunk neon. No text, no watermark, no logo, no jewelry with text. Realistic eye reflections, correct eye anatomy (no extra catchlights, no over-saturated iris). Centered composition, head and upper shoulders visible, relaxed natural expression, looking directly at camera. Shot on 85mm lens, f/2.0, shallow depth of field, sharp focus on the eyes. Square 1:1 framing, portrait-oriented subject centered in frame.
-```
+- **Expression states (idle/listening/thinking/speaking).** Will be
+  rendered runtime from anchor + visemes via the lipsync pipeline,
+  not pre-generated as static stills. The first-pass approach
+  (4 still PNGs) is being abandoned.
+- **Visemes** for lipsync. Will be generated by the Phase 4b lipsync
+  pipeline (PuLID-driven or LivePortrait) once that's built end-to-end.
+- **Body shot.** Phase 5+ (end-of-project) per Don's 2026-04-28 directive.
+- **Multi-pose / motion.** Phase 5+.
 
-### Original `states/{idle,listening,thinking,speaking}.png` (archived)
+See file:///C:/Users/dbhav/Projects/aether/personas/CHARACTERS.md
+for the full asset schema and trajectory.
 
-Same base prompt as the original portrait, with an additional
-"Expression for this frame:" sentence per state. Full prompts
-were captured in the prior version of this file in git history
-(commit before 2026-04-28 swap).
+---
+
+## Cross-pack QA (worth eyeballing before downstream pipelines lock to it)
+
+Open all four side-by-side in an image viewer. Same person? Same
+hair color, same freckle pattern, same eye color, same approximate
+face geometry across the 4 shots? If any one feels off-character,
+flag it for regeneration before downstream pipelines lock to it.
+The anchor specifically must read as the canonical Aurora — if it
+doesn't, every downstream generation will inherit the error.

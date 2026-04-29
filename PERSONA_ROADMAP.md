@@ -50,23 +50,72 @@ The seven-layer architecture, Memory V2, retrieval orchestrator, audit chain, pr
 
 ### Phase 4 — Persona avatar (still + lipsync animation)
 
-**Goal:** Aurora has a face. Photoreal still image. Lipsync from voice in real time. 30 fps target.
+**Goal (revised 2026-04-28):** Each of the 9 cast personas has a
+photoreal headshot rendering with realtime lipsync from voice.
+30 fps target. **Headshots only at this phase** — full-body avatars
+deferred to Phase 5+ (end of project).
 
-**Status:** Pieces exist in sibling projects.
-- FLUX.1-dev + RealVisXL Lightning generate photoreal stills (CIGE).
-- LivePortrait drives still photos from audio (Library / VAULT cinematic experiments).
-- `personas/*/avatar/` directories exist in Aether's persona schema with landmark caches.
-- Aurora's face has not been fixed yet — needs Don's call on what she looks like.
+**Sub-phases (added 2026-04-28 after asset-schema redesign):**
 
-**Remaining sessions:** 4-8 to integrate at acceptable quality. Bottleneck: Aurora's likeness lock-in (a creative call), not the tech.
+**4a — Anchor sets for the 9-persona cast (current).**
+Per persona, generate the Phase-4 asset schema:
+`anchor.png` (canonical face-consistency reference, even diffuse
+light, neutral relaxed expression, mouth closed, looking forward,
+simple background) + `portrait.png` (personality shot for picker UI)
++ `profile_left.png` + `profile_right.png` (3/4 angles for lipsync
+support) + voice reference clip + hand-authored system prompt. See
+file:///C:/Users/dbhav/Projects/aether/personas/CHARACTERS.md for
+the full roster and asset schema.
+**Sessions:** 2-4 (one session per 2-3 personas).
 
-### Phase 5 — Persona video real-time
+**4b — Lipsync pipeline verified end-to-end on one persona (Aurora).**
+Drive Aurora's anchor with Aurora's voice clone via PuLID + FLUX redux
+or LivePortrait. Audit qualitatively: face identity consistent across
+frames? Mouth shape matches phonemes? Latency target 30 fps?
+**Sessions:** 1-2.
 
-**Goal:** Aurora shows up as a real-time avatar that reacts during conversation. Eyes track, expressions modulate, mouth lipsyncs.
+**4c — Lipsync replicated for the other 8 personas.**
+Once 4b verifies, run the same pipeline for Marcus, Sara, James,
+Nadia, Priya, Ray, Hannah, Tomás. Mostly mechanical at this point.
+**Sessions:** 1-2.
 
-**Status:** Research-only. The current state of local real-time avatar video at indistinguishable quality is **not solved**. Closest open-source options (LivePortrait at 30 fps, MetaHuman if cloud, Synthesia-class only cloud) all have visible artifacts or require GPU budget Don's hardware can't sustain in real-time.
+**Status (2026-04-28):** First-pass headshots for Aurora (cafe-candid)
+and Marcus (study-glasses) shipped earlier today, archived after
+Don raised the face-consistency critique — single candid stills are
+suboptimal as anchors for downstream face-consistent generation.
+Second pass uses the proper anchor-set schema.
 
-**Remaining sessions:** 6-20+ over months, depending on a tech-frontier waiting game. May not be reachable at indistinguishable quality on local 3090 Ti hardware in 2026. Realistic to ship "good but visibly synthetic" avatar; "indistinguishable" probably waits.
+**Remaining sessions:** 4-8 total to ship lipsynced headshots for
+all 9 personas.
+
+### Phase 5 — Persona full body + motion video (end-of-project)
+
+**Goal (revised 2026-04-28):** Each persona has full-body rendering
+with motion. Walking, gesturing, full-figure presence in chat or
+ambient UI. **Pursued at end-of-project per Don's directive 2026-04-28:
+"shoot for headshots with lip-syncing now, then move towards full body
+and full movement video toward the end of the project."**
+
+**Sub-phases (planned, sequence approximate):**
+
+**5a — Body shots per persona** (`body.png`, ~9 stills, locks
+proportions/build/wardrobe).
+**5b — Multi-pose reference set** (`poses/{front,three_quarter_*,...}.png`,
+~3-5 stills per persona for animation rig).
+**5c — Full-body motion pipeline** built end-to-end on one persona
+(LivePortrait → AnimateDiff → custom rig, exact stack TBD).
+**5d — Motion replicated** for the other 8.
+
+**Status:** Deferred. Don directive 2026-04-28: "improve training
+before video." Phase 5 work begins only after Phases 2 (text training)
+and 4 (headshot lipsync) reach shippable quality.
+
+**Remaining sessions:** 8-20+ over the remaining project. The body +
+motion pipeline is genuinely harder than headshot lipsync; "real-time
+indistinguishable" full-body avatar at local 3090 Ti hardware in 2026
+is the hardest target on the trajectory and may not fully resolve.
+Realistic ship target: "good but visibly synthetic" full-body in the
+2027 horizon, maybe earlier if open-source tooling matures.
 
 ### Phase 6 — Aurora as a whole
 
@@ -286,5 +335,6 @@ Phase 6 Aurora-as-a-whole integration :  4 to 10 sessions    (1-3 weeks)
 |---|---|---|
 | 2026-04-28 | File created. Phase 2 cursor at V6. Phase 1 closed. | autonomous V*-arc agent |
 | 2026-04-28 (eve) | V7+V8 pipeline launched unattended (~5-6h wallclock). V7 = LoRA continuation from V6 with adamw_8bit. V8 = rank-96 LoRA from base (corrected from "rank 32 from base" — V6 is already rank 64; rank-96 fits VRAM after rank-128 OOM risk surfaced from V7 telemetry). Multi-turn discriminator descoped to next session. Cursor moves to V7/V8 once results land. See HANDOFF_2026-04-28_V7_V8_PIPELINE_LAUNCHED.md. | V7+V8 launch agent |
+| 2026-04-28 (night) | **Persona cast redesigned to 9 characters** + new asset schema. Don directive: "These will eventually be full human-like video avatars, with full bodies. Headshots with lip-syncing now, then full body and full movement video toward the end of the project." First-pass picks (Aurora cafe-candid, Marcus study-glasses) archived after face-consistency critique landed — single candid stills are suboptimal as anchors for downstream lipsync. Second-pass schema = anchor.png (canonical neutral reference, even diffuse light) + portrait.png (personality picker shot) + profile_left/right.png (3/4 angles). Phase 4 split into 4a (anchor sets, current) / 4b (lipsync verified on Aurora) / 4c (lipsync replicated for 8 others). Phase 5 split into 5a (body shots) / 5b (multi-pose) / 5c (motion pipeline) / 5d (motion replicated) — deferred to end-of-project. Roster: Aurora Nash, Marcus Chen, Sara Reyes, James Whitfield, Nadia Volkov, Priya Iyer, Ray Castellano, Hannah Park, Tomás Andrade. See file:///C:/Users/dbhav/Projects/aether/personas/CHARACTERS.md. | persona-cast redesign agent |
 
 (Future agents append here.)
