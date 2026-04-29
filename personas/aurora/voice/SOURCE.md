@@ -33,7 +33,7 @@
 OpenAI TTS API output is owned by the API user under OpenAI's standard
 terms; voices `nova`, `alloy`, `echo`, etc. are synthetic, not based
 on a specific real person's voice. Suitable for commercial use under
-the Aether persona pack's `custom_aether` license (bundled under the
+the Companion persona pack's `custom_aether` license (bundled under the
 repo's MIT umbrella).
 
 ## Selection rationale

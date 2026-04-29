@@ -135,7 +135,7 @@ notes: |
   likeness reference. Voice reference + sample as of 2026-04-28 are
   AI-generated via OpenAI gpt-4o-mini-tts with voice 'nova' (synthetic,
   not modeled on a specific real person). Derived cloned output from
-  Chatterbox / Zonos based on this reference is owned by Aether under
+  Chatterbox / Zonos based on this reference is owned by Companion under
   the persona pack's custom_aether license (bundled under the repo's
   MIT umbrella). Prior 2026-04-17 LibriVox CC0 recital is archived for
   provenance under voice/_archived_2026-04-17/.

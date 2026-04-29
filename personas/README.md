@@ -1,6 +1,6 @@
 # Persona Packs
 
-This directory holds the bundled persona packs that ship with Aether v1.0. Each persona is a self-contained folder defining one character's look, voice, and personality.
+This directory holds the bundled persona packs that ship with Companion v1.0. Each persona is a self-contained folder defining one character's look, voice, and personality.
 
 **Canonical schema:** see [../docs/PERSONA-SCHEMA.md](../docs/PERSONA-SCHEMA.md)
 
