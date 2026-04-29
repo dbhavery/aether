@@ -1,0 +1,66 @@
+schema_version: 1
+
+creator: "Don Havery (cast expansion authorized 2026-04-28)"
+created: "2026-04-28"
+last_updated: "2026-04-28"
+
+# Provenance for every shipped asset. See PERSONA-SCHEMA.md §4 and §8.
+assets:
+  anchor:
+    source: "PENDING — anchor-set generation queued"
+    note: >-
+      Anchor + portrait + profile_left + profile_right not yet generated.
+      Prompt briefs ready at avatar/README.md. Gated on Don's eyeball-check
+      of Aurora's anchor set (face-consistency lock-before-scale rule).
+      Plan: 4 fal.ai fal-ai/flux-pro/v1.1-ultra calls, ~$0.20.
+    license: "custom_aether"
+
+  portrait:
+    source: "PENDING — see anchor entry above"
+    license: "custom_aether"
+
+  profile_left:
+    source: "PENDING — see anchor entry above"
+    license: "custom_aether"
+
+  profile_right:
+    source: "PENDING — see anchor entry above"
+    license: "custom_aether"
+
+  state_images:
+    source: "DEFERRED — to be rendered runtime, not pre-generated"
+    note: >-
+      Expression states are rendered runtime from anchor.png + visemes
+      via the Phase 4b lipsync pipeline. Pre-generated stills abandoned
+      per the 2026-04-28 anchor-schema redesign.
+    license: "custom_aether"
+
+  voice_reference:
+    source: "ai_generated"
+    generator: "OpenAI gpt-4o-mini-tts (voice 'sage') with grounded-elder steering"
+    generation_date: "2026-04-28"
+    license: "custom_aether"
+    description: >-
+      20.0s synthetic conversational speech generated 2026-04-28 (eve).
+      Voice 'sage' steered for unhurried mid-low male voice with comfort
+      around silence and unforced warmth — like an older friend who has
+      lived a while and reads philosophy. Output saved as 24 kHz mono
+      16-bit PCM WAV. Steering text + reference text recovery pending —
+      see voice/SOURCE.md draft.
+
+  voice_sample:
+    source: "ai_generated"
+    generator: "OpenAI gpt-4o-mini-tts (voice 'sage'), same steering as voice_reference"
+    license: "custom_aether"
+    description: >-
+      4.0s synthetic conversational speech for the wizard preview.
+
+notes: |
+  James is the fourth persona in the cast (PRACTICAL × SUPPORTIVE
+  quadrant); see file:///C:/Users/dbhav/Projects/aether/personas/CHARACTERS.md
+  for the full roster plan and design rationale.
+
+  Voice generation provenance details (exact steering text + reference
+  text) need recovery from the 2026-04-28 session logs and addition to
+  voice/SOURCE.md before this persona ships in a release. Voice WAVs
+  are committed canonically; provenance docs are draft.
