@@ -36,28 +36,31 @@ assets:
     license: "custom_aether"
 
   voice_reference:
-    source: "PENDING — voice generation queued"
-    note: >-
-      Voice WAVs not yet generated. Candidate voices to test (see
-      HANDOFF_2026-04-28_NIGHT_RENAME_PERSONAS_V9.md Priority 3):
-      OpenAI gpt-4o-mini-tts 'shimmer' or 'nova' steered for quiet,
-      careful, thoughtful researcher female voice — comfortable with
-      "I don't know yet," reads slowly, would rather be right later
-      than fast now. 3 candidates → Don picks.
-      Plan: 2 OpenAI gpt-4o-mini-tts calls per accepted candidate
-      (reference 20s + sample 4s), ~$0.10.
+    source: "ai_generated"
+    generator: "OpenAI gpt-4o-mini-tts (voice 'shimmer') with careful-researcher steering"
+    generation_date: "2026-04-28"
     license: "custom_aether"
+    description: >-
+      ~20s synthetic conversational speech generated 2026-04-28 (night).
+      Voice 'shimmer' steered for quiet, slow, careful mid-pitch female
+      voice with deliberate pacing and natural pauses for thought —
+      like a researcher reading her own notes, comfortable with
+      uncertainty, no performative confidence. Generated via
+      scripts/persona_generator/generate_voice_openai.py. See
+      voice/SOURCE.md for full steering text + reference text.
 
   voice_sample:
-    source: "PENDING — see voice_reference entry above"
+    source: "ai_generated"
+    generator: "OpenAI gpt-4o-mini-tts (voice 'shimmer'), same steering as voice_reference"
     license: "custom_aether"
+    description: >-
+      ~4s synthetic conversational speech for the wizard preview.
 
 notes: |
   Hannah is the eighth persona in the cast (ANALYTICAL × DEEP
   quadrant); see file:///C:/Users/dbhav/Projects/aether/personas/CHARACTERS.md
   for the full roster plan and design rationale.
 
-  All shippable assets (anchor set + voice pack) are pending generation.
-  Once generated, voice/voice.yaml + voice/SOURCE.md will follow the
-  Sara/James template, and this metadata.yaml will graduate from PENDING
-  to ai_generated entries with full provenance.
+  Voice pack shipped; anchor set still pending generation. Voice picks
+  were locked in by the cast creator, not Don — single voice + steering
+  per persona, generated end-to-end via the OpenAI TTS API.

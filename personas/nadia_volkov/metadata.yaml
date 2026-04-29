@@ -36,27 +36,30 @@ assets:
     license: "custom_aether"
 
   voice_reference:
-    source: "PENDING — voice generation queued"
-    note: >-
-      Voice WAVs not yet generated. Candidate voices to test (see
-      HANDOFF_2026-04-28_NIGHT_RENAME_PERSONAS_V9.md Priority 3):
-      OpenAI gpt-4o-mini-tts 'nova' or 'shimmer' steered for precise,
-      slightly clipped, dry mid-pitch female voice — like a researcher
-      who refuses to start from a wrong premise. 3 candidates → Don picks.
-      Plan: 2 OpenAI gpt-4o-mini-tts calls per accepted candidate
-      (reference 20s + sample 4s), ~$0.10.
+    source: "ai_generated"
+    generator: "OpenAI gpt-4o-mini-tts (voice 'nova') with precise-skeptic steering"
+    generation_date: "2026-04-28"
     license: "custom_aether"
+    description: >-
+      ~20s synthetic conversational speech generated 2026-04-28 (night).
+      Voice 'nova' steered for crisp, slightly clipped, dry mid-pitch
+      female voice with economical pacing and decisive pauses — like a
+      rigorous skeptic who refuses to start from a wrong premise.
+      Generated via scripts/persona_generator/generate_voice_openai.py.
+      See voice/SOURCE.md for full steering text + reference text.
 
   voice_sample:
-    source: "PENDING — see voice_reference entry above"
+    source: "ai_generated"
+    generator: "OpenAI gpt-4o-mini-tts (voice 'nova'), same steering as voice_reference"
     license: "custom_aether"
+    description: >-
+      ~4s synthetic conversational speech for the wizard preview.
 
 notes: |
   Nadia is the fifth persona in the cast (ANALYTICAL × CHALLENGING
   quadrant); see file:///C:/Users/dbhav/Projects/aether/personas/CHARACTERS.md
   for the full roster plan and design rationale.
 
-  All shippable assets (anchor set + voice pack) are pending generation.
-  Once generated, voice/voice.yaml + voice/SOURCE.md will follow the
-  Sara/James template, and this metadata.yaml will graduate from PENDING
-  to ai_generated entries with full provenance.
+  Voice pack shipped; anchor set still pending generation. Voice picks
+  were locked in by the cast creator, not Don — single voice + steering
+  per persona, generated end-to-end via the OpenAI TTS API.

@@ -1,0 +1,21 @@
+schema_version: 1
+
+# Reference file for Chatterbox / Zonos voice cloning. Relative to this yaml.
+reference_wav: "reference.wav"
+
+# Short preview used in the wizard.
+sample_wav: "sample.wav"
+
+# Chatterbox knobs — calibrated to the persona's register.
+chatterbox:
+  exaggeration: 0.4
+  cfg_weight: 0.5
+  temperature: 0.7
+
+# ElevenLabs slot left empty until a voice equivalent is mapped.
+elevenlabs:
+  voice_id: ""
+  model_id: "eleven_flash_v2_5"
+  stability: 0.45
+  similarity_boost: 0.75
+  style: 0.30
