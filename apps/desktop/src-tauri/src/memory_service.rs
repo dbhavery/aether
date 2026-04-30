@@ -1650,6 +1650,132 @@ mod tests {
         assert_eq!(durable_forgotten, 1);
     }
 
+    /// Belt-and-suspenders crash-safety guard for the retention sweep.
+    ///
+    /// Implementation note (Option 3 — synthetic crash via TempDir +
+    /// reopen): we boot an `AppState` over a real on-disk SQLite file,
+    /// seed three sessions of expired Session-lane rows + one fresh
+    /// row, then **partially** prune by calling `prune_before` on
+    /// session "s1" only — simulating "the process crashed after the
+    /// first session was pruned but before the rest." We drop the
+    /// `AppState` (releasing the SQLite handle), reopen a fresh
+    /// `AppState` against the same file, and run the full retention
+    /// sweep. End-state must be: every expired row gone across every
+    /// session, the fresh row preserved.
+    ///
+    /// What this proves:
+    ///   1. `prune_before` is durable — partial progress survives a
+    ///      process restart (the SQL `DELETE` commits per call).
+    ///   2. The sweep is idempotent against the post-crash state — re-
+    ///      running it after the crash converges to the clean end-state
+    ///      with no double-counted evictions or skipped rows.
+    ///   3. `list_sessions()` after reopen still surfaces every session
+    ///      that has surviving rows, so the second sweep visits s2/s3.
+    ///
+    /// Memory config is per-`AppState` (not persisted across reopen),
+    /// so the second instance re-applies the Session retention. That's
+    /// the realistic boot path: `main.rs` reloads config on startup
+    /// before the boot sweep tick.
+    #[cfg(feature = "sqlite-backend")]
+    #[test]
+    fn sweep_is_idempotent_across_simulated_mid_sweep_crash() {
+        use tempfile::TempDir;
+
+        let tmp = TempDir::new().expect("tempdir");
+        let db_path = tmp.path().join("aether.db");
+
+        let day_ms: u64 = 86_400_000;
+        let now_ms: u64 = 10 * day_ms;
+        // 1-day retention → cutoff = now - 1 day = 9 * day_ms.
+        // Anything with ts_ms < cutoff_ms must be evicted.
+
+        // ---- Phase 1: boot, seed, partial-prune (simulate crash) ----
+        {
+            let state =
+                AppState::new_with_db_path(&db_path).expect("first AppState");
+            // Only proceed if we actually got the durable backend.
+            // If the temp-dir fallback to in-memory ever fires, this
+            // test is a no-op against the wrong backend — bail loudly.
+            assert!(
+                state.durable_store().is_some(),
+                "expected durable SQLite backend over temp file"
+            );
+
+            let mut cfg = MemoryConfig::defaults();
+            cfg.retention_days.insert(MemoryDomain::Session, Some(1));
+            state.set_memory_config(cfg).unwrap();
+
+            // 3 sessions, each with one expired row (ts=1) and one
+            // fresh row (well inside the 1-day window).
+            for sid in ["s1", "s2", "s3"] {
+                seed_row(&state, sid, "ancient", 1);
+                seed_row(&state, sid, "fresh", now_ms - 3_600_000);
+            }
+
+            // Simulate "we crashed after pruning s1." Use the trait's
+            // `prune_before` directly — same primitive the sweep calls
+            // — but only against s1, then drop the AppState before
+            // s2/s3 get touched.
+            let cutoff_ms = now_ms.saturating_sub(day_ms);
+            let session_store = state.memory_for_domain(MemoryDomain::Session);
+            let pruned_s1 =
+                session_store.prune_before("s1", cutoff_ms).expect("prune s1");
+            assert_eq!(pruned_s1, 1, "s1 ancient row evicts pre-crash");
+
+            // s1 fresh row survived; s2/s3 still have both rows each.
+            assert_eq!(state.memory.recent("s1").unwrap().records.len(), 1);
+            assert_eq!(state.memory.recent("s2").unwrap().records.len(), 2);
+            assert_eq!(state.memory.recent("s3").unwrap().records.len(), 2);
+            // AppState dropped at end of scope — releases SQLite handle.
+        }
+
+        // ---- Phase 2: reopen, run full sweep, assert clean state ----
+        let state2 =
+            AppState::new_with_db_path(&db_path).expect("second AppState");
+        assert!(
+            state2.durable_store().is_some(),
+            "reopen must land on the durable backend, not the in-memory fallback"
+        );
+
+        // Re-apply retention (config is per-AppState, not persisted).
+        let mut cfg = MemoryConfig::defaults();
+        cfg.retention_days.insert(MemoryDomain::Session, Some(1));
+        state2.set_memory_config(cfg).unwrap();
+
+        // After reopen, all three sessions should still surface (each
+        // has surviving rows) and the partial pre-crash state must be
+        // exactly: s1 has the fresh row only, s2/s3 still have both.
+        let session_store = state2.memory_for_domain(MemoryDomain::Session);
+        let mut sessions = session_store.list_sessions().expect("list_sessions");
+        sessions.sort();
+        assert_eq!(sessions, vec!["s1".to_string(), "s2".into(), "s3".into()]);
+        assert_eq!(state2.memory.recent("s1").unwrap().records.len(), 1);
+        assert_eq!(state2.memory.recent("s2").unwrap().records.len(), 2);
+        assert_eq!(state2.memory.recent("s3").unwrap().records.len(), 2);
+
+        // Run the full sweep — it must pick up where the crash left
+        // off without double-counting s1.
+        let evicted = state2.run_retention_sweep(now_ms).expect("sweep");
+        assert_eq!(
+            evicted, 2,
+            "exactly the s2 + s3 ancient rows evict (s1 already pruned pre-crash)"
+        );
+
+        // End-state: every ancient row gone, every fresh row kept.
+        for sid in ["s1", "s2", "s3"] {
+            let w = state2.memory.recent(sid).unwrap();
+            assert_eq!(w.records.len(), 1, "session {sid} keeps its fresh row");
+            assert_eq!(w.records[0].content, "fresh");
+        }
+
+        // Idempotency: running the sweep again is a clean no-op.
+        let second_pass = state2.run_retention_sweep(now_ms).expect("re-sweep");
+        assert_eq!(second_pass, 0, "repeat sweep over a clean store evicts nothing");
+        for sid in ["s1", "s2", "s3"] {
+            assert_eq!(state2.memory.recent(sid).unwrap().records.len(), 1);
+        }
+    }
+
     #[test]
     fn memory_for_domain_falls_back_to_session_for_unbacked_domains() {
         // Contract: Session + Durable get dedicated lanes; everything
