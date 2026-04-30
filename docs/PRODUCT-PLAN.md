@@ -1,4 +1,4 @@
-# Aether v1.0 — Productization Plan
+# Companion v1.0 — Productization Plan
 
 **Status:** Active planning → execution
 **Branch:** `dev`

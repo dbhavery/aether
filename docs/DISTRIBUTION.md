@@ -1,6 +1,6 @@
-# Aether — Distribution Playbook (v1.0.0-pre launch)
+# Companion — Distribution Playbook (v1.0.0-pre launch)
 
-> Shipped 2026-04-18. This file tracks where Aether was announced, where it still needs to be announced, and the drafts for each channel. Paste-ready; Don posts manually where the channel doesn't allow automation.
+> Shipped 2026-04-18. This file tracks where Companion was announced, where it still needs to be announced, and the drafts for each channel. Paste-ready; Don posts manually where the channel doesn't allow automation.
 
 ---
 
@@ -46,7 +46,7 @@ The content that went live via morning-intel's LinkedInPoster:
 >
 > Cloud assistants send every word to a server. They change personality every six weeks without asking. They charge per request and lock you into one model. They're rented, not owned.
 >
-> This week I shipped Aether — a desktop AI companion that's the opposite. Install it once, pick one of twelve personas, bring your own LLM key or stay fully local with Ollama, and it's yours. Conversations never leave your machine unless you told them to. Persistent memory, voice, and video all work offline. MIT-licensed. Free.
+> This week I shipped Companion — a desktop AI companion that's the opposite. Install it once, pick one of twelve personas, bring your own LLM key or stay fully local with Ollama, and it's yours. Conversations never leave your machine unless you told them to. Persistent memory, voice, and video all work offline. MIT-licensed. Free.
 >
 > If you're building AI into a personal workflow and privacy matters more to you than marginal reasoning quality, local-first with cloud fallback is the pattern worth studying. The stack I landed on: litellm as the provider router (100+ models), faster-whisper for local STT, Chatterbox Turbo for per-persona voice cloning, ChromaDB for hybrid BM25 + dense-vector memory. The latency budget lands under 500 ms on a single consumer GPU; cost per query is $0 local, whatever the provider charges in cloud mode, no middleman markup.
 >
@@ -68,9 +68,9 @@ The content that went live via morning-intel's LinkedInPoster:
 
 **Body:**
 
-> Aether is a desktop AI companion I've been building for about seven months. Today I pushed it to public preview.
+> Companion is a desktop AI companion I've been building for about seven months. Today I pushed it to public preview.
 >
-> The thesis: cloud assistants are rented, not owned. They change personality without asking, charge per request, and send every word you say through someone else's server. Aether flips that — install it once, pick a persona, bring your own LLM key (or stay fully local with Ollama), and it's yours.
+> The thesis: cloud assistants are rented, not owned. They change personality without asking, charge per request, and send every word you say through someone else's server. Companion flips that — install it once, pick a persona, bring your own LLM key (or stay fully local with Ollama), and it's yours.
 >
 > Design choices worth calling out:
 >
@@ -100,7 +100,7 @@ The content that went live via morning-intel's LinkedInPoster:
 
 **Body:**
 
-> I just pushed v1.0.0-pre of Aether, an open-source desktop AI companion built around local-first LLMs with optional cloud fallback. Posting here because this subreddit is exactly the audience that cares about the tradeoffs.
+> I just pushed v1.0.0-pre of Companion, an open-source desktop AI companion built around local-first LLMs with optional cloud fallback. Posting here because this subreddit is exactly the audience that cares about the tradeoffs.
 >
 > **Architecture:**
 >
@@ -127,7 +127,7 @@ The content that went live via morning-intel's LinkedInPoster:
 
 **Body:**
 
-> Shipped the public preview of Aether today — an AI assistant you install once and keep on your own machine. Posting here because the self-hosting crowd cares about the privacy + ownership angle more than the "shiny AI" angle.
+> Shipped the public preview of Companion today — an AI assistant you install once and keep on your own machine. Posting here because the self-hosting crowd cares about the privacy + ownership angle more than the "shiny AI" angle.
 >
 > **What you run:** a Python backend (FastAPI + WebSocket) + a Next.js frontend. Talks to Ollama for fully-local LLM, or to any cloud provider via litellm when you want more horsepower.
 >

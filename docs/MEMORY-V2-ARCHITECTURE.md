@@ -4,7 +4,7 @@
 > **Scope:** Evolution of the current session-memory kernel into a
 > structured, user-visible memory system with clear retention rules,
 > per-item trust provenance, and a UX that lets the user see and
-> control what Aether remembers about them and their projects.
+> control what Companion remembers about them and their projects.
 > **Out of scope for v2:** long-horizon autonomous memory curation
 > (the assistant deciding on its own what to remember), vector
 > search over the open web, cross-user memory, remote memory
@@ -19,9 +19,9 @@ rot-guard manifest is added under `tools/lint-memory-doc/`.
 
 ---
 
-## 0. What "memory" is (and isn't) in Aether
+## 0. What "memory" is (and isn't) in Companion
 
-Memory is everything Aether persists about the user's conversations
+Memory is everything Companion persists about the user's conversations
 and projects beyond the current turn. It is NOT:
 
 - a search engine over external documents,
@@ -80,7 +80,7 @@ default, privacy class, and Trust-drawer lane.
 
 Domains NOT present in v2 (deferred):
 
-- **Reflections** / "what Aether thinks about you" — out of scope;
+- **Reflections** / "what Companion thinks about you" — out of scope;
   re-introducing any form of auto-inferred user model requires a
   separate design round.
 - **Global web** — out of scope; no automatic web ingestion.
@@ -258,7 +258,7 @@ All read from a future source-of-truth
 | `Settings` → Memory section (NEW)   | per-domain retention, per-domain default risk, embeddings enable, forget-all |
 
 The "Memory tab" is the headline v2 surface. It's the place the
-user goes when they want to know **what Aether knows about them**,
+user goes when they want to know **what Companion knows about them**,
 in a form that reads like notes, not logs.
 
 ---
@@ -389,7 +389,7 @@ Today's behaviour:
 ### Cross-device sync
 
 - Out of scope for v2. A future track may let the user sync
-  memory between two of their own Aether installs over a private
+  memory between two of their own Companion installs over a private
   channel; that's a new capability with its own design doc.
 
 ### L3 presence × memory retention

@@ -1,4 +1,4 @@
-# Aether — Architecture Diagram
+# Companion — Architecture Diagram
 
 > **Status:** Onboarding reference.
 > **Audience:** New contributors, portfolio readers, reviewers picking up the repo cold.
@@ -101,7 +101,7 @@ flowchart TB
     class Shell shell
 ```
 
-**What this shows.** The seven Aether layers stack from interaction-
+**What this shows.** The seven Companion layers stack from interaction-
 time concerns at the bottom (L1, the only layer with a hard sub-100ms
 budget) up through routing and memory (L2-L4) and into the
 policy/presentation tier (L5-L7). Sibling crates do **not** import
@@ -353,7 +353,7 @@ flowchart LR
 ```
 
 **What this shows.** The tier model is the one hardware-adaptation
-axis in Aether — every downstream subsystem (embeddings today;
+axis in Companion — every downstream subsystem (embeddings today;
 avatar / TTS / vision / LLM in future ADRs) reads `tier.json` and
 adapts, rather than reinventing hardware detection. Detection
 runs once at first launch and on demand from Settings, populating
@@ -393,7 +393,7 @@ slot count, not byte count, was the binding constraint.
 ## Reading order for new contributors
 
 1. [planning/00_VISION_AND_GUARDRAILS.md](../planning/00_VISION_AND_GUARDRAILS.md)
-   — what Aether is and what it refuses to be.
+   — what Companion is and what it refuses to be.
 2. [CLAUDE.md](../CLAUDE.md) §1.4 + §5 — layer-boundary and event rules.
 3. This file — visual orientation across the four most-asked questions.
 4. [planning/08_system_architecture.md](../planning/08_system_architecture.md)

@@ -1,9 +1,9 @@
-# Aether glossary
+# Companion glossary
 
 > **Status:** Skeleton. Structure and stubs only.
 > **Created:** 2026-05-16 (closing audit gap #1 against the 22-section
 > numbered specification outline).
-> **Keystone.** This is the canonical vocabulary file for Aether. When
+> **Keystone.** This is the canonical vocabulary file for Companion. When
 > two docs disagree on what a term means, this file is where the tie
 > is broken.
 
@@ -44,7 +44,7 @@
 
 ## 1. Core product concepts
 
-- **Aether**
+- **Companion**
   Definition: TODO — derive from `planning/00_VISION_AND_GUARDRAILS.md`
   + `planning/01_product_doctrine.md` + `planning/02_product_family.md`.
   Short: the master platform family for a multimodal AI assistant
@@ -70,17 +70,17 @@
   Definition: TODO — derive from `docs/PRESENCE-V1-ARCHITECTURE.md` §4
   + `planning/13_trust_security_redteam.md`.
   Short: any UI or audit affordance where the user can see, inspect,
-  or reverse what Aether did on their behalf.
+  or reverse what Companion did on their behalf.
 
-- **Aether Pro**
+- **Companion**
   Definition: TODO — derive from `planning/02_product_family.md` §1.3.
 
-- **Aether OSS Preview**
+- **Companion (OSS Preview wedge thesis retired 2026-05-18 per doctrine §6)**
   Definition: TODO — derive from `planning/02_product_family.md` §1.2.
 
 - **Isabelle / Isabelle_Kunstig**
   Definition: TODO — derive from `planning/02_product_family.md` §1.4.
-  Note: internal codename; private personal branch on top of Aether
+  Note: internal codename; private personal branch on top of Companion
   Pro.
 
 ---
@@ -441,10 +441,10 @@
 
 ## 8. Product-tier terms
 
-- **Aether OSS Preview**
+- **Companion**
   Cross-reference: §1. The public, minimal, extensible baseline.
 
-- **Aether Pro**
+- **Companion**
   Cross-reference: §1. The commercial-grade flagship.
 
 - **Cross-system spec**

@@ -1,6 +1,6 @@
 # Persona Pack Schema
 
-A persona pack is a **self-contained folder** that tells Aether how one character looks, sounds, and behaves. Users can switch personas at runtime; the active persona drives avatar rendering, voice synthesis, and LLM system prompt construction.
+A persona pack is a **self-contained folder** that tells Companion how one character looks, sounds, and behaves. Users can switch personas at runtime; the active persona drives avatar rendering, voice synthesis, and LLM system prompt construction.
 
 ---
 
@@ -249,7 +249,7 @@ Every shipped persona pack must:
 
 - Have `metadata.yaml` complete, with every asset's source + license documented.
 - Pass the pre-commit audit check (`scripts/audit_persona.py <id>`).
-- Use only CC0, MIT, or Aether-owned assets.
+- Use only CC0, MIT, or Companion-owned assets.
 - Avoid any likeness of a real identifiable person (per Don's locked rule: AI-generated only).
 
 The v1.0 installer includes a single LICENSE-PERSONAS.md document aggregating every persona's attribution and license info. Users can read it anytime from `%APPDATA%/aether/LICENSE-PERSONAS.md`.

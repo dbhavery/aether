@@ -1,19 +1,19 @@
 # Sync From Upstream Isabelle
 
-**Purpose:** Isabelle_Kunstig is Aether's rolling upstream for core modules. Isabelle advances faster than Aether can productize. When we need the latest voice pipeline, avatar pipeline, or memory stack in Aether, we port — not copy. This document defines the deterministic rules for that port.
+**Purpose:** Isabelle_Kunstig is Companion's rolling upstream for core modules. Isabelle advances faster than Companion can productize. When we need the latest voice pipeline, avatar pipeline, or memory stack in Companion, we port — not copy. This document defines the deterministic rules for that port.
 
-**Do not edit Isabelle_Kunstig from Aether work.** Another agent is actively developing Isabelle (per memory `project_two_agent_coordination.md`, last confirmed 2026-04-10). Reads only. Writes happen in Aether.
+**Do not edit Isabelle_Kunstig from Companion work.** Another agent is actively developing Isabelle (per memory `project_two_agent_coordination.md`, last confirmed 2026-04-10). Reads only. Writes happen in Companion.
 
 ---
 
 ## 1. Why sync, not vendor
 
-We could git-submodule Isabelle into Aether and import modules directly. We don't, because:
+We could git-submodule Isabelle into Companion and import modules directly. We don't, because:
 
 - Isabelle modules have hardcoded Don-specific assumptions (paths, reference voice, speaker verify, tool access). These MUST be stripped before public shipping.
 - Isabelle's test data and asset pipeline reference `I:\IsabelleData\` — a drive path that doesn't exist on users' machines.
-- Git history contains PII that was sanitized out of Aether's `dc92ba3 [SECURITY] Remove PII and generalize personal references` commit. Vendoring Isabelle would re-import that history.
-- Aether needs independence to diverge. The v2 rebuild will have no Isabelle code at all.
+- Git history contains PII that was sanitized out of Companion's `dc92ba3 [SECURITY] Remove PII and generalize personal references` commit. Vendoring Isabelle would re-import that history.
+- Companion needs independence to diverge. The v2 rebuild will have no Isabelle code at all.
 
 So: **we port modules with transformations, not vendor them as-is.**
 
@@ -21,7 +21,7 @@ So: **we port modules with transformations, not vendor them as-is.**
 
 ## 2. Module port status (as of 2026-04-17)
 
-| Module | Aether state | Isabelle state | Action |
+| Module | Companion state | Isabelle state | Action |
 |--------|-------------|----------------|--------|
 | `src/core/` | March snapshot | Current | Re-port in P1 |
 | `src/shared/` | March snapshot | Current | Re-port in P1 |
@@ -147,11 +147,11 @@ Flow:
 
 ## 5. Conflict resolution
 
-If a sync would overwrite Aether-specific changes (e.g., new code added in Aether that doesn't exist in Isabelle), the script:
+If a sync would overwrite Companion-specific changes (e.g., new code added in Companion that doesn't exist in Isabelle), the script:
 
 1. Detects divergence via content hash.
 2. Refuses to overwrite.
-3. Writes a `.sync-conflict` file next to the Aether version with the Isabelle version.
+3. Writes a `.sync-conflict` file next to the Companion version with the Isabelle version.
 4. Exits with error; human resolves.
 
 This ensures aether-side divergence never gets silently reverted.
@@ -171,15 +171,15 @@ Each re-sync is a single PR on `dev` branch with the structured commit message, 
 
 ## 7. Anti-drift guarantees
 
-- The sync script is the ONLY way to move code from Isabelle to Aether. Hand-copying is forbidden.
+- The sync script is the ONLY way to move code from Isabelle to Companion. Hand-copying is forbidden.
 - Every ported file is stamped with a header comment: `# ported from Isabelle_Kunstig@<sha> at <date>`.
-- A CI check (`scripts/verify_no_isabelle_strings.py`) fails the build if `isabelle` or `Isabelle` appears anywhere in Aether's `src/` (except inside ported comments).
+- A CI check (`scripts/verify_no_isabelle_strings.py`) fails the build if `isabelle` or `Isabelle` appears anywhere in Companion's `src/` (except inside ported comments).
 - A CI check fails if a dropped module name (`tools`, `agents`, etc.) reappears under `src/`.
 
 ---
 
 ## 8. What this doc is NOT
 
-- Not a dependency: Aether does not require Isabelle to build, run, or install. The sync script is a developer tool.
+- Not a dependency: Companion does not require Isabelle to build, run, or install. The sync script is a developer tool.
 - Not a sync of the v2 rebuild: v2 will share no code with Isabelle. This doc only governs v1.0 modules.
 - Not a substitute for reviews: every re-sync is reviewed by Don before merge to `dev`.

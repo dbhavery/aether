@@ -399,7 +399,7 @@ vision §9 apply, plus:
 Out of scope for Voice v1. When scoped, it becomes **Voice
 Output v1** with its own doc. It will have its own permission,
 capability, and audit semantics because the user experience is
-fundamentally different (hearing Aether vs. speaking to Aether).
+fundamentally different (hearing Companion vs. speaking to Companion).
 Do not coalesce input and output capabilities.
 
 ### Wake word / continuous listening

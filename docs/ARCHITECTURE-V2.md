@@ -1,4 +1,4 @@
-# Aether v1.0 Architecture
+# Companion v1.0 Architecture
 
 **Applies to:** `dev` branch productization work.
 **Supersedes:** the PySide6-only architecture documented in the root `README.md` (which describes the `master` snapshot).

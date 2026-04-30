@@ -1,6 +1,6 @@
 # Media permissions
 
-Aether keeps a small, **local-only** record of how much it is allowed
+Companion keeps a small, **local-only** record of how much it is allowed
 to look at — currently camera and (scaffolded) screen capture. This
 document is the source of truth for the model.
 
@@ -83,12 +83,12 @@ Three layers gate every capture call:
 2. **Webview `getUserMedia` / `getDisplayMedia`**. These are standard
    browser APIs the webview hosts; they do **not** require a Tauri
    capability. They are governed by the OS-level permission prompt
-   and, on Windows, by WebView2 permission policies. Aether never
+   and, on Windows, by WebView2 permission policies. Companion never
    bypasses these.
 
 3. **In-app `media_permissions.json` gate** (this document). Sits in
    front of every capture site so the user has one local control
-   surface for "may Aether see anything?" independent of the OS
+   surface for "may Companion see anything?" independent of the OS
    prompt history.
 
 A future distribution build will additionally:

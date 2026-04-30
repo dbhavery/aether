@@ -1,4 +1,4 @@
-# Repo Tour — Free Aether, Community Edition
+# Repo Tour — Free Companion, Community Edition
 
 > Fifteen-minute guided walk through the directories. Read this before you
 > touch code. The planning corpus is authoritative; everything in this tour

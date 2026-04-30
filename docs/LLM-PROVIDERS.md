@@ -1,6 +1,6 @@
 # LLM Provider Abstraction
 
-**Purpose:** Aether supports many LLM providers through a single internal abstraction. Users pick one in the onboarding wizard (or multiple, one per tier). The brain module never imports a specific provider's SDK directly — it always goes through `litellm`.
+**Purpose:** Companion supports many LLM providers through a single internal abstraction. Users pick one in the onboarding wizard (or multiple, one per tier). The brain module never imports a specific provider's SDK directly — it always goes through `litellm`.
 
 ---
 
@@ -26,7 +26,7 @@ Docs: https://docs.litellm.ai/
 | **Groq** | Cloud, free tier + paid | Llama 3.x / Mixtral at very high speed. Good for fast tier. |
 | **OpenRouter** | Cloud, pay-as-you-go | Aggregator — one key, many models. Useful for power users. |
 | **Ollama** | Local, free | Any model the user has pulled. Default fast-tier option. |
-| **Aether Guest** | Hosted by us, rate-limited | Groq-backed; used only by "Guest mode" on Screen 5 Card C. |
+| **Companion Guest** | Hosted by us, rate-limited | Groq-backed; used only by "Guest mode" on Screen 5 Card C. |
 
 Future (post-v1.0): Mistral, Cohere, Together, DeepSeek, xAI. All are already supported by litellm; we just need to add them to the wizard UI.
 
@@ -158,7 +158,7 @@ For BYOK providers, display rolling costs:
 - Budgets optional: user can set "warn at $X/day", "hard cap at $Y/day".
 - No PII in cost logs — just aggregate tokens and estimated USD.
 
-For Ollama and Aether Guest: display "$0.00" but still show token counts for parity.
+For Ollama and Companion Guest: display "$0.00" but still show token counts for parity.
 
 ---
 
@@ -183,9 +183,9 @@ One exception: built-in, safe tool calls that the frontend needs — `get_curren
 
 ---
 
-## 11. Aether Guest endpoint
+## 11. Companion Guest endpoint
 
-For wizard Screen 5 Card C ("Guest mode"), Aether hosts a tiny proxy at a URL like `guest.aether.sh`.
+For wizard Screen 5 Card C ("Guest mode"), Companion hosts a tiny proxy at a URL like `guest.aether.sh`.
 
 Design:
 - Hit Cloudflare Worker that proxies to Groq with our key.

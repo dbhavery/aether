@@ -1,4 +1,4 @@
-# Aether non-functional requirements
+# Companion non-functional requirements
 
 > **Status:** Skeleton. Structure and stubs only.
 > **Created:** 2026-05-17 (closing audit gap #2 against the 22-section
@@ -37,9 +37,9 @@
 
 ## 1. Purpose and scope
 
-This document captures the **non-functional expectations** Aether
+This document captures the **non-functional expectations** Companion
 must satisfy across its subsystems and layers. Functional
-behaviour — what Aether *does* — is scoped in the per-subsystem
+behaviour — what Companion *does* — is scoped in the per-subsystem
 architecture docs (`VISION-V1-ARCHITECTURE.md`,
 `VOICE-V1-ARCHITECTURE.md`, `PRESENCE-V1-ARCHITECTURE.md`,
 `MEMORY-V2-ARCHITECTURE.md`, `QUALITY-EVAL-V1-ARCHITECTURE.md`).

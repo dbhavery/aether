@@ -22,7 +22,7 @@ symbols and strings this doc claims exist will fail the linter.
 
 ---
 
-## 0. What "presence" means in Aether
+## 0. What "presence" means in Companion
 
 Presence is the assistant's model of **is the user here right now,
 and how much should the assistant presume to do on its own**. It is
@@ -355,7 +355,7 @@ V1 implements two UI surfaces against presence; the header
   Presence is observation of the OS idle timer; it does not listen
   to the L1 turn-state machine's per-capture decisions. Exception:
   assistant posture DOES reflect whether L1 is currently mid-turn,
-  because that's the whole point of the "Aether is working"
+  because that's the whole point of the "Companion is working"
   affordance.
 - **Audio capture does not influence attention.** Pressing
   push-to-talk doesn't flip the user from `Active → Away`; mic
@@ -448,7 +448,7 @@ track) are V2.
 ### Cross-app presence (remote)
 
 - Out of scope for v1. A future track may let the user surface
-  their Aether presence to an MCP peer; that would be a new
+  their Companion presence to an MCP peer; that would be a new
   capability with its own consent surface, not a widening of this
   doc.
 
