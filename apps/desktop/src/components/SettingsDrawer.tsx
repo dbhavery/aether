@@ -27,6 +27,7 @@ import {
   PRESENCE_THRESHOLD_MAX_S,
   PRESENCE_THRESHOLD_MIN_S,
 } from "../lib/types";
+import { PersonaSection } from "./PersonaSection";
 
 interface Props {
   open: boolean;
@@ -239,7 +240,12 @@ export function SettingsDrawer({ open, onClose }: Props) {
           </div>
         )}
 
-        <section aria-labelledby="settings-media-heading">
+        <PersonaSection open={open} />
+
+        <section
+          aria-labelledby="settings-media-heading"
+          className="mt-6 border-t border-aether-border pt-4"
+        >
           <h2
             id="settings-media-heading"
             className="text-[11px] uppercase tracking-[0.18em] text-aether-dim"
