@@ -147,7 +147,7 @@ Operationalized through measurable elements:
 - Hardware-specific defaults
 
 ### VRAM budget rule
-**50% of available VRAM default** for Full/Pro installed product. Leaves headroom for rendering, framework overhead, fragmentation, spikes. Expert override available with warnings.
+**50% of available VRAM default** for the Full tier of the installed product. Leaves headroom for rendering, framework overhead, fragmentation, spikes. Expert override available with warnings.
 
 ### Auto-recommendation
 Onboarding and settings detect likely hardware capacity and recommend profile automatically. Expert override available.
@@ -190,7 +190,7 @@ Full in-product trust surface:
 
 ---
 
-## Tech stack (Pro)
+## Tech stack (Companion)
 
 ```
 Desktop shell:    Tauri (or custom) + TypeScript/React
@@ -347,7 +347,7 @@ This operating model holds through Phase 6 unless explicitly amended by a follow
 
 ## Success criteria
 
-Aether Pro is successful when:
+Companion is successful when:
 1. It is clearly **not a wrapper product** — the moat layers are custom-controlled.
 2. Core user-relationship layers (presence, memory, timing, trust, policy) are custom.
 3. The assistant feels **premium and socially coherent** under real use.
