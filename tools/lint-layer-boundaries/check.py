@@ -97,10 +97,12 @@ ALLOWED: dict[str, frozenset[str]] = {
         {"aether-event-bus", "aether-storage", "aether-telemetry"}
     ),
     # T1.3 §2.1 — l5-browser is a sibling capability surface that
-    # extends `l5-policy::Capability` additively. Skeleton has no
-    # deps; impl PRs will add `aether-l5-policy` (and any subprocess /
-    # transport infra crates) as needed.
-    "aether-l5-browser":     frozenset(),
+    # extends `l5-policy::Capability` additively. The first impl slice
+    # (BrowserExecutor trait + Playwright-stub backend, 2026-04-30)
+    # adds an `aether-l5-policy` dep so `capability_for_method` can
+    # name `Capability` variants; subprocess / transport infra crates
+    # land in later slices.
+    "aether-l5-browser":     frozenset({"aether-l5-policy"}),
     # T1.3 §2.2 — l5-files is a sibling capability surface that extends
     # `l5-policy::Capability` additively with FilesEdit/Delete/Move/
     # Archive/Grep. Skeleton has no deps; impl PRs will add
