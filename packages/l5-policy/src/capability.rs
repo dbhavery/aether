@@ -177,6 +177,31 @@ pub enum Capability {
     CostCapAdmin,
     /// Export the audit log (full or filtered). Critical; always Ask.
     AuditExport,
+
+    // ----- Persona delivery (ADR-0012, 2026-04-28 night) -----
+    // Tier-2 persona pack lifecycle. Each variant emits one L5 audit
+    // row when the desktop shell drives the corresponding L6
+    // primitive. Default risks: Medium for install/uninstall (user
+    // data dir mutation), Low for switch (pointer-only), Medium for
+    // download (network egress on verified content). Default modes
+    // are baked into the wave3_default policy so the wizard can run
+    // its confirmation step without a redundant L5 modal on top.
+    /// Fetch a Tier-2 persona pack zip from the manifest URL.
+    /// Network egress; the SHA-256 + Ed25519 verification gates
+    /// trust, not this capability.
+    PersonaDownload,
+    /// Extract a verified persona pack into the user's data dir.
+    /// User data mutation; the wizard's confirmation step is the
+    /// user-visible gate.
+    PersonaInstall,
+    /// Remove an installed persona pack. Default `Ask` when called
+    /// outside a switch flow — explicit destruction warrants the
+    /// modal.
+    PersonaUninstall,
+    /// Change which persona is currently active. Pointer-only;
+    /// uninstall+install are emitted separately when a switch
+    /// triggers them (ADR-0012 §Switch flow).
+    PersonaSwitch,
     // TODO(wave-3): `Capability::AuditExport` vs `Capability::MemoryExport`
     // distinction locked by Decision 3. Confirm L7 trust-center export UX
     // uses `AuditExport` for the audit export action, `MemoryExport` for the

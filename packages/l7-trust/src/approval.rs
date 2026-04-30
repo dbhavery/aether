@@ -152,6 +152,10 @@ pub fn human_capability(cap: &Capability) -> &'static str {
         Capability::RouterAllowRemoteWithPrivate => "router.allow_remote_with_private",
         Capability::CostCapAdmin => "cost_cap.admin",
         Capability::AuditExport => "audit.export",
+        Capability::PersonaDownload => "persona.download",
+        Capability::PersonaInstall => "persona.install",
+        Capability::PersonaUninstall => "persona.uninstall",
+        Capability::PersonaSwitch => "persona.switch",
     }
 }
 

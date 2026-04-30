@@ -225,6 +225,39 @@ impl EngineConfig {
                 risk: RiskClass::Low,
             },
         );
+        // Persona delivery (ADR-0012). Defaults map to "the wizard's
+        // confirm step is the user-visible gate, L5 records audit
+        // rows but doesn't double-prompt." Raw uninstall (outside a
+        // switch flow) keeps Ask because explicit destruction
+        // warrants a modal even from the trust-drawer surface.
+        d.insert(
+            Capability::PersonaDownload,
+            CapabilityPolicy {
+                mode: ApprovalMode::Auto,
+                risk: RiskClass::Medium,
+            },
+        );
+        d.insert(
+            Capability::PersonaInstall,
+            CapabilityPolicy {
+                mode: ApprovalMode::Auto,
+                risk: RiskClass::Medium,
+            },
+        );
+        d.insert(
+            Capability::PersonaUninstall,
+            CapabilityPolicy {
+                mode: ApprovalMode::Ask,
+                risk: RiskClass::Medium,
+            },
+        );
+        d.insert(
+            Capability::PersonaSwitch,
+            CapabilityPolicy {
+                mode: ApprovalMode::Auto,
+                risk: RiskClass::Low,
+            },
+        );
         Self {
             preset: PresetId(String::from("wave3.balanced")),
             preset_version: 1,
@@ -1187,6 +1220,59 @@ mod tests {
             Capability::MemoryForget,
             Capability::MemoryEdit,
             Capability::MemoryEmbed,
+        ] {
+            let s = serde_json::to_string(&cap).unwrap();
+            let back: Capability = serde_json::from_str(&s).unwrap();
+            assert_eq!(back, cap, "round-trip failed for {:?}", cap);
+        }
+    }
+
+    // ---- ADR-0012: persona delivery capabilities ----
+
+    #[test]
+    fn persona_delivery_capabilities_registered_in_wave3_default() {
+        // Pin the four risk-class + approval-mode pairs so the
+        // wizard's confirmation flow doesn't accidentally double-
+        // prompt and so a future preset author understands which
+        // capabilities expect Ask vs Auto out of the box.
+        let cfg = EngineConfig::wave3_default(persona());
+
+        let download = cfg
+            .preset_defaults
+            .get(&Capability::PersonaDownload)
+            .expect("PersonaDownload preset default should be registered");
+        assert_eq!(download.mode, ApprovalMode::Auto);
+        assert_eq!(download.risk, RiskClass::Medium);
+
+        let install = cfg
+            .preset_defaults
+            .get(&Capability::PersonaInstall)
+            .expect("PersonaInstall preset default should be registered");
+        assert_eq!(install.mode, ApprovalMode::Auto);
+        assert_eq!(install.risk, RiskClass::Medium);
+
+        let uninstall = cfg
+            .preset_defaults
+            .get(&Capability::PersonaUninstall)
+            .expect("PersonaUninstall preset default should be registered");
+        assert_eq!(uninstall.mode, ApprovalMode::Ask);
+        assert_eq!(uninstall.risk, RiskClass::Medium);
+
+        let switch_cap = cfg
+            .preset_defaults
+            .get(&Capability::PersonaSwitch)
+            .expect("PersonaSwitch preset default should be registered");
+        assert_eq!(switch_cap.mode, ApprovalMode::Auto);
+        assert_eq!(switch_cap.risk, RiskClass::Low);
+    }
+
+    #[test]
+    fn persona_delivery_capabilities_round_trip_through_serde() {
+        for cap in [
+            Capability::PersonaDownload,
+            Capability::PersonaInstall,
+            Capability::PersonaUninstall,
+            Capability::PersonaSwitch,
         ] {
             let s = serde_json::to_string(&cap).unwrap();
             let back: Capability = serde_json::from_str(&s).unwrap();
