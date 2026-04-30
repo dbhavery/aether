@@ -58,6 +58,11 @@ aether-l7-trust       = { path = "../../../packages/l7-trust" }
 # (This Cargo.toml declares a standalone [workspace] above, so we
 # can't use `workspace = true` to inherit from the repo-root manifest.)
 base64                = "0.22"
+# ADR-0012 Tier-2 install — `install_persona_via_http` stages the
+# downloaded manifest + zip in a self-cleaning tempdir before handing
+# them to the L6 install primitives. Was test-only; promoted to a
+# regular dep when the runtime install path landed.
+tempfile              = "3"
 
 [features]
 # By default Tauri's `custom-protocol` feature is enabled only in release
@@ -79,7 +84,6 @@ speech-whispercpp = ["aether-l4-router/speech-whispercpp"]
 sqlite-backend = []
 
 [dev-dependencies]
-tempfile = "3"
 # `tauri/test` exposes `mock_app()` + `MockRuntime`. Phase 4D backfill
 # tests need a live `AppHandle` to drive `spawn_backfill` end-to-end
 # (timing, double-start guard, cancel cadence). Enabled only for tests

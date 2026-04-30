@@ -1109,10 +1109,7 @@ impl AppState {
 
     /// Snapshot the current tier config. Cheap clone; safe for Tauri.
     pub fn tier_config(&self) -> TierConfig {
-        self.tier_config
-            .read()
-            .expect("tier cfg read lock")
-            .clone()
+        self.tier_config.read().expect("tier cfg read lock").clone()
     }
 
     /// User-initiated tier change (Settings UI). Updates `selected_tier`,
@@ -1163,10 +1160,7 @@ impl AppState {
             let mut w = self.tier_config.write().expect("tier cfg write lock");
             w.detected_tier = recommended;
             w.hardware_snapshot = snapshot;
-            w.detected_at_ms = w
-                .hardware_snapshot
-                .detected_at_ms
-                .max(w.detected_at_ms);
+            w.detected_at_ms = w.hardware_snapshot.detected_at_ms.max(w.detected_at_ms);
             // If selected matches the new detected, drop any manual-
             // override flag — user's choice now coincides with detection.
             if w.selected_tier == recommended {
@@ -1215,10 +1209,7 @@ impl AppState {
     ///   or the standard default `http://127.0.0.1:11434`.
     pub fn probe_readiness_now(&self) -> ReadinessState {
         let cfg = self.memory_config();
-        let disk = self
-            .tier_config()
-            .hardware_snapshot
-            .disk_available_gb;
+        let disk = self.tier_config().hardware_snapshot.disk_available_gb;
         let base_url = std::env::var("AETHER_EMBED_OLLAMA_BASE_URL")
             .unwrap_or_else(|_| "http://127.0.0.1:11434".to_string());
         let next = crate::retrieval::probe_readiness(
@@ -1330,9 +1321,7 @@ impl AppState {
         match prefix {
             "ollama" => {
                 let base = std::env::var("AETHER_EMBED_OLLAMA_BASE_URL")
-                    .unwrap_or_else(|_| {
-                        aether_l2_memory::DEFAULT_OLLAMA_BASE_URL.to_string()
-                    });
+                    .unwrap_or_else(|_| aether_l2_memory::DEFAULT_OLLAMA_BASE_URL.to_string());
                 let new_provider: Arc<dyn EmbeddingProvider> =
                     Arc::new(OllamaEmbeddingProvider::new(base, rest));
                 if let Ok(mut w) = self.embedding_provider.write() {
@@ -2113,11 +2102,7 @@ humor: "dry"
 
         // Boot with an empty persona dir → catalog is the built-ins only.
         let state = AppState::new().expect("AppState::new");
-        let before: Vec<String> = state
-            .catalog_entries()
-            .into_iter()
-            .map(|e| e.id)
-            .collect();
+        let before: Vec<String> = state.catalog_entries().into_iter().map(|e| e.id).collect();
         assert!(
             !before.contains(&"freshpick".to_string()),
             "precondition: freshpick must not be in the built-in catalog"
@@ -2137,11 +2122,7 @@ humor: "dry"
         std::fs::write(tmp.path().join("freshpick.yaml"), yaml).unwrap();
 
         // Catalog should still NOT see it before refresh.
-        let mid: Vec<String> = state
-            .catalog_entries()
-            .into_iter()
-            .map(|e| e.id)
-            .collect();
+        let mid: Vec<String> = state.catalog_entries().into_iter().map(|e| e.id).collect();
         assert!(
             !mid.contains(&"freshpick".to_string()),
             "catalog must not auto-rescan; saw {mid:?}"
@@ -2151,11 +2132,7 @@ humor: "dry"
         // live catalog must include `freshpick`.
         let added = state.refresh_catalog();
         assert_eq!(added, 1, "refresh_catalog should report 1 new entry");
-        let after: Vec<String> = state
-            .catalog_entries()
-            .into_iter()
-            .map(|e| e.id)
-            .collect();
+        let after: Vec<String> = state.catalog_entries().into_iter().map(|e| e.id).collect();
         assert!(
             after.contains(&"freshpick".to_string()),
             "freshpick should be in catalog after refresh; saw {after:?}"
@@ -2185,11 +2162,7 @@ humor: "dry"
         // Pack was present at boot, so it's already merged.
         assert_eq!(state.refresh_catalog(), 0);
         assert_eq!(state.refresh_catalog(), 0);
-        let ids: Vec<String> = state
-            .catalog_entries()
-            .into_iter()
-            .map(|e| e.id)
-            .collect();
+        let ids: Vec<String> = state.catalog_entries().into_iter().map(|e| e.id).collect();
         let count = ids.iter().filter(|id| id.as_str() == "twice").count();
         assert_eq!(count, 1, "expected exactly one `twice` entry, saw {ids:?}");
     }

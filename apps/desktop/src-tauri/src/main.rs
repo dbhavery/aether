@@ -41,8 +41,7 @@ use tauri::Manager;
 /// Until then, the constant is wired so callers can be tested
 /// end-to-end against the fixture, and the swap-to-real-key
 /// motion is a single-line edit.
-const RELEASE_PUBLIC_KEY_B64: &str =
-    "6kpsY+KcUgq+9VB7Ey7F+ZVHdq6+vnuSQh7qaRRG0iw=";
+const RELEASE_PUBLIC_KEY_B64: &str = "6kpsY+KcUgq+9VB7Ey7F+ZVHdq6+vnuSQh7qaRRG0iw=";
 
 /// Verify a signed persona manifest with the bundled public key.
 ///
@@ -54,7 +53,6 @@ const RELEASE_PUBLIC_KEY_B64: &str =
 /// Most callers will receive the manifest bytes from a network
 /// fetch; the bytes themselves stay opaque to this function so it
 /// can be unit-tested without an HTTP roundtrip.
-#[allow(dead_code)] // Used by Tier-2 install; install command lands in a follow-up commit.
 fn verify_persona_manifest_with_bundled_key(
     manifest_bytes: &[u8],
 ) -> Result<(), aether_l6_persona::ManifestVerifyError> {
@@ -149,6 +147,7 @@ fn main() {
             commands::clear_session,
             commands::audit_recent,
             commands::list_personas,
+            commands::install_persona,
             commands::switch_persona,
             commands::set_autonomy_preset,
             commands::current_autonomy_preset,
@@ -686,8 +685,11 @@ mod bundled_persona_pack_tests {
 /// treats every error as terminal — no partial install survives a
 /// failed run thanks to L6's `.partial → final` rename.
 #[derive(Debug, thiserror::Error)]
-#[allow(dead_code)] // Surfaced by Tier-2 install flow (HTTP wrapper lands later).
-enum PersonaInstallError {
+pub(crate) enum PersonaInstallError {
+    #[error("personas dir is not configured (no app_data_dir and no AETHER_PERSONAS_DIR env)")]
+    NoPersonasDir,
+    #[error("network fetch from {url:?} failed: {message}")]
+    Fetch { url: String, message: String },
     #[error("read failed at {path:?}: {source}")]
     Io {
         path: std::path::PathBuf,
@@ -741,8 +743,7 @@ enum PersonaInstallError {
 /// `AppState` is hard-coded today; ADR-0012 §Switch flow expects an
 /// "engine pause / install / resume" wrapper which lands when the
 /// catalog gains interior mutability.
-#[allow(dead_code)] // Same caveat as the helper above.
-fn install_persona_from_local_files(
+pub(crate) fn install_persona_from_local_files(
     manifest_path: &std::path::Path,
     zip_path: &std::path::Path,
     slug: &str,
@@ -779,6 +780,284 @@ fn install_persona_from_local_files(
         .map_err(|source| PersonaInstallError::Extract { source })
 }
 
+/// Maximum bytes we'll accept for either a manifest or a pack zip.
+/// Manifests are JSON describing a handful of personas, packs are
+/// modest yaml + voice clips + a thumbnail. 32 MiB is a generous
+/// ceiling that still rejects "the network handed us a tarball of
+/// the entire site" denial-of-service input.
+const PERSONA_FETCH_BYTE_LIMIT: u64 = 32 * 1024 * 1024;
+
+/// Stream `url` into `dest`. Refuses inputs larger than
+/// [`PERSONA_FETCH_BYTE_LIMIT`] so a hostile server cannot exhaust
+/// disk by streaming forever. Truncates+overwrites `dest` on success.
+///
+/// Kept blocking — Tauri commands schedule this on a blocking task
+/// pool so the IPC thread stays responsive. ureq is already a
+/// dependency for the Ollama readiness probe (see Cargo.toml), so
+/// pulling it in here adds no new transitive deps.
+pub(crate) fn fetch_url_to_file(
+    url: &str,
+    dest: &std::path::Path,
+) -> Result<(), PersonaInstallError> {
+    let response = ureq::get(url)
+        .call()
+        .map_err(|e| PersonaInstallError::Fetch {
+            url: url.to_string(),
+            message: e.to_string(),
+        })?;
+    let mut reader = response.into_reader();
+    let mut limited = std::io::Read::take(&mut reader, PERSONA_FETCH_BYTE_LIMIT + 1);
+    let mut file = std::fs::File::create(dest).map_err(|e| PersonaInstallError::Io {
+        path: dest.to_path_buf(),
+        source: e,
+    })?;
+    let copied = std::io::copy(&mut limited, &mut file).map_err(|e| PersonaInstallError::Io {
+        path: dest.to_path_buf(),
+        source: e,
+    })?;
+    if copied > PERSONA_FETCH_BYTE_LIMIT {
+        // Drop the over-sized partial; never leave the caller with a
+        // file the orchestrator might trust.
+        let _ = std::fs::remove_file(dest);
+        return Err(PersonaInstallError::Fetch {
+            url: url.to_string(),
+            message: format!("response exceeded {} byte limit", PERSONA_FETCH_BYTE_LIMIT),
+        });
+    }
+    Ok(())
+}
+
+/// Look up the asset URL for `slug` inside a signed manifest.
+///
+/// Verifies the Ed25519 signature against the bundled release public
+/// key BEFORE trusting the manifest's contents — so the URL we
+/// download from has been authenticated by Don's signing key. The
+/// orchestrator that follows re-verifies signature and SHA-256 on the
+/// downloaded zip; this helper exists only to know *where* to
+/// download.
+pub(crate) fn resolve_pack_asset_for_slug(
+    manifest_bytes: &[u8],
+    slug: &str,
+) -> Result<String, PersonaInstallError> {
+    verify_persona_manifest_with_bundled_key(manifest_bytes)
+        .map_err(|source| PersonaInstallError::ManifestSignature { source })?;
+    let manifest: serde_json::Value = serde_json::from_slice(manifest_bytes)
+        .map_err(|source| PersonaInstallError::ManifestJson { source })?;
+    let entry = manifest
+        .get("personas")
+        .and_then(|v| v.as_array())
+        .and_then(|arr| {
+            arr.iter()
+                .find(|e| e.get("slug").and_then(|v| v.as_str()) == Some(slug))
+        })
+        .ok_or_else(|| PersonaInstallError::SlugNotInManifest {
+            slug: slug.to_string(),
+        })?;
+    let asset_url = entry
+        .get("asset_url")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| PersonaInstallError::SlugEntryMalformed {
+            slug: slug.to_string(),
+            field: "asset_url".to_string(),
+        })?
+        .to_string();
+    Ok(asset_url)
+}
+
+/// Full Tier-2 install: download manifest, download zip, verify+extract.
+///
+/// Wraps [`install_persona_from_local_files`] with the two HTTP
+/// fetches it needs. Lands the final pack at
+/// `dest_dir/<slug>/`. Returns the final extracted dir on success.
+///
+/// Caller is expected to invoke
+/// [`crate::state::AppState::refresh_catalog`] after a successful
+/// install so the live shell sees the new persona.
+pub(crate) fn install_persona_via_http(
+    manifest_url: &str,
+    slug: &str,
+    dest_dir: &std::path::Path,
+) -> Result<std::path::PathBuf, PersonaInstallError> {
+    // Stage manifest + zip in a tempdir so a partial download doesn't
+    // pollute the personas dir; tempdir self-deletes on drop.
+    let staging = tempfile::tempdir().map_err(|e| PersonaInstallError::Io {
+        path: dest_dir.to_path_buf(),
+        source: e,
+    })?;
+    let manifest_path = staging.path().join("manifest.json");
+    fetch_url_to_file(manifest_url, &manifest_path)?;
+    let manifest_bytes =
+        std::fs::read(&manifest_path).map_err(|source| PersonaInstallError::Io {
+            path: manifest_path.clone(),
+            source,
+        })?;
+    let asset_url = resolve_pack_asset_for_slug(&manifest_bytes, slug)?;
+    let zip_path = staging.path().join("pack.zip");
+    fetch_url_to_file(&asset_url, &zip_path)?;
+    install_persona_from_local_files(&manifest_path, &zip_path, slug, dest_dir)
+}
+
+#[cfg(test)]
+mod http_install_tests {
+    //! Integration tests for the Tier-2 HTTP install path. Drives a
+    //! real local HTTP server (a tiny `std::net::TcpListener` thread)
+    //! so the full download → verify → extract loop is exercised
+    //! without mocking ureq.
+    use super::*;
+    use std::io::{Read as _, Write as _};
+    use std::net::TcpListener;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+
+    /// Build a deterministic in-memory zip with a single
+    /// `alice/persona.yaml` entry — same shape `extract_pack_zip`
+    /// expects (top-level slug-named directory).
+    fn build_alice_zip_bytes() -> Vec<u8> {
+        use std::io::{Cursor, Write as _};
+        use zip::write::SimpleFileOptions;
+        let mut cursor = Cursor::new(Vec::<u8>::new());
+        {
+            let mut w = zip::ZipWriter::new(&mut cursor);
+            let opts =
+                SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+            w.start_file("alice/persona.yaml", opts).unwrap();
+            w.write_all(b"id: alice\nversion: 1\nname: Alice\ndescription: x\n")
+                .unwrap();
+            w.finish().unwrap();
+        }
+        cursor.into_inner()
+    }
+
+    /// Build a manifest-and-zip pair for slug `alice`, signed by the
+    /// fixture key (seed `[7u8; 32]`) so it verifies against the
+    /// bundled `RELEASE_PUBLIC_KEY_B64`. Embeds `asset_url` so the
+    /// runtime install path can fetch the zip back from a test server.
+    fn fixture_signed_manifest_with_url(asset_url: &str) -> (Vec<u8>, Vec<u8>, String) {
+        use ed25519_dalek::Signer as _;
+        use ed25519_dalek::SigningKey;
+        use sha2::{Digest as _, Sha256};
+
+        let zip = build_alice_zip_bytes();
+        let sha = format!("{:x}", Sha256::digest(&zip));
+
+        // Same seed used in cross_language_verify.rs — keeps the bundled
+        // RELEASE_PUBLIC_KEY_B64 const a valid verifier for our re-signed
+        // manifest.
+        let signing = SigningKey::from_bytes(&[7u8; 32]);
+
+        let manifest_personas = serde_json::json!([{
+            "slug": "alice",
+            "version": "1.0.0",
+            "asset_url": asset_url,
+            "sha256": sha,
+        }]);
+        // The verifier hashes the personas array's compact-canonical
+        // serialization (BTreeMap keys, no whitespace) — same shape
+        // sign_manifest.py produces.
+        let canonical = serde_json::to_vec(&manifest_personas).unwrap();
+        let signature = signing.sign(&canonical);
+        use base64::Engine as _;
+        let sig_b64 = base64::engine::general_purpose::STANDARD.encode(signature.to_bytes());
+
+        let wrapped = serde_json::json!({
+            "schema_version": 1,
+            "personas": manifest_personas,
+            "signature": format!("ed25519:{sig_b64}"),
+        });
+        let manifest_bytes = serde_json::to_vec(&wrapped).unwrap();
+        (manifest_bytes, zip, sha)
+    }
+
+    /// Bind a random localhost port without yet serving anything.
+    /// Lets the caller learn the URL before signing a manifest that
+    /// points at it.
+    fn bind_random_port() -> (TcpListener, String) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let addr = listener.local_addr().unwrap();
+        let url = format!("http://{}", addr);
+        (listener, url)
+    }
+
+    /// Drive a previously-bound listener as a one-shot HTTP server
+    /// that serves `manifest_bytes` at `/manifest.json` and
+    /// `zip_bytes` at `/pack.zip`. Returns a stop flag — set to true
+    /// to terminate the server thread.
+    fn serve_listener(
+        listener: TcpListener,
+        manifest_bytes: Vec<u8>,
+        zip_bytes: Vec<u8>,
+    ) -> Arc<AtomicBool> {
+        let stop = Arc::new(AtomicBool::new(false));
+        let stop_clone = stop.clone();
+        listener.set_nonblocking(true).unwrap();
+        std::thread::spawn(move || {
+            while !stop_clone.load(Ordering::Relaxed) {
+                match listener.accept() {
+                    Ok((mut stream, _)) => {
+                        let mut buf = [0u8; 1024];
+                        let _ = stream.read(&mut buf);
+                        let req = String::from_utf8_lossy(&buf);
+                        let body: &[u8] = if req.contains("/manifest.json") {
+                            &manifest_bytes
+                        } else if req.contains("/pack.zip") {
+                            &zip_bytes
+                        } else {
+                            b""
+                        };
+                        let header = format!(
+                            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                            body.len()
+                        );
+                        let _ = stream.write_all(header.as_bytes());
+                        let _ = stream.write_all(body);
+                    }
+                    Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                        std::thread::sleep(std::time::Duration::from_millis(10));
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
+        stop
+    }
+
+    #[test]
+    fn install_persona_via_http_end_to_end() {
+        let dest = tempfile::tempdir().unwrap();
+        // Bind first to learn the port, then sign the manifest with
+        // an asset_url that points at this same listener.
+        let (listener, base) = bind_random_port();
+        let asset_url = format!("{}/pack.zip", base);
+        let (manifest_bytes, zip_bytes, _) = fixture_signed_manifest_with_url(&asset_url);
+        let stop = serve_listener(listener, manifest_bytes, zip_bytes);
+
+        let manifest_url = format!("{}/manifest.json", base);
+        let result = install_persona_via_http(&manifest_url, "alice", dest.path());
+        stop.store(true, Ordering::Relaxed);
+        let final_dir = result.expect("install_persona_via_http should succeed");
+        assert!(final_dir.is_dir(), "final dir not created: {final_dir:?}");
+        assert!(
+            final_dir.ends_with("alice"),
+            "wrong slug dir: {final_dir:?}"
+        );
+    }
+
+    #[test]
+    fn fetch_url_to_file_rejects_missing_host() {
+        // A bind-then-immediately-close port. ureq returns Transport.
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener); // close — no one is listening now.
+        let dst = tempfile::NamedTempFile::new().unwrap();
+        let url = format!("http://127.0.0.1:{}/whatever", port);
+        let err = fetch_url_to_file(&url, dst.path()).expect_err("should fail to fetch");
+        match err {
+            PersonaInstallError::Fetch { .. } => {}
+            other => panic!("expected Fetch err, got {other:?}"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod bundled_release_key_tests {
     //! Locks the contract between `RELEASE_PUBLIC_KEY_B64` (the bundled
@@ -800,8 +1079,7 @@ mod bundled_release_key_tests {
         // or regenerates with a new key, this test fails.
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../../packages/l6-persona/tests/fixtures/signed_manifest.json");
-        std::fs::read(&path)
-            .unwrap_or_else(|e| panic!("read fixture {}: {e}", path.display()))
+        std::fs::read(&path).unwrap_or_else(|e| panic!("read fixture {}: {e}", path.display()))
     }
 
     #[test]
@@ -835,10 +1113,7 @@ mod bundled_release_key_tests {
         bytes = tampered.into_bytes();
         let err = verify_persona_manifest_with_bundled_key(&bytes).unwrap_err();
         assert!(
-            matches!(
-                err,
-                aether_l6_persona::ManifestVerifyError::BadSignature
-            ),
+            matches!(err, aether_l6_persona::ManifestVerifyError::BadSignature),
             "expected BadSignature, got {err:?}"
         );
     }
@@ -873,8 +1148,8 @@ mod persona_install_orchestration_tests {
         let zip_path = dir.join(name);
         let f = fs::File::create(&zip_path).unwrap();
         let mut w = zip::ZipWriter::new(f);
-        let opts = SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Deflated);
+        let opts =
+            SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
         w.start_file("alice/persona.yaml", opts).unwrap();
         w.write_all(b"id: alice\nversion: 1\nname: Alice\ndescription: x\n")
             .unwrap();
@@ -900,8 +1175,7 @@ mod persona_install_orchestration_tests {
 
         let raw = fs::read(fixture_signed_manifest_path()).unwrap();
         let mut manifest: serde_json::Value = serde_json::from_slice(&raw).unwrap();
-        manifest["personas"][0]["sha256"] =
-            serde_json::Value::String(alice_sha.to_string());
+        manifest["personas"][0]["sha256"] = serde_json::Value::String(alice_sha.to_string());
 
         // Re-sign with the same deterministic key the fixture used
         // (seed [7;32], also the cross-language Rust test seed).
@@ -923,8 +1197,8 @@ mod persona_install_orchestration_tests {
         let manifest = signed_manifest_with_sha(&tmp, &sha);
         let dest = tmp.path().join("install");
 
-        let result = install_persona_from_local_files(&manifest, &zip, "alice", &dest)
-            .expect("install");
+        let result =
+            install_persona_from_local_files(&manifest, &zip, "alice", &dest).expect("install");
         assert_eq!(result, dest.join("alice"));
         assert!(dest.join("alice/alice/persona.yaml").exists());
     }
@@ -936,8 +1210,7 @@ mod persona_install_orchestration_tests {
         let manifest = signed_manifest_with_sha(&tmp, &sha);
         let dest = tmp.path().join("install");
 
-        let err = install_persona_from_local_files(&manifest, &zip, "ghost", &dest)
-            .unwrap_err();
+        let err = install_persona_from_local_files(&manifest, &zip, "ghost", &dest).unwrap_err();
         assert!(matches!(
             err,
             super::PersonaInstallError::SlugNotInManifest { .. }
@@ -953,13 +1226,11 @@ mod persona_install_orchestration_tests {
         // Corrupt the manifest signature post-sign.
         let mut m: serde_json::Value =
             serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
-        m["personas"][0]["display_name"] =
-            serde_json::Value::String("Corrupted".to_string());
+        m["personas"][0]["display_name"] = serde_json::Value::String("Corrupted".to_string());
         fs::write(&manifest, serde_json::to_vec(&m).unwrap()).unwrap();
 
         let dest = tmp.path().join("install");
-        let err = install_persona_from_local_files(&manifest, &zip, "alice", &dest)
-            .unwrap_err();
+        let err = install_persona_from_local_files(&manifest, &zip, "alice", &dest).unwrap_err();
         assert!(matches!(
             err,
             super::PersonaInstallError::ManifestSignature { .. }
@@ -976,8 +1247,7 @@ mod persona_install_orchestration_tests {
         let manifest = signed_manifest_with_sha(&tmp, &"f".repeat(64));
         let dest = tmp.path().join("install");
 
-        let err = install_persona_from_local_files(&manifest, &zip, "alice", &dest)
-            .unwrap_err();
+        let err = install_persona_from_local_files(&manifest, &zip, "alice", &dest).unwrap_err();
         assert!(matches!(err, super::PersonaInstallError::Sha256 { .. }));
         assert!(!dest.join("alice").exists());
     }
@@ -1028,8 +1298,7 @@ mod persona_seed_tests {
         // Non-yaml — must be ignored.
         write(src.path(), "readme.md", "not a pack");
 
-        let outcome =
-            seed_persona_pack_dir_from(src.path(), dest.path()).expect("seed");
+        let outcome = seed_persona_pack_dir_from(src.path(), dest.path()).expect("seed");
         assert_eq!(
             outcome,
             PersonaSeedOutcome::Copied {
@@ -1050,8 +1319,7 @@ mod persona_seed_tests {
         // Pre-existing user-edited copy at dest.
         write(dest.path(), "alice.yaml", "id: alice_USER\n");
 
-        let outcome =
-            seed_persona_pack_dir_from(src.path(), dest.path()).expect("seed");
+        let outcome = seed_persona_pack_dir_from(src.path(), dest.path()).expect("seed");
         assert_eq!(
             outcome,
             PersonaSeedOutcome::Copied {
@@ -1061,7 +1329,10 @@ mod persona_seed_tests {
         );
         // User edit survives — overwrite would have replaced this.
         let body = fs::read_to_string(dest.path().join("alice.yaml")).unwrap();
-        assert!(body.contains("alice_USER"), "user edit was overwritten: {body:?}");
+        assert!(
+            body.contains("alice_USER"),
+            "user edit was overwritten: {body:?}"
+        );
     }
 
     #[test]
@@ -1090,8 +1361,7 @@ mod persona_seed_tests {
         write(src.path(), "alice.yaml", "id: alice\n");
         write(src.path(), "bob.yaml", "id: bob\n");
 
-        let first =
-            seed_persona_pack_dir_from(src.path(), dest.path()).expect("seed1");
+        let first = seed_persona_pack_dir_from(src.path(), dest.path()).expect("seed1");
         assert_eq!(
             first,
             PersonaSeedOutcome::Copied {
@@ -1100,8 +1370,7 @@ mod persona_seed_tests {
             }
         );
 
-        let second =
-            seed_persona_pack_dir_from(src.path(), dest.path()).expect("seed2");
+        let second = seed_persona_pack_dir_from(src.path(), dest.path()).expect("seed2");
         assert_eq!(
             second,
             PersonaSeedOutcome::Copied {
@@ -1122,8 +1391,7 @@ mod persona_seed_tests {
         // Pre-existing install: only alice is on disk.
         write(dest.path(), "alice.yaml", "id: alice\n");
 
-        let outcome =
-            seed_persona_pack_dir_from(src.path(), dest.path()).expect("seed");
+        let outcome = seed_persona_pack_dir_from(src.path(), dest.path()).expect("seed");
         assert_eq!(
             outcome,
             PersonaSeedOutcome::Copied {

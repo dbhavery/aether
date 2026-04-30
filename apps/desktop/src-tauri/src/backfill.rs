@@ -130,10 +130,7 @@ pub fn estimate_unembedded_count(state: &AppState) -> usize {
     let mut total = 0;
     for &domain in EMBED_ELIGIBLE_DOMAINS {
         let memory_rows = count_memory_rows_for_domain(state, domain);
-        let embedded = state
-            .embedding_store
-            .count(domain)
-            .unwrap_or(memory_rows); // pessimistic: if count fails, assume all embedded
+        let embedded = state.embedding_store.count(domain).unwrap_or(memory_rows); // pessimistic: if count fails, assume all embedded
         total += memory_rows.saturating_sub(embedded);
     }
     total
@@ -175,11 +172,7 @@ fn count_memory_rows_for_domain(state: &AppState, domain: L2Domain) -> usize {
 /// runtime (no event emission). Production callers go through
 /// [`run_backfill_worker`].
 #[cfg(test)]
-pub fn run_backfill_worker_headless(
-    state: &AppState,
-    job_id: String,
-    options: BackfillOptions,
-) {
+pub fn run_backfill_worker_headless(state: &AppState, job_id: String, options: BackfillOptions) {
     run_backfill_worker::<tauri::test::MockRuntime>(state, None, job_id, options);
 }
 
@@ -216,7 +209,10 @@ pub fn run_backfill_worker<R: Runtime>(
     }
 
     {
-        let mut p = state.backfill_progress.lock().expect("backfill progress lock");
+        let mut p = state
+            .backfill_progress
+            .lock()
+            .expect("backfill progress lock");
         p.total = total;
         p.completed = 0;
         p.failures = 0;
@@ -286,12 +282,18 @@ pub fn run_backfill_worker<R: Runtime>(
             }
         };
         {
-            let mut p = state.backfill_progress.lock().expect("backfill progress lock");
+            let mut p = state
+                .backfill_progress
+                .lock()
+                .expect("backfill progress lock");
             p.current_domain = Some(domain.label().to_string());
         }
         for (sid, seq, content) in rows {
             if state.backfill_cancel.load(Ordering::SeqCst) {
-                let mut p = state.backfill_progress.lock().expect("backfill progress lock");
+                let mut p = state
+                    .backfill_progress
+                    .lock()
+                    .expect("backfill progress lock");
                 p.cancelled = true;
                 break 'outer;
             }
@@ -388,22 +390,34 @@ pub fn run_backfill_worker<R: Runtime>(
 }
 
 fn bump_completed(state: &AppState) {
-    let mut p = state.backfill_progress.lock().expect("backfill progress lock");
+    let mut p = state
+        .backfill_progress
+        .lock()
+        .expect("backfill progress lock");
     p.completed += 1;
 }
 
 fn bump_failures(state: &AppState) {
-    let mut p = state.backfill_progress.lock().expect("backfill progress lock");
+    let mut p = state
+        .backfill_progress
+        .lock()
+        .expect("backfill progress lock");
     p.failures += 1;
 }
 
 fn bump_skipped(state: &AppState) {
-    let mut p = state.backfill_progress.lock().expect("backfill progress lock");
+    let mut p = state
+        .backfill_progress
+        .lock()
+        .expect("backfill progress lock");
     p.skipped_already_embedded += 1;
 }
 
 fn bump_recovered(state: &AppState) {
-    let mut p = state.backfill_progress.lock().expect("backfill progress lock");
+    let mut p = state
+        .backfill_progress
+        .lock()
+        .expect("backfill progress lock");
     p.recovered_failures += 1;
 }
 
@@ -472,9 +486,16 @@ fn is_transient_embed_failure(err: &L2Error) -> bool {
 
     // 5xx HTTP status — Ollama queue pressure, internal error,
     // restart-in-progress. Worth at least one retry.
-    let http_5xx = ["status code 500", "status code 502", "status code 503",
-                    "status code 504", "status: 500", "status: 502",
-                    "status: 503", "status: 504"];
+    let http_5xx = [
+        "status code 500",
+        "status code 502",
+        "status code 503",
+        "status code 504",
+        "status: 500",
+        "status: 502",
+        "status: 503",
+        "status: 504",
+    ];
     if http_5xx.iter().any(|needle| lower.contains(needle)) {
         return true;
     }
@@ -522,9 +543,17 @@ fn cancel_aware_sleep(state: &AppState, total: Duration) -> bool {
     !state.backfill_cancel.load(Ordering::SeqCst)
 }
 
-fn finalize<R: Runtime>(state: &AppState, app: Option<&AppHandle<R>>, job_id: &str, cancelled: bool) {
+fn finalize<R: Runtime>(
+    state: &AppState,
+    app: Option<&AppHandle<R>>,
+    job_id: &str,
+    cancelled: bool,
+) {
     {
-        let mut p = state.backfill_progress.lock().expect("backfill progress lock");
+        let mut p = state
+            .backfill_progress
+            .lock()
+            .expect("backfill progress lock");
         p.finished = true;
         p.cancelled = cancelled;
         p.current_domain = None;
@@ -665,11 +694,16 @@ mod tests {
         run_backfill_worker_headless(
             &state,
             "test-job".into(),
-            BackfillOptions { per_row_pause_ms: 0 },
+            BackfillOptions {
+                per_row_pause_ms: 0,
+            },
         );
         let p = state.backfill_progress.lock().unwrap();
         assert!(p.finished, "worker must mark finished");
-        assert!(!p.cancelled, "worker must not be marked cancelled on success");
+        assert!(
+            !p.cancelled,
+            "worker must not be marked cancelled on success"
+        );
         assert_eq!(p.total, 3, "total must match seeded row count");
         assert_eq!(p.completed, 3, "every row must be embedded");
         assert_eq!(p.failures, 0, "no failures on stub embedder");
@@ -685,7 +719,9 @@ mod tests {
         run_backfill_worker_headless(
             &state,
             "test-job".into(),
-            BackfillOptions { per_row_pause_ms: 0 },
+            BackfillOptions {
+                per_row_pause_ms: 0,
+            },
         );
         assert!(
             !state.backfill_in_progress.load(Ordering::SeqCst),
@@ -705,7 +741,9 @@ mod tests {
         run_backfill_worker_headless(
             &state,
             "test-job".into(),
-            BackfillOptions { per_row_pause_ms: 0 },
+            BackfillOptions {
+                per_row_pause_ms: 0,
+            },
         );
         let p = state.backfill_progress.lock().unwrap();
         assert!(p.finished);
@@ -725,7 +763,9 @@ mod tests {
         run_backfill_worker_headless(
             &state,
             "first".into(),
-            BackfillOptions { per_row_pause_ms: 0 },
+            BackfillOptions {
+                per_row_pause_ms: 0,
+            },
         );
         {
             let p = state.backfill_progress.lock().unwrap();
@@ -739,7 +779,9 @@ mod tests {
         run_backfill_worker_headless(
             &state,
             "second".into(),
-            BackfillOptions { per_row_pause_ms: 0 },
+            BackfillOptions {
+                per_row_pause_ms: 0,
+            },
         );
         let p = state.backfill_progress.lock().unwrap();
         assert!(p.finished);
@@ -772,7 +814,10 @@ mod tests {
         let mut all_ids: Vec<MemoryId> = Vec::new();
         for sid in sessions {
             for r in store.recent(&sid).unwrap().records {
-                all_ids.push(MemoryId::new(format!("mem-{}-{}", r.session_id, r.sequence)));
+                all_ids.push(MemoryId::new(format!(
+                    "mem-{}-{}",
+                    r.session_id, r.sequence
+                )));
             }
         }
         assert_eq!(all_ids.len(), 5);
@@ -791,7 +836,9 @@ mod tests {
         run_backfill_worker_headless(
             &state,
             "mixed".into(),
-            BackfillOptions { per_row_pause_ms: 0 },
+            BackfillOptions {
+                per_row_pause_ms: 0,
+            },
         );
         let p = state.backfill_progress.lock().unwrap();
         assert!(p.finished);
@@ -817,7 +864,9 @@ mod tests {
         run_backfill_worker_headless(
             &state,
             "warmup".into(),
-            BackfillOptions { per_row_pause_ms: 0 },
+            BackfillOptions {
+                per_row_pause_ms: 0,
+            },
         );
 
         // Now pre-cancel and run again. Every row would be a skip, but
@@ -826,7 +875,9 @@ mod tests {
         run_backfill_worker_headless(
             &state,
             "cancelled".into(),
-            BackfillOptions { per_row_pause_ms: 0 },
+            BackfillOptions {
+                per_row_pause_ms: 0,
+            },
         );
         let p = state.backfill_progress.lock().unwrap();
         assert!(p.finished);
@@ -874,7 +925,9 @@ mod tests {
         let job_id = spawn_backfill(
             state.clone(),
             app.handle().clone(),
-            BackfillOptions { per_row_pause_ms: 0 },
+            BackfillOptions {
+                per_row_pause_ms: 0,
+            },
         )
         .expect("first start must succeed");
         let elapsed = t0.elapsed();
@@ -904,7 +957,9 @@ mod tests {
         let first = spawn_backfill(
             state.clone(),
             app.handle().clone(),
-            BackfillOptions { per_row_pause_ms: 5 },
+            BackfillOptions {
+                per_row_pause_ms: 5,
+            },
         );
         assert!(first.is_some(), "first spawn must succeed");
 
@@ -912,7 +967,9 @@ mod tests {
         let second = spawn_backfill(
             state.clone(),
             app.handle().clone(),
-            BackfillOptions { per_row_pause_ms: 0 },
+            BackfillOptions {
+                per_row_pause_ms: 0,
+            },
         );
         assert!(second.is_none(), "second spawn must be rejected");
         // Cancel so the test doesn't have to wait for natural
@@ -936,7 +993,9 @@ mod tests {
         spawn_backfill(
             state.clone(),
             app.handle().clone(),
-            BackfillOptions { per_row_pause_ms: 5 },
+            BackfillOptions {
+                per_row_pause_ms: 5,
+            },
         )
         .expect("spawn must succeed");
         // Give the worker a real chance to enter the row loop. 50 ms
@@ -1008,9 +1067,7 @@ mod tests {
     /// Clone a script entry by manually recreating each variant so
     /// adding a new `L2Error` arm upstream is a localised compile
     /// error here rather than a silent fallback.
-    fn clone_script_entry(
-        entry: &Result<Vec<f32>, L2Error>,
-    ) -> Result<Vec<f32>, L2Error> {
+    fn clone_script_entry(entry: &Result<Vec<f32>, L2Error>) -> Result<Vec<f32>, L2Error> {
         match entry {
             Ok(v) => Ok(v.clone()),
             Err(e) => Err(clone_l2_error(e)),
@@ -1063,7 +1120,9 @@ mod tests {
         run_backfill_worker_headless(
             &state,
             "f1-recover".into(),
-            BackfillOptions { per_row_pause_ms: 0 },
+            BackfillOptions {
+                per_row_pause_ms: 0,
+            },
         );
         let p = state.backfill_progress.lock().unwrap();
         assert!(p.finished);
@@ -1091,7 +1150,9 @@ mod tests {
         run_backfill_worker_headless(
             &state,
             "f1-giveup".into(),
-            BackfillOptions { per_row_pause_ms: 0 },
+            BackfillOptions {
+                per_row_pause_ms: 0,
+            },
         );
         let p = state.backfill_progress.lock().unwrap();
         assert!(p.finished);
@@ -1129,13 +1190,17 @@ mod tests {
         let canceller_state = state.clone();
         let canceller = std::thread::spawn(move || {
             std::thread::sleep(Duration::from_millis(20));
-            canceller_state.backfill_cancel.store(true, Ordering::SeqCst);
+            canceller_state
+                .backfill_cancel
+                .store(true, Ordering::SeqCst);
         });
 
         run_backfill_worker_headless(
             &state,
             "f1-cancel".into(),
-            BackfillOptions { per_row_pause_ms: 100 },
+            BackfillOptions {
+                per_row_pause_ms: 100,
+            },
         );
         canceller.join().unwrap();
 
@@ -1167,7 +1232,9 @@ mod tests {
         run_backfill_worker_headless(
             &state,
             "f1-no-retry-on-400".into(),
-            BackfillOptions { per_row_pause_ms: 0 },
+            BackfillOptions {
+                per_row_pause_ms: 0,
+            },
         );
         let p = state.backfill_progress.lock().unwrap();
         assert!(p.finished);
@@ -1217,8 +1284,12 @@ mod tests {
             );
         }
         // Non-Embedding variants are never transient.
-        assert!(!is_transient_embed_failure(&L2Error::Storage("disk full".into())));
-        assert!(!is_transient_embed_failure(&L2Error::Internal("poisoned".into())));
+        assert!(!is_transient_embed_failure(&L2Error::Storage(
+            "disk full".into()
+        )));
+        assert!(!is_transient_embed_failure(&L2Error::Internal(
+            "poisoned".into()
+        )));
     }
 
     #[test]
@@ -1236,7 +1307,9 @@ mod tests {
         run_backfill_worker_headless(
             &state,
             "test-job".into(),
-            BackfillOptions { per_row_pause_ms: 0 },
+            BackfillOptions {
+                per_row_pause_ms: 0,
+            },
         );
         let p = state.backfill_progress.lock().unwrap();
         assert!(p.finished);

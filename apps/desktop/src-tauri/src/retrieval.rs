@@ -708,7 +708,12 @@ mod tests {
 
     #[test]
     fn probe_returns_disabled_when_embeddings_off() {
-        let s = probe_readiness(false, Some("ollama:bge-m3"), "http://127.0.0.1:1", Some(100));
+        let s = probe_readiness(
+            false,
+            Some("ollama:bge-m3"),
+            "http://127.0.0.1:1",
+            Some(100),
+        );
         assert_eq!(s, ReadinessState::Disabled);
     }
 
@@ -718,7 +723,10 @@ mod tests {
         assert!(matches!(
             s,
             ReadinessState::NotReady {
-                reason: NotReadyReason::LowDisk { needed_gb: 2, available_gb: 0 }
+                reason: NotReadyReason::LowDisk {
+                    needed_gb: 2,
+                    available_gb: 0
+                }
             }
         ));
     }
@@ -961,13 +969,7 @@ mod tests {
             RECENCY_WEIGHT_ALPHA,
             RECENCY_HALF_LIFE,
         );
-        let fresh = combined_rank_score(
-            0.70,
-            now,
-            now,
-            RECENCY_WEIGHT_ALPHA,
-            RECENCY_HALF_LIFE,
-        );
+        let fresh = combined_rank_score(0.70, now, now, RECENCY_WEIGHT_ALPHA, RECENCY_HALF_LIFE);
         assert!(fresh > stale, "fresh must outrank stale at equal cosine");
     }
 

@@ -134,8 +134,49 @@ pub fn companion_banner(state: State<'_, std::sync::Arc<AppState>>) -> Companion
 }
 
 #[tauri::command]
-pub fn list_personas(state: State<'_, std::sync::Arc<AppState>>) -> Vec<crate::state::PersonaCatalogEntry> {
+pub fn list_personas(
+    state: State<'_, std::sync::Arc<AppState>>,
+) -> Vec<crate::state::PersonaCatalogEntry> {
     state.catalog_entries()
+}
+
+/// ADR-0012 Tier-2 install — fetch a signed persona manifest, verify it
+/// against the bundled release public key, download the slug's pack
+/// zip, SHA-256-check, atomically extract, and refresh the live
+/// catalog. Returns the number of newly-added catalog entries (0 if
+/// the slug was already installed and the rescan was a no-op).
+///
+/// Long-running and IO-heavy: scheduled on the blocking task pool so
+/// the IPC thread stays responsive while the download runs.
+#[tauri::command]
+pub async fn install_persona(
+    slug: String,
+    manifest_url: String,
+    state: State<'_, std::sync::Arc<AppState>>,
+    app: AppHandle,
+) -> Result<usize, String> {
+    use tauri::Manager;
+    let personas_dir = match app.path().app_data_dir() {
+        Ok(dir) => dir.join("personas"),
+        Err(_) => match std::env::var("AETHER_PERSONAS_DIR") {
+            Ok(v) => std::path::PathBuf::from(v),
+            Err(_) => return Err("personas dir not configured".to_string()),
+        },
+    };
+    if let Err(e) = std::fs::create_dir_all(&personas_dir) {
+        return Err(format!(
+            "could not create personas dir {}: {e}",
+            personas_dir.display()
+        ));
+    }
+    let dir_for_task = personas_dir.clone();
+    let install_outcome = tauri::async_runtime::spawn_blocking(move || {
+        crate::install_persona_via_http(&manifest_url, &slug, &dir_for_task)
+    })
+    .await
+    .map_err(|e| format!("install task failed to join: {e}"))?;
+    install_outcome.map_err(|e| format!("{e}"))?;
+    Ok(state.refresh_catalog())
 }
 
 #[tauri::command]
@@ -503,7 +544,9 @@ pub fn resolve_approval(
 }
 
 #[tauri::command]
-pub fn presence_current(state: State<'_, std::sync::Arc<AppState>>) -> Result<PresencePayload, String> {
+pub fn presence_current(
+    state: State<'_, std::sync::Arc<AppState>>,
+) -> Result<PresencePayload, String> {
     let snap = state
         .presence
         .current(SESSION_ID)
@@ -516,7 +559,9 @@ pub fn presence_current(state: State<'_, std::sync::Arc<AppState>>) -> Result<Pr
 }
 
 #[tauri::command]
-pub fn memory_recent(state: State<'_, std::sync::Arc<AppState>>) -> Result<Vec<TranscriptMessage>, String> {
+pub fn memory_recent(
+    state: State<'_, std::sync::Arc<AppState>>,
+) -> Result<Vec<TranscriptMessage>, String> {
     let w = state
         .memory
         .recent(SESSION_ID)
@@ -535,7 +580,10 @@ pub fn memory_recent(state: State<'_, std::sync::Arc<AppState>>) -> Result<Vec<T
 }
 
 #[tauri::command]
-pub fn clear_session(state: State<'_, std::sync::Arc<AppState>>, app: AppHandle) -> Result<(), String> {
+pub fn clear_session(
+    state: State<'_, std::sync::Arc<AppState>>,
+    app: AppHandle,
+) -> Result<(), String> {
     state.clear_session()?;
     transition_presence(
         &app,
@@ -894,7 +942,10 @@ fn finalize_turn(
 /// Return the newest-first telemetry entries for the Trust drawer
 /// History tab. `limit` is clamped to the internal buffer capacity.
 #[tauri::command]
-pub fn telemetry_recent(limit: Option<usize>, state: State<'_, std::sync::Arc<AppState>>) -> Vec<TelemetryEntry> {
+pub fn telemetry_recent(
+    limit: Option<usize>,
+    state: State<'_, std::sync::Arc<AppState>>,
+) -> Vec<TelemetryEntry> {
     let cap = crate::state::TELEMETRY_BUFFER_CAPACITY;
     let n = limit.unwrap_or(cap).min(cap);
     state.telemetry_recent(n)
@@ -2132,7 +2183,9 @@ pub fn transcribe_utterance(
 /// shape is an opaque re-export of `PresenceConfig`; the TS side
 /// mirrors the same fields.
 #[tauri::command]
-pub fn get_presence_config(state: State<'_, std::sync::Arc<AppState>>) -> crate::presence_config::PresenceConfig {
+pub fn get_presence_config(
+    state: State<'_, std::sync::Arc<AppState>>,
+) -> crate::presence_config::PresenceConfig {
     state.presence_config()
 }
 
@@ -2213,7 +2266,9 @@ pub fn presence_recent_history(
 /// `docs/MEMORY-V2-ARCHITECTURE.md` §3 — retention per domain,
 /// default risk per domain, embeddings opt-in block.
 #[tauri::command]
-pub fn get_memory_config(state: State<'_, std::sync::Arc<AppState>>) -> crate::memory_config::MemoryConfig {
+pub fn get_memory_config(
+    state: State<'_, std::sync::Arc<AppState>>,
+) -> crate::memory_config::MemoryConfig {
     state.memory_config()
 }
 
