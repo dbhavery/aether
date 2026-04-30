@@ -17,6 +17,7 @@ pub mod bridge;
 pub mod controller;
 pub mod engine;
 pub mod error;
+pub mod runtime;
 
 pub use attention::{
     AttentionEvent, AttentionSnapshot, AttentionThresholds, UserAttention, UserAttentionController,
@@ -28,3 +29,8 @@ pub use controller::{
 };
 pub use engine::{BehaviorClass, BehaviorFrame, PresenceEngine, PresenceTier, RenderingSurface};
 pub use error::L3Error;
+pub use runtime::{
+    AudioStreamHandle, BoxedRendererController, LogStubRenderer, MotionClipId,
+    MotionClipLibraryHandle, Renderer, RendererEvent, RenderingPresenceController,
+    RENDERER_EVENT_LOG_CAP,
+};
