@@ -1,6 +1,6 @@
 # Support
 
-Free Aether — Community Edition is an early-preview, single-maintainer project. This document explains where to ask what, and what level of support you can realistically expect during the preview.
+Free Companion — Community Edition is an early-preview, single-maintainer project. This document explains where to ask what, and what level of support you can realistically expect during the preview.
 
 ## Where to ask what
 

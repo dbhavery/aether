@@ -1,6 +1,6 @@
 # Code of Conduct
 
-The Free Aether — Community Edition project adopts the **Contributor Covenant, version 2.1**, as its code of conduct for all project spaces: the GitHub repository, issue tracker, pull-request discussions, and any future project forums.
+The Free Companion — Community Edition project adopts the **Contributor Covenant, version 2.1**, as its code of conduct for all project spaces: the GitHub repository, issue tracker, pull-request discussions, and any future project forums.
 
 - Canonical text: https://www.contributor-covenant.org/version/2/1/code_of_conduct/
 - Plain-text reference: https://www.contributor-covenant.org/version/2/1/code_of_conduct/code_of_conduct.txt

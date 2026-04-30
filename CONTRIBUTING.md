@@ -1,9 +1,9 @@
-# Contributing to Free Aether — Community Edition
+# Contributing to Free Companion — Community Edition
 
 Thank you for considering a contribution. This document explains what kinds of
 contributions help, how the work is organized, and what to expect from review.
 
-Aether is an architecture project in an early preview state. That means the
+Companion is an architecture project in an early preview state. That means the
 **contract surfaces matter more than the visible product**. Most of the
 high-leverage work right now is invisible to end users: docs, lints, test
 matrices, contract refinements, first-logic slices.
