@@ -3,6 +3,7 @@
 
 mod adapter;
 mod backfill;
+mod browser_commands;
 mod commands;
 mod hardware;
 mod idle_probe;
@@ -199,6 +200,17 @@ fn main() {
             commands::refresh_vision_models,
             commands::set_active_vision_provider,
             commands::set_active_vision_model,
+            // T1.3 — L5-gated browser automation surface. Backed by
+            // the `aether-l5-browser` PlaywrightExecutor stub today;
+            // every method propagates BackendDisabled until the real
+            // Node-subprocess driver lands.
+            browser_commands::browser_open,
+            browser_commands::browser_navigate,
+            browser_commands::browser_read_page,
+            browser_commands::browser_extract,
+            browser_commands::browser_fill_form,
+            browser_commands::browser_submit,
+            browser_commands::browser_close,
         ])
         .run(tauri::generate_context!())
         .expect("error while running aether-desktop");
