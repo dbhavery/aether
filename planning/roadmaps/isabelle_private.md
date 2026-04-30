@@ -2,13 +2,13 @@
 
 ## Role
 
-Isabelle is Don's **private personal assistant/companion** — a customized profile/branch built on top of Aether Pro. This is not a separate product and not a separate codebase. It is a **privileged profile layer** on the Aether Pro platform.
+Isabelle is Don's **private personal assistant/companion** — a customized profile/branch built on top of Companion. This is not a separate product and not a separate codebase. It is a **privileged profile layer** on the Companion platform.
 
 ---
 
 ## Architecture decision
 
-**Isabelle is a privileged profile / branch / configuration super-layer on top of the Aether Pro platform — not a completely separate foundational codebase.**
+**Isabelle is a privileged profile / branch / configuration super-layer on top of the Companion platform — not a completely separate foundational codebase.**
 
 ### Rationale
 A separate codebase would create maintenance drag:
@@ -17,9 +17,9 @@ A separate codebase would create maintenance drag:
 - Every architectural improvement would cost twice
 
 ### The pattern
-**One shared platform (Aether Pro) + a private "god-tier profile" layer only Don can access.**
+**One shared platform (Companion) + a private "god-tier profile" layer only Don can access.**
 
-- Isabelle inherits the full Aether Pro runtime.
+- Isabelle inherits the full Companion runtime.
 - Isabelle adds custom persona packs, voice packs, avatar appearance packs, memory configurations, permission presets, integrations, and workflows.
 - Isabelle-specific features live in a private overlay, not as forks of platform code.
 - Private features are intentionally excluded from public distribution.
@@ -78,8 +78,8 @@ A separate codebase would create maintenance drag:
 ## Policy
 
 - **Not distributed publicly.** Private only.
-- **Built on Aether Pro.** Does not diverge at the platform layer.
-- **All Aether Pro doctrine applies.** Isabelle is strictly additive on top.
+- **Built on Companion.** Does not diverge at the platform layer.
+- **All Companion doctrine applies.** Isabelle is strictly additive on top.
 - **Private overlay structure** — Isabelle configurations, models, and packs live separately from the public Pro codebase.
 - **Memory / data isolation** — Isabelle's memory database is never accessed by public product code paths.
 
@@ -98,7 +98,7 @@ A separate codebase would create maintenance drag:
 ### Migration strategy (to be refined)
 - **Do not auto-import.** Migration is manual / curated.
 - Review each category for relevance to new Isabelle.
-- Structured import into Aether Pro memory engine (with proper provenance, confidence, and governance).
+- Structured import into Companion memory engine (with proper provenance, confidence, and governance).
 - Old Isabelle_Kunstig data preserved read-only during migration.
 - Migration tooling lives in Pro's offline tooling layer (Python OK for this — non-runtime).
 
@@ -116,7 +116,7 @@ These are facts about Don that Isabelle should carry forward as durable memory f
 - Deep 3D neumorphic monochrome UI aesthetic preference
 - Direct communication, no fluff — Don directs, AI agents build
 - Active projects: Isabelle_Kunstig, CIGE, Library, Morning Intel, Masters Degree, VoiceType, Portfolio
-- Public product naming convention: Aether (Isabelle), Vault (Library), Forge (CIGE), Herald (Morning Intel), VoxType (VoiceType), FuelFleet (StaFull)
+- Public product naming convention: Companion (Isabelle), Vault (Library), Forge (CIGE), Herald (Morning Intel), VoxType (VoiceType), FuelFleet (StaFull)
 - Coordination pattern with 2-agent Isabelle work (see [project_two_agent_coordination.md])
 - Don's locked behavioral feedback rules (CSS/HTML for UI, no CSS mockups for showcases, clickable file links, don't ask — just execute, self-review loop, etc.)
 
@@ -126,7 +126,7 @@ This is personal context that makes Isabelle feel like Don's assistant from sess
 
 ## Tech stack
 
-**Identical to Aether Pro** — Isabelle is a profile layer, not a separate stack.
+**Identical to Companion** — Isabelle is a profile layer, not a separate stack.
 
 - Desktop shell: Tauri + TypeScript/React
 - Runtime: Rust
@@ -155,7 +155,7 @@ See [../16_tech_stack.md](../16_tech_stack.md).
 ### Public/private separation (memory rule)
 - [No personal data in public repos](file:///C:/Users/dbhav/.claude/projects/C--Users-dbhav-Projects/memory/feedback_no_personal_data_public.md)
 - [Public vs private naming](file:///C:/Users/dbhav/.claude/projects/C--Users-dbhav-Projects/memory/feedback_public_private_naming.md)
-- Isabelle's private repo / overlay is strictly separated from the public Aether repos
+- Isabelle's private repo / overlay is strictly separated from the public Companion repos
 
 ---
 
@@ -180,9 +180,9 @@ See [../16_tech_stack.md](../16_tech_stack.md).
 
 ---
 
-## Roadmap (follows Aether Pro)
+## Roadmap (follows Companion)
 
-Isabelle's roadmap depends on Aether Pro reaching each phase:
+Isabelle's roadmap depends on Companion reaching each phase:
 
 - **Pro Phase 0–1 (platform core)** → Isabelle preparation: persona pack spec, appearance pack spec, migration plan for Isabelle_Kunstig data
 - **Pro Phase 2 (conversation core)** → Isabelle alpha: basic persona + voice + memory on Don's desktop
@@ -198,7 +198,7 @@ Isabelle does not race ahead of Pro. Pro's stability is Isabelle's stability.
 ## Naming
 
 - **Working name:** Isabelle / Isabelle_Kunstig
-- **Public reference from memory:** "Aether (Isabelle)" — Aether is the public product family; Isabelle is the private instance
+- **Public reference from memory:** "Companion (Isabelle)" — Companion is the public product family; Isabelle is the private instance
 - **Decision on formal name** in [../OPEN_QUESTIONS.md](../OPEN_QUESTIONS.md#naming)
 
 ---
@@ -208,7 +208,7 @@ Isabelle does not race ahead of Pro. Pro's stability is Isabelle's stability.
 Isabelle is successful when:
 1. She feels like **Don's companion** — not a generic assistant with a different name.
 2. Customization reaches voice, appearance, memory, workflows, and relationship style.
-3. **No platform fork exists** — Isabelle rides on Aether Pro.
+3. **No platform fork exists** — Isabelle rides on Companion.
 4. Memory migration from old Isabelle_Kunstig preserves what matters and discards noise.
 5. Isabelle coexists with VoiceType, Morning Intel, Claude Code, and other Don tooling without conflict.
 6. Private features stay private; public repos stay clean.
@@ -232,5 +232,5 @@ Isabelle is successful when:
 - Product family (Isabelle's place): [../02_product_family.md](../02_product_family.md#3-isabelle--isabelle_kunstig-private-personal-branch)
 - Memory architecture (Isabelle extensions): [../10_memory_architecture.md](../10_memory_architecture.md#isabelle-specific-memory)
 - Tech stack: [../16_tech_stack.md](../16_tech_stack.md#isabelle-stack-notes)
-- Aether Pro roadmap (Isabelle rides on): [aether_pro.md](aether_pro.md)
+- Companion roadmap (Isabelle rides on): [aether_pro.md](aether_pro.md)
 - Open questions: [../OPEN_QUESTIONS.md](../OPEN_QUESTIONS.md)

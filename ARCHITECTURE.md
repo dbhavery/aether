@@ -1,6 +1,6 @@
-# Aether — Architecture
+# Companion — Architecture
 
-Aether is an AI companion that runs on your machine. It has one architectural invariant: **every action that touches the world first clears a policy gate.** No exceptions, no fast paths, no "admin mode." The gate is the ground floor. Everything else grows on top of it.
+Companion is an AI companion that runs on your machine. It has one architectural invariant: **every action that touches the world first clears a policy gate.** No exceptions, no fast paths, no "admin mode." The gate is the ground floor. Everything else grows on top of it.
 
 This document explains how the ground floor was built and what sits on it.
 
@@ -8,7 +8,7 @@ This document explains how the ground floor was built and what sits on it.
 
 ## The thesis
 
-Most AI assistants assume the language model is the product. Aether doesn't. The model is a service. The *relationship* — memory, presence, trust, timing — is the product. Policy is what keeps the relationship intact over years of use.
+Most AI assistants assume the language model is the product. Companion doesn't. The model is a service. The *relationship* — memory, presence, trust, timing — is the product. Policy is what keeps the relationship intact over years of use.
 
 Three commitments follow from that:
 
@@ -22,7 +22,7 @@ Those commitments shape every other choice below.
 
 ## The seven layers
 
-Aether is organized into seven independent engines, each with an explicit contract. Nothing is a god object. Nothing is optional. The table reads top to bottom; the call arrow goes the other way.
+Companion is organized into seven independent engines, each with an explicit contract. Nothing is a god object. Nothing is optional. The table reads top to bottom; the call arrow goes the other way.
 
 | Layer | Name | Owns |
 |-------|------|------|
@@ -42,7 +42,7 @@ The layer boundary is enforced by a linter that runs in CI (`tools/lint-layer-bo
 
 ## One turn, end to end
 
-Here is what happens when a user says something to Aether:
+Here is what happens when a user says something to Companion:
 
 ```
 user utterance
@@ -85,7 +85,7 @@ The L1 turn state machine has 19 canonical states. The current vertical slice us
 
 ## The policy gate
 
-L5 is the part of Aether that would be boring in any other system and is load-bearing here.
+L5 is the part of Companion that would be boring in any other system and is load-bearing here.
 
 A policy decision is a typed value, not a boolean:
 
@@ -178,7 +178,7 @@ Remote escalation is one of the eight re-evaluation triggers. If a turn starts l
 
 ## What this costs
 
-Architecture has a price. Aether's is:
+Architecture has a price. Companion's is:
 
 - **Every action is slower by one synchronous policy evaluate and one synchronous audit write.** Wave 3 measured the evaluator at sub-millisecond on in-memory backends. SQLite-backed mode adds storage-bound latency.
 - **Grants accumulate.** A long session with a Bold persona generates many session-scoped grants. Revoke, TTL, and persona-swap each clear them, but the steady-state ledger is larger than a "just call the tool" design.
@@ -189,13 +189,13 @@ None of these are bugs. They are the shape of a system that takes authorization 
 
 ---
 
-## What Aether is not
+## What Companion is not
 
 Stated plainly so expectations calibrate:
 
 - Not a chatbot UI.
 - Not a plugin framework for LLMs.
-- Not a LangChain competitor. Chains are a runtime concept; Aether is a layered architecture.
+- Not a LangChain competitor. Chains are a runtime concept; Companion is a layered architecture.
 - Not a hosted service.
 - Not ready to use. The OSS preview ships the spine and the first real slice of L5. Almost everything user-facing is not.
 

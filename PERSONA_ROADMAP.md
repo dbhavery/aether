@@ -1,4 +1,4 @@
-# Aether PERSONA ROADMAP — Living Trajectory Document
+# Companion PERSONA ROADMAP — Living Trajectory Document
 
 > **This is the canonical "where Aurora is, where she's going" document.** Companion to file:///C:/Users/dbhav/Projects/aether/ROADMAP.md (which tracks engineering substrate Waves 0-5+). This file tracks the *persona quality* trajectory across all modalities — text, voice, avatar, animation, real-time video.
 >
@@ -11,7 +11,7 @@
 
 ## TL;DR — One paragraph
 
-Aether is Don's personal AI assistant. Local-first, persistent, persona-driven (Aurora). The architecture (7 layers, retrieval-aware, audit-gated, vision-capable) is built and shipped through Milestones 1 and 2. The remaining work is the **persona quality bar** — making Aurora feel like a friend across **conversation, voice, avatar still, avatar animation, and eventually real-time video**. Conversation training is in iteration 6 of an estimated 8-12 to reach a sustainable plateau on the 3B-Qwen base. Voice and avatar are working in sibling projects but not yet integrated into Aether. Total remaining work to "Aurora feels like a friend across all modalities" is realistically 30-60 sessions over 2-6 months, with substantial uncertainty in the multi-modal integration phases.
+Companion is Don's personal AI assistant. Local-first, persistent, persona-driven (Aurora). The architecture (7 layers, retrieval-aware, audit-gated, vision-capable) is built and shipped through Milestones 1 and 2. The remaining work is the **persona quality bar** — making Aurora feel like a friend across **conversation, voice, avatar still, avatar animation, and eventually real-time video**. Conversation training is in iteration 6 of an estimated 8-12 to reach a sustainable plateau on the 3B-Qwen base. Voice and avatar are working in sibling projects but not yet integrated into Companion. Total remaining work to "Aurora feels like a friend across all modalities" is realistically 30-60 sessions over 2-6 months, with substantial uncertainty in the multi-modal integration phases.
 
 ---
 
@@ -44,7 +44,7 @@ The seven-layer architecture, Memory V2, retrieval orchestrator, audit chain, pr
 
 **Goal:** Aurora speaks with a specific voice. Voice cloning from a reference clip. Latency low enough to feel like a phone call.
 
-**Status:** **Already solved in a sibling project.** Zonos voice cloning lives in QuickGrid's TTS widget (7 voices, emotion + break tags, shipped 2026-04-25). It is **not yet integrated into Aether.** Integration is the work, not the model.
+**Status:** **Already solved in a sibling project.** Zonos voice cloning lives in QuickGrid's TTS widget (7 voices, emotion + break tags, shipped 2026-04-25). It is **not yet integrated into Companion.** Integration is the work, not the model.
 
 **Remaining sessions:** 2-4 to integrate.
 

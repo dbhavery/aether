@@ -1,6 +1,6 @@
-# Aether — Roadmap
+# Companion — Roadmap
 
-> Early, evolving roadmap for Free Aether — Community Edition. Priorities in
+> Early, evolving roadmap for Free Companion — Community Edition. Priorities in
 > this document can change between waves; the `WAVE*_EXECUTION_REPORT_*.md`
 > files at the repo root are always the authoritative record of what actually
 > landed.
@@ -104,7 +104,7 @@ The roadmap reflects how the architecture was staged, not marketing priorities:
 ### 4. Public-release polish
 
 - Expand docs/ with per-layer deep dives beyond `REPO_TOUR.md`.
-- Replace any remaining "Aether Pro" or "Isabelle" references in the public
+- Replace any remaining "Companion" or "Isabelle" references in the public
   repo with Community Edition equivalents.
 - Retire the legacy Python tree once capability parity is verified per X2/X4
   plans.
