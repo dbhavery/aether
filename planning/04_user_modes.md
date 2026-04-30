@@ -66,13 +66,13 @@ Face-to-face conversational mode. User sees the avatar assistant in a live video
 - Listening posture
 - Speaking behavior
 - Thinking / acknowledgement behavior (distinct from speaking)
-- **Later (flagship milestone):** hand and body movement, full-body
+- Hand and body movement, full-body — included from the start (doctrine §5: photoreal full-body, no headshot intermediate)
 
 ### Degradation
-Must degrade gracefully to simpler avatar levels on weaker hardware:
-- **Lite:** headshot, basic lip-sync, limited facial animation, simpler gaze logic
-- **Balanced:** improved facial animation, gaze + blink, listening/thinking states distinct
-- **Full / Pro:** richer facial animation, idle motion, eventually gesture/body
+Companion ships as a single product (doctrine §6) with hardware-aware performance tiers. All tiers render the same photoreal full-body character; tiers trade animation richness, idle motion fidelity, and frame-rate budget — **not** body framing. No tier crops to headshot-only.
+- **Lite:** photoreal full-body, basic lip-sync, simplified facial animation and gaze logic, reduced idle motion
+- **Balanced:** photoreal full-body, improved facial animation, gaze + blink, listening/thinking states distinct
+- **Full:** photoreal full-body, richer facial animation, idle motion, gesture/body movement
 
 ### Muted visual mode
 User can keep the avatar visible without voice playback, or keep the avatar present but minimized. Voice output is per-direction, not coupled to avatar rendering.
