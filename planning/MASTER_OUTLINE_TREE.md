@@ -39,13 +39,13 @@ Full hierarchical planning tree. This is the anchor document — every `NN_*.md`
   - user permission/policy enforcement
 - Product moat comes from integration, orchestration, memory, timing, trust, and UX
 - Roadmap separates MVP wedge from flagship platform
-- **OSS Preview may use open-source components aggressively; Aether Pro onward is primarily custom-written software**
+- **OSS Preview may use open-source components aggressively; Companion onward is primarily custom-written software**
 
 ---
 
 ## 1. Product family structure
 
-### 1.1 Aether OSS Preview
+### 1.1 Companion (OSS Preview wedge thesis retired 2026-05-18 per doctrine §6)
 - Free
 - Open-source
 - Launch-fast showcase / teaser product
@@ -68,7 +68,7 @@ Full hierarchical planning tree. This is the anchor document — every `NN_*.md`
   - create distribution momentum
 - Should not overextend into deep full-platform complexity
 
-### 1.2 Aether Public Pro
+### 1.2 Companion Public Pro
 - Full-performance public flagship product
 - Commercial / premium-ready architecture
 - Full multimodal roadmap target
@@ -81,7 +81,7 @@ Full hierarchical planning tree. This is the anchor document — every `NN_*.md`
 
 ### 1.3 Isabelle / Isabelle_Kunstig
 - Personal private branch/profile
-- Built on top of Aether Public Pro
+- Built on top of Companion Public Pro
 - 100% custom for personal assistant/companion use
 - Private features and private tuning not included in public release
 - Should ideally remain a privileged profile layer, not a fully separate base code stack
@@ -94,9 +94,9 @@ Full hierarchical planning tree. This is the anchor document — every `NN_*.md`
   - private workflows
 
 ### 1.4 Brand hierarchy
-- Umbrella candidate: **Aether**
-- Open-source preview candidate: Aether OSS / Aether Preview
-- Public flagship candidate: Aether Core / Aether One / Aether Pro
+- Umbrella candidate: **Companion**
+- Open-source preview candidate: Companion / Companion Preview
+- Public flagship candidate: Companion Core / Companion One / Companion
 - Personal profile: Isabelle / Isabelle_Kunstig
 - Branding should support both community distribution and premium trust positioning
 
@@ -526,8 +526,8 @@ Full hierarchical planning tree. This is the anchor document — every `NN_*.md`
 - Recommended preset
 - Simple explanations
 - Resource pickers
-- "Aether will be able to..."
-- "Aether will always ask before..."
+- "Companion will be able to..."
+- "Companion will always ask before..."
 
 ### 9.9 Settings integration
 - Preset selector
@@ -674,8 +674,8 @@ Full hierarchical planning tree. This is the anchor document — every `NN_*.md`
 - Treat design, trust, and architecture as early deliverables
 
 ### 13.2 Planned tracks
-- Aether OSS Preview track
-- Aether Public Pro track
+- Companion track
+- Companion Public Pro track
 - Isabelle private profile track
 - Onboarding/UX track
 - Permissions/trust track
@@ -712,7 +712,7 @@ Full hierarchical planning tree. This is the anchor document — every `NN_*.md`
 See [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) for the live list.
 
 ### 14.1 Naming finalization
-- Confirm Aether family naming
+- Confirm Companion family naming
 - Choose public flagship exact name
 - Decide whether Isabelle_Kunstig remains formal private brand
 

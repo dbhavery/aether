@@ -82,7 +82,7 @@ Filling VRAM tightly causes:
 | Expert override | User-adjustable higher | Warnings shown; user accepts instability risk |
 
 ### Not a hard law
-The 50% target is a **default envelope**, not a hard rule for every subsystem. Subsystems within Aether share the budget intelligently — avatar rendering, local LLM, memory embedding index, visual state.
+The 50% target is a **default envelope**, not a hard rule for every subsystem. Subsystems within Companion share the budget intelligently — avatar rendering, local LLM, memory embedding index, visual state.
 
 Advanced users can raise the cap in settings with explicit warnings.
 
@@ -184,7 +184,7 @@ The Preview does not expose the full three-tier ladder. Full-tier experience is 
 
 ## Pro scope
 
-Aether Pro supports the full **Lite / Balanced / Full** ladder with:
+Companion supports the full **Lite / Balanced / Full** ladder with:
 - Dynamic tier adjustment
 - Expert overrides
 - Full modular pack system

@@ -1,6 +1,6 @@
 # 07 — Tutorial and Help System
 
-Aether's in-product learning and help system. Distinct from onboarding (first-run setup) and from the showcase (marketing/narrative surface).
+Companion's in-product learning and help system. Distinct from onboarding (first-run setup) and from the showcase (marketing/narrative surface).
 
 ---
 

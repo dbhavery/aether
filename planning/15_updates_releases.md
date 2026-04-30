@@ -1,6 +1,6 @@
 # 15 — Updates & Release Management
 
-Aether's update policy and release channels. Updates are **mostly optional**, mandatory only for critical security / compatibility / trust issues.
+Companion's update policy and release channels. Updates are **mostly optional**, mandatory only for critical security / compatibility / trust issues.
 
 ---
 
@@ -27,7 +27,7 @@ Outside these cases, the user decides when to update.
 - Critical security updates are the only mandatory class.
 - Update notifications are non-nagging and respect user intent.
 
-Rationale: open-source communities dislike forced updates. Aggressive update pushes alienate the audience Aether OSS is trying to reach.
+Rationale: open-source communities dislike forced updates. Aggressive update pushes alienate the audience Companion is trying to reach.
 
 ---
 

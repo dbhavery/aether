@@ -1,6 +1,6 @@
 # 05 — UX Principles
 
-The governing UX principles for Aether. These apply to both OSS Preview and Pro; the bar is the same.
+The governing UX principles for Companion. These apply to both OSS Preview and Pro; the bar is the same.
 
 ---
 
@@ -46,7 +46,7 @@ The governing UX principles for Aether. These apply to both OSS Preview and Pro;
 
 ## Showcase layer
 
-Aether ships with a **dedicated showcase layer** — not just a core app UI. This is distinct from onboarding: it is an in-product surface for activation, trust-building, and marketing storytelling.
+Companion ships with a **dedicated showcase layer** — not just a core app UI. This is distinct from onboarding: it is an in-product surface for activation, trust-building, and marketing storytelling.
 
 ### Purpose
 - Market the vision
@@ -102,7 +102,7 @@ Modular, chapter-based, "choose your path" where appropriate. Not a single long 
 
 ## Component system
 
-Aether uses a **custom design system**, not template UI. Tokenized components for:
+Companion uses a **custom design system**, not template UI. Tokenized components for:
 - Onboarding steps
 - Settings rows
 - Permission prompts

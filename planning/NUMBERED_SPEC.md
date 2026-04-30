@@ -1,4 +1,4 @@
-# Aether Numbered Specification Outline (1.0–18.0)
+# Companion Numbered Specification Outline (1.0–18.0)
 
 Formal numbered form of the master planning tree. Parallel to [MASTER_OUTLINE_TREE.md](MASTER_OUTLINE_TREE.md) — use whichever form is more useful for the current task (tree for scanning, numbered for ticketing/docs).
 
@@ -7,23 +7,23 @@ Formal numbered form of the master planning tree. Parallel to [MASTER_OUTLINE_TR
 ## 1.0 Product family definition
 
 ### 1.1 Umbrella product
-- **1.1.1 Working umbrella name:** Aether
-- **1.1.2 Umbrella purpose:** Aether is the master platform family for a multimodal AI assistant product centered on conversational interaction, local-first responsiveness, customizable identity, and a high-trust user experience.
+- **1.1.1 Working umbrella name:** Companion
+- **1.1.2 Umbrella purpose:** Companion is the master platform family for a multimodal AI assistant product centered on conversational interaction, local-first responsiveness, customizable identity, and a high-trust user experience.
 
 ### 1.2 Public open-source product
-- **1.2.1 Working name:** Aether OSS Preview
+- **1.2.1 Working name:** Companion (OSS Preview wedge thesis retired 2026-05-18 per doctrine §6)
 - **1.2.2 Product role:** Free, open-source, fast-launch preview and showcase product. Wedge for adoption, visibility, community, and teaser marketing.
 - **1.2.3 Primary goal:** Deliver a complete but narrower assistant experience using currently available open-source components, with strong onboarding, permissions, disclosures, and headshot lip-sync avatar interaction.
 
 ### 1.3 Public flagship product
-- **1.3.1 Working names:** Aether Pro, Aether Core, or Aether One
+- **1.3.1 Working names:** Companion, Companion Core, or Companion One
 - **1.3.2 Product role:** Full-performance public flagship. Commercial-grade multimodal assistant platform with advanced memory, permissions, avatar systems, and multi-device continuity.
 - **1.3.3 Primary goal:** Deliver the full public vision with premium UX, performance tiers, strong trust posture, and expandable architecture. **Primarily custom-written software.**
 
 ### 1.4 Private personal branch
 - **1.4.1 Working names:** Isabelle / Isabelle_Kunstig
-- **1.4.2 Product role:** Private customized profile or branch built on top of the flagship Aether platform. Personal assistant/companion instance with unique private capabilities not distributed in the public product.
-- **1.4.3 Architecture recommendation:** Isabelle should be implemented as a privileged profile/branch/configuration super-layer on top of the Aether Pro platform rather than a completely separate foundational codebase.
+- **1.4.2 Product role:** Private customized profile or branch built on top of the flagship Companion product family. Personal assistant/companion instance with unique private capabilities not distributed in the public product.
+- **1.4.3 Architecture recommendation:** Isabelle should be implemented as a privileged profile/branch/configuration super-layer on top of the Companion platform rather than a completely separate foundational codebase.
 
 ---
 
@@ -68,11 +68,11 @@ Formal numbered form of the master planning tree. Parallel to [MASTER_OUTLINE_TR
 ### 4.1 Need for separation
 - **4.1.1 Planning principle:** Open-source preview, flagship platform, and private Isabelle instance are planned separately to avoid scope contamination and conflicting priorities.
 
-### 4.2 Aether OSS Preview planning boundary
+### 4.2 Companion planning boundary
 - **4.2.1 Scope:** Narrow, launch-fast, community-oriented, visually compelling, complete enough to feel real.
 - **4.2.2 Exclusions:** Does not absorb the entire complexity of the flagship roadmap.
 
-### 4.3 Aether Pro planning boundary
+### 4.3 Companion planning boundary
 - **4.3.1 Scope:** Full public platform architecture, advanced systems, long-term premium product. Custom-written from here on.
 
 ### 4.4 Isabelle planning boundary
@@ -280,7 +280,7 @@ Formal numbered form of the master planning tree. Parallel to [MASTER_OUTLINE_TR
 
 ### 13.7 Onboarding integration
 - **13.7.1 Requirement:** Onboarding includes a permissions/autonomy step.
-- **13.7.2 Plain-language output:** "Aether can do this." "Aether will always ask before this."
+- **13.7.2 Plain-language output:** "Companion can do this." "Companion will always ask before this."
 
 ### 13.8 Settings integration
 - **13.8.1 Required views:** Preset mode selector; granular capability matrix; scope editor; temporary grants; log viewer; emergency revoke all.
@@ -335,7 +335,7 @@ Formal numbered form of the master planning tree. Parallel to [MASTER_OUTLINE_TR
 ### 16.3 MVP component direction (OSS Preview only)
 - **16.3.1 Open-source avatar/lip-sync references:** MuseTalk; TalkingHead; real-time Wav2Lip-style references.
 
-### 16.4 Flagship component direction (Aether Pro — custom-built)
+### 16.4 Flagship component direction (Companion — custom-built)
 - **16.4.1 Custom moat layers:** Reflex router; memory kernel; presence scheduler; model router; persona compiler; policy engine.
 
 ---
@@ -347,8 +347,8 @@ Formal numbered form of the master planning tree. Parallel to [MASTER_OUTLINE_TR
 - **17.1.2 Additional principle:** Onboarding, permissions, trust, avatar, memory, performance, sync as first-class tracks.
 
 ### 17.2 Major roadmap tracks
-- 17.2.1 Aether OSS Preview
-- 17.2.2 Aether Public Pro
+- 17.2.1 Companion
+- 17.2.2 Companion Public Pro
 - 17.2.3 Isabelle private profile
 - 17.2.4 Cross-cutting systems: onboarding, permissions, trust, performance, updates, memory, orchestration, sync
 

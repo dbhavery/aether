@@ -1,6 +1,6 @@
 # 10 — Memory Architecture
 
-Memory is central to Aether's companion feel. The memory engine is a **must-own custom-built layer** — not a vector database bolted onto chat history.
+Memory is central to Companion's companion feel. The memory engine is a **must-own custom-built layer** — not a vector database bolted onto chat history.
 
 ---
 
@@ -134,7 +134,7 @@ Research direction (from [sources_matrix.md](sources_matrix.md)): selective inge
 - **Always**: current session memory.
 - **Usually**: durable user memory.
 - **By permission**: artifact memory (if the file is in-scope per permissions).
-- **Never silent**: cross-user memory (N/A in Aether — single-user architecture).
+- **Never silent**: cross-user memory (N/A in Companion — single-user architecture).
 
 ---
 

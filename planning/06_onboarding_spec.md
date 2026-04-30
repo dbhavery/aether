@@ -50,7 +50,7 @@ Each explainer contains:
 ## Core onboarding flow (target structure)
 
 ### Step 1 — Welcome & disclosure
-- What Aether is (one sentence)
+- What Companion is (one sentence)
 - What it does and doesn't do (plain-language)
 - Terms & conditions acceptance (with short "plain English" summary + full text)
 - AI disclosure (clearly stated — "You are interacting with AI-generated responses and an AI-generated avatar")
@@ -80,9 +80,9 @@ Each explainer contains:
 ### Step 5 — Permissions & autonomy
 - **Autonomy preset selection** (Observer / Assistant / Operator / Power User / Custom)
 - Plain-language summary:
-  - "Aether will be able to: [list]"
-  - "Aether will always ask before: [list]"
-  - "Aether will never: [list]"
+  - "Companion will be able to: [list]"
+  - "Companion will always ask before: [list]"
+  - "Companion will never: [list]"
 - Resource pickers (approved folders, approved domains) — optional, defaults safe
 - Advanced capability matrix available but collapsed
 
@@ -127,7 +127,7 @@ All auto-detected values can be manually overridden in Step 4 advanced controls.
 ## Trust-building elements embedded in onboarding
 
 - **AI disclosure up front** — not buried
-- **Permissions explained in plain language** — "Aether will be able to..."
+- **Permissions explained in plain language** — "Companion will be able to..."
 - **Data locality disclosed** — what stays local, what goes to cloud
 - **Every default is conservative** — least autonomy, least data, least risk
 - **Review screen before finishing** — user sees all choices before committing
@@ -179,9 +179,9 @@ All auto-detected values can be manually overridden in Step 4 advanced controls.
 ## Success criteria
 
 A user completing onboarding should:
-1. Understand what Aether is.
+1. Understand what Companion is.
 2. Have their assistant configured (named, styled, tier-matched).
-3. Understand what Aether will and won't do.
+3. Understand what Companion will and won't do.
 4. Trust that they can change anything later.
 5. Feel the product is premium, thoughtful, trustworthy.
 6. Be ready to start using it — or to watch the showcase.

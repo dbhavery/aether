@@ -1,6 +1,6 @@
 # 16 — Tech Stack
 
-The technology stack for Aether across OSS Preview and Pro. **OSS Preview uses open-source/available-now components aggressively. Aether Pro is primarily custom-written software** — borrowed primitives are isolated behind our own interfaces and replaceable.
+The technology stack for Companion across OSS Preview and Pro. **OSS Preview uses open-source/available-now components aggressively. Companion is primarily custom-written software** — borrowed primitives are isolated behind our own interfaces and replaceable.
 
 ---
 
@@ -70,7 +70,7 @@ Why:
 
 Electron remains viable as a fallback but is heavier and less aligned with the long-term Rust runtime story.
 
-### Aether Pro: Tauri (or custom)
+### Companion: Tauri (or custom)
 Tauri continues as the default for Pro unless concrete performance / integration constraints require a custom shell. The Rust + webview pattern scales into the flagship cleanly.
 
 ---
@@ -88,7 +88,7 @@ Variant selection per tier is in [14_performance_tiers_vram.md](14_performance_t
 
 ### Inference runtime
 - **OSS Preview:** leverage existing runtime (llama.cpp / ollama / transformers — TBD based on Gemma 4 support maturity).
-- **Aether Pro:** custom-wrapped inference surface — Rust-bound, streaming-aware, tightly integrated with the event bus. Borrowed inference engine, custom control surface.
+- **Companion:** custom-wrapped inference surface — Rust-bound, streaming-aware, tightly integrated with the event bus. Borrowed inference engine, custom control surface.
 
 ---
 
@@ -101,7 +101,7 @@ Variant selection per tier is in [14_performance_tiers_vram.md](14_performance_t
 - **Whisper Large V3 Turbo / Distil-Whisper** — faster throughput, broader flexibility
 - **Moonshine** — edge/mobile-oriented path (later)
 
-**For Aether Pro:**
+**For Companion:**
 - Inference model borrowed (Parakeet / Whisper variant); streaming chunk model, interruption handling, and viseme timing are **custom** (our ownership).
 
 ### TTS (text-to-speech) candidates
@@ -110,7 +110,7 @@ Variant selection per tier is in [14_performance_tiers_vram.md](14_performance_t
 - XTTS-v2-class experimentation for expressive local speech (licensing reviewed before any commercial carry-forward).
 - Open TTS alternatives: Piper, Coqui variants, Kokoro — evaluated for voice quality, latency, licensing.
 
-**For Aether Pro:**
+**For Companion:**
 - TTS model selection driven by quality + licensing + latency; **our streaming, chunk timing, and viseme synchronization are custom.** TTS model is swappable.
 
 ### VAD and audio handling
@@ -128,7 +128,7 @@ Variant selection per tier is in [14_performance_tiers_vram.md](14_performance_t
 
 These are acceptable direct dependencies in OSS Preview.
 
-### Aether Pro — custom + selectively borrowed
+### Companion — custom + selectively borrowed
 - **Presence controller** — custom (moat layer)
 - **Facial expression layer** — custom
 - **Gaze / blink layer** — custom
@@ -148,7 +148,7 @@ Direction: borrowed rendering surface + custom everything-on-top.
 - Browser-compatible 3D (Three.js) or lightweight 3D shell — TalkingHead-class
 - 2D avatar fallback for Lite tier
 
-### Aether Pro
+### Companion
 - Native rendering surface. Candidates:
   - Unreal Engine integration (highest fidelity, heaviest)
   - Custom OpenGL / Vulkan / Metal pipeline (most control, most work)
@@ -197,7 +197,7 @@ Direction: borrowed rendering surface + custom everything-on-top.
 ### State management
 - React Query / TanStack Query for server state
 - Zustand or equivalent for local UI state
-- Avoid Redux-scale complexity — Aether UI is stateful but not enterprise-state-heavy
+- Avoid Redux-scale complexity — Companion UI is stateful but not enterprise-state-heavy
 
 ### Motion
 - Framer Motion or equivalent for UI animations
@@ -217,7 +217,7 @@ Decision in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) — pending Pro alpha phase.
 
 ---
 
-## Must-own layers (custom-built, Aether Pro onward)
+## Must-own layers (custom-built, Companion onward)
 
 Reiterating from [01_product_doctrine.md](01_product_doctrine.md#must-own-layers-custom-built-aether-pro-onward):
 
@@ -265,7 +265,7 @@ Sync:             N/A (OSS Preview is single-device)
 
 ---
 
-## Aether Pro stack summary
+## Companion stack summary
 
 ```
 Desktop shell:    Tauri (or custom) + TypeScript/React
@@ -288,7 +288,7 @@ Moat layers:      Custom (presence, memory, router, reflex, policy, persona, tim
 
 ## Isabelle stack notes
 
-Isabelle runs on the Aether Pro stack, **not a separate codebase**. Isabelle-specific additions:
+Isabelle runs on the Companion stack, **not a separate codebase**. Isabelle-specific additions:
 - Custom persona compile pack
 - Custom voice pack
 - Custom avatar appearance pack

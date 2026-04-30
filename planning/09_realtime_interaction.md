@@ -1,6 +1,6 @@
 # 09 — Real-time Interaction & Latency Model
 
-The two-speed cognition model, acknowledgment pattern, and timing contracts that make Aether feel socially present.
+The two-speed cognition model, acknowledgment pattern, and timing contracts that make Companion feel socially present.
 
 ---
 

@@ -1,6 +1,6 @@
 # 03 — Vision and Thesis
 
-The product vision and the three theses (core / experience / strategic) that govern Aether's design.
+The product vision and the three theses (core / experience / strategic) that govern Companion's design.
 
 ---
 
@@ -64,7 +64,7 @@ Any competitor can buy a lip-sync API. None of them have these layers working to
 ### Roadmap separates MVP wedge from flagship platform
 
 - **OSS Preview** is a wedge — it must ship fast and prove the vision. It uses open-source components aggressively.
-- **Aether Pro** is the platform — it is built primarily from custom software. Borrowed primitives are isolated and replaceable.
+- **Companion** is the platform — it is built primarily from custom software. Borrowed primitives are isolated and replaceable.
 - **Isabelle** is a private instance on top of Pro, not a separate codebase.
 
 ---

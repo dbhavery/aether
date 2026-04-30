@@ -2,7 +2,7 @@
 
 The model router is a **must-own custom layer** (see [01_product_doctrine.md](01_product_doctrine.md)). It decides, per turn, which model handles the response — routing between the reflex path (local Gemma 4) and deliberative path (local large variant or remote frontier).
 
-Ported and generalized from v1.0 `LLM-PROVIDERS.md` — the v1.0 `litellm`-based abstraction is replaced with a custom Rust-backed router for Aether Pro.
+Ported and generalized from v1.0 `LLM-PROVIDERS.md` — the v1.0 `litellm`-based abstraction is replaced with a custom Rust-backed router for Companion.
 
 ---
 
@@ -111,7 +111,7 @@ The router supports an expandable provider set. Current candidates:
 | **OpenRouter** | Cloud, pay-as-you-go | Aggregator (one key, many models) |
 | **Ollama** | Local, user-managed | Alternative local inference (user provides models) |
 
-### Aether Pro design
+### Companion design
 
 The Pro router does **not** use `litellm` as the abstraction (v1.0 pattern). Instead:
 
@@ -119,7 +119,7 @@ The Pro router does **not** use `litellm` as the abstraction (v1.0 pattern). Ins
 - **Provider adapters** isolate vendor-specific streaming/tool/error semantics
 - **One integration point** but NOT via a borrowed library that could constrain or change underneath us
 
-Rationale: the model router is a must-own layer. Depending on `litellm` (or similar) makes the router someone else's product. Aether Pro owns this.
+Rationale: the model router is a must-own layer. Depending on `litellm` (or similar) makes the router someone else's product. Companion owns this.
 
 ---
 
@@ -209,14 +209,14 @@ for chunk in router.route_tier(tier="main", messages=..., stream=True):
 
 ## Tool calling
 
-**Aether Pro phase 4+.** (See [roadmaps/aether_pro.md](roadmaps/aether_pro.md#phase-4-tools-and-autonomy).)
+**Companion phase 4+.** (See [roadmaps/aether_pro.md](roadmaps/aether_pro.md#phase-4-tools-and-autonomy).)
 
 - Tool calls go through the **policy engine** (see [12_permissions_autonomy.md](12_permissions_autonomy.md)) — no bypass
 - Tool definitions live in `src/tools/<tool>.rs` (or equivalent); router calls tools only after policy approval
 - Every tool invocation emits `action_request` → policy → `action_approval` or denial
 - Audit log records every tool call with intent, target, outcome
 
-v1.0 had PC control tools (pyautogui, psutil) — these **do not carry forward** to Aether Pro. Pro starts with safer scoped tools (browser, files, memory) behind strict permissions.
+v1.0 had PC control tools (pyautogui, psutil) — these **do not carry forward** to Companion. Pro starts with safer scoped tools (browser, files, memory) behind strict permissions.
 
 ---
 
@@ -255,9 +255,9 @@ v1.0 model routing (from `file:///C:/Users/dbhav/Projects/aether/docs/LLM-PROVID
 - ✅ OS keyring for BYOK keys
 
 v1.0 concepts that **do not** carry forward:
-- ❌ `litellm` as the integration library (Aether Pro owns the router)
+- ❌ `litellm` as the integration library (Companion owns the router)
 - ❌ Ollama qwen2.5:7b as default fast (replaced with Gemma 4)
-- ❌ Guest mode / Aether Guest endpoint (see [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) — candidate for Pro onboarding low-friction tier)
+- ❌ Guest mode / Companion Guest endpoint (see [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) — candidate for Pro onboarding low-friction tier)
 - ❌ PC control tool invocations (`pyautogui`, `psutil`) — replaced with safer scoped tools behind policy engine
 
 ---

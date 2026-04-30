@@ -163,9 +163,9 @@ Onboarding includes a dedicated **Autonomy & Permissions** step (Step 5 in [06_o
 Surface pattern:
 1. **Recommended preset** selected by default (usually "Assistant").
 2. Plain-language summary:
-   - "Aether will be able to: [list]"
-   - "Aether will always ask before: [list]"
-   - "Aether will never: [list]"
+   - "Companion will be able to: [list]"
+   - "Companion will always ask before: [list]"
+   - "Companion will never: [list]"
 3. **Resource pickers** for approved folders / domains (optional, conservative defaults).
 4. **"Customize"** expansion for the full capability matrix.
 5. **Review screen** before onboarding completes.

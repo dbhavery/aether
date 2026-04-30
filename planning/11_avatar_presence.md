@@ -145,7 +145,7 @@ This is the rule-based spine. The presence controller implements it; persona par
 - Browser-compatible (TalkingHead-style) acceptable
 - Target: credible, not photoreal
 
-### Aether Pro
+### Companion
 - Higher-fidelity rendering; 3D rigged head + shoulders minimum at launch
 - Path toward photorealism through custom rendering stack or Unreal-class integration
 - MetaHuman-class rigs may be referenced and studied; integration only if they don't cap the ceiling or lock us in

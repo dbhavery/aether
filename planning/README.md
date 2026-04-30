@@ -1,6 +1,6 @@
-# Aether Planning — Reference Folder
+# Companion Planning — Reference Folder
 
-Source of truth for the Aether product family planning: **OSS Preview**, **Aether Pro** flagship, and **Isabelle / Isabelle_Kunstig** private branch.
+Source of truth for the Companion product family planning: **OSS Preview**, **Companion** flagship, and **Isabelle / Isabelle_Kunstig** private branch.
 
 This folder replaces/supersedes prior scattered planning:
 - `file:///C:/Users/dbhav/Projects/aether_oss_preview_roadmap.md`
@@ -15,7 +15,7 @@ Old files remain in place until the comparison pass migrates or discards them.
 ## Hard rule (applied throughout)
 
 - **OSS Preview**: open-source / available-now components acceptable — it is a launch-fast wedge.
-- **Aether Pro and Isabelle**: we write our own software from here on. Borrowed primitives are permitted **only** where they do not cap the product ceiling or become the moat. Every "must-own" layer in `01_product_doctrine.md` is custom-built.
+- **Companion and Isabelle**: we write our own software from here on. Borrowed primitives are permitted **only** where they do not cap the product ceiling or become the moat. Every "must-own" layer in `01_product_doctrine.md` is custom-built.
 
 ## Index
 

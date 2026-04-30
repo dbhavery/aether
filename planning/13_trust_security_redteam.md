@@ -1,6 +1,6 @@
 # 13 — Trust, Security, and Red-Team Readiness
 
-Aether is designed to survive serious red-team review and support **high user trust**. Trust-by-design is built in from the start — not added later.
+Companion is designed to survive serious red-team review and support **high user trust**. Trust-by-design is built in from the start — not added later.
 
 ---
 
@@ -20,7 +20,7 @@ These are mandatory product-level elements:
 ### User-visible trust elements
 - **Disclosures** — AI-generated assistant, AI-generated avatar, data locality, model use. Clearly stated up-front.
 - **Informed onboarding** — user understands what they're agreeing to before onboarding completes.
-- **Permission clarity** — "Aether will be able to / will always ask before / will never" language.
+- **Permission clarity** — "Companion will be able to / will always ask before / will never" language.
 - **Action logs** — every autonomous action visible in human-readable form.
 - **Approval workflows** — high-risk actions always ask; user sees intent, target, and consequence.
 - **Undo / recovery** — where possible, actions are reversible; when not, user is warned before committing.
@@ -30,7 +30,7 @@ These are mandatory product-level elements:
 
 ## Red-team focus areas
 
-These are the classes of attack / failure Aether must defend against. Each requires explicit threat modeling, test scenarios, and verification:
+These are the classes of attack / failure Companion must defend against. Each requires explicit threat modeling, test scenarios, and verification:
 
 ### 1. Prompt attacks
 - Prompt injection from user input, tool output, scraped page content, or memory artifacts.
@@ -93,7 +93,7 @@ A dedicated area inside settings that makes trust **legible and inspectable**.
 - **Memory controls** — view, edit, delete, export (links to memory management)
 - **Model / source disclosures** — what models are active (local Gemma 4 / remote frontier / etc.), what's doing what
 - **Safety / privacy explanations** — plain-language summary of data handling
-- **"What Aether can do / cannot do"** — comprehensive, user-comprehensible
+- **"What Companion can do / cannot do"** — comprehensive, user-comprehensible
 
 ### Placement
 - Always one click from every mode.
@@ -156,7 +156,7 @@ Three channels (see [15_updates_releases.md](15_updates_releases.md)):
 ## Disclosures and informed consent
 
 ### Required disclosures during onboarding
-- **AI nature** — "Aether is an AI assistant; responses and avatar are AI-generated."
+- **AI nature** — "Companion is an AI assistant; responses and avatar are AI-generated."
 - **Data handling** — what stays local, what goes to cloud when, what's encrypted.
 - **Memory** — what gets remembered and how to control it.
 - **Autonomy scope** — what the chosen preset allows.
@@ -199,7 +199,7 @@ Three channels (see [15_updates_releases.md](15_updates_releases.md)):
 
 ## Success criteria
 
-Aether is successful in trust when:
+Companion is successful in trust when:
 - Security researchers can review the threat model and find the mitigations documented and testable.
 - Users can answer "what does my assistant remember / can do / has done" without asking support.
 - No autonomous action is untraceable.

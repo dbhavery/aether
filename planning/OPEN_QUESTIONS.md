@@ -1,4 +1,4 @@
-# Open Questions — Aether Planning
+# Open Questions — Companion Planning
 
 Live list of unresolved decisions. Each entry should be marked **[OPEN]**, **[DECIDED]** (with date + decision), or **[DEFERRED]** (with trigger condition).
 
@@ -40,7 +40,7 @@ References:
 
 ### Desktop framework — [DECIDED 2026-04-18]
 
-**Decision:** **Tauri is the long-term desktop default** across the Aether family. **pywebview** is a tactical, OSS-Preview-only shortcut if speed-to-demo requires it; it is explicitly non-doctrinal. Locked memory `feedback_css_default_for_ui.md` remains valid in spirit ("HTML/CSS/JS for UI, never Tkinter/Qt") — Tauri is a webview shell, so the intent is preserved; only the framework specificity (pywebview) is superseded.
+**Decision:** **Tauri is the long-term desktop default** across the Companion family. **pywebview** is a tactical, OSS-Preview-only shortcut if speed-to-demo requires it; it is explicitly non-doctrinal. Locked memory `feedback_css_default_for_ui.md` remains valid in spirit ("HTML/CSS/JS for UI, never Tkinter/Qt") — Tauri is a webview shell, so the intent is preserved; only the framework specificity (pywebview) is superseded.
 
 - **Date locked:** 2026-04-18
 - **Authority:** Don
@@ -201,19 +201,19 @@ Additive to prior pass; non-duplicates only.
 
 ## Pull decisions (2026-04-18)
 
-- **[DECIDED 2026-04-18]** v1.0 fate → **PULLED.** GitHub release `v1.0.0-pre` deleted (tag + release); `dbhavery/aether` repo set to PRIVATE; portfolio Aether content removed (commit `d4cde07` on portfolio `feature/portfolio/cinematic-redesign`). New Aether OSS Preview will be a rebuild per `01_product_doctrine.md` — not a continuation of v1.0. See [archive/PULL_STATUS_2026-04-18.md](archive/PULL_STATUS_2026-04-18.md).
+- **[DECIDED 2026-04-18]** v1.0 fate → **PULLED.** GitHub release `v1.0.0-pre` deleted (tag + release); `dbhavery/aether` repo set to PRIVATE; portfolio Companion content removed (commit `d4cde07` on portfolio `feature/portfolio/cinematic-redesign`). New Companion (OSS Preview wedge thesis retired 2026-05-18 per doctrine §6) will be a rebuild per `01_product_doctrine.md` — not a continuation of v1.0. See [archive/PULL_STATUS_2026-04-18.md](archive/PULL_STATUS_2026-04-18.md).
 - **[DECIDED 2026-04-18]** `dbhavery/aether` repo visibility → **PRIVATE**.
-- **[DECIDED 2026-04-18]** Portfolio Aether entry → **REMOVED** (all 59 files, including `public/aether/`, `public/anima/`, demo HTMLs, components).
+- **[DECIDED 2026-04-18]** Portfolio Companion entry → **REMOVED** (all 59 files, including `public/aether/`, `public/anima/`, demo HTMLs, components).
 - **[PENDING MANUAL]** LinkedIn post from 2026-04-18 — still live; Don must delete manually (morning-intel doesn't persist URN).
 
 ---
 
 ## Naming
 
-- **[OPEN]** Final public flagship name — Aether Pro / Aether Core / Aether One (or new)
-- **[OPEN]** Final OSS preview naming — "Aether OSS Preview" vs shorter
+- **[OPEN]** Final public flagship name — Companion / Companion Core / Companion One (or new)
+- **[OPEN]** Final OSS preview naming — "Companion" vs shorter
 - **[OPEN]** Final Isabelle formal naming — Isabelle / Isabelle_Kunstig / another private brand
-- **[OPEN]** Alt umbrella names considered if Aether is dropped: Astrae, Vesper, Eidolon, Lumen, Serein, Auralis
+- **[OPEN]** Alt umbrella names considered if Companion is dropped: Astrae, Vesper, Eidolon, Lumen, Serein, Auralis
 
 ## Scope boundaries
 
@@ -252,7 +252,7 @@ Additive to prior pass; non-duplicates only.
 
 ## Architecture decisions deferred
 
-- **[DEFERRED — after OSS Preview ships]** When to begin Aether Pro custom memory kernel implementation
+- **[DEFERRED — after OSS Preview ships]** When to begin Companion custom memory kernel implementation
 - **[DEFERRED — after OSS Preview ships]** When to begin custom presence scheduler implementation
 - **[DEFERRED — after Pro alpha]** Whether Isabelle ever diverges into its own codebase or stays a privileged profile
 
@@ -265,5 +265,5 @@ Additive to prior pass; non-duplicates only.
 
 ## Doctrine application edge cases
 
-- **[OPEN]** Which open-source primitives (if any) are acceptable to carry into Aether Pro as temporary accelerators vs. must be replaced before Pro ships
+- **[OPEN]** Which open-source primitives (if any) are acceptable to carry into Companion as temporary accelerators vs. must be replaced before Pro ships
 - **[OPEN]** Acceptable use of hosted frontier LLMs (Anthropic/OpenAI/etc) for the deliberative path — scope, privacy, fallback rules

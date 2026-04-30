@@ -1,6 +1,6 @@
-# Aether Sources Matrix
+# Companion Sources Matrix
 
-External sources that informed the Aether planning docs in this folder. Ported and consolidated from the earlier `file:///C:/Users/dbhav/Projects/aether_sources_matrix.md`.
+External sources that informed the Companion planning docs in this folder. Ported and consolidated from the earlier `file:///C:/Users/dbhav/Projects/aether_sources_matrix.md`.
 
 ## Table legend
 - **ID** — Internal short identifier

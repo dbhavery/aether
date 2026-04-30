@@ -1,6 +1,6 @@
 # 08 — System Architecture
 
-The engines, event bus, and platform roles that make up the Aether system. Architecture is strictly separated so no single slow component breaks social presence.
+The engines, event bus, and platform roles that make up the Companion system. Architecture is strictly separated so no single slow component breaks social presence.
 
 ---
 

@@ -1,6 +1,6 @@
 # 17 — Persona Pack Schema
 
-A persona pack is a **self-contained folder** that tells Aether how one character looks, sounds, and behaves. Users switch personas at runtime; the active persona drives avatar rendering, voice synthesis, and LLM system prompt construction.
+A persona pack is a **self-contained folder** that tells Companion how one character looks, sounds, and behaves. Users switch personas at runtime; the active persona drives avatar rendering, voice synthesis, and LLM system prompt construction.
 
 Ported and generalized from v1.0 `PERSONA-SCHEMA.md` — engine-specific names (LivePortrait, Chatterbox, ChromaDB) replaced with the new plan's engine-agnostic references.
 
@@ -242,7 +242,7 @@ Every shipped persona pack must:
 
 - Have `metadata.yaml` complete with every asset's source + license
 - Pass the pre-ship audit check
-- Use only CC0, MIT, Aether-owned, or explicitly-licensed assets
+- Use only CC0, MIT, Companion-owned, or explicitly-licensed assets
 - **Avoid likeness of any real identifiable person** (Don's locked rule: [AI-generated source models only](file:///C:/Users/dbhav/.claude/projects/C--Users-dbhav-Projects/memory/feedback_ai_source_models_only.md))
 
 Shipped products include a single `LICENSE-PERSONAS.md` aggregating all pack attributions.
@@ -251,7 +251,7 @@ Shipped products include a single `LICENSE-PERSONAS.md` aggregating all pack att
 
 ## Isabelle-specific note
 
-Isabelle's persona pack is **private** — not distributed with Aether OSS Preview or Aether Pro public packs. Her appearance, voice, and system prompt are Don's private configuration on top of the Aether Pro platform (see [roadmaps/isabelle_private.md](roadmaps/isabelle_private.md)).
+Isabelle's persona pack is **private** — not distributed with Companion (OSS Preview wedge thesis retired 2026-05-18 per doctrine §6) or Companion public packs. Her appearance, voice, and system prompt are Don's private configuration on top of the Companion platform (see [roadmaps/isabelle_private.md](roadmaps/isabelle_private.md)).
 
 Isabelle's pack uses the same schema but lives in Don's private overlay, not any public persona directory.
 

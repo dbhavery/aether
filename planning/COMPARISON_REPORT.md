@@ -17,7 +17,7 @@ The `aether/` repo (not to be confused with the new `aether-planning/` folder) *
 - Portfolio showcase deployed to `dbhavery.dev`
 - Show HN, Reddit r/LocalLLaMA / r/selfhosted / r/privacy drafts ready
 
-**The v1.0 that just shipped uses a DIFFERENT tech stack than the new Aether OSS Preview plan describes.** This is the biggest single thing Don needs to decide: does the new plan replace v1.0, supersede it at next version, or describe a separate product line?
+**The v1.0 that just shipped uses a DIFFERENT tech stack than the new Companion (OSS Preview wedge thesis retired 2026-05-18 per doctrine §6) plan describes.** This is the biggest single thing Don needs to decide: does the new plan replace v1.0, supersede it at next version, or describe a separate product line?
 
 ---
 
@@ -35,7 +35,7 @@ The `aether/` repo (not to be confused with the new `aether-planning/` folder) *
 **Verdict:** These are the research output from the planning conversation that seeded the new folder. Content is ~95% captured. Differences:
 - Old uses `[cite:XX]` markers; new stripped them.
 - Old does NOT mention Gemma 4 (new addition from today's direction).
-- Old doctrine is softer than new doctrine; new doctrine explicitly rules that Aether Pro onward is primarily custom-written.
+- Old doctrine is softer than new doctrine; new doctrine explicitly rules that Companion onward is primarily custom-written.
 
 **Recommendation:** Archive these 4 root files after Don confirms. They are redundant with the new folder.
 
@@ -97,7 +97,7 @@ Don today explicitly directed Gemma 4 integration. Old Ollama choice is stale.
 
 #### Hard conflict: port-from-Isabelle vs fresh code
 
-The v1.0 `SYNC-ISABELLE.md` defines a deterministic port script from upstream Isabelle_Kunstig. The new plan doctrine says "Aether Pro onward is primarily custom-written software." 
+The v1.0 `SYNC-ISABELLE.md` defines a deterministic port script from upstream Isabelle_Kunstig. The new plan doctrine says "Companion onward is primarily custom-written software." 
 
 **If the new plan stands:** SYNC-ISABELLE.md is obsolete; no more ports. Pro is a greenfield rebuild.
 **If incremental:** OSS Preview keeps v1.0's ported code; Pro is the rebuild.
@@ -109,7 +109,7 @@ Several pieces in old `aether/docs/` have no equivalent in new planning:
 1. **Persona pack schema** (`PERSONA-SCHEMA.md`) — concrete YAML schema for persona packs (avatar + voice + personality + metadata + licensing). Useful as a concrete input for the Pro persona compiler.
 2. **LLM tier abstraction** (`LLM-PROVIDERS.md`) — concrete implementation pattern for fast/main/heavy tier mapping to providers. Useful as reference for Pro's model router.
 3. **8-screen onboarding wizard** (`ONBOARDING-SPEC.md`) — concrete screen-by-screen spec including persona grid, LLM setup with key validation, voice setup. More detailed than new `06_onboarding_spec.md`.
-4. **Guest mode / Aether Guest endpoint** — clever low-friction onboarding (Cloudflare Worker proxying to Groq free tier, rate-limited). Worth preserving as a concept.
+4. **Guest mode / Companion Guest endpoint** — clever low-friction onboarding (Cloudflare Worker proxying to Groq free tier, rate-limited). Worth preserving as a concept.
 5. **Distribution playbook** (`DISTRIBUTION.md`) — shipped GitHub release metadata, LinkedIn post copy, Show HN draft, Reddit drafts. Valuable marketing work already done.
 6. **Inno Setup installer scaffold + auto-updater design** — concrete Windows distribution.
 7. **Cost visibility / BYOK cost tracking** — per-provider rolling cost display concept.
@@ -164,7 +164,7 @@ Plus `CLAUDE.md` at repo root with module boundaries (01-Core through 12-Notific
 #### Key observations vs new Isabelle plan
 
 The new `roadmaps/isabelle_private.md` says:
-- Isabelle is a **privileged profile layer** on Aether Pro, not a separate codebase.
+- Isabelle is a **privileged profile layer** on Companion, not a separate codebase.
 - Isabelle memory migration from Isabelle_Kunstig is **curated, not auto-imported**.
 - Don's existing preferences/data carry forward.
 
@@ -181,16 +181,16 @@ The existing `Isabelle_Kunstig/` has:
 | Concern | Existing Isabelle | New plan |
 |---------|-------------------|----------|
 | UI | PySide6 (#222222 / #333333 / #0044AA) | Custom design system, deep 3D neumorphic monochrome (new) |
-| Code base | Standalone Python | On top of Aether Pro (custom Rust + TS) |
+| Code base | Standalone Python | On top of Companion (custom Rust + TS) |
 | LLM tiers | Ollama qwen2.5:7b + Claude Sonnet/Opus + Gemini | Gemma 4 (local) + frontier remote |
 | Memory | ChromaDB at I:\IsabelleData\chroma | SQLite + vector (Pro implementation) |
 | Avatar | FlashHead Lite / Ditto / MuseTalk (subprocess) | Pro custom presence + rendering |
 | Module boundaries | 01–12 Python modules | Six engines (Rust) |
 
 **Recommendation:** This is the most sensitive migration. Options:
-1. **Keep Isabelle_Kunstig running as-is** until Aether Pro is stable enough to take over. Treat Isabelle_Kunstig as "Isabelle v0" — the current working companion. Freeze at its last stable state when Pro is ready.
+1. **Keep Isabelle_Kunstig running as-is** until Companion is stable enough to take over. Treat Isabelle_Kunstig as "Isabelle v0" — the current working companion. Freeze at its last stable state when Pro is ready.
 2. **Incremental migration** — move modules over one at a time as Pro phases ship.
-3. **Hard cutover** — develop Aether Pro in parallel; when ready, spin down Isabelle_Kunstig.
+3. **Hard cutover** — develop Companion in parallel; when ready, spin down Isabelle_Kunstig.
 
 Don's decision needed. The existing `Isabelle_Kunstig/docs/preferences.md` and identity content MUST port forward (it's Isabelle's persona foundation).
 
@@ -236,9 +236,9 @@ From existing Isabelle_Kunstig → into new Isabelle plan:
 ## Recommendations (in priority order)
 
 1. **Don decides v1.0's fate.** Three options:
-   - **A. v1.0 = Aether OSS Preview (shipped).** New OSS Preview plan describes a *future rebuild*; v1.0 stands. Update new plan to acknowledge v1.0 exists and is the current preview; the Tauri/Gemma 4/MuseTalk rebuild is OSS Preview v2.
+   - **A. v1.0 = Companion (shipped).** New OSS Preview plan describes a *future rebuild*; v1.0 stands. Update new plan to acknowledge v1.0 exists and is the current preview; the Tauri/Gemma 4/MuseTalk rebuild is OSS Preview v2.
    - **B. v1.0 is deprecated.** New OSS Preview plan replaces it with a Tauri/Gemma 4 rebuild; v1.0 archived.
-   - **C. v1.0 continues as-is; Aether Pro is the new thing.** New OSS Preview plan is scrapped because v1.0 already fills that slot.
+   - **C. v1.0 continues as-is; Companion is the new thing.** New OSS Preview plan is scrapped because v1.0 already fills that slot.
 
 2. **Don decides the Tauri vs pywebview rule.** Update or keep the 2026-04-11 locked feedback.
 
