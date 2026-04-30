@@ -187,10 +187,10 @@ Additive to prior pass; non-duplicates only.
 - **[OPEN]** L1 sub-budget ms values — `T_reflex_sla`, `T_memory_deadline`, `T_barge_in_cut`, `T_tts_chunk_inactivity`, `T_repair_ack`, `T_event_loop_tick` all currently proposed-defaults (150 / 150 / 150 / 500 / 2000 / 5 ms). Need Don sign-off before property-test thresholds and tier-downgrade triggers freeze.
 - **[OPEN]** L6 `tier_preference` terminology overload — same name used for perf tier (L4 §87) and model tier (17_persona_pack_schema.md). Compiler currently emits both under distinct names; recommend schema v2 rename. Not done this pass per no-doctrine-edits rule.
 - **[OPEN]** L6 persona-pack signing scheme — Ed25519 + pinned public key vs OS-keychain-backed. Blocks signature verifier implementation.
-- **[OPEN]** L7 pywebview shell-adapter event-replay parity — Tauri's seq-ordered event bus is trivial; pywebview may be lossy. Decide: feature-cap OSS Preview (no strict ordering) or build ordering shim.
+- ~~**[OPEN]** L7 pywebview shell-adapter event-replay parity — Tauri's seq-ordered event bus is trivial; pywebview may be lossy. Decide: feature-cap OSS Preview (no strict ordering) or build ordering shim.~~ — **MOOT 2026-04-30** (doctrine §6: single product on Tauri; no OSS Preview shell to feature-cap). Pywebview retired as a shell target; question dissolves.
 - **[OPEN]** L7 keybinding collision audit across wizard / trust-center / persona picker — no systematic inventory yet.
 - **[OPEN]** L7 single-window multi-route vs multi-window for onboarding — Tauri capability list differs either way.
-- **[OPEN]** L7 guest-mode infrastructure (Cloudflare Worker + Groq endpoint) — ship for OSS Preview or defer until Pro Phase 1?
+- **[OPEN]** L7 guest-mode infrastructure (Cloudflare Worker + Groq endpoint) — ship as part of Companion onboarding flow, or defer post-launch? (Doctrine §6 retired the OSS-Preview-vs-Pro split; the question now reduces to "in-launch vs post-launch.")
 - **[OPEN]** L2 contradiction-ranker tiebreaker — recency vs confidence vs provenance vs user-pin precedence when two memories conflict. Needs L6/L7 input.
 - **[OPEN]** Newly-proposed events from event_contracts_master — `degraded_mode_entered` / `degraded_mode_cleared` / `ingestion_candidate_accepted` / `cost_cap_rearmed` / `memory_promoted` / `plan_preview_ready`. Each needs author confirmation from the owning layer before schema lock.
 - **[OPEN]** Storage encryption scheme — SQLCipher whole-DB vs per-column encryption on sensitive fields. Affects dependency pinning, key handling, build toolchain. Recommend whole-DB; Don locks.
@@ -210,17 +210,17 @@ Additive to prior pass; non-duplicates only.
 
 ## Naming
 
-- **[OPEN]** Final public flagship name — Companion / Companion Core / Companion One (or new)
-- **[OPEN]** Final OSS preview naming — "Companion" vs shorter
-- **[OPEN]** Final Isabelle formal naming — Isabelle / Isabelle_Kunstig / another private brand
+- **[DECIDED 2026-04-28]** Public flagship name — **Companion** (renamed from "Aether"). Internal codename `aether` preserved for repo/db/identifier per `RENAME_TO_COMPANION.md`.
+- ~~**[OPEN]** Final OSS preview naming~~ — **MOOT 2026-04-30** (doctrine §6: no separate OSS Preview product).
+- **[OPEN]** Final Isabelle formal naming — Isabelle / Isabelle_Kunstig / another private brand. Public-facing identity remains hidden per memory rule "Isabelle is private; never surface in public/portfolio."
 - **[OPEN]** Alt umbrella names considered if Companion is dropped: Astrae, Vesper, Eidolon, Lumen, Serein, Auralis
 
 ## Scope boundaries
 
-- **[OPEN]** Exact OSS Preview MVP cut line — which features ship in hours/days vs. are teaser-only
-- **[OPEN]** Exact first Pro milestone cut line
-- **[OPEN]** When full-body avatar becomes an actual target milestone (not MVP)
-- **[OPEN]** Desktop-first vs mobile parity timing for Pro
+- ~~**[OPEN]** Exact OSS Preview MVP cut line~~ — **MOOT 2026-04-30** (doctrine §6: no MVP cut; ships when complete).
+- ~~**[OPEN]** Exact first Pro milestone cut line~~ — **MOOT 2026-04-30** (doctrine §6: single product, ships when complete; no Pro milestone separate from "shippable").
+- **[DECIDED 2026-05-18]** Full-body avatar — **Phase 3 required** per doctrine §5 + ADR-0014. Not Phase 6 stretch, not MVP-deferred.
+- ~~**[OPEN]** Desktop-first vs mobile parity timing for Pro~~ — **PARTIALLY RESOLVED** by ADR-0016 (mobile sync schema additive; mobile is a *surface* of Companion, not a separate product). Exact ship cadence — desktop first, then mobile add-on — remains Don's call.
 
 ## Tech decisions
 
