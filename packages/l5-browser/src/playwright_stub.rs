@@ -188,6 +188,20 @@ impl PlaywrightExecutor {
     }
 
     fn spawn() -> Result<Arc<DriverState>, String> {
+        // Spawning the child + the stdout reader task both need a
+        // running Tokio runtime. `AppState::build` is called
+        // synchronously from many test harnesses (no `#[tokio::test]`,
+        // no `Builder::new_current_thread().enable_all().build()`),
+        // so we must detect runtime absence and self-degrade instead
+        // of panicking. Real production callers always run inside
+        // Tauri's async runtime, so this branch is test-only.
+        if tokio::runtime::Handle::try_current().is_err() {
+            return Err(
+                "no Tokio runtime in current thread — playwright driver requires async context"
+                    .to_string(),
+            );
+        }
+
         let script = Self::driver_script_path();
         if !script.exists() {
             return Err(format!(
