@@ -84,10 +84,12 @@ pub struct ActiveEngine {
 
 /// Application-wide shared state held in a Tauri `State<AppState>`.
 pub struct AppState {
-    /// Pre-defined personas available for runtime switching. Deliberately
-    /// hard-coded rather than loaded from YAML — that's a later slice
-    /// (persona-pack loader, per planning/17_persona_pack_schema.md).
-    pub catalog: Vec<PersonaProfile>,
+    /// Personas available for runtime switching. Initialised from the
+    /// hard-coded built-ins merged with YAML packs found in
+    /// `AETHER_PERSONAS_DIR`. Wrapped in `RwLock` so that ADR-0012
+    /// Tier-2 installs can hot-add a freshly extracted pack without a
+    /// shell restart — see `refresh_catalog`.
+    pub catalog: RwLock<Vec<PersonaProfile>>,
     pub presence: Arc<dyn PresenceController>,
     pub memory: Arc<dyn SessionMemoryStore>,
     /// Memory V2 / ADR-0004 — Durable-domain session-memory store.
@@ -561,7 +563,7 @@ impl AppState {
         let embedding_provider: Arc<dyn EmbeddingProvider> =
             Arc::new(OllamaEmbeddingProvider::from_env());
         Ok(Self {
-            catalog,
+            catalog: RwLock::new(catalog),
             presence,
             memory,
             durable_memory,
@@ -1434,7 +1436,8 @@ impl AppState {
         }
         let profile = {
             let active = self.active.read().expect("active read lock");
-            self.catalog
+            let catalog = self.catalog.read().expect("catalog read lock");
+            catalog
                 .iter()
                 .find(|p| p.persona_id.0 == active.compiled.persona_id.0)
                 .cloned()
@@ -1485,7 +1488,24 @@ impl AppState {
 
     /// List the available personas in catalog order.
     pub fn catalog_entries(&self) -> Vec<PersonaCatalogEntry> {
-        self.catalog.iter().map(profile_to_entry).collect()
+        let catalog = self.catalog.read().expect("catalog read lock");
+        catalog.iter().map(profile_to_entry).collect()
+    }
+
+    /// Re-scan `AETHER_PERSONAS_DIR` and merge any newly-installed
+    /// flat-schema YAML packs into the live catalog. Called after a
+    /// Tier-2 install lands a pack on disk so the wizard / picker can
+    /// see the new persona without a shell restart (ADR-0012). Existing
+    /// entries with the same id are not replaced — same merge rule as
+    /// boot-time `merge_yaml_personas`.
+    ///
+    /// Returns the number of newly-added personas.
+    pub fn refresh_catalog(&self) -> usize {
+        let mut catalog = self.catalog.write().expect("catalog write lock");
+        let before = catalog.len();
+        let merged = merge_yaml_personas(catalog.clone());
+        *catalog = merged;
+        catalog.len().saturating_sub(before)
     }
 
     /// Swap the active persona. Clears session state (memory, presence,
@@ -1493,12 +1513,14 @@ impl AppState {
     /// against the new persona's defaults. Audit chain is reset because
     /// a different persona is a different trust surface.
     pub fn switch_persona(&self, id: &str) -> Result<(), String> {
-        let profile = self
-            .catalog
-            .iter()
-            .find(|p| p.persona_id.0 == id)
-            .ok_or_else(|| format!("unknown persona: {id}"))?
-            .clone();
+        let profile = {
+            let catalog = self.catalog.read().expect("catalog read lock");
+            catalog
+                .iter()
+                .find(|p| p.persona_id.0 == id)
+                .ok_or_else(|| format!("unknown persona: {id}"))?
+                .clone()
+        };
         let preset = self.current_preset();
         let new_active = build_active(&profile, self.memory.clone(), preset)?;
         self.clear_session()?;
@@ -2079,6 +2101,97 @@ humor: "dry"
             ids.contains(&"solstice".to_string()),
             "YAML persona should appear in catalog; saw {ids:?}"
         );
+    }
+
+    #[test]
+    fn refresh_catalog_picks_up_yaml_pack_dropped_after_boot() {
+        // ADR-0012 Tier-2 install flow: a freshly installed pack lands
+        // on disk after AppState boot, and `refresh_catalog` must let
+        // the live catalog see it without a shell restart.
+        let tmp = tempfile::TempDir::new().unwrap();
+        let _env = PersonasDirGuard::with(tmp.path());
+
+        // Boot with an empty persona dir → catalog is the built-ins only.
+        let state = AppState::new().expect("AppState::new");
+        let before: Vec<String> = state
+            .catalog_entries()
+            .into_iter()
+            .map(|e| e.id)
+            .collect();
+        assert!(
+            !before.contains(&"freshpick".to_string()),
+            "precondition: freshpick must not be in the built-in catalog"
+        );
+
+        // Drop a new flat-schema pack into the dir AFTER boot.
+        let yaml = r#"
+id: "freshpick"
+version: 1
+name: "FreshPick"
+description: "Installed live."
+tone: "warm"
+verbosity: "balanced"
+stance: "balanced"
+humor: "dry"
+"#;
+        std::fs::write(tmp.path().join("freshpick.yaml"), yaml).unwrap();
+
+        // Catalog should still NOT see it before refresh.
+        let mid: Vec<String> = state
+            .catalog_entries()
+            .into_iter()
+            .map(|e| e.id)
+            .collect();
+        assert!(
+            !mid.contains(&"freshpick".to_string()),
+            "catalog must not auto-rescan; saw {mid:?}"
+        );
+
+        // Refresh — exactly one new persona should appear, and the
+        // live catalog must include `freshpick`.
+        let added = state.refresh_catalog();
+        assert_eq!(added, 1, "refresh_catalog should report 1 new entry");
+        let after: Vec<String> = state
+            .catalog_entries()
+            .into_iter()
+            .map(|e| e.id)
+            .collect();
+        assert!(
+            after.contains(&"freshpick".to_string()),
+            "freshpick should be in catalog after refresh; saw {after:?}"
+        );
+    }
+
+    #[test]
+    fn refresh_catalog_is_idempotent() {
+        // Calling refresh twice with no on-disk change must report
+        // zero additions on the second call. Guards against duplicate
+        // entries growing the catalog on every install attempt.
+        let tmp = tempfile::TempDir::new().unwrap();
+        let yaml = r#"
+id: "twice"
+version: 1
+name: "Twice"
+description: "Second refresh must not duplicate."
+tone: "warm"
+verbosity: "balanced"
+stance: "balanced"
+humor: "dry"
+"#;
+        std::fs::write(tmp.path().join("twice.yaml"), yaml).unwrap();
+        let _env = PersonasDirGuard::with(tmp.path());
+
+        let state = AppState::new().expect("AppState::new");
+        // Pack was present at boot, so it's already merged.
+        assert_eq!(state.refresh_catalog(), 0);
+        assert_eq!(state.refresh_catalog(), 0);
+        let ids: Vec<String> = state
+            .catalog_entries()
+            .into_iter()
+            .map(|e| e.id)
+            .collect();
+        let count = ids.iter().filter(|id| id.as_str() == "twice").count();
+        assert_eq!(count, 1, "expected exactly one `twice` entry, saw {ids:?}");
     }
 
     #[test]
