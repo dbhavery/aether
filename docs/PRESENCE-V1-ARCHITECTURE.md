@@ -1,6 +1,6 @@
 # Presence v1 — architecture reference
 
-> **Status:** Current as of 2026-05-17.
+> **Status:** Current as of 2026-04-29.
 > **Scope:** Local, single-user desktop presence — signals about the
 > user's attention state and the assistant's responsiveness posture,
 > captured only while the app is foregrounded and the user is
@@ -458,6 +458,19 @@ track) are V2.
   V1 does **not** wire the user-attention axis into the avatar —
   that's an avatar-polish track that also reads from the same
   snapshot.
+- **Runtime renderer scaffold (T1.4, ADR-0013).** A no-op renderer
+  contract lives in `packages/l3-presence/src/runtime.rs`. The
+  `Renderer` trait + `LogStubRenderer` no-op default + opaque
+  `MotionClipLibraryHandle` / `AudioStreamHandle` /  `MotionClipId`
+  marker types reserve the input contract the future avatar
+  renderer will consume so renderer work can advance in parallel
+  with the GPU asset pipeline (ADR-0014 Step 5). The stub emits
+  structured `RendererEvent`s on every L3 state transition and
+  retains a bounded `RENDERER_EVENT_LOG_CAP` ring; no playback,
+  no I/O, no cross-layer imports. `RenderingPresenceController`
+  wraps the existing `InMemoryPresenceController` and forwards
+  transitions to the renderer; `with_log_stub()` is the default
+  wiring until a real renderer ships.
 
 ---
 
@@ -515,6 +528,10 @@ guards and AC are deliberately distinct surfaces.
   - `engine.rs`, `bridge.rs` — rendering surfaces (avatar polish
     track, out of scope for Presence V1 rot guarding beyond their
     existence).
+  - `runtime.rs` — runtime renderer scaffold (T1.4, ADR-0013):
+    `Renderer` trait, `LogStubRenderer`, `MotionClipLibraryHandle`,
+    `AudioStreamHandle`, `MotionClipId`, `RendererEvent`,
+    `RenderingPresenceController`, `RENDERER_EVENT_LOG_CAP`.
 - `apps/desktop/src-tauri/src/` — shell wiring:
   - `presence_config.rs` — `presence.json` contract.
   - `idle_probe.rs` — OS idle probe trait + Windows impl.

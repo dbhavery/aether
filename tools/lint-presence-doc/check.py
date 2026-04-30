@@ -94,6 +94,17 @@ ANCHORS: list[tuple[str, str, str | None, str]] = [
     # ---- §6 UI — Settings + Trust drawer ----
     ("file",   "apps/desktop/src/components/SettingsDrawer.tsx", None, "§6 Settings UI"),
     ("file",   "apps/desktop/src/components/TrustDrawer.tsx",    None, "§6 Trust drawer"),
+
+    # ---- §9 / §12 runtime renderer scaffold (T1.4, ADR-0013) ----
+    ("file",   "packages/l3-presence/src/runtime.rs", None, "§9 / §12 runtime renderer scaffold"),
+    ("symbol", "packages/l3-presence/src/runtime.rs", "trait Renderer", "§9 renderer trait"),
+    ("symbol", "packages/l3-presence/src/runtime.rs", "struct LogStubRenderer", "§9 stub renderer"),
+    ("symbol", "packages/l3-presence/src/runtime.rs", "struct MotionClipLibraryHandle", "§9 library handle"),
+    ("symbol", "packages/l3-presence/src/runtime.rs", "struct AudioStreamHandle", "§9 audio handle"),
+    ("symbol", "packages/l3-presence/src/runtime.rs", "struct MotionClipId", "§9 clip id"),
+    ("symbol", "packages/l3-presence/src/runtime.rs", "enum RendererEvent", "§9 renderer event vocabulary"),
+    ("symbol", "packages/l3-presence/src/runtime.rs", "struct RenderingPresenceController", "§9 wired controller"),
+    ("symbol", "packages/l3-presence/src/runtime.rs", "RENDERER_EVENT_LOG_CAP", "§9 bounded ring cap"),
 ]
 
 
