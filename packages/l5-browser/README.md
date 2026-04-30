@@ -1,19 +1,30 @@
 # aether-l5-browser — L5 browser-automation capability surface
 
-> **Status:** Skeleton only. Implementation lands in follow-up PRs per the T1.3 sub-decisions.
+> **Status (T1.3 first impl slice):** Trait + types defined; default backend is a stub that returns `BackendDisabled`. Real Playwright subprocess wiring is a later slice.
 
-This crate is the L5-gated browser-automation surface for Companion. It does not exist as a *new* policy layer; it is the additive set of capabilities that extends `aether_l5_policy::Capability` with browser primitives.
+This crate is the L5-gated browser-automation surface for Companion. It is not a *new* policy layer; it plugs additively into `aether_l5_policy::Capability` (variants `BrowserOpen`, `BrowserReadPage`, `BrowserExtractData`, `BrowserFillForm`, `BrowserUpload`, `BrowserDownload`, `BrowserSubmit`, `BrowserLoginReuse` already exist in L5).
 
-## Scope (frozen 2026-04-30)
+## Surface
 
-Capabilities (added to the L5 enum in a follow-up PR):
+- `BrowserExecutor` (`src/executor.rs`) — the object-safe async trait every backend implements. Methods: `open`, `navigate`, `read_page`, `extract`, `fill_form`, `submit`, `close`.
+- Value types (`src/types.rs`) — `SessionId`, `PageSnapshot`, `FormField`, `BrowserExecError`.
+- `capability_for_method` (`src/capability_map.rs`) — maps method names to `aether_l5_policy::Capability` variants. The integration point where future Tauri commands check L5 policy **before** invoking the executor.
+- `PlaywrightExecutor` (`src/playwright_stub.rs`, `playwright` feature) — default backend stub. Every method returns `BrowserExecError::BackendDisabled`.
 
-- `BrowserOpen` — start a browser session.
-- `BrowserNavigate` — navigate to a URL within an approved scope.
-- `BrowserClick` — click a DOM element by selector or accessible role.
-- `BrowserFillForm` — fill input fields. Submit goes through Ask in Operator.
-- `BrowserExtract` — extract text/structured data from the live DOM.
-- `BrowserScreenshot` — capture page state for the audit log.
+## Features
+
+- `default = []` — ships the trait + types + capability map only.
+- `playwright` — additionally compiles the `PlaywrightExecutor` stub. The real Node-subprocess driver lands in a later slice.
+
+## Wiring contract
+
+L5 is the single writer for side effects (CLAUDE.md §1.5). The executor itself does NOT perform any policy check. Call sites:
+
+1. Resolve a `Capability` via `capability_for_method(method_name)`.
+2. Ask `aether_l5_policy::PolicyEngine` for a `Decision::Allow`.
+3. Only on `Allow`, invoke the matching method on a `Arc<dyn BrowserExecutor>`.
+
+`close` is intentionally ungated — releasing session resources must always be permitted (a denied close would leak browser processes).
 
 ## Approval mode by autonomy preset
 
@@ -32,16 +43,18 @@ Capabilities (added to the L5 enum in a follow-up PR):
 
 ## Backend
 
-Playwright via subprocess. Cross-platform, headless-safe, mature automation surface. Locked over WebView2 (Windows-coupling) and CDP-direct (re-implements what Playwright already does well).
+Playwright via subprocess. Cross-platform, headless-safe, mature automation surface. Locked over WebView2 (Windows-coupling) and CDP-direct (re-implements what Playwright already does well). The current `PlaywrightExecutor` is structurally complete but every method returns `BackendDisabled`; the real Node-subprocess driver, IPC framing, and session map land in a later slice.
 
 ## What this crate does NOT do
 
-- Implementation. The capability primitives, the Playwright wrapper, the audit-row emission — all land in follow-up PRs. This crate only holds the type space + the doc surface so the workspace check passes.
+- Real browser automation. The Playwright Node subprocess, IPC framing, and session lifecycle land in a later slice.
+- Tauri commands. The wiring from Tauri command handlers through L5 policy and into `BrowserExecutor` is the next single-layer follow-up session under `apps/desktop/`.
 - New approval modes. `ApprovalScope` ("Ask once per session / task") and "Draft only" land in `aether-l5-policy` directly per T1.3 §2.3.
 
 ## References
 
-- `planning/plans/T1.3_browser_file_workflow_proposal.md` §2.1 — Approved coordinator proposal (status flipped 2026-04-30 under Don's "1–5 are your decisions now" delegation).
+- `planning/plans/T1.3_browser_file_workflow_proposal.md` §2.1 — Approved coordinator proposal.
+- `planning/plans/T1.3_approval_scope_design.md` — ApprovalScope design (out-of-scope for this slice).
 - `planning/12_permissions_autonomy.md` — autonomy preset framework + risk classes.
-- `aether_l5_policy::Capability` — the additive surface where new variants land.
-- `tools/redteam/scenarios/browser_misuse/` — capability-specific adversarial scenarios; the credential-fill scenario stubbed in T2.2 unblocks once the first impl PR lands.
+- `aether_l5_policy::Capability` — the additive surface this crate plugs into.
+- `tools/redteam/scenarios/browser_misuse/` — capability-specific adversarial scenarios; the credential-fill scenario stubbed in T2.2 unblocks once the real Playwright driver lands.
