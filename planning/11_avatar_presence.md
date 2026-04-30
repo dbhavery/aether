@@ -4,10 +4,10 @@ The avatar subsystem and the presence controller. The presence controller is a *
 
 ---
 
-## Long-term target
+## Target
 
 ### Goal
-Persistent, photorealistic, conversationally believable assistant avatar. Listens, speaks, moves, and responds naturally. Can extend to full-body in the final vision.
+Persistent, photoreal, full-body, conversationally believable assistant avatar from launch (doctrine §5). Listens, speaks, moves, and responds naturally. No headshot intermediate.
 
 ### Clarification
 **The user knows it is AI.** The goal is realism and social presence, not deception. The standard "highest-believable assistant/companion relationship" (per [01_product_doctrine.md](01_product_doctrine.md)) is about trust and emotional coherence, not identity fraud.
@@ -21,16 +21,17 @@ The engineering task is assembly, integration, and social timing — not inventi
 
 ---
 
-## MVP target (OSS Preview)
+## Launch scope
 
-- **Scope:** Headshot or bust-level avatar
-- **Real-time or near-real-time lip-sync**
-- **Speech-driven facial animation**
-- **Distinct listening / thinking / speaking states**
-- **Open-source-compatible implementation** — MuseTalk / TalkingHead / Wav2Lip-style references acceptable at this tier
-- **Degrades gracefully on weak hardware**
+Companion ships as a single product (doctrine §6). The avatar at launch is:
 
-See [roadmaps/aether_oss_preview.md](roadmaps/aether_oss_preview.md).
+- **Photoreal full-body** (doctrine §5; ADR-0014). No headshot-only release.
+- **Real-time or near-real-time lip-sync.**
+- **Speech-driven facial animation.**
+- **Distinct listening / thinking / speaking states.**
+- **Hardware-aware tiers** (Lite / Balanced / Full) — all tiers render the same photoreal full-body character; tiers trade animation richness, idle motion fidelity, and frame-rate budget, **not** body framing.
+
+See [`roadmaps/aether_pro.md`](roadmaps/aether_pro.md) for the launch-track roadmap; [`roadmaps/aether_oss_preview.md`](roadmaps/aether_oss_preview.md) is tombstoned per doctrine §6.
 
 ---
 
@@ -41,42 +42,41 @@ The avatar is not one engine. It is a stack of distinct layers, each with its ow
 ### Layer 1 — Speech-to-face (visemes / mouth motion)
 - Maps phonemes / audio chunks to mouth shapes.
 - Runs in sync with TTS stream.
-- **OSS Preview:** borrowable (MuseTalk / Wav2Lip-class).
-- **Pro:** custom, streaming-aware, tightly timed with TTS chunks. Borrowed only as study reference.
+- **Custom Companion implementation** — streaming-aware, tightly timed with TTS chunks. Open-source references (MuseTalk / Wav2Lip-class) studied as baselines, isolated behind our own interface; not the shipping path.
 
 ### Layer 2 — Facial expression
 - State-linked expressions (listening, thinking, answering, acknowledging).
 - Speech-linked micro-expressions (emphasis, surprise, warmth).
-- **Must-own (Pro).** This is part of persona expression, not a commodity.
+- **Must-own.** This is part of persona expression, not a commodity.
 
 ### Layer 3 — Gaze and blink
 - Eye direction, micro-saccades, blink cadence.
 - State-linked: "thinking" gaze differs from "speaking" gaze differs from "listening" gaze.
 - Natural blink variation (not metronomic).
-- **Must-own (Pro).** Uncanny avatars are a gaze-failure problem as much as a rendering problem.
+- **Must-own.** Uncanny avatars are a gaze-failure problem as much as a rendering problem.
 
 ### Layer 4 — Listening / thinking posture
 - Non-speaking state presence.
 - Small head tilts, nods, lean variation.
 - Distinct listening (attentive) vs thinking (inward) postures.
-- **Must-own (Pro).**
+- **Must-own.**
 
 ### Layer 5 — Idle motion
 - Subtle breath, weight shift, micro-motion.
 - Prevents "frozen uncanny" state.
 - Runs continuously even during thinking/waiting.
-- **Must-own (Pro).**
+- **Must-own.**
 
 ### Layer 6 — Gesture / body scheduler (later)
 - Hand gestures, torso shifts, emphasis beats.
 - Full-body later in flagship roadmap.
-- **Must-own (Pro).**
+- **Must-own.**
 
 ### Layer 7 — Cinematic stabilizer / anti-uncanny control
 - Smooths transitions between states.
 - Prevents over-animation and rapid state flicker.
 - Suppresses features that commonly create uncanny feel.
-- **Must-own (Pro).** Hardest and most important layer.
+- **Must-own.** Hardest and most important layer.
 
 ---
 
@@ -139,21 +139,13 @@ This is the rule-based spine. The presence controller implements it; persona par
 
 ## Rendering strategy
 
-### OSS Preview
-- Open-source / available-now rendering primitives
-- 2D or simple 3D headshot
-- Browser-compatible (TalkingHead-style) acceptable
-- Target: credible, not photoreal
-
-### Companion
-- Higher-fidelity rendering; 3D rigged head + shoulders minimum at launch
-- Path toward photorealism through custom rendering stack or Unreal-class integration
-- MetaHuman-class rigs may be referenced and studied; integration only if they don't cap the ceiling or lock us in
+### Companion (single product)
+- Photoreal full-body rendering at launch (doctrine §5).
+- Per-persona character pipeline produces stills and video drawn from the same identity (ADR-0014).
+- Pre-generated motion clip library + runtime blend + lip-sync overlay (ADR-0013).
+- MetaHuman-class rigs and open-source rendering primitives may be studied as references; integration only if they do not cap the ceiling or lock us in.
 - **The rig is borrowable; the control layer on top stays ours.**
-
-### Full-body (later milestone)
-- Deferred until core avatar mode is stable and believable at head-and-shoulders.
-- Adding full-body before reasoning and memory are solid makes the product feel impressive-but-unreliable (see [01_product_doctrine.md](01_product_doctrine.md) anti-patterns).
+- Reliability under load is non-negotiable: a photoreal character that freezes, drifts identity, or breaks lip-sync is a doctrine §5 violation, not an acceptable trade.
 
 ---
 
@@ -165,7 +157,7 @@ This is the rule-based spine. The presence controller implements it; persona par
 - **Frame rate target by tier:**
   - Lite: 24 fps minimum
   - Balanced: 30 fps
-  - Full / Pro: 60 fps where possible
+  - Full: 60 fps where possible
 
 Specific ms targets to lock in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
@@ -183,18 +175,20 @@ Specific ms targets to lock in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
 ---
 
-## OSS Preview vs Pro avatar scope
+## Avatar capability by hardware tier
 
-| Feature | OSS Preview | Pro |
-|---------|-------------|-----|
-| Avatar type | Headshot, 2D or simple 3D | 3D head+shoulders, photoreal path |
-| Lip-sync | Open-source primitive (MuseTalk / Wav2Lip-class) | Custom, streaming-tight, chunk-synced |
-| Facial expression | Basic state-linked | Rich, speech-linked, persona-tuned |
-| Gaze / blink | Simple | Full presence-controller-driven |
-| Idle motion | Minimal | Full subtle motion layer |
-| Body / gesture | None | Limited at launch; expands in later phases |
-| Presence controller | Lite (rule-based, minimal) | Full must-own implementation |
-| Rendering | Browser-compatible | Native rendering surface, higher fidelity |
+Companion ships with the full avatar capability set (doctrine §6). Hardware tiers (Lite / Balanced / Full) trade animation richness and frame-rate budget — not body framing or feature presence. All tiers render the same photoreal full-body character (doctrine §5).
+
+| Capability | Lite | Balanced | Full |
+|------------|------|----------|------|
+| Avatar type | Photoreal full-body | Photoreal full-body | Photoreal full-body |
+| Lip-sync | Custom, streaming-tight, chunk-synced (reduced cadence) | Custom, full cadence | Custom, full cadence + emphasis-linked detail |
+| Facial expression | State-linked, simplified palette | Rich, speech-linked | Rich, speech-linked, persona-tuned |
+| Gaze / blink | Presence-controller-driven, simplified | Full presence-controller-driven | Full presence-controller-driven |
+| Idle motion | Subtle motion (reduced frequency) | Full subtle motion layer | Full subtle motion layer |
+| Body / gesture | Reduced gesture set | Standard gesture set | Full gesture / body movement |
+| Presence controller | Full must-own implementation | Full must-own implementation | Full must-own implementation |
+| Rendering | Native, lower fidelity | Native, mid fidelity | Native, full fidelity |
 
 ---
 
