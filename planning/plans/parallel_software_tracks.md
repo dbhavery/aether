@@ -20,10 +20,10 @@
 ## Tier 1 — Closes moat layers (high leverage, no GPU)
 
 ### T1.1 — Memory V2 step 5 (retention sweep)
-**Status:** BLOCKED on Don's `MemoryDomain` enum reconciliation decision (HANDOFF_2026-05-18 Risk A — three options documented).
+**Status:** Available — `MemoryDomain` reconciliation was already locked by [ADR-0001](../../docs/adr/ADR-0001-memory-domain-reconciliation.md) on 2026-04-23 (Option 3: retire L2 kernel stub, shell six-domain taxonomy canonical). HANDOFF_2026-05-18 Risk A was stale-prompt drift; reconciliation is done in code (`packages/l2-memory/src/domain.rs`). T1.2 — also flagged as blocked in earlier handoffs — already shipped (`tools/lint-quality-doc/`, commit `4b0a5ce`). Repo beats prompt per Decision #32.
 **Layer:** L2.
 **Self-test gate:** unit + integration tests on retention behavior across all six domains.
-**Notes:** Cannot start until Don picks reconciliation option. Highest-priority unblock.
+**Notes:** Highest-priority moat work. Can start any time.
 
 ### T1.2 — Quality-Eval Tier 2B (rot guard + doc flip)
 **Status:** Available now.
