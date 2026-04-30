@@ -289,8 +289,8 @@
   <name>-doc/`. Checks that named anchor strings from an
   architecture doc are present across a fixed set of code files.
   **Enforces doc↔code anchor presence, not behavioral correctness.**
-  See `docs/AC-STYLE.md` (future) for the split between rot guards
-  and acceptance criteria.
+  See [`docs/AC-STYLE.md`](AC-STYLE.md) for the split between rot
+  guards and acceptance criteria.
 
 - **hard constraints**
   Definition: a section in every subsystem architecture doc listing
@@ -306,10 +306,16 @@
   updating the manifest.
 
 - **acceptance criteria (AC)**
-  Definition: TODO — settle with `docs/AC-STYLE.md` (future). Short:
-  behavioural, testable checks that verify code does the right thing
-  under specific inputs. Live in tests and eval scenarios. **Do not
-  collapse AC into rot guards or hard constraints.**
+  Definition: behavioural, testable checks that verify a feature does
+  the right thing under specific inputs. Each criterion expresses one
+  observable outcome a tester can pass/fail by inspection — written
+  user-perspective ("the user sees", "the agent emits", "the audit
+  log shows"), not implementation-perspective. Live as numbered lists
+  under `## Acceptance criteria` headings in spec docs; verified by
+  tests, evals, or other measurable artifacts. **Do not collapse AC
+  into rot guards or hard constraints** — those are different shapes.
+  See [`docs/AC-STYLE.md`](AC-STYLE.md) for the canonical writing
+  rules + good/bad examples.
 
 ---
 
@@ -520,9 +526,8 @@
 Tracked here temporarily; promote to `planning/OPEN_QUESTIONS.md` if
 any survives more than one drafting pass.
 
-- **AC house style** — bullets-with-thresholds vs Given/When/Then.
-  Blocks populating the `acceptance criteria` entry above. See
-  pending `docs/AC-STYLE.md`.
+- ~~**AC house style** — bullets-with-thresholds vs Given/When/Then.~~
+  **Resolved 2026-04-30** by [`docs/AC-STYLE.md`](AC-STYLE.md): bullets-with-thresholds + optional `(P0/P1/P2)` priority + optional `(verified by: <test or anchor>)` provenance. Don may override via a follow-up edit; default is locked.
 - **Requirement ID scheme** — proposed `<layer>-<subsystem>-<NNN>`
   (e.g. `L2-MEM-014`). Not locked. Blocks populating any term that
   references "requirement ID".
