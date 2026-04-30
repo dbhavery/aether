@@ -129,13 +129,23 @@ Realistic ship target: "good but visibly synthetic" full-body in the
 
 ## Where we are right now (the cursor)
 
-**Active phase:** Phase 2 (Persona text), iteration V6 of estimated 8-12 to plateau.
+**Active phase:** Phase 2 (Persona text), V6 still ship default after V7/V8/V9 sweep + V9c full eval (2026-04-29).
 
-**Branch:** `dev` at `093a597` (or wherever the next commit lands).
+**Branch:** `dev` at `7fc7434` or later (run `git pull` first).
 **Best model:** V6 LoRA at file:///C:/Users/dbhav/Projects/aether/planning/session_2026-04-26/training/checkpoints_v6/qwen25_3b_human_lora_v6/final/
-**Best score:** 28% human-rate on WildChat (held-out unseen distribution).
-**Days into project:** ~10 days since the current monorepo (April 18) — but built on months of v13 predecessor work.
-**Sessions burned in current monorepo:** ~25 sessions of agent work since 2026-04-18, including this one.
+**Best score:** 28% human-rate on WildChat. Unbeaten across V7 (23.5%, overfit), V8 (20.5%, fresh-from-base under-fit), V9a (under-fit), V9b (continuation alone insufficient), V9c (25.0% — strongest non-V6, doesn't beat).
+
+**V*-arc updates since 2026-04-28:**
+- V7 archived as negative result (multi-turn-format continuation overfits) — see file:///C:/Users/dbhav/Projects/aether/planning/session_2026-04-26/training/V7_RESULTS.md
+- V8 archived as negative result (rank-96 fresh-from-base under-fits at 1500 steps) — see file:///C:/Users/dbhav/Projects/aether/planning/session_2026-04-26/training/V8_RESULTS.md
+- V9 sweep done — see file:///C:/Users/dbhav/Projects/aether/planning/session_2026-04-26/training/V9_SWEEP_RESULTS.md and file:///C:/Users/dbhav/Projects/aether/planning/session_2026-04-26/training/V9C_FULL_RESULTS.md
+- D3 decision: V6 retained as ship default. Two open follow-ups:
+  - **Path B (V9b' = V6-merged + rank-96 expansion).** Scripts shipped (file:///C:/Users/dbhav/Projects/aether/planning/session_2026-04-26/training/train_pipeline_v9b_prime.py + file:///C:/Users/dbhav/Projects/aether/planning/session_2026-04-26/training/eval_v9b_prime_full.py). Cheapest test of "is the V*-arc continuation chain the WildChat lever?" ~3-4 hr train + ~50-60 min eval.
+  - **Path A (V9c-3000).** Speculative; only if Path B lands short of 28%.
+- ADR-0012 (persona delivery via Tier-1 bundled previews + Tier-2 download-on-demand packs) ACCEPTED. Wizard onboarding flow shipped end-to-end in dev as of `e122bfa` → `7fc7434`. 8 cast persona packs bundled + seeded into `<app_data>/personas/` on first boot.
+
+**Days into project:** ~11 days since the current monorepo (April 18) — but built on months of v13 predecessor work.
+**Sessions burned in current monorepo:** ~28 sessions of agent work since 2026-04-18, including the autonomous continuation runs of 2026-04-29.
 
 ---
 
