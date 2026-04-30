@@ -642,3 +642,73 @@ export async function browserSubmit(
 export async function browserClose(session: SessionId): Promise<void> {
   return invoke<void>("browser_close", { session });
 }
+
+// --- T1.3 — L5-gated file-workflow surface ----------------------------
+//
+// Thin wrappers around the six `files_*` Tauri commands. The backend is
+// currently the `StdFsExecutor` stub: every call below will reject with
+// a `BackendDisabled` error string until the real `std::fs` / `tokio::fs`
+// driver lands. The shape is locked now so the UI can build against it.
+
+/** A single grep hit returned by {@link filesGrep}. `line_no` is
+ * 1-indexed (matching `grep -n`, ripgrep, and editor conventions);
+ * `line_text` is the matching line with its trailing newline stripped.
+ * Mirrors the Rust `aether_l5_files::GrepHit` struct. */
+export interface GrepHit {
+  path: string;
+  line_no: number;
+  line_text: string;
+}
+
+/** Read the full contents of a file as raw bytes. The caller is
+ * responsible for any text-decoding choices. Gated by L5 `FilesRead`. */
+export async function filesRead(path: string): Promise<number[]> {
+  return invoke<number[]>("files_read", { path });
+}
+
+/** Create a new file with the given contents. The backend MUST refuse
+ * to overwrite an existing path — overwrite goes through {@link filesEdit}
+ * under the separate `FilesEdit` capability. Gated by L5 `FilesCreate`. */
+export async function filesCreate(
+  path: string,
+  contents: number[],
+): Promise<void> {
+  return invoke<void>("files_create", { path, contents });
+}
+
+/** Replace the contents of an existing file. Real backends write
+ * atomically (write-to-temp + rename). Gated by L5 `FilesEdit`. */
+export async function filesEdit(
+  path: string,
+  contents: number[],
+): Promise<void> {
+  return invoke<void>("files_edit", { path, contents });
+}
+
+/** Move or rename a file from `src` to `dst`. Per T1.3 the policy
+ * layer enforces an Ask gate above this call — even Operator preset
+ * never auto-runs `FilesRenameMove`. Both endpoints must be in
+ * approved scope. Gated by L5 `FilesRenameMove`. */
+export async function filesRename(src: string, dst: string): Promise<void> {
+  return invoke<void>("files_rename", { src, dst });
+}
+
+/** Delete a file. Per T1.3 the policy layer enforces an Ask gate
+ * above this call — `FilesDelete` never auto-runs in any preset.
+ * Gated by L5 `FilesDelete`. */
+export async function filesDelete(path: string): Promise<void> {
+  return invoke<void>("files_delete", { path });
+}
+
+/** Search file contents under `root` for lines matching `pattern`.
+ * The pattern grammar is backend-defined (the real backend will use
+ * a regex crate). Live read-side scan, no persistent index. Gated by
+ * L5 `FilesRead` — anything Read already permits is already greppable
+ * (mirrors the `navigate → BrowserOpen` consolidation in the browser
+ * surface). */
+export async function filesGrep(
+  root: string,
+  pattern: string,
+): Promise<GrepHit[]> {
+  return invoke<GrepHit[]>("files_grep", { root, pattern });
+}
