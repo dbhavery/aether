@@ -20,7 +20,7 @@ Hardware adaptation is a **first-class design constraint**. The product must wor
 **Target hardware:** low VRAM, low storage, older consumer systems.
 
 - Smallest Gemma 4 variant (local LLM)
-- 2D or minimal-3D headshot avatar
+- Photoreal full-body avatar at lower rendering fidelity (doctrine §5: no headshot intermediate; tiers trade animation richness, not body framing)
 - Basic lip-sync
 - Lower-resolution assets
 - Reduced cache footprint
@@ -43,7 +43,7 @@ Hardware adaptation is a **first-class design constraint**. The product must wor
 
 **VRAM budget: 30–40% of detected VRAM**
 
-### Full / Pro
+### Full
 **Target hardware:** high-end GPU, larger storage budget.
 
 - Largest Gemma 4 variant the VRAM budget supports
@@ -61,7 +61,7 @@ Hardware adaptation is a **first-class design constraint**. The product must wor
 ## VRAM policy (the 50% rule)
 
 ### The rule
-**The fully installed Pro product targets ~50% of available VRAM as its default local budget ceiling.**
+**The fully installed Companion product targets ~50% of available VRAM as its default local budget ceiling at the Full tier.**
 
 ### Why not 100%
 Filling VRAM tightly causes:
@@ -78,7 +78,7 @@ Filling VRAM tightly causes:
 |------|-------------|-----------|
 | Lite | 15–25% | Maximum headroom; product works on shared-GPU systems |
 | Balanced | 30–40% | Room for rendering and other apps |
-| Full / Pro | 50% (default) | Premium experience; other apps still work |
+| Full | 50% (default) | Premium experience; other apps still work |
 | Expert override | User-adjustable higher | Warnings shown; user accepts instability risk |
 
 ### Not a hard law
@@ -98,7 +98,7 @@ Heavy components are **installable as packs**, not bundled as always-present:
 - **Avatar asset packs** — persona appearances
 - **Language packs** — additional languages for STT/TTS
 - **Advanced tool packs** — browser, file, research, coding tool suites
-- **Cache packs** — larger local inference caches for Pro
+- **Cache packs** — larger local inference caches for Full tier
 
 ### Storage budget
 - User controls retention.
@@ -107,9 +107,9 @@ Heavy components are **installable as packs**, not bundled as always-present:
 - Cache eviction is automatic with configurable limits.
 
 ### No bundled bloat
-- OSS Preview install is intentionally small (Tauri-class footprint advantage).
-- Larger components downloaded only when user opts in.
-- Pro install is modular — users can start lean and add packs.
+- Base install is intentionally small (Tauri-class footprint advantage).
+- Larger components (model packs, voice packs, persona / asset packs) are downloaded only when the user opts in.
+- The install is modular — users can start lean and add packs.
 
 ---
 
@@ -150,7 +150,7 @@ Auto-detection never silently applies. The onboarding shows the recommendation; 
 |------|-------------|--------------------| ----------------|
 | Lite | Smallest Gemma 4 variant | N/A — always remote | Frontier LLM (required for non-reflex tasks) |
 | Balanced | Mid Gemma 4 | Mid Gemma 4 handles most | Frontier LLM for edge cases |
-| Full / Pro | Largest Gemma 4 within 50% VRAM | Largest Gemma 4 | Frontier LLM only for hardest tasks |
+| Full | Largest Gemma 4 within 50% VRAM | Largest Gemma 4 | Frontier LLM only for hardest tasks |
 
 Variant selection is automatic during onboarding based on detected VRAM. Advanced users can select larger or smaller variants with warnings.
 
@@ -167,28 +167,18 @@ Variant selection is automatic during onboarding based on detected VRAM. Advance
 Settings honor tier context: defaults shown on a Lite system differ from defaults on a Pro system. The info-explainer for each setting notes "Recommended for your tier."
 
 ### Cross-tier consistency
-The **product identity is the same across tiers.** Only the performance ceiling changes. A Lite user should feel they're using the same product as a Pro user — just with lighter local capability.
+The **product identity is the same across tiers.** Only the performance ceiling changes. A Lite user should feel they're using the same product as a Full user — just with lighter local capability. All tiers render the same photoreal full-body character (doctrine §5).
 
 ---
 
-## OSS Preview scope
+## Tier ladder scope (single product)
 
-The OSS Preview supports:
-- **Lite** (default for most systems)
-- **Balanced** (where hardware allows)
-- **Optional Enhanced mode** for stronger systems (exposes a subset of Full capabilities)
-
-The Preview does not expose the full three-tier ladder. Full-tier experience is a Pro milestone.
-
----
-
-## Pro scope
-
-Companion supports the full **Lite / Balanced / Full** ladder with:
-- Dynamic tier adjustment
-- Expert overrides
-- Full modular pack system
-- Per-pack install / remove management
+Companion ships as a single product (doctrine §6) with the full **Lite / Balanced / Full** ladder available to every user:
+- Hardware detection picks the recommended tier automatically.
+- Dynamic tier adjustment under VRAM pressure.
+- Expert overrides surfaced behind warnings.
+- Full modular pack system across all tiers.
+- Per-pack install / remove management across all tiers.
 
 ---
 
