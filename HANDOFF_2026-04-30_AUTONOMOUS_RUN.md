@@ -38,10 +38,11 @@ The `feedback_stale_prompt_drift.md` rule fired twice today. Handoff documents c
 Run `python scripts/current_status.py` for the live state. Highlights as of session-mid:
 
 - All 7 doc rot guards green (presence, vision, voice, quality, memory, policy, media-permissions).
-- Boundary lint green: **13 crates / 9 engines / 4 shared infra** (l5-browser + l5-files skeletons landed).
+- Boundary lint green: **13 crates / 9 engines / 4 shared infra** (l5-browser + l5-files skeletons + first impl slices landed).
 - All workspace `cargo test`s green.
-- Desktop crate `cargo test --bin aether-desktop`: 306+ green (kill-mid-sweep idempotency test added; bundled-key tests reshaped post-real-key-swap).
-- Frontend `pnpm exec tsc --noEmit` clean; `pnpm exec vitest run` **268+ pass** (PersonaSection 7 cases added).
+- Desktop crate `cargo test --bin aether-desktop`: **311 passed / 0 failed** (kill-mid-sweep idempotency test, reshaped bundled-key tests, 4 new browser_commands tests).
+- Frontend `pnpm exec tsc --noEmit` clean; `pnpm exec vitest run` **268 passed / 24 files** (PersonaSection 7 cases + 3 doctrine-§8-bug-fix updates).
+- l5-browser: 15 tests green with `--features playwright`. l5-files: 13 default + 19 with `--features std-fs`.
 
 ## Decisions locked this run
 
@@ -70,24 +71,27 @@ Run `python scripts/current_status.py` for the live state. Highlights as of sess
 ### Cross-reference debt (small, fixable later)
 - T1.3 proposal cites "ADR-0009 (policy decisions)" but ADR-0009 is `retrieval-augmented-utterance-audit-reach`. There is no policy-doctrine ADR by that number. Either add one or correct the cite in the proposal. Flagged 2026-04-30.
 
-## Waves through 6 — completed since handoff drafted
+## Waves through 8 — completed across the autonomous run
 
-**Wave 4** (post-handoff-draft): T1.3 l5-files skeleton (`f0f8e70`), T2.4 persona switcher UI (`776f9e0` / `614fdf5` / `05cdf88`). Both clean, no race.
+**Wave 4**: T1.3 l5-files skeleton (`f0f8e70`), T2.4 persona switcher UI (`776f9e0` / `614fdf5` / `05cdf88`). Multi-agent commit race caught + cleaned up (revert `b40b837`, re-land `4c6cb2b` + `1b8f3d4`). Lesson: **explicit-paths `git add` insufficient under agent concurrency; worktree isolation is the durable fix**.
 
-**Wave 5**: Memory V2 step 6 audit (stale-confirm, no commits), sign_manifest end-to-end exercise (runbook at `999f40b`, real-key roundtrip PASS).
+**Wave 5**: Memory V2 step 6 audit (stale-confirm — already shipped at `e135c2a`, no commits), sign_manifest end-to-end exercise (runbook at `999f40b`, real-key roundtrip PASS, T1.5 fully closed).
 
-**Wave 6** (worktree-isolated to defeat the index race that bit Wave 4): docs/AC-STYLE.md (Gap #6, `70786a2`), planning/plans/T1.3_approval_scope_design.md (`3a858a8`), docs/RTM.md (Gap #5, `bbe0d5c`), GLOSSARY follow-ups (`27a7307`), OPEN_QUESTIONS doctrine §6 cleanup (`3bd02a5`, `5e66344`), RTM PD2/PD3 stale correction (`ee54b04`).
+**Wave 6** (worktree-isolated): docs/AC-STYLE.md Gap #6 (`70786a2`), planning/plans/T1.3_approval_scope_design.md (`3a858a8`), docs/RTM.md Gap #5 (`bbe0d5c`), GLOSSARY follow-ups (`27a7307`), OPEN_QUESTIONS doctrine §6 cleanup (`3bd02a5`, `5e66344`), RTM PD2/PD3 stale correction (`ee54b04`), tombstones on 02_oss_preview_alignment_map + banner refresh on 01_pro_phase_crosswalk + 00_ORCHESTRATION_MAP (`6ce0fed`, `2061882`), GLOSSARY/lint-private-asset-leak doctrine §6 cleanup (`0dcb9b3`).
 
-**Currently in flight**: doctrine §8 used-as-user verify on T2.3 + T2.4 (Vite/playwright agent in worktree).
+**Wave 7** (worktree-isolated): T1.3 first impl slice — `aether-l5-browser` with `BrowserExecutor` async trait + types + capability map + `PlaywrightExecutor` stub (`ca38a5a`..`6dadb2a`+`1b22781`, 7 atomic commits). NFR.md doctrine §6 cleanup (`84035b6`). Doctrine §8 used-as-user verify on T2.3 + T2.4 in isolated worktree — **3 real bugs surfaced and fixed in foreground (`7ccc978`)**: persona-switch a11y label, Loading-stuck-after-error, drawer-wide error visibility.
 
-## Wave 7+ queued (will dispatch when current agent lands)
+**Wave 8** (worktree-isolated): T1.3 first impl slice — `aether-l5-files` with `FilesExecutor` trait + types + `ScopeAllowlist` + capability map + `StdFsExecutor` stub (`3293844`..`f4fce68`, 6 atomic commits). T1.3 Tauri command surface wiring `BrowserExecutor` end-to-end through L5 PolicyEngine (`f8c22d4`..`54776ef`, 4 atomic commits, +4 desktop tests).
 
-- **T2.5 Memory tab/drawer consolidation.** HANDOFF_2026-05-18 Risk D/E. Decide one surface, retire the other, migrate users. Frontend, doctrine §8 used-as-user gate.
-- **First T1.3 implementation slice — `BrowserOpen` + `BrowserNavigate` capabilities** in `packages/l5-browser/`. Adds Playwright dep, `BrowserCapability` variants, and the additive entries on `aether_l5_policy::Capability`. Multi-layer; needs a cross-layer coordinator pass per CLAUDE.md §1.
-- **First T1.3 implementation slice — `FilesEdit` + `FilesGrep`** in `packages/l5-files/`. Same shape, smaller blast radius (no subprocess).
-- **`infra/persona-manifest/sign_manifest.py` end-to-end exercise.** Now that the real key exists, run the full sign → publish → verify roundtrip on a real manifest to lock the production path.
-- **Doctrine §8 used-as-user verification on T2.3 + T2.4.** Live Tauri build → click through → confirm state persists → confirm chat behavior shifts when preset/persona changes.
-- **GPU queue:** Aurora reference batch (Don-driven; not agent work).
+## Wave 9+ queued (next session work)
+
+- **Real Playwright Node-subprocess driver inside `playwright_stub.rs`.** Graduates the stub to a real backend — spawn long-lived Node child running the Playwright driver script, length-prefixed JSON over stdio, `HashMap<SessionId, BrowserContext>` session tracking, typed `BrowserExecError` mapping. Tauri wiring landed today is fully ready; only the `state.rs::build` constructor flips. Single-layer (`packages/l5-browser/`).
+- **First T1.3 Tauri wiring for `aether-l5-files`** — mirror the `browser_commands.rs` shape for `files_*` Tauri commands. Same one-layer-per-session pattern; reuse the L5 gate helper from `browser_commands::gate()`.
+- **L5-gated approval routing for browser/files commands.** Today `Decision::Ask` returns a string error; the next slice routes through the existing pending-approval registry that `submit_turn` uses (reference: `apps/desktop/src-tauri/src/commands.rs::submit_turn`).
+- **T1.3 §2.3 ApprovalScope implementation** — apply the ApprovalScope design doc (`3a858a8`) to the live `aether-l5-policy` engine. Single-layer in l5-policy.
+- **GPU queue:** Aurora reference batch (Don-driven; not agent work). `python tools/persona-reference-gen/__main__.py --persona aurora --batch 2026-04-30a` then `tools/persona-reference-gen/curate.py`.
+- **L*_*_system_design.md doctrine §6 sweep** (T4.7 follow-up). Layer plan docs still reference OSS Preview / Pro split. Lower priority — these are author-focused, not load-bearing.
+- **Spec gap #3** (forward-looking requirement IDs) — Don-reserved per HANDOFF_2026-05-18.
 
 ## Useful reference paths
 
