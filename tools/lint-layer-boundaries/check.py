@@ -103,11 +103,13 @@ ALLOWED: dict[str, frozenset[str]] = {
     # name `Capability` variants; subprocess / transport infra crates
     # land in later slices.
     "aether-l5-browser":     frozenset({"aether-l5-policy"}),
-    # T1.3 §2.2 — l5-files is a sibling capability surface that extends
-    # `l5-policy::Capability` additively with FilesEdit/Delete/Move/
-    # Archive/Grep. Skeleton has no deps; impl PRs will add
-    # `aether-l5-policy` (and any executor / fs infra crates) as needed.
-    "aether-l5-files":       frozenset(),
+    # T1.3 §2.2 — l5-files is a sibling capability surface that
+    # extends `l5-policy::Capability` additively. The first impl slice
+    # (FilesExecutor trait + std::fs-stub backend, 2026-04-30) adds an
+    # `aether-l5-policy` dep so `capability_for_method` can name
+    # `Capability` variants; real `std::fs` / `tokio::fs` infra crates
+    # land in later slices.
+    "aether-l5-files":       frozenset({"aether-l5-policy"}),
     "aether-l6-persona":     frozenset({"aether-l5-policy"}),
     "aether-l7-trust":       frozenset({"aether-l5-policy"}),
     # ------ shared infra ------
