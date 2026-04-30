@@ -454,10 +454,13 @@
   Cross-reference: §1. The commercial-grade flagship.
 
 - **Cross-system spec**
-  Definition: the shared rulebook across OSS Preview and Pro. Covers
-  onboarding, permissions, trust, performance tiers, updates. In the
-  current repo, this material lives in numbered planning docs
-  (`06_onboarding_spec.md`, `12_permissions_autonomy.md`,
+  Definition: the rulebook covering onboarding, permissions, trust,
+  performance tiers, and updates for the single Companion product.
+  (Pre-doctrine §6 phrasing called this "shared across OSS Preview
+  and Pro" — that split was retired 2026-05-18; the rulebook is now
+  the Companion rulebook.) In the current repo, this material lives
+  in numbered planning docs (`06_onboarding_spec.md`,
+  `12_permissions_autonomy.md`,
   `13_trust_security_redteam.md`, `14_performance_tiers_vram.md`,
   `15_updates_releases.md`) rather than in one assembled document.
 
