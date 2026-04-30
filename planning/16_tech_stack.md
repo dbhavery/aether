@@ -1,6 +1,6 @@
 # 16 — Tech Stack
 
-The technology stack for Companion across OSS Preview and Pro. **OSS Preview uses open-source/available-now components aggressively. Companion is primarily custom-written software** — borrowed primitives are isolated behind our own interfaces and replaceable.
+The technology stack for Companion. Companion ships as a single product (doctrine §6) — **primarily custom-written software** with borrowed primitives isolated behind our own interfaces and replaceable. The OSS-friendly engineering posture (clean Tauri shell, layer scaffolds, open-weights tooling) remains correct as engineering practice; it does not ship as a separate product.
 
 ---
 
@@ -14,8 +14,8 @@ Used for:
 - Media pipeline control (timing, chunking, buffering)
 - Policy engine
 - Local storage and sync primitives
-- Presence controller runtime (Pro)
-- Reflex router (Pro)
+- Presence controller runtime
+- Reflex router
 
 Why: low-latency systems performance, strong type safety, memory safety, good FFI to Python / C++, mature async story, excellent WebRTC and audio ecosystems.
 
@@ -49,7 +49,7 @@ Used for:
 - Avatar pipeline experimentation (during prototype phase)
 - Training data prep (for Isabelle-specific tuning)
 
-**Not** used in the hot-path runtime for Pro — Python sidecars acceptable for OSS Preview speed-to-launch, but moved into Rust for Pro.
+**Not** used in the hot-path runtime — Python is for offline experimentation, training, and batch tooling only. Hot-path code lives in Rust.
 
 ### Swift / Kotlin (later)
 Native mobile where performance and platform integration require it. Cross-platform React Native is the likely default for the companion app, with native modules where needed. Final decision in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
@@ -58,27 +58,25 @@ Native mobile where performance and platform integration require it. Cross-platf
 
 ## Desktop application shell
 
-### OSS Preview: Tauri
-**Recommended: Tauri + Rust backend + TypeScript/React frontend.**
+### Tauri (default)
+**Tauri + Rust backend + TypeScript/React frontend.**
 
 Why:
-- Smaller distribution size than Electron (matters for open-source adoption)
+- Smaller distribution size than Electron
 - Lower runtime overhead
-- Rust backend aligns with long-term latency-critical code
-- Better fit for open-source packaging and fast desktop iteration
+- Rust backend aligns with the latency-critical hot-path code
 - Native webview per-platform (no Chromium bundle)
 
-Electron remains viable as a fallback but is heavier and less aligned with the long-term Rust runtime story.
+Electron remains viable as a fallback but is heavier and less aligned with the Rust runtime story.
 
-### Companion: Tauri (or custom)
-Tauri continues as the default for Pro unless concrete performance / integration constraints require a custom shell. The Rust + webview pattern scales into the flagship cleanly.
+A custom shell is on the table only if concrete performance / integration constraints require it; Tauri scales cleanly into the flagship as default.
 
 ---
 
 ## Local LLM runtime
 
 ### Default: Gemma 4
-**Gemma 4 is the default local LLM across all tiers and both products.**
+**Gemma 4 is the default local LLM across all tiers.**
 
 - Reflex path: always local Gemma 4
 - Local deliberative path (Balanced and Full tiers): Gemma 4 (larger variant)
@@ -87,31 +85,19 @@ Tauri continues as the default for Pro unless concrete performance / integration
 Variant selection per tier is in [14_performance_tiers_vram.md](14_performance_tiers_vram.md).
 
 ### Inference runtime
-- **OSS Preview:** leverage existing runtime (llama.cpp / ollama / transformers — TBD based on Gemma 4 support maturity).
-- **Companion:** custom-wrapped inference surface — Rust-bound, streaming-aware, tightly integrated with the event bus. Borrowed inference engine, custom control surface.
+Custom-wrapped inference surface — Rust-bound, streaming-aware, tightly integrated with the event bus. Borrowed inference engine (llama.cpp / ollama / transformers — TBD based on Gemma 4 support maturity), custom control surface on top.
 
 ---
 
 ## Speech stack
 
-### STT (speech-to-text) candidates
+### STT (speech-to-text)
 
-**For OSS Preview:**
-- **Parakeet TDT** — ultra-low-latency streaming use cases
-- **Whisper Large V3 Turbo / Distil-Whisper** — faster throughput, broader flexibility
-- **Moonshine** — edge/mobile-oriented path (later)
+Borrowed inference model (candidates: Parakeet TDT for ultra-low-latency streaming; Whisper Large V3 Turbo / Distil-Whisper for throughput; Moonshine for edge/mobile path later). The streaming chunk model, interruption handling, and viseme timing are **custom** (our ownership).
 
-**For Companion:**
-- Inference model borrowed (Parakeet / Whisper variant); streaming chunk model, interruption handling, and viseme timing are **custom** (our ownership).
+### TTS (text-to-speech)
 
-### TTS (text-to-speech) candidates
-
-**For OSS Preview:**
-- XTTS-v2-class experimentation for expressive local speech (licensing reviewed before any commercial carry-forward).
-- Open TTS alternatives: Piper, Coqui variants, Kokoro — evaluated for voice quality, latency, licensing.
-
-**For Companion:**
-- TTS model selection driven by quality + licensing + latency; **our streaming, chunk timing, and viseme synchronization are custom.** TTS model is swappable.
+Borrowed inference model selected on quality + licensing + latency (candidates: XTTS-v2-class for expressive local speech with licensing reviewed; Piper / Coqui variants / Kokoro as open alternatives). **Our streaming, chunk timing, and viseme synchronization are custom.** TTS model is swappable.
 
 ### VAD and audio handling
 - VAD: Silero VAD or WebRTC VAD class — borrowed
@@ -121,22 +107,24 @@ Variant selection per tier is in [14_performance_tiers_vram.md](14_performance_t
 
 ## Avatar stack
 
-### OSS Preview — open-source baselines
-- **MuseTalk** — real-time lip-sync / talking-head benchmark
-- **TalkingHead** — lightweight real-time 3D/browser avatar reference
-- **Wav2Lip variants** — real-time forks for comparison/prototyping
+Companion ships with a photoreal full-body avatar at launch (doctrine §5; ADR-0014). The avatar pipeline is custom-built across the must-own layers, with selectively borrowed primitives below.
 
-These are acceptable direct dependencies in OSS Preview.
-
-### Companion — custom + selectively borrowed
+### Custom (must-own moat)
 - **Presence controller** — custom (moat layer)
 - **Facial expression layer** — custom
 - **Gaze / blink layer** — custom
 - **Listening / thinking posture** — custom
 - **Idle motion** — custom
 - **Lip-sync (speech-to-viseme)** — custom or tightly-integrated borrowed (streaming, chunk-timed)
-- **Rendering surface** — Unreal-class or custom GL/Vulkan; MetaHuman rigs studied as reference, not locked dependency
 - **Anti-uncanny stabilizer** — custom
+
+### Studied as references (not shipping dependencies)
+- **MuseTalk** — real-time lip-sync / talking-head benchmark
+- **TalkingHead** — lightweight real-time 3D/browser avatar reference
+- **Wav2Lip variants** — real-time forks for comparison
+
+### Borrowed primitives (isolated behind our interfaces)
+- **Rendering surface** — Unreal-class or custom GL/Vulkan; MetaHuman rigs studied as reference, not locked dependency
 
 Direction: borrowed rendering surface + custom everything-on-top.
 
@@ -144,17 +132,14 @@ Direction: borrowed rendering surface + custom everything-on-top.
 
 ## Rendering
 
-### OSS Preview
-- Browser-compatible 3D (Three.js) or lightweight 3D shell — TalkingHead-class
-- 2D avatar fallback for Lite tier
+Native rendering surface for the full photoreal pipeline (doctrine §5). Candidates:
+- Unreal Engine integration (highest fidelity, heaviest)
+- Custom OpenGL / Vulkan / Metal pipeline (most control, most work)
+- Hybrid: Unreal for the rig, custom control plane
 
-### Companion
-- Native rendering surface. Candidates:
-  - Unreal Engine integration (highest fidelity, heaviest)
-  - Custom OpenGL / Vulkan / Metal pipeline (most control, most work)
-  - Hybrid: Unreal for the rig, custom control plane
-- Rendering engine choice in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
-- Three.js is **not** the Pro rendering target — it's an OSS Preview tool.
+Rendering engine choice in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
+
+Three.js / TalkingHead-class browser 3D may be used as **prototyping references** during development; they are not the shipping rendering target.
 
 ---
 
@@ -217,7 +202,7 @@ Decision in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) — pending Pro alpha phase.
 
 ---
 
-## Must-own layers (custom-built, Companion onward)
+## Must-own layers (custom-built)
 
 Reiterating from [01_product_doctrine.md](01_product_doctrine.md#must-own-layers-custom-built-aether-pro-onward):
 
@@ -230,7 +215,7 @@ Reiterating from [01_product_doctrine.md](01_product_doctrine.md#must-own-layers
 7. Latency-aware social timing system
 8. Onboarding / trust UX
 
-**These are non-negotiable custom for Pro.** No vendor dependency for these layers.
+**These are non-negotiable custom for Companion.** No vendor dependency for these layers.
 
 ---
 
@@ -246,22 +231,6 @@ Reiterating from [01_product_doctrine.md](01_product_doctrine.md#must-own-layers
 | Transport | WebRTC | Control channel, viseme metadata, reconnection logic |
 | Storage | SQLite + vector lib | Schema, migrations, sync semantics |
 | CRDT (if chosen) | Automerge / Yjs / custom | Conflict resolution policy, merge rules |
-
----
-
-## OSS Preview stack summary
-
-```
-Desktop shell:    Tauri + TypeScript/React
-Local runtime:    Rust (core) + Python sidecar (transitional)
-Local LLM:        Gemma 4 (smallest variant that fits tier)
-STT:              Parakeet / Whisper variant
-TTS:              XTTS / Piper / Coqui
-Avatar:           MuseTalk / TalkingHead / Wav2Lip-class
-Rendering:        Three.js or lightweight 3D
-Storage:          SQLite
-Sync:             N/A (OSS Preview is single-device)
-```
 
 ---
 
