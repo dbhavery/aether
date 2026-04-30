@@ -93,7 +93,7 @@ A permission check evaluates all five layers. Any deny at any layer blocks the a
 - Camera access (for user attention signal)
 - Screen capture (for screen-understanding tasks)
 
-### Integrations (later / Pro)
+### Integrations (later phase)
 - Third-party service access (scoped per service)
 - External API use
 - Automation triggers
