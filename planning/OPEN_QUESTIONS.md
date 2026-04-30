@@ -252,9 +252,9 @@ Additive to prior pass; non-duplicates only.
 
 ## Architecture decisions deferred
 
-- **[DEFERRED — after OSS Preview ships]** When to begin Companion custom memory kernel implementation
-- **[DEFERRED — after OSS Preview ships]** When to begin custom presence scheduler implementation
-- **[DEFERRED — after Pro alpha]** Whether Isabelle ever diverges into its own codebase or stays a privileged profile
+- ~~**[DEFERRED — after OSS Preview ships]** When to begin Companion custom memory kernel implementation~~ — **SUPERSEDED 2026-04-30** by doctrine §6 (single product; OSS Preview retired). Memory kernel work is gated only by the active wave plan; see `packages/l2-memory/` (Memory V2 steps 1–6 already shipped).
+- ~~**[DEFERRED — after OSS Preview ships]** When to begin custom presence scheduler implementation~~ — **SUPERSEDED 2026-04-30** by doctrine §6. Presence V1 work is in `packages/l3-presence/`; see `docs/PRESENCE-V1-ARCHITECTURE.md`.
+- ~~**[DEFERRED — after Pro alpha]** Whether Isabelle ever diverges into its own codebase or stays a privileged profile~~ — **SUPERSEDED 2026-04-30** by doctrine §6. There is no Pro alpha cadence (single product). Isabelle continues as a privileged profile/overlay; divergence remains hypothetical and is a Don-only call.
 
 ## Repo/folder structure decisions
 
@@ -265,5 +265,5 @@ Additive to prior pass; non-duplicates only.
 
 ## Doctrine application edge cases
 
-- **[OPEN]** Which open-source primitives (if any) are acceptable to carry into Companion as temporary accelerators vs. must be replaced before Pro ships
+- **[OPEN]** Which open-source primitives (if any) are acceptable to carry into Companion as temporary accelerators vs. must be replaced before Companion ships (per doctrine §6 — single product, no separate Pro)
 - **[OPEN]** Acceptable use of hosted frontier LLMs (Anthropic/OpenAI/etc) for the deliberative path — scope, privacy, fallback rules
