@@ -1,8 +1,8 @@
 # ADR-0016: Mobile companion sync schema
 
-- **Status:** **Accepted (body) — 10 OQs explicitly deferred (see §9).** Accepted 2026-04-29 under Don's "decisions 1–4 are yours to make" delegation.
-- **Date:** 2026-04-29 (drafted), 2026-04-29 (accepted body).
-- **Deciders:** Don (delegated to parallel-tracks coordinator). Drafted under doctrine §6 (single product) + delegation lock for the body of the design; OQ-1 through OQ-10 remain open and reserved for Don.
+- **Status:** **Accepted (full — body + 10 OQs).** Body accepted 2026-04-29; OQ-1 through OQ-10 accepted 2026-04-30 under Don's follow-up delegation ("1–5 are your decisions now"). Locked decisions captured in §10 of this ADR.
+- **Date:** 2026-04-29 (drafted + body accepted), 2026-04-30 (OQs accepted).
+- **Deciders:** Don (delegated to parallel-tracks coordinator). Body locked under doctrine §6 (single product) + body delegation; OQs locked under follow-up delegation 2026-04-30.
 - **Supersedes:** nothing.
 - **Superseded by:** nothing yet.
 - **Related:**
@@ -126,6 +126,25 @@ Until those checkpoints land, this ADR is the design contract for the work, not 
 - A follow-on ADR locks pairing UX (open question §9 OQ-7).
 - A follow-on ADR locks the off-LAN relay protocol (open question §9 OQ-6) when Don decides to ship it.
 - Coordinator-gated package proposals when mobile ships: `packages/sync-engine/`, `packages/device-identity/`, `apps/mobile/`.
+
+## 10. Open questions — RESOLVED 2026-04-30
+
+Per Don's follow-up delegation, the 10 OQs surfaced by the T2.1 design draft are locked at the recommended defaults documented in `planning/plans/T2.1_mobile_sync_schema.md` §9. Summary:
+
+| # | Decision | Rationale |
+|---|---|---|
+| OQ-1 | **Defensive design** with full schema reservation. Mobile may or may not ship; schema columns are nullable from day one so retrofit cost stays trivial. | Cheap-now / expensive-later tradeoff already locked by ADR body. |
+| OQ-2 | **Live cross-device session migration is out-of-scope for v1.** Sessions are device-local; sync is for history visibility. | Scope discipline; revisit in v2 if user research demands it. |
+| OQ-3 | **Soft toast + 5-second auto-dismiss** when a stale approval modal is invalidated by a winning approval on the other device. | Least-disruptive UX; no hard close. |
+| OQ-4 | **Yes, add `cost_caps_local` per device.** Schema-side reservation now; implementation deferred. | Defensive; cheap to reserve. |
+| OQ-5 | **5-minute persona-swap timeout** with `persona_swap_rollback` audit event. User retries on whichever device they're on. | Avoids ambiguous "did the swap commit?" state. |
+| OQ-6 | **LAN-only transport in v1.** Off-LAN relay (companion.dbhavery.dev worker) is a v2 feature. | Most user cases are at home/work LAN. Relay adds infra cost + threat surface. |
+| OQ-7 | **QR-code + numeric confirmation** device pairing. Desktop displays QR; phone scans + shows confirmation code; user reads code on desktop; both devices commit. Audit row on both. | Strong identity binding without typing 64-char hex. |
+| OQ-8 | **Audit shard pruning after desktop confirms `audit_chain_head` includes mobile's last row + 30-day cooldown.** | Safe by default; never prunes before desktop has fully ingested. |
+| OQ-9 | **Never auto-migrate desktop on a wire-breaking release while a still-supported mobile version exists.** Add `compatible_mobile_version` field to release metadata. | Avoids locking mobile-only users out of their own data. |
+| OQ-10 | **This ADR is the locked surface.** `T2.1_mobile_sync_schema.md` is the rationale doc; updates to *decisions* go through new ADRs. | Standard ADR/rationale split. |
+
+These resolutions move the OQ section in `T2.1_mobile_sync_schema.md` from "deferred" to "accepted defaults" — that doc remains the rationale source.
 
 ## References
 
