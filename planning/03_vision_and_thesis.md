@@ -2,6 +2,14 @@
 
 The product vision and the three theses (core / experience / strategic) that govern Companion's design.
 
+> **Updated 2026-05-18** to reflect doctrine §5/§6/§7/§8 (`01_product_doctrine.md`):
+> - **§5** photoreal full-body characters from the start — no headshot intermediate;
+> - **§6** Companion ships once, when complete — no interim wedge product;
+> - **§7** voice does not ship as a standalone product;
+> - **§8** self-test before Don review (visual via multimodal vision; frontend used-as-user).
+>
+> The "OSS Preview as wedge / Pro as flagship" two-product framing in earlier drafts of this file is **retired**. Anywhere this file conflicts with `01_product_doctrine.md`, doctrine wins.
+
 ---
 
 ## Core vision
@@ -61,11 +69,12 @@ The product's defensibility is not a single avatar or a single model. It is the 
 
 Any competitor can buy a lip-sync API. None of them have these layers working together.
 
-### Roadmap separates MVP wedge from flagship platform
+### One product, ships when complete (doctrine §6)
 
-- **OSS Preview** is a wedge — it must ship fast and prove the vision. It uses open-source components aggressively.
-- **Companion** is the platform — it is built primarily from custom software. Borrowed primitives are isolated and replaceable.
-- **Isabelle** is a private instance on top of Pro, not a separate codebase.
+- **Companion** is the single product — it is built primarily from custom software. Borrowed primitives are isolated and replaceable. Companion ships once, when complete; no interim wedge product, no headshot-only release, no voice-only release, no chat-only release.
+- The OSS-friendly engineering posture (clean Tauri shell, layer scaffolds, open-weights tooling) remains correct as engineering practice — it just does not ship as a separate product. The prior "OSS Preview as wedge" thesis is retired.
+- **Isabelle** is a private overlay on top of Companion, not a separate codebase.
+- **Voice** (doctrine §7) is a sub-feature of Companion — STT + TTS + push-to-talk + presence-aware turn-taking are integrated continuously, but the surface that exposes voice ships only with the complete Companion.
 
 ---
 
@@ -94,7 +103,7 @@ Aspirational framing: "indistinguishable from a real human assistant/companion."
 | Continuity > completeness | Finish fewer things well; no conversation ever ends in silence |
 | Trust > autonomy | The assistant never surprises the user with an action |
 | Memory > prompt-stuffing | Durable structured memory beats ever-larger context windows |
-| Presence > realism | A lower-fidelity avatar that feels alive beats a photoreal one that freezes |
+| Presence quality at full-body fidelity | Photoreal full-body is the locked target (doctrine §5). Presence quality (gaze, blink, micro-motion, anti-uncanny stabilization) is engineered into the photoreal pipeline — not traded against it. The pipeline must hit both at once; "lower-fidelity but feels alive" is no longer an acceptable fallback. |
 | Clarity > cleverness | Settings and permissions are legible to non-technical users |
 
 ---
@@ -103,7 +112,7 @@ Aspirational framing: "indistinguishable from a real human assistant/companion."
 
 - **"Just wrap an LLM"** — the product ceiling is set by integration, not by the wrapped model.
 - **"Good enough is fine for now"** — close-enough SaaS quality is unacceptable in core experience layers (see doctrine).
-- **"Full body first, reasoning later"** — realism without reliability is a liability.
+- **"Realism without reliability"** — a photoreal character that freezes, drifts identity, or breaks lip-sync under load is a liability. Doctrine §5 locks photoreal full-body as the target *and* requires reliability under load; the two are not traded against each other.
 - **"Lock the user into our cloud"** — local-first is a doctrine, not an optimization.
 - **"Hide the permissions behind an advanced menu"** — trust must be legible to mainstream users.
 - **"Feature-match competitors"** — the product is a relationship, not a checklist.
@@ -119,6 +128,17 @@ These establish that the flagship target is reachable:
 - Real-time TTS-driven lip-sync with human-like motion exists.
 
 The engineering challenge is **assembly, integration, and presence quality under load** — not inventing from zero. Don has spent months hitting "highly-believable" with existing tooling; the path forward is deeper integration and custom-built must-own layers, not more vendor stacking.
+
+---
+
+## Self-test before review (doctrine §8)
+
+Don's review time is the scarce resource. Nothing reaches him until the agent has self-tested it.
+
+- **Visual artifacts** (reference images, identity-LoRA samples, motion clips, video, lip-sync output): multimodal-vision evaluation against acceptance criteria; failed self-tests re-loop the producing step.
+- **Frontend changes** (any UI in `apps/desktop/`): used-as-user via browser/Tauri automation; "looks fine in the diff" or "unit tests pass" is **not** sufficient.
+
+This is the gate, not a recommendation.
 
 ---
 
