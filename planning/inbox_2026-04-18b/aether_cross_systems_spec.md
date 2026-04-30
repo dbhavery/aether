@@ -1,5 +1,15 @@
 # Aether Cross-System Architecture and Standards
 
+> **HISTORICAL — DO NOT IMPLEMENT AGAINST THIS FILE.**
+>
+> This is an early-2026 inbox draft kept under `planning/INBOX_RECONCILIATION_2026-04-18b.md` as **reference only**. It uses the retired three-product framing (Aether OSS Preview / Aether Pro / Isabelle); the 2026-05-18 doctrine refresh collapsed that into one product (Companion) + one private overlay (Isabelle):
+> - **§5** photoreal full-body characters from the start — no headshot intermediate.
+> - **§6** Companion ships once, when complete — no interim wedge product.
+> - **§7** voice does not ship as a standalone product.
+> - **§8** self-test before Don review.
+>
+> Canonical successors: [`planning/02_product_family.md`](../02_product_family.md), [`planning/01_product_doctrine.md`](../01_product_doctrine.md), [`planning/roadmaps/aether_pro.md`](../roadmaps/aether_pro.md), [`planning/roadmaps/isabelle_private.md`](../roadmaps/isabelle_private.md).
+
 ## Product family doctrine
 
 Across the Aether family, “close enough” commodity SaaS behavior is unacceptable in the layers that define the user relationship, trust model, autonomy model, and perceived assistant quality. External libraries, engines, and services may be used as accelerators, but core differentiators must remain custom-controlled enough to preserve the intended product ceiling and moat.[cite:193][cite:195][cite:200]

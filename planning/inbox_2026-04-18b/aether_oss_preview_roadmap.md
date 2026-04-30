@@ -1,5 +1,14 @@
 # Aether OSS Preview Specification and Roadmap
 
+> **HISTORICAL — DO NOT IMPLEMENT AGAINST THIS FILE.**
+>
+> This is an early-2026 inbox draft kept under `planning/INBOX_RECONCILIATION_2026-04-18b.md` as **reference only**. It is fully retired by the 2026-05-18 doctrine refresh:
+> - **§6** retires the "OSS Preview as wedge" thesis — Companion ships once, when complete; no interim wedge product.
+> - **§5** explicitly forbids the headshot / bust-level avatar approach this file describes — characters are photoreal full-body from the start (see ADR-0014).
+> - **§7** confirms voice does not ship as a standalone product.
+>
+> Canonical successor: [`planning/roadmaps/aether_oss_preview.md`](../roadmaps/aether_oss_preview.md) (tombstoned). Single-product roadmap: [`planning/roadmaps/aether_pro.md`](../roadmaps/aether_pro.md). Doctrine of record: [`planning/01_product_doctrine.md`](../01_product_doctrine.md).
+
 ## Product doctrine
 
 Aether OSS Preview is not intended to be a disposable demo or a thin wrapper around generic AI SaaS. It is a launch-fast but complete preview product that should already demonstrate the product family’s core values: premium UX, trust, conversational clarity, hardware-aware setup, and visible identity. Product requirements guidance in the AI era increasingly emphasizes that differentiating AI products need explicit experience standards rather than vague “feature parity” goals.[cite:188][cite:175]

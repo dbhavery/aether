@@ -1,5 +1,15 @@
 # Aether Pro Specification and Roadmap
 
+> **HISTORICAL — DO NOT IMPLEMENT AGAINST THIS FILE.**
+>
+> This is an early-2026 inbox draft kept under `planning/INBOX_RECONCILIATION_2026-04-18b.md` as **reference only**. It predates the 2026-05-18 doctrine refresh:
+> - **§5** photoreal full-body characters from the start — no headshot intermediate.
+> - **§6** Companion ships once, when complete — the "Aether Pro vs OSS Preview" two-product framing in this file is **retired**; "Aether Pro" is now simply **Companion** (single product).
+> - **§7** voice does not ship as a standalone product.
+> - **§8** self-test before Don review (visual via multimodal vision; frontend used-as-user).
+>
+> Canonical successor: [`planning/roadmaps/aether_pro.md`](../roadmaps/aether_pro.md) (renamed-in-place to "Companion — Specification & Roadmap"). Doctrine of record: [`planning/01_product_doctrine.md`](../01_product_doctrine.md).
+
 ## Product doctrine
 
 Aether Pro is not allowed to settle for commodity “close enough” SaaS behavior in any core experience layer. Off-the-shelf products, APIs, libraries, and engines may be used selectively as accelerators, but they are unacceptable as permanent substitutes wherever they limit the product’s intended ceiling in social presence, trust, memory quality, autonomy control, or user experience.[cite:193][cite:195][cite:200]
