@@ -1,6 +1,16 @@
-# 02 — OSS Preview Alignment Map
+# 02 — OSS Preview Alignment Map — RETIRED
 
-**Status:** draft
+> **STATUS: RETIRED 2026-05-18.** Preserved as historical record only. The "OSS Preview vs Pro" axis this doc maps was retired by doctrine §6 (`../01_product_doctrine.md`) — Companion ships once, when complete; no separate OSS Preview product.
+>
+> **What replaces this:** the per-must-own-layer plans (L1..L7) remain the locked surfaces. See the surviving Companion roadmap at `roadmaps/aether_pro.md`. The original `roadmaps/aether_oss_preview.md` carries a matching tombstone.
+>
+> **Do not implement against this document.** Banner added 2026-04-30 during the planning-cleanup pass.
+
+---
+
+# (Historical) 02 — OSS Preview Alignment Map
+
+**Status:** draft (historical)
 **Last updated:** 2026-04-18
 **Axis:** per-must-own-layer × OSS-Preview-vs-Pro scope split.
 **Depends on:** L1..L7 layer plans, `roadmaps/aether_oss_preview.md`, `roadmaps/aether_pro.md`, `02_product_family.md`.

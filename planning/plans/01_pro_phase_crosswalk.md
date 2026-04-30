@@ -1,9 +1,11 @@
-# 01 — Pro-Phase Crosswalk
+# 01 — Companion-Phase Crosswalk
+
+> **Renamed 2026-04-30.** Was "Pro-Phase Crosswalk" — under doctrine §6 there is no separate "Pro" product; Companion ships once, when complete. The phase-indexed view this doc provides is still useful as a release-planning lens onto the L1..L7 work; only the product-name framing is updated.
 
 **Status:** draft
-**Last updated:** 2026-04-18
+**Last updated:** 2026-04-30 (banner-only refresh; matrix content unchanged from 2026-04-18 lock).
 **Axis:** secondary (per Don's 2026-04-18 lock — primary axis is per-must-own-layer; this crosswalk is the phase-indexed view of the same work).
-**Depends on:** L1..L7 layer plans, `roadmaps/aether_pro.md`.
+**Depends on:** L1..L7 layer plans, `roadmaps/aether_pro.md` (the surviving Companion roadmap).
 
 ---
 
