@@ -1,5 +1,10 @@
 # Media permissions
 
+> **Status:** Current as of 2026-04-29. Anchored by
+> [`tools/lint-media-permissions-doc/`](../tools/lint-media-permissions-doc/) —
+> the rot guard fails when the symbols, commands, env vars, or UI
+> components named below disappear from the code.
+
 Companion keeps a small, **local-only** record of how much it is allowed
 to look at — currently camera and (scaffolded) screen capture. This
 document is the source of truth for the model.
