@@ -1,0 +1,17 @@
+[package]
+name = "aether-l5-browser"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Aether L5 — gated browser-automation surface (read + click + fill + extract). Skeleton-only: no logic, no Playwright dep yet. See planning/plans/T1.3_browser_file_workflow_proposal.md §2.1."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+# Skeleton-only. No workspace deps yet. Implementation PRs will add
+# aether-l5-policy (capability declarations) and a Playwright subprocess
+# wrapper. See T1.3 proposal §2.1 + §7 (locked sub-decisions).

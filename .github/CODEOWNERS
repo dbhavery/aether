@@ -36,6 +36,9 @@
 # non-bypassable authorization gate.
 /packages/l5-policy/            @dbhavery
 /packages/l5-policy-ts/         @dbhavery
+# T1.3 first slice (2026-04-30) — L5-gated browser-automation surface.
+# Skeleton-only; coordinator-owned. See planning/plans/T1.3_browser_file_workflow_proposal.md §2.1.
+/packages/l5-browser/           @dbhavery
 # Wave 4 (2026-04-19) — engine stubs coordinator-owned until agents assigned.
 /packages/l1-interaction/       @dbhavery
 /packages/l2-memory/            @dbhavery
