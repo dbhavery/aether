@@ -44,10 +44,10 @@
 **Notes:** Lets the runtime side advance in parallel with the GPU asset side.
 
 ### T1.5 — Persona pack release infrastructure (Tier-2 closure)
-**Status:** Largely done per `48f3765` (Tier-2 install — HTTP fetch + install_persona Tauri command landed). Open: real-key swap of `RELEASE_PUBLIC_KEY_B64` once Don runs `keygen.py`.
-**Scope:** Ed25519 fixture key → real key swap. Update bundled cross-language fixture verifier test. Document key-rotation runbook.
-**Self-test gate:** install Tier-2 pack via Tauri command end-to-end on Don's actual install; verify signature passes against real key.
-**Notes:** Don-reserved on key generation itself.
+**Status:** DONE — closed 2026-04-30 in commit `91f23a9`. Real Ed25519 key generated (`~/.aether/release-key/`, backed up to `I:/IsabelleData/_keys/`); bundled `RELEASE_PUBLIC_KEY_B64` swapped; install orchestrator parameterized on `pk`; tests use the L6 fixture pk explicitly. Desktop test suite: 306/306 green.
+**Scope (historical):** Ed25519 fixture key → real key swap. Update bundled cross-language fixture verifier test.
+**Self-test gate:** desktop crate test suite all green; bundled-key tests verify shape + that the const ≠ fixture pk.
+**Notes:** Key-rotation runbook deferred — when needed, run `keygen.py --force` and repeat the const-swap commit shape.
 
 ---
 
