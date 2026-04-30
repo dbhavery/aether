@@ -159,20 +159,20 @@ All auto-detected values can be manually overridden in Step 4 advanced controls.
 - **No technical jargon in default copy** — "VRAM," "LLM," "token," "embedding" do not appear in main flow (but are in advanced section).
 - **No gated blocking steps** — user can always skip to "I'll decide later."
 - **No dark patterns** — no pre-checked aggressive permissions, no buried "agree to everything" bundling.
-- **No forced account creation** for the free OSS Preview.
+- **No forced account creation** to use Companion locally. Account is only required for opt-in cloud-backed features (sync, licensing).
 
 ---
 
-## OSS Preview vs Pro onboarding differences
+## Onboarding scope (single product)
 
-| Element | OSS Preview | Pro |
-|---------|-------------|-----|
-| Account creation | Not required | May require account for sync / licensing |
-| Permissions presets | Simplified — Observer / Assistant default | Full 5-preset ladder |
-| Performance tiers | Lite / Balanced + optional Enhanced | Full Lite / Balanced / Full ladder |
-| Showcase depth | Teaser of future features shown as "coming to Pro" | Full showcase of flagship capabilities |
-| Memory controls | Basic (session / durable) | Full granularity |
-| Sync setup | N/A | Optional sync step for mobile companion |
+Companion ships as a single product (doctrine §6). Onboarding is one flow with progressive disclosure across hardware tiers:
+
+- **Account creation** — not required for local-only use; required only for opt-in sync / licensing surfaces.
+- **Permissions presets** — full 5-preset autonomy ladder available; the recommended default surfaces first, advanced presets behind expansion.
+- **Performance tiers** — hardware detection picks Lite / Balanced / Full from a single ladder. All tiers render the same photoreal full-body character (doctrine §5); tiers trade animation richness, not body framing.
+- **Showcase depth** — full showcase of flagship capabilities; post-launch roadmap features shown as future, never faked.
+- **Memory controls** — full granularity (session / durable / scoped / forgettable) available; sensible defaults presented first.
+- **Sync setup** — optional sync step for mobile companion (later phase per `roadmaps/aether_pro.md`); skippable.
 
 ---
 
