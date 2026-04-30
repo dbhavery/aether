@@ -161,7 +161,7 @@ Three.js / TalkingHead-class browser 3D may be used as **prototyping references*
 
 ### Primary store
 - **SQLite** for structured state (settings, persona, permissions, audit logs, session memory)
-- **Vector index** for semantic memory — candidates: sqlite-vss, Qdrant-embedded, custom Rust implementation for Pro
+- **Vector index** for semantic memory — candidates: sqlite-vss, Qdrant-embedded, or a custom Rust implementation
 - **Encryption at rest** for durable memory
 - Schema, migration policy, sync semantics — **custom**
 
@@ -198,7 +198,7 @@ Three.js / TalkingHead-class browser 3D may be used as **prototyping references*
 - **Native modules** for audio / avatar / system integration where needed
 - **Shared Rust core** (via FFI) for sync, crypto, and local reasoning primitives
 
-Decision in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) — pending Pro alpha phase.
+Decision in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) — pending the mobile-companion phase of the Companion roadmap.
 
 ---
 
