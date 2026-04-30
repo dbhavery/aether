@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Companion T2.3 + T2.4 Used-As-User Harness</title>
+  </head>
+  <body class="bg-aether-bg text-aether-text antialiased">
+    <!-- Doctrine §8 used-as-user harness for T2.3 (Autonomy preset
+         picker) + T2.4 (Persona switcher). Mounts the production
+         SettingsDrawer + PersonaSection with a Tauri-IPC mock shim so
+         Playwright can drive the real components without a Tauri build.
+         See tools/used-as-user/ for the runner + report. -->
+    <div id="root"></div>
+    <script type="module" src="/src/test/harness_entry.tsx"></script>
+  </body>
+</html>
