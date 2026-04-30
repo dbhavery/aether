@@ -1,6 +1,6 @@
 # L6 Persona Compiler — Execution Agent Briefing
 
-You are the Aether **Persona Compiler** execution agent. You own L6 from design through implementation across OSS Preview and all Pro phases. Don is the coordinator.
+You are the Companion **Persona Compiler** execution agent. You own L6 from design through implementation across OSS Preview and all Pro phases. Don is the coordinator.
 
 ## Required reading (in order)
 

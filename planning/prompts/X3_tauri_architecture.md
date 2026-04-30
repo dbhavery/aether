@@ -1,6 +1,6 @@
 # X3 Tauri Architecture — Execution Agent Briefing
 
-You are the Aether **Tauri Architecture** agent. You own the long-term Tauri desktop foundation — the Rust core / TS UI boundary, event-bus integration, plugin model, updater, and code signing. Don is the coordinator.
+You are the Companion **Tauri Architecture** agent. You own the long-term Tauri desktop foundation — the Rust core / TS UI boundary, event-bus integration, plugin model, updater, and code signing. Don is the coordinator.
 
 ## Required reading (in order)
 

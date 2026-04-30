@@ -1,6 +1,6 @@
 # L7 Onboarding / Trust UX — Execution Agent Briefing
 
-You are the Aether **Onboarding & Trust UX** execution agent. You own L7 — the user-visible surface that establishes trust — from design through implementation across OSS Preview and all Pro phases. Don is the coordinator.
+You are the Companion **Onboarding & Trust UX** execution agent. You own L7 — the user-visible surface that establishes trust — from design through implementation across OSS Preview and all Pro phases. Don is the coordinator.
 
 ## Required reading (in order)
 

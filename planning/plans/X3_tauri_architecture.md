@@ -22,11 +22,11 @@ gates (human-in-the-loop):
   - G4 IPC + filesystem scope defaults — PENDING REVIEW
 ---
 
-# X3 — Tauri Architecture Plan (Aether Pro + shared family foundation)
+# X3 — Tauri Architecture Plan (Companion + shared family foundation)
 
 > **Status: planning only.** No scaffolding until Don approves G1–G4.
 >
-> This document defines how the Aether Pro desktop app is built as a Tauri application: the Rust core / TS UI boundary, event-bus integration, plugin model, signed updater, code-signing path, IPC + filesystem defaults, WebView2 story, and the transition plan for OSS Preview's pywebview shortcut. It is compatible with the 7-layer planning model and the three performance tiers (Lite / Balanced / Full).
+> This document defines how the Companion desktop app is built as a Tauri application: the Rust core / TS UI boundary, event-bus integration, plugin model, signed updater, code-signing path, IPC + filesystem defaults, WebView2 story, and the transition plan for OSS Preview's pywebview shortcut. It is compatible with the 7-layer planning model and the three performance tiers (Lite / Balanced / Full).
 
 ---
 
@@ -182,9 +182,9 @@ Layers that **straddle**:
 
 ### 5.1 Definitions
 
-- **Core** — shipped in every Aether build, required for the product to function, frozen by doctrine. L1–L7 runtime, event bus, policy engine, updater, storage drivers, persona compiler, default model router.
+- **Core** — shipped in every Companion build, required for the product to function, frozen by doctrine. L1–L7 runtime, event bus, policy engine, updater, storage drivers, persona compiler, default model router.
 - **Tauri plugin** — a Rust crate exposing additional commands/events behind a capability. Swappable, optional, and **gated by L5** once L5 ships.
-- **Webview-side "plugin"** — explicitly **not a thing** in Aether. The UI does not load third-party JS bundles at runtime. All extension happens on the Rust side.
+- **Webview-side "plugin"** — explicitly **not a thing** in Companion. The UI does not load third-party JS bundles at runtime. All extension happens on the Rust side.
 
 ### 5.2 First-party Tauri plugins we will use (candidates, verify against current Tauri v2 docs before G2)
 
@@ -203,7 +203,7 @@ Explicitly **not** adopted without a second look:
 - `tauri-plugin-http` — we prefer our own HTTP client inside L4 so routing/escalation policy is enforced in one place.
 - `tauri-plugin-notification` — evaluate after L7 gets its trust-center notification model.
 
-### 5.3 First-party Aether plugins (our own)
+### 5.3 First-party Companion plugins (our own)
 
 Treat these as Rust crates behind the plugin boundary so they can be swapped per tier or per product (Pro vs OSS Preview vs Isabelle overlay):
 

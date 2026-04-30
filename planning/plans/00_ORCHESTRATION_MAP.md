@@ -6,7 +6,7 @@ owner: Don (human coordinator)
 
 # 00 — Orchestration Map
 
-Authoritative coordination artifact for the Aether planning + build phase. Defines the operating model, agent roster, ownership matrix, dependencies, checkpoints, human decision gates, conflict-escalation protocol, and the two doctrine reconciliations (Tauri vs pywebview; 7-vs-8 layer count) locked this session.
+Authoritative coordination artifact for the Companion planning + build phase. Defines the operating model, agent roster, ownership matrix, dependencies, checkpoints, human decision gates, conflict-escalation protocol, and the two doctrine reconciliations (Tauri vs pywebview; 7-vs-8 layer count) locked this session.
 
 ---
 
@@ -23,11 +23,11 @@ This reconciliation is recorded before any other orchestration content so the co
 
 ## 2. Tauri vs pywebview reconciliation
 
-- **UI technology default:** HTML / CSS / JS, shared across the Aether family.
-- **Desktop shell doctrine:** **Tauri is the long-term default** for all Aether-family products.
+- **UI technology default:** HTML / CSS / JS, shared across the Companion family.
+- **Desktop shell doctrine:** **Tauri is the long-term default** for all Companion-family products.
 - **pywebview status:** tactical, OSS-Preview-only shortcut if speed-to-demo absolutely requires it. Explicitly **non-doctrinal**. Must be marked preview-only wherever referenced.
 - **What the old memory note (`feedback_css_default_for_ui.md`, 2026-04-11) preserved:** "Never Tkinter/Qt for visual UI; use web tech." Fully retained — Tauri is web tech behind a native Rust shell.
-- **What the old note superseded:** its framework specificity (pywebview only). For the Aether family's long-term foundation, Tauri supersedes.
+- **What the old note superseded:** its framework specificity (pywebview only). For the Companion family's long-term foundation, Tauri supersedes.
 
 Any agent citing the old memory note as "pywebview is canonical" is wrong and must flag the conflict.
 
@@ -151,7 +151,7 @@ Reserved for Don, not agents:
 - Sync architecture (CRDT vs op-log).
 - OSS Preview MVP cut line (which features ship in hours/days vs are teaser-only).
 - ms budgets and framerate targets by performance tier.
-- Final naming (Aether Pro / Core / One; Isabelle formal name).
+- Final naming (Companion / Core / One; Isabelle formal name).
 - Hosted frontier-LLM acceptable-use rules for the deliberative path.
 - Whether to rewrite `feedback_css_default_for_ui.md` memory note after Tauri lock.
 - Doctrine update pass to reflect 7-layer split (pending).

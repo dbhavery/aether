@@ -24,7 +24,7 @@ non_goals:
 
 ## 1. Purpose
 
-L7 is the **user-facing shell** for Aether. It renders onboarding, trust, permission approvals, cost, personas, and degraded-mode state. L7's single guiding contract is asymmetric:
+L7 is the **user-facing shell** for Companion. It renders onboarding, trust, permission approvals, cost, personas, and degraded-mode state. L7's single guiding contract is asymmetric:
 
 - **L7 never decides. L7 renders.**
 - Every capability-affecting action travels L5 → projected event → L7 UI → user choice → command back to L5.
@@ -52,7 +52,7 @@ Primary source: file:///C:/Users/dbhav/Projects/aether-planning/plans/L7_trust_u
 ### 2.1 Owns
 
 - **Onboarding wizard** — 8-screen flow (Welcome → Privacy & data → Assistant identity → Interaction mode → Hardware tier → LLM/BYOK or Guest → Permissions preset → Ready). Wizard is replayable; every step payload persists via `onboarding.save_step`.
-- **Trust center** — "What Aether can do / will ask / will never do", recent activity, grant ledger, BYOK wallet, policy posture, model + source disclosure. 7 tabs (4 in OSS Preview).
+- **Trust center** — "What Companion can do / will ask / will never do", recent activity, grant ledger, BYOK wallet, policy posture, model + source disclosure. 7 tabs (4 in OSS Preview).
 - **Permission approval UX** — approval prompt modal, pending-approvals drawer (slide-out, `Ctrl+Shift+A`), resource-scope picker, risk pill, capability matrix.
 - **Preset picker** — 5-preset ladder (Observer / Assistant / Operator / Power User / Custom) from L5 §6 surfaced during onboarding + Settings.
 - **Action-history UI + replay** — timeline scrubber, state transitions, memory hits, tool calls. Read-only reconstitution driven by `trust.replay_action`.

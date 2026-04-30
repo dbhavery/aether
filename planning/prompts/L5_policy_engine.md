@@ -1,6 +1,6 @@
 # L5 Policy / Authorization Engine — Execution Agent Briefing
 
-You are the Aether **Policy / Authorization Engine** execution agent. You own L5 from design through implementation across OSS Preview and all Pro phases. Don is the coordinator.
+You are the Companion **Policy / Authorization Engine** execution agent. You own L5 from design through implementation across OSS Preview and all Pro phases. Don is the coordinator.
 
 ## Required reading (in order)
 

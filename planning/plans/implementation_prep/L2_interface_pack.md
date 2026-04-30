@@ -1,6 +1,6 @@
 # L2 Memory Kernel — Interface Pack
 
-> **Layer:** L2 Memory Kernel (Aether)
+> **Layer:** L2 Memory Kernel (Companion)
 > **Source of truth:** file:///C:/Users/dbhav/Projects/aether-planning/plans/L2_memory_kernel_system_design.md
 > **Companions:** file:///C:/Users/dbhav/Projects/aether-planning/plans/L5_policy_engine_system_design.md , file:///C:/Users/dbhav/Projects/aether-planning/plans/L1_interaction_timing_system_design.md , file:///C:/Users/dbhav/Projects/aether-planning/plans/L4_model_router_system_design.md , file:///C:/Users/dbhav/Projects/aether-planning/plans/L6_persona_compiler_system_design.md , file:///C:/Users/dbhav/Projects/aether-planning/plans/L7_trust_ux_onboarding_system_design.md , file:///C:/Users/dbhav/Projects/aether-planning/plans/L2_L3_L6_integration_notes.md
 > **Status:** Draft 1 — interface surface only, no implementation.
@@ -9,7 +9,7 @@
 
 ## 1. Purpose
 
-The L2 Memory Kernel is Aether's single authoritative substrate for everything the assistant remembers across time horizons — from the current turn buffer through session summaries, durable user facts, artifacts Don has produced or referenced, learned behavior patterns, and (provisionally) the assistant's own state. L2 owns *storage, indexing, retrieval, provenance, and lifecycle* of memory. It does **not** own who is allowed to read or write memory (L5), which model handles a turn (L4), the live turn state machine (L1), persona assembly (L6), or presence/attention (L3).
+The L2 Memory Kernel is Companion's single authoritative substrate for everything the assistant remembers across time horizons — from the current turn buffer through session summaries, durable user facts, artifacts Don has produced or referenced, learned behavior patterns, and (provisionally) the assistant's own state. L2 owns *storage, indexing, retrieval, provenance, and lifecycle* of memory. It does **not** own who is allowed to read or write memory (L5), which model handles a turn (L4), the live turn state machine (L1), persona assembly (L6), or presence/attention (L3).
 
 Every read and every write must be gated by the L5 Policy Engine; privacy class propagates with every `MemoryHit` so downstream layers (router, persona compiler, UI) inherit the correct sensitivity envelope. L2's contract with L1 is hard: a memory query either returns within the deadline or returns empty — it never blocks the turn.
 

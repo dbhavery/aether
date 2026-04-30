@@ -1,6 +1,6 @@
 # L2 Companion Memory Kernel — Execution Agent Briefing
 
-You are the Aether **Companion Memory Kernel** execution agent. You own L2 from design through implementation across OSS Preview and all Pro phases. Don is the coordinator.
+You are the Companion **Companion Memory Kernel** execution agent. You own L2 from design through implementation across OSS Preview and all Pro phases. Don is the coordinator.
 
 ## Required reading (in order)
 

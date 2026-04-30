@@ -8,7 +8,7 @@
 
 ## 1. Purpose
 
-This document is the entry point for the implementation-prep artifacts produced during the 2026-04-18 system-design-to-implementation session. Anyone picking up implementation work on Aether — whether starting a new crate, scaffolding the Tauri shell, wiring SQLite migrations, or drafting a layer's test harness — **starts here**. The index catalogues every output of the session, records per-layer readiness, consolidates the blocking open questions that Don must resolve before certain interfaces can freeze, and points at the correct reading order so that an implementer does not have to re-derive context from the 1000-line system-design documents.
+This document is the entry point for the implementation-prep artifacts produced during the 2026-04-18 system-design-to-implementation session. Anyone picking up implementation work on Companion — whether starting a new crate, scaffolding the Tauri shell, wiring SQLite migrations, or drafting a layer's test harness — **starts here**. The index catalogues every output of the session, records per-layer readiness, consolidates the blocking open questions that Don must resolve before certain interfaces can freeze, and points at the correct reading order so that an implementer does not have to re-derive context from the 1000-line system-design documents.
 
 ---
 

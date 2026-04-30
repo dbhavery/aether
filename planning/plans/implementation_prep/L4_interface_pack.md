@@ -1,6 +1,6 @@
 # L4 Model Router — Interface Pack
 
-> **Layer:** L4 Model Router (Aether)
+> **Layer:** L4 Model Router (Companion)
 > **Canonical package:** file:///C:/Users/dbhav/Projects/aether/packages/l4-router/
 > **Typed bindings:** file:///C:/Users/dbhav/Projects/aether/packages/l4-router-ts/
 > **Remote plugin crates:** file:///C:/Users/dbhav/Projects/aether/crates/plugin-router-remote/
@@ -12,7 +12,7 @@
 
 ## 1. Purpose
 
-L4 is the **tier-abstracted model and tool router** for Aether. Cognition, L1, and L7 never ask for a concrete model — they ask L4 for a **tier** (`fast-local | main-local | heavy-local | fast-remote | main-remote | heavy-remote | tool-plan-executor`) plus a typed `RouteHint`, and L4 maps that to a concrete `(provider, model, adapter)` selection, assembles tool plans, brokers BYOK credentials, tracks cost, and hands back a `RouteDecision`.
+L4 is the **tier-abstracted model and tool router** for Companion. Cognition, L1, and L7 never ask for a concrete model — they ask L4 for a **tier** (`fast-local | main-local | heavy-local | fast-remote | main-remote | heavy-remote | tool-plan-executor`) plus a typed `RouteHint`, and L4 maps that to a concrete `(provider, model, adapter)` selection, assembles tool plans, brokers BYOK credentials, tracks cost, and hands back a `RouteDecision`.
 
 **Load-bearing invariant — reinforced:** *every* tool call, remote model call, and side-effecting provider action flows through L5's `PolicyEngine::evaluate` chokepoint. L4 has **no bypass path**. The only local short-circuit is a mirrored `CostCapHit` deny (L5 already denied once; L4 mirrors for latency and re-confirms on next evaluate). DegradedNoPolicy mode (L5 unavailable) emits `RouteDecision { chosen_tier: None, rationale: DegradedNoPolicy }` — never silent-allow.
 

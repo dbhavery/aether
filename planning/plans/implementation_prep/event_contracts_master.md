@@ -26,9 +26,9 @@ non_goals:
   - Does not resolve silently-drifting semantics; flags them.
 ---
 
-# Aether — Master Event Contracts (cross-layer)
+# Companion — Master Event Contracts (cross-layer)
 
-> Canonical cross-layer reference for every typed event that crosses an Aether
+> Canonical cross-layer reference for every typed event that crosses an Companion
 > layer boundary. This file is the single source of truth for event names,
 > producers, consumers, synchronicity, projection status, payload field sets,
 > versioning, and invariants.
@@ -44,7 +44,7 @@ non_goals:
 ## 1. Purpose
 
 This document is the **single source of truth for every typed event crossing
-an Aether layer boundary**. It consolidates the event surfaces of L1
+an Companion layer boundary**. It consolidates the event surfaces of L1
 (interaction timing), L2 (memory kernel), L3 (presence engine), L4 (model
 router), L5 (policy/authorization), L6 (persona compiler), L7 (trust UX),
 plus shared core.health and media signals, into one canonical catalog with
@@ -1255,4 +1255,4 @@ receiving `Deny { reason: NeedsUpgrade }` should treat it as equivalent to
 
 ---
 
-*End of Aether Master Event Contracts — Draft 1.*
+*End of Companion Master Event Contracts — Draft 1.*

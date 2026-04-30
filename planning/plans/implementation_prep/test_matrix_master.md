@@ -1,6 +1,6 @@
-# Test Matrix Master — Aether
+# Test Matrix Master — Companion
 
-> Canonical test matrix consolidating per-layer testing plans, integration notes, and the red-team brief into a single verification contract for Aether.
+> Canonical test matrix consolidating per-layer testing plans, integration notes, and the red-team brief into a single verification contract for Companion.
 >
 > **Sources consolidated:**
 > - file:///C:/Users/dbhav/Projects/aether-planning/plans/implementation_prep/L1_interface_pack.md through L7_interface_pack.md
@@ -19,7 +19,7 @@
 
 ## 1. Test philosophy
 
-Trust is the product moat. Aether's entire thesis — a presence-first AI companion that a user can entrust with private memory, autonomous action, and long-lived personality — collapses the first time an invariant silently drifts, a permission gate silently regresses, or a degraded mode silently produces deceptive output. Every surface of the system either earns trust or squanders it. Interface tests and contract tests matter **here specifically** because:
+Trust is the product moat. Companion's entire thesis — a presence-first AI companion that a user can entrust with private memory, autonomous action, and long-lived personality — collapses the first time an invariant silently drifts, a permission gate silently regresses, or a degraded mode silently produces deceptive output. Every surface of the system either earns trust or squanders it. Interface tests and contract tests matter **here specifically** because:
 
 - **Events cross typed-contract boundaries.** Layers are assembled from independently buildable crates (L1 orchestration, L2 memory, L3 presence, L4 routing, L5 policy, L6 persona, L7 shell). They communicate only through versioned events, IPC commands, and trait interfaces. A drift in field naming or semantics that compiles cleanly on each side can still silently break the integration — contract tests catch this before cross-layer integration.
 - **Invariants are load-bearing.** The event contract doc specifies ten-plus global invariants (monotonic turn ids, append-only audit chain, persona precedence order, no-tool-without-grant, etc.). These cannot be enforced by types alone — they require property-based tests that fuzz inputs and assert invariants hold across every reachable state.

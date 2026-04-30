@@ -33,7 +33,7 @@ non_goals:
 
 ### 1.1 Owns
 - **Onboarding wizard** (8-screen concrete flow per `plans/03_content_lock_v1_port.md §1`, reconciled with `06_onboarding_spec.md` 7-step outline; see §4).
-- **Trust center** — "What Aether can / will ask / will never do", recent activity, grant ledger view, BYOK wallet, policy posture, model/source disclosure (§5).
+- **Trust center** — "What Companion can / will ask / will never do", recent activity, grant ledger view, BYOK wallet, policy posture, model/source disclosure (§5).
 - **Permission approval UX** — approval prompt modal, pending-approvals drawer, resource-scope picker, capability matrix surface (§3).
 - **Preset picker** (5-preset ladder from L5 §6 surfaced during onboarding + Settings).
 - **Action-history + replay UI** (§6).
@@ -276,7 +276,7 @@ Reconciliation: `06_onboarding_spec.md` specifies 7 steps. `03_content_lock §1`
 
 | # | Screen | Purpose | Commands invoked | Events observed | Data captured → command |
 |---|---|---|---|---|---|
-| 1 | **Welcome** | One-sentence "what is Aether"; "I am an AI" disclosure up front; T&C plain-English summary + full text expand | `onboarding.save_step("welcome", {tc_accepted, disclosure_ack})` | none | consent flags |
+| 1 | **Welcome** | One-sentence "what is Companion"; "I am an AI" disclosure up front; T&C plain-English summary + full text expand | `onboarding.save_step("welcome", {tc_accepted, disclosure_ack})` | none | consent flags |
 | 2 | **Privacy & data** | What stays local, what can leave (privacy posture — L5 §10); category checkboxes; retention default | `onboarding.save_step("privacy", posture)` → `policy.set_preset_fragment` (internal) | `policy_decision` echo | privacy posture flags |
 | 3 | **Assistant identity** | Name (optional), persona preset (Warm/Professional/Playful/Custom), optional voice, optional avatar preset; preview inline | `persona.list`, `persona.compile(id)` (dry-run preview), `onboarding.save_step("identity", {...})` | `persona_swap_commit` (on final confirm at end of wizard only) | persona_id, assistant_name |
 | 4 | **Interaction mode** | Text / Text+Voice / Full Avatar; mic, voice output, avatar visibility toggles | `onboarding.save_step("interaction", {...})` | none | interaction flags |
@@ -328,7 +328,7 @@ Each preset card shows:
 
 Data categories (all checkboxes, defaulted to most-private):
 - [ ] Allow durable memory on this device
-- [ ] Allow Aether to use memories in future tasks
+- [ ] Allow Companion to use memories in future tasks
 - [ ] Allow remote LLM calls when no private-tagged context is present
 - [ ] Allow remote LLM calls even when private-tagged context is present (requires `RouterAllowRemoteWithPrivate`)
 - [ ] Allow anonymous telemetry (error reports only)
@@ -347,7 +347,7 @@ Displayed as a non-modal panel on first app open after wizard completion:
 - [ ] Try your first message
 - [ ] Approve a file read (seeds first grant)
 - [ ] Open trust center (1-click guided)
-- [ ] Review what Aether will and won't do
+- [ ] Review what Companion will and won't do
 - [ ] (Pro) Set a daily spend cap
 
 ### 4.9 Replayability
@@ -364,7 +364,7 @@ Displayed as a non-modal panel on first app open after wizard completion:
 
 | Tab | Source | Data shape |
 |---|---|---|
-| **What Aether can do** | `policy.list_capabilities` filtered `mode != deny/block` | CapabilityRow[] |
+| **What Companion can do** | `policy.list_capabilities` filtered `mode != deny/block` | CapabilityRow[] |
 | **Will always ask** | same, filtered `mode = ask` | CapabilityRow[] |
 | **Will never do** | same, filtered `mode ∈ {deny, block}` + hardcoded block list from §2.3 | CapabilityRow[] (locked_by set) |
 | **Recent activity** | `policy.get_audit_summary` + stream | AuditRow[] |
@@ -554,7 +554,7 @@ user clicks persona B
 ### 8.3 Mid-utterance safety
 
 - Swap button is **disabled** whenever `turn_state ∈ {speaking, thinking_with_commitment}` (per L1).
-- Tooltip: "Wait for Aether to finish speaking."
+- Tooltip: "Wait for Companion to finish speaking."
 - Attempted swap during a blocked window is rejected client-side (never invokes).
 - L1 is the authority; L7 only mirrors its state.
 
@@ -573,11 +573,11 @@ user clicks persona B
 
 | Upstream failure (event) | Banner text (plain) | UI lockout |
 |---|---|---|
-| L5 unreachable / `DegradedMode::SafeMode` | "No automation mode — Aether can't act on your behalf right now." | All tool invocation UI disabled; memory-write disabled; approvals drawer shows "policy engine offline, pending approvals preserved" |
+| L5 unreachable / `DegradedMode::SafeMode` | "No automation mode — Companion can't act on your behalf right now." | All tool invocation UI disabled; memory-write disabled; approvals drawer shows "policy engine offline, pending approvals preserved" |
 | L5 `AuditBroken` | "Audit log is unavailable. All actions are paused until it recovers." | Full write lockout; read-only allowed |
 | L5 `LedgerCorrupt` | "Permissions in safe mode — only low-risk reads allowed." | Only `Low` risk auto-caps; else disabled |
 | L4 unreachable | "Local-only mode — remote model calls are paused." | Remote-provider UI disabled; cost wallet shows "paused" |
-| L2 unreachable | "No memory mode — Aether won't remember this session." | Memory-write UI disabled; memory-query greyed |
+| L2 unreachable | "No memory mode — Companion won't remember this session." | Memory-write UI disabled; memory-query greyed |
 | L6 persona compile fail | "Minimum-trust persona active — your choices are still safe." | Persona picker shows error state for failing persona; all others selectable |
 | Media engine stalled | "Repair in progress — audio/video pipeline restarting." (transient) | Mic/cam widgets show spinner; chat stays active |
 | `core.health tier downgrade` | "Switched to Balanced tier to protect performance." | Avatar/effects step down; non-blocking |
@@ -772,17 +772,17 @@ Styling implementation deferred to UI-phase pass.
 
 | L5 `DenyReason` / `PolicyIpcError` | User-facing copy | Surface |
 |---|---|---|
-| `HardcodedBlock(id)` | "Aether can't do that in any preset — it's a safety-locked action." + link to the block's explainer | Approval modal; recent activity |
+| `HardcodedBlock(id)` | "Companion can't do that in any preset — it's a safety-locked action." + link to the block's explainer | Approval modal; recent activity |
 | `FeatureDisabled` | "Your current preset doesn't allow this. You can switch presets or allow this once." | NeedsUpgrade modal |
 | `ActionOutOfScope` | "This action isn't in your current permissions." | NeedsUpgrade modal |
-| `ResourceOutOfScope` | "You haven't given Aether access to this folder/site yet." + "Add scope" button | Approval modal |
-| `ModeDeny` | "You set this to never — Aether won't do it." | Recent activity |
+| `ResourceOutOfScope` | "You haven't given Companion access to this folder/site yet." + "Add scope" button | Approval modal |
+| `ModeDeny` | "You set this to never — Companion won't do it." | Recent activity |
 | `GrantExpired` | "The earlier permission has expired. Approve again?" | Approval modal |
 | `GrantRevoked` | "You revoked this permission." | Recent activity |
-| `ProvenanceTaint(kind)` | "Aether won't act on information from an untrusted source without asking you first." | Approval modal |
+| `ProvenanceTaint(kind)` | "Companion won't act on information from an untrusted source without asking you first." | Approval modal |
 | `PrivacyPostureViolation` | "This would send private information off your machine. Blocked by your privacy settings." | Approval modal; privacy tab |
 | `CostCapHit(provider)` | "You've hit your cost cap for {provider}." | Cap-hit modal (§7.3) |
-| `TierDowngradeStripped` | "Aether switched to a lighter tier — a few advanced actions are paused." | Banner |
+| `TierDowngradeStripped` | "Companion switched to a lighter tier — a few advanced actions are paused." | Banner |
 | `LedgerCorrupt` | "Permissions in safe mode — only low-risk reads allowed." | Banner |
 | `AuditWriteFailed` | "Audit log is unavailable. All actions paused until it recovers." | Banner |
 | `PolicyIpcError::RequiresReauth` | "Confirm it's you to continue." | Re-auth modal |
@@ -909,7 +909,7 @@ Enough surface that L1/L2/L4/L5/L6 can stub against L7 without L7 being finished
 
 ### 18.1 Comprehension tests (informal)
 
-- Rubric: "after reading the modal, can the user say in their own words what Aether is asking to do, what happens if they say yes, and what happens if they say no?"
+- Rubric: "after reading the modal, can the user say in their own words what Companion is asking to do, what happens if they say yes, and what happens if they say no?"
 - 5 non-technical participants per milestone (Don's informal recruit).
 - Pass/fail per screen is Don's call; no numeric target.
 

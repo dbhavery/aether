@@ -10,7 +10,7 @@
 
 ## Purpose
 
-The companion memory system. Five-layer kernel (ephemeral / session / durable-user / artifact / behavior) with novelty filtering, scoped recall, editable entries, provenance, confidence decay, and user-enforced forgetting. This is what makes Aether feel like a relationship rather than a stateless chat.
+The companion memory system. Five-layer kernel (ephemeral / session / durable-user / artifact / behavior) with novelty filtering, scoped recall, editable entries, provenance, confidence decay, and user-enforced forgetting. This is what makes Companion feel like a relationship rather than a stateless chat.
 
 ## Why must-own
 

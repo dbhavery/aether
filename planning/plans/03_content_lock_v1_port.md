@@ -35,7 +35,7 @@ Signal only. No long prose imported verbatim. Each section cites the v1.0 path f
 
 ---
 
-## 2. Guest mode / Aether Guest endpoint
+## 2. Guest mode / Companion Guest endpoint
 
 **What it is:** Low-friction onboarding path: no Ollama install, no BYOK. Cloudflare Worker proxy at `guest.aether.sh` → Groq free tier. Per-installation-UUID rate-limiting (10/hr, 40/day, 4096 max tokens). Simple jailbreak keyword filter. Aggregate logs only (no prompt content). $0.01/day cost cap on the Worker.
 
@@ -120,7 +120,7 @@ Signal only. No long prose imported verbatim. Each section cites the v1.0 path f
 | v1.0 artifact | Source path | New home | Port status |
 |---|---|---|---|
 | 8-screen wizard | `aether/docs/ONBOARDING-SPEC.md` | `plans/L7_trust_ux_onboarding.md`, `06_onboarding_spec.md` | ported forward |
-| Guest mode / Aether Guest endpoint | `aether/docs/LLM-PROVIDERS.md` §11 | `plans/L4_model_router.md`, `plans/L7_*`, `X1` (worker infra) | ported forward (OSS Preview only); retired for Pro |
+| Guest mode / Companion Guest endpoint | `aether/docs/LLM-PROVIDERS.md` §11 | `plans/L4_model_router.md`, `plans/L7_*`, `X1` (worker infra) | ported forward (OSS Preview only); retired for Pro |
 | Distribution playbook | `aether/docs/DISTRIBUTION.md` | `prompts/X4_v1_content_port.md`, `roadmaps/aether_oss_preview.md` | preserved here as reference (scaffold only; copy retired) |
 | BYOK cost visibility | `aether/docs/LLM-PROVIDERS.md` §8 | `plans/L4_model_router.md`, `plans/L5_policy_engine.md`, `plans/L7_*` | ported forward |
 | Inno Setup + auto-updater | `aether/docs/PRODUCT-PLAN.md`, `ARCHITECTURE-V2.md` | `prompts/X3_tauri_architecture.md` (Pro), `prompts/X4_*` (OSS Preview) | ported forward (OSS Preview); explicitly retired (Pro) |

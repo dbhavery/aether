@@ -9,7 +9,7 @@
 
 ## Introduction — OSS Preview purpose
 
-Aether OSS Preview is the free, open-source wedge (`02_product_family.md`). Its job is to launch fast, spread through the open-source community, and prove the flagship is being built to a serious quality bar. It explicitly **may use open-source / available-now primitives aggressively** (`01_product_doctrine.md` §Aether OSS Preview) — but even here, shallow quality is not acceptable in the user-facing experience.
+Companion (OSS Preview wedge thesis retired 2026-05-18 per doctrine §6) is the free, open-source wedge (`02_product_family.md`). Its job is to launch fast, spread through the open-source community, and prove the flagship is being built to a serious quality bar. It explicitly **may use open-source / available-now primitives aggressively** (`01_product_doctrine.md` §Companion) — but even here, shallow quality is not acceptable in the user-facing experience.
 
 The critical doctrine rule for this document: **no must-own layer is fully borrowed even in OSS Preview — the control plane stays ours.** Borrowed primitives may do work in a given layer, but they sit behind our interfaces. That distinction is what lets OSS Preview be tactical without compromising the Pro moat.
 

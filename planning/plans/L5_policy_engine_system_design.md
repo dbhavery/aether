@@ -848,7 +848,7 @@ Privacy-posture sits in **Stage 0 (pre-evaluator gates)** of the state machine (
 ### 11.1 Audit-log write failure
 
 - **Effect:** deny-all until resolved. Every `evaluate` returns `Deny { reason: AuditWriteFailed }`.
-- **User surface:** a hard-blocking banner in the trust center ("Aether is paused: cannot record actions. Check disk / keyring.") with Don-only dismissal after diagnostics.
+- **User surface:** a hard-blocking banner in the trust center ("Companion is paused: cannot record actions. Check disk / keyring.") with Don-only dismissal after diagnostics.
 - **Rationale:** `L5_plan §"Acceptance criteria"` — zero-bypass invariant requires every decision be logged; silent allow when we can't record is the exact failure mode we exist to prevent.
 - **Recovery:** on next successful write, emit a recovery audit record with an explicit `"audit_recovery"` capability marker and resume normal evaluation.
 

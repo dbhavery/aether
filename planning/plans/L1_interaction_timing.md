@@ -10,7 +10,7 @@
 
 ## Purpose
 
-Own the felt timing of every interaction. This layer is the product's social pulse — the reflex path, the acknowledgment phrase pool, the timing contracts, and the turn-state machine that guarantees Aether never feels "thinking-quiet."
+Own the felt timing of every interaction. This layer is the product's social pulse — the reflex path, the acknowledgment phrase pool, the timing contracts, and the turn-state machine that guarantees Companion never feels "thinking-quiet."
 
 ## Why must-own
 

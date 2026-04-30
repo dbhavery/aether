@@ -14,18 +14,18 @@ Own the user-visible surface that establishes and maintains trust. Onboarding wi
 
 ## Why must-own
 
-Trust UX cannot be outsourced to a generic component library, a SaaS admin panel, or a borrowed settings framework. The product's "premium, careful, legible" posture lives in this surface — the copy, the info-explainer on every option, the "Aether will / will always ask / will never" phrasing, the memory-review affordances, the action-history replay, the guest-mode entry. Any generic drop-in component ("we'll just use shadcn permissions") caps the ceiling here because it was designed for SaaS dashboards, not for a companion product. Doctrine rule §1.1 applies hardest here: no close-enough SaaS in the layer that defines the user relationship.
+Trust UX cannot be outsourced to a generic component library, a SaaS admin panel, or a borrowed settings framework. The product's "premium, careful, legible" posture lives in this surface — the copy, the info-explainer on every option, the "Companion will / will always ask / will never" phrasing, the memory-review affordances, the action-history replay, the guest-mode entry. Any generic drop-in component ("we'll just use shadcn permissions") caps the ceiling here because it was designed for SaaS dashboards, not for a companion product. Doctrine rule §1.1 applies hardest here: no close-enough SaaS in the layer that defines the user relationship.
 
 ## Boundaries
 
 **Owns:**
 - Onboarding wizard (7 steps, info-explainer on every option, progressive disclosure, preset-first).
 - Disclosure flow (AI nature, data locality, model use, memory semantics) with plain-English summary + full-text expand.
-- Permission UI — approval prompts, capability matrix view, resource scope pickers, "Aether will / will always ask / will never" surface.
+- Permission UI — approval prompts, capability matrix view, resource scope pickers, "Companion will / will always ask / will never" surface.
 - Memory-review UI — inspect / edit / delete / export, memory-write notifications, confidence/provenance display.
 - Trust center — permissions summary, recent actions, full action history (searchable, replayable), model/source disclosures, safety docs.
 - Routing-decision audit UI — per-turn "which model answered, why" surface for the deliberative path (Pro+).
-- Guest-mode entry — Aether Guest landing surface, rate-limit copy, "upgrade to local" path.
+- Guest-mode entry — Companion Guest landing surface, rate-limit copy, "upgrade to local" path.
 - First-run checklist + inline walkthrough plumbing (triggers, dismissal, re-show).
 - Info-explainer component (the (i) icon) — the single reusable primitive.
 - Consent-revocation flow — uniform across memory, permissions, integrations.
@@ -56,7 +56,7 @@ Trust UX cannot be outsourced to a generic component library, a SaaS admin panel
 | Onboarding wizard shell | **Custom.** The copy, step structure, info-explainer, and preset model are doctrine surfaces. Generic wizard libraries cap the ceiling. |
 | Info-explainer popup component | **Custom.** Reused 100+ times across product; has to match design-system exactly. |
 | Disclosure copy | **Custom.** Plain-English summaries are authored, not templated. |
-| Permission approval prompt | **Custom.** "Aether will / will always ask / will never" phrasing is doctrinal. |
+| Permission approval prompt | **Custom.** "Companion will / will always ask / will never" phrasing is doctrinal. |
 | Trust center shell | **Custom.** Action-history replay + memory-review + model disclosure is not a commodity pattern. |
 | Form primitives (input, select, toggle) | **Borrow** — Radix or Headless UI behind design-system wrapper. |
 | Markdown renderer (help center) | **Borrow** — isolated behind a component; content is custom. |
@@ -82,13 +82,13 @@ Trust UX cannot be outsourced to a generic component library, a SaaS admin panel
 5. **P4 (Pro Phase 3–4)** — routing-decision audit UI full, consent-revocation flow uniform across surfaces, red-team-driven copy review, trust center 1-click-from-every-mode.
 6. **P5 (Pro Phase 5–6)** — Isabelle-private trust surfaces (wider autonomy visualization, cross-project memory review), showcase chapter hand-off maturation, accessibility re-audit against shipped flows.
 
-**Guest-mode & 8-screen wizard**: the v1.0 docs (Aether Guest endpoint concept; 8-screen concrete wizard) are a content source for P0. Agent D owns v1.0 content port into the component copy; L7 owns the shell and hands copy slots to Agent D.
+**Guest-mode & 8-screen wizard**: the v1.0 docs (Companion Guest endpoint concept; 8-screen concrete wizard) are a content source for P0. Agent D owns v1.0 content port into the component copy; L7 owns the shell and hands copy slots to Agent D.
 
 ## Acceptance criteria
 
 - 7-step onboarding completable by a non-technical user in <5 minutes with default presets, zero required text entry beyond an optional assistant name.
 - Every interactive control in the product has an info-explainer; automated lint/test fails the build if a new control lacks one.
-- Permissions UI renders "Aether will / will always ask / will never" lists generated from the capability model (no hand-maintained copy drift).
+- Permissions UI renders "Companion will / will always ask / will never" lists generated from the capability model (no hand-maintained copy drift).
 - Trust center reachable in ≤1 click from every mode.
 - Every autonomous action shows up in action history within 500 ms of completion, rendered as plain English with expandable raw detail.
 - Memory-review UI list renders <100 ms for 10 000 memories.
@@ -113,4 +113,4 @@ Trust UX cannot be outsourced to a generic component library, a SaaS admin panel
 - `file:///C:/Users/dbhav/Projects/aether-planning/13_trust_security_redteam.md`
 - `file:///C:/Users/dbhav/Projects/aether-planning/12_permissions_autonomy.md`
 - `file:///C:/Users/dbhav/Projects/aether-planning/01_product_doctrine.md`
-- v1.0 reference (to be ported by Agent D): 8-screen onboarding wizard, Aether Guest endpoint concept.
+- v1.0 reference (to be ported by Agent D): 8-screen onboarding wizard, Companion Guest endpoint concept.

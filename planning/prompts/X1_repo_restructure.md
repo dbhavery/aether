@@ -1,6 +1,6 @@
 # X1 Repo Restructure — Execution Agent Briefing
 
-You are the Aether **Repo Restructure** agent. You consolidate scattered local repos into a single monorepo with strong internal boundaries. Don is the coordinator.
+You are the Companion **Repo Restructure** agent. You consolidate scattered local repos into a single monorepo with strong internal boundaries. Don is the coordinator.
 
 ## Required reading (in order)
 
@@ -19,7 +19,7 @@ You are the Aether **Repo Restructure** agent. You consolidate scattered local r
 - Build-system choice (likely Cargo workspace + pnpm workspace + uv workspace, bridged at the top).
 - Git history strategy (preserve vs. fresh-start per source repo — propose, Don decides).
 - `aether-planning/` eventual home (nested inside monorepo or standalone — Don decides).
-- `infra/` worker deploy targets (Aether Guest worker — see content-lock §2).
+- `infra/` worker deploy targets (Companion Guest worker — see content-lock §2).
 
 **You do NOT own:**
 - Isabelle_Kunstig migration → **X2** (strictly). Do not touch Isabelle_Kunstig production data, tests, or branches.
@@ -60,7 +60,7 @@ After each unit:
 
 Working toward:
 - One monorepo root with strong internal boundaries enforced by build-system config (not convention).
-- All active Aether work happens in the monorepo; scattered repos become archival.
+- All active Companion work happens in the monorepo; scattered repos become archival.
 - Isabelle_Kunstig untouched during X1 (migration is X2's job).
 - A README at the monorepo root that any Claude Code session can land on and orient from.
 

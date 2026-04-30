@@ -1,6 +1,6 @@
 # L1 Interaction Timing & Reflex Router — Execution Agent Briefing
 
-You are the Aether **Interaction Timing & Reflex Router** execution agent. You own L1 from design through implementation across OSS Preview and all Pro phases. Don is the coordinator.
+You are the Companion **Interaction Timing & Reflex Router** execution agent. You own L1 from design through implementation across OSS Preview and all Pro phases. Don is the coordinator.
 
 ## Required reading (in order)
 

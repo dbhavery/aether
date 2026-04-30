@@ -1,7 +1,7 @@
-# SQLite Schema Pack — Aether Local Store (DRAFT)
+# SQLite Schema Pack — Companion Local Store (DRAFT)
 
 > **Status:** DRAFT — not yet ratified. All DDL below is illustrative and subject to change pending resolution of open questions (§11).
-> **Scope:** Local persistence for Aether Pro (Tauri desktop app). Single-user, single-device primary; Phase-5 sync is out of scope for this draft.
+> **Scope:** Local persistence for Companion (Tauri desktop app). Single-user, single-device primary; Phase-5 sync is out of scope for this draft.
 > **Primary sources:**
 > - file:///C:/Users/dbhav/Projects/aether-planning/plans/L5_policy_engine_system_design.md (§7 grants, §8 audit, §9 cost counters)
 > - file:///C:/Users/dbhav/Projects/aether-planning/plans/L2_memory_kernel_system_design.md (§7 memory tables)
@@ -45,17 +45,17 @@
 
 ## 2. Database Layout
 
-Per X3 §7 filesystem scopes, Aether Pro data root is `%APPDATA%/Aether/Pro/data/`.
+Per X3 §7 filesystem scopes, Companion data root is `%APPDATA%/Aether/Pro/data/`.
 
 **Proposed layout:**
 
 | DB file | Purpose | Rationale |
 |---|---|---|
-| file:///C:/Users/dbhav/AppData/Roaming/Aether/Pro/data/aether.db | Primary user data (memory, persona, sessions, routing, grants, BYOK meta, approvals, degraded events) | One DB for related tables keeps referential integrity + atomic multi-table writes |
-| file:///C:/Users/dbhav/AppData/Roaming/Aether/Pro/data/aether_audit.db | Append-only audit log + checkpoints | Isolation: audit cannot be corrupted by a bad migration on primary DB; different backup/retention policy; read-mostly after write |
-| file:///C:/Users/dbhav/AppData/Roaming/Aether/Pro/data/aether_cost.db | Cost counters (optional, see below) | **OPEN:** could collapse into aether.db. Justification for separation: high write churn (per-request updates), bounded size, easily rebuildable from audit log. Justification for merge: fewer handles, simpler transactions. **Recommendation:** collapse into aether.db for v1 (single ATTACH) and split only if contention measured. |
+| file:///C:/Users/dbhav/AppData/Roaming/Companion/Pro/data/aether.db | Primary user data (memory, persona, sessions, routing, grants, BYOK meta, approvals, degraded events) | One DB for related tables keeps referential integrity + atomic multi-table writes |
+| file:///C:/Users/dbhav/AppData/Roaming/Companion/Pro/data/aether_audit.db | Append-only audit log + checkpoints | Isolation: audit cannot be corrupted by a bad migration on primary DB; different backup/retention policy; read-mostly after write |
+| file:///C:/Users/dbhav/AppData/Roaming/Companion/Pro/data/aether_cost.db | Cost counters (optional, see below) | **OPEN:** could collapse into aether.db. Justification for separation: high write churn (per-request updates), bounded size, easily rebuildable from audit log. Justification for merge: fewer handles, simpler transactions. **Recommendation:** collapse into aether.db for v1 (single ATTACH) and split only if contention measured. |
 
-**Single-writer rule (X3 §8.1):** `tauri-plugin-single-instance` ensures one Aether process per user session. Multiple backend threads use a single connection pool with a single writer (SQLite WAL mode permits concurrent readers).
+**Single-writer rule (X3 §8.1):** `tauri-plugin-single-instance` ensures one Companion process per user session. Multiple backend threads use a single connection pool with a single writer (SQLite WAL mode permits concurrent readers).
 
 **Pragmas applied at open:**
 
@@ -637,7 +637,7 @@ Stable tables (`persona_profiles`, `byok_credentials_meta`, `schema_versions`) r
 
 **Recommendation:** SQLCipher whole-DB for `aether.db` and `aether_audit.db`. Key derivation:
 - Master key held in OS keyring (Windows Credential Manager).
-- At app launch, Aether fetches master key, derives per-DB key via HKDF(master_key, info="aether-db:<db-name>:v1").
+- At app launch, Companion fetches master key, derives per-DB key via HKDF(master_key, info="aether-db:<db-name>:v1").
 - `PRAGMA key = '<derived>'` applied on each connection.
 
 **Alternative (OPEN, §11):** per-column encryption only on sensitive fields (`memory_items.content_inline`, `memory_items.content_summary`, `memory_provenance.source_ref`, `policy_audit_log.payload`). Benefit: indexes remain usable on non-encrypted columns without SQLCipher overhead. Drawback: leaks metadata; more error-prone; index on encrypted columns impossible.

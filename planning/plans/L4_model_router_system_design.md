@@ -1118,7 +1118,7 @@ Each: **Question** — why it matters — proposed default — impact if default
     - **Proposed default:** `router.route_preview` is **dry-run only**; no `ActionRequest` emitted; no audit. Actual execution via `router.request_route` writes normal audit chain.
     - **Impact if defaulted silently:** log bloat or blind spot.
 
-15. **Contradiction between `18_model_router_spec.md` "Anti-patterns" and the tool-use roadmap.** `18` says tool calling is "Aether Pro phase 4+" but this document's §7 (tool protocol) is a P0–P2 concern for Search-then-answer and tool plans. Reconciliation: the **contract** exists from P0 (so L1 / L5 can stub), but the *adapter implementations* arrive at Pro Phase 4. Not a contradiction in doctrine; a sequencing note.
+15. **Contradiction between `18_model_router_spec.md` "Anti-patterns" and the tool-use roadmap.** `18` says tool calling is "Companion phase 4+" but this document's §7 (tool protocol) is a P0–P2 concern for Search-then-answer and tool plans. Reconciliation: the **contract** exists from P0 (so L1 / L5 can stub), but the *adapter implementations* arrive at Pro Phase 4. Not a contradiction in doctrine; a sequencing note.
 
 ---
 

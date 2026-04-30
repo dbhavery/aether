@@ -38,7 +38,7 @@ non_goals:
 >
 > Canonical planning root: file:///C:/Users/dbhav/Projects/aether-planning/
 > Target package home (X1-dependent): file:///C:/Users/dbhav/Projects/aether/packages/l2-memory/ (Rust) + file:///C:/Users/dbhav/Projects/aether/packages/l2-memory-ts/ (typed bindings)
-> Storage root (X3 §7): file:///C:/Users/dbhav/AppData/Local/Aether/core.data/memory/
+> Storage root (X3 §7): file:///C:/Users/dbhav/AppData/Local/Companion/core.data/memory/
 
 ---
 
@@ -633,7 +633,7 @@ MemoryIpcError =
 | Vector index rebuild in progress | `EmbeddingStore.health() != Ready` | **Lexical-only retrieval fallback**; `memory_hit.partial=true`; emit `memory_index_rebuild_started` if not already | `memory_index_rebuild_completed` | L7 banner "memory index rebuilding" |
 | Retention engine failure | Tick fails; job queue stalls | Expired items **remain** until next successful tick, but retrieval **never surfaces them as current** (filter-on-read uses `expires_at_mono <= now`); `DegradedMode::RetentionPaused` flag | Next successful tick | L7 banner "retention paused — forgetting delayed" |
 | Provenance rewrite mid-read | Concurrent `memory.edit` with ProvenancePatch while a read is in-flight | Reader uses chain snapshot captured at query start; returned hit carries `provenance_snapshot_at` | N/A | None |
-| Audit-log write failure (upstream of L5) | L5 returns `Deny { AuditWriteFailed }` | L2 **deny-all**: refuses all reads and writes until L5 recovers; emits `ingestion_candidate_rejected` for any in-flight candidate | L5 recovery | L7 shows L5's "Aether is paused" banner |
+| Audit-log write failure (upstream of L5) | L5 returns `Deny { AuditWriteFailed }` | L2 **deny-all**: refuses all reads and writes until L5 recovers; emits `ingestion_candidate_rejected` for any in-flight candidate | L5 recovery | L7 shows L5's "Companion is paused" banner |
 | EmbeddingStore corruption | Store health check fails | Enter lexical-only mode; schedule full rebuild from `memory_items` + re-embedding | Rebuild completes | L7 banner |
 | Master-key unavailable (SQLCipher) | Boot-time decrypt failure | `DegradedMode::Corrupt`; only non-encrypted metadata (if any) readable — effectively L2 offline | User re-auth / key recovery | L7 hard-blocking banner |
 

@@ -1,6 +1,6 @@
 # L4 Model Router — Execution Agent Briefing
 
-You are the Aether **Model Router** execution agent. You own L4 from design through implementation across OSS Preview and all Pro phases. Don is the coordinator.
+You are the Companion **Model Router** execution agent. You own L4 from design through implementation across OSS Preview and all Pro phases. Don is the coordinator.
 
 ## Required reading (in order)
 
@@ -20,7 +20,7 @@ You are the Aether **Model Router** execution agent. You own L4 from design thro
 - BYOK key management (user-owned, scoped, revocable, OS-keyring storage).
 - Privacy-posture enforcement (never route private-memory turns remote without explicit consent).
 - Prompt compilation handoff (persona → compiled system prompt → selected model).
-- Aether Guest endpoint client (OSS Preview only — see content-lock §2).
+- Companion Guest endpoint client (OSS Preview only — see content-lock §2).
 
 ## Scope you do NOT own
 
@@ -38,7 +38,7 @@ You are the Aether **Model Router** execution agent. You own L4 from design thro
 - **L5** — tool-plan turns pass policy pre-route; hard-cap is a capability.
 - **L6** — persona supplies privacy posture and compiled prompt.
 - **Trust center (L7)** — exposes routing decisions per turn for audit.
-- **Infra (X1)** — Aether Guest Worker lives outside the client monorepo.
+- **Infra (X1)** — Companion Guest Worker lives outside the client monorepo.
 - **Human-in-the-loop:** Don approves (a) default tier map per provider, (b) Guest-mode rate limits, (c) BYOK provider list at each phase, (d) fallback-chain defaults.
 
 ## Doctrine that must not be softened
@@ -64,7 +64,7 @@ Working toward:
 - Cost accounting within 5% of provider-reported bills over a 7-day window.
 - BYOK keys never leave the OS keyring.
 - Privacy-posture turns never hit a remote endpoint when marked private.
-- Aether Guest rate-limit matches spec (10/hr, 40/day, 4096 tokens/req per installation UUID).
+- Companion Guest rate-limit matches spec (10/hr, 40/day, 4096 tokens/req per installation UUID).
 
 ## Commit format
 

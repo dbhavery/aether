@@ -26,7 +26,7 @@ target_packages:
 
 ## 1. Purpose
 
-L5 is the **single, non-bypassable authorization gate** for every autonomous action Aether takes. Nothing executes — no tool call, no memory write, no remote model route, no cost-bearing API hit — without L5 returning `Decision::Allow`. It owns the capability taxonomy, the five-layer evaluator, the grant ledger, the append-only hash-chained audit log, the BYOK hard-cap enforcement counter, and the privacy-posture gate.
+L5 is the **single, non-bypassable authorization gate** for every autonomous action Companion takes. Nothing executes — no tool call, no memory write, no remote model route, no cost-bearing API hit — without L5 returning `Decision::Allow`. It owns the capability taxonomy, the five-layer evaluator, the grant ledger, the append-only hash-chained audit log, the BYOK hard-cap enforcement counter, and the privacy-posture gate.
 
 Consumer layers (L1 reflex/turn loop, L2 memory, L4 model router, L7 trust UX) stub against the contracts frozen here and in the system-design source. The purpose of this pack is to give those stubs stable inbound/outbound shapes, typed error vocabulary, and a minimal `PolicyEngine` trait surface that CI can lint against (no executor may call a side-effectful API without holding an `Arc<dyn PolicyEngine>` handle and presenting a `Decision::Allow`).
 

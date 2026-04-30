@@ -17,7 +17,7 @@ blocked_by:
 
 # Monorepo Plan — Draft
 
-Concrete top-level layout, 7-layer mapping, cross-cutting stream placement, guardrails, and migration sketch for the Aether family monorepo. Planning pass only — no file moves, no code writes.
+Concrete top-level layout, 7-layer mapping, cross-cutting stream placement, guardrails, and migration sketch for the Companion family monorepo. Planning pass only — no file moves, no code writes.
 
 This document is the upstream for `MIGRATION_PLAN.md` (to live at the new repo root once approved) and for X1's execution prompt (`prompts/X1_repo_restructure.md`).
 
@@ -123,7 +123,7 @@ No layer imports a sibling layer directly at package level — coordination happ
 
 ### 3.3 X3 — Tauri desktop shell
 
-- Single `apps/desktop/` app serves both OSS Preview and Aether Pro — differentiated by build flags, not separate trees. A `--product=oss|pro` compile-time switch gates Pro-only features (Email capability, full preset ladder, etc.).
+- Single `apps/desktop/` app serves both OSS Preview and Companion — differentiated by build flags, not separate trees. A `--product=oss|pro` compile-time switch gates Pro-only features (Email capability, full preset ladder, etc.).
 - Tauri backend is a Rust crate living under `apps/desktop/src-tauri/` and it composes the 7-layer packages; zero business logic in the shell itself.
 - Signed updater + code-sign keys + installer scaffolds all in `infra/`.
 - pywebview explicitly **not** present in the monorepo unless Don authorizes a tactical OSS-Preview-only escape hatch. If authorized, it lives at `apps/desktop-pywebview-fallback/` clearly marked deprecated-on-arrival.
@@ -227,7 +227,7 @@ Phases 1–6 per `plans/01_pro_phase_crosswalk.md`; Isabelle domains cut over as
 
 ### Open (blocking Wave 0–1)
 
-1. **Canonical repo path and final name.** Working `file:///C:/Users/dbhav/Projects/aether/` but OPEN_QUESTIONS lists Aether Pro / Core / One still open. Repo name chosen independently of the product marketing name?
+1. **Canonical repo path and final name.** Working `file:///C:/Users/dbhav/Projects/aether/` but OPEN_QUESTIONS lists Companion / Core / One still open. Repo name chosen independently of the product marketing name?
 2. **Sibling repo fate.** `aether-desktop-voice/`, `aether-frontend-ux/`, `aether-personas/` — archive inside repo under `research/archive/`, archive outside repo, or delete?
 3. **Isabelle_Kunstig physical location.** Stays where it is during phased overlap, or moves under `apps/isabelle-legacy/` inside the monorepo for visibility?
 4. **History preservation policy.** `git subtree add` (preserves) vs flat import (loses history but cleaner). Default: preserve.
@@ -244,8 +244,8 @@ Phases 1–6 per `plans/01_pro_phase_crosswalk.md`; Isabelle domains cut over as
 
 - **A1.** Monorepo uses Rust workspace + pnpm workspaces + single toolchain pinning. No nested independent repos.
 - **A2.** Every layer package exposes a stable public interface; sibling-layer imports forbidden at tooling level from Wave 3 onward.
-- **A3.** Isabelle never forks the codebase; she is always a privileged persona profile + private asset overlay over Aether Pro.
-- **A4.** OSS Preview and Aether Pro share `apps/desktop/` with feature-flagged divergence, not separate app trees.
+- **A3.** Isabelle never forks the codebase; she is always a privileged persona profile + private asset overlay over Companion.
+- **A4.** OSS Preview and Companion share `apps/desktop/` with feature-flagged divergence, not separate app trees.
 - **A5.** Planning corpus (`planning/`) lives inside the repo and is PR-reviewed like code.
 - **A6.** Private Isabelle overlay path sits outside the repo and is never committed; the compiler resolves it at runtime for Don's profile only.
 - **A7.** CI/CD pipeline design is a follow-on deliverable (out of scope here), but the boundary-lint tooling in `tools/` is scaffolded in Wave 1 so that whenever CI lands, it has jobs to run.

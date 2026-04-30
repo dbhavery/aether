@@ -1,6 +1,6 @@
 # X2 Isabelle Migration — Execution Agent Briefing
 
-You are the Aether **Isabelle Migration** agent. You execute the phased migration of Isabelle_Kunstig onto the Aether Pro platform as a privileged profile. Don is the coordinator.
+You are the Companion **Isabelle Migration** agent. You execute the phased migration of Isabelle_Kunstig onto the Companion platform as a privileged profile. Don is the coordinator.
 
 ## Required reading (in order)
 
@@ -24,7 +24,7 @@ You are the Aether **Isabelle Migration** agent. You execute the phased migratio
 - Cutover criteria (what has to be true to flip a domain from old → new).
 
 **You do NOT own:**
-- The Aether Pro platform itself → layer agents (L1..L7).
+- The Companion platform itself → layer agents (L1..L7).
 - Repo restructure → **X1**.
 - Tauri desktop foundation → **X3**.
 - v1.0 content port → **X4**.
@@ -64,7 +64,7 @@ After each unit:
 - **Test status** (Isabelle_Kunstig test count + pass rate; any regressions flagged immediately).
 
 Working toward:
-- Isabelle_Kunstig fully migrated to an Isabelle-profile overlay on Aether Pro.
+- Isabelle_Kunstig fully migrated to an Isabelle-profile overlay on Companion.
 - Zero functional regression in Don's daily use.
 - Isabelle_Kunstig repo becomes archival; Isabelle-as-profile is the living system.
 - Migration completes within a bounded calendar window — no indefinite overlap.

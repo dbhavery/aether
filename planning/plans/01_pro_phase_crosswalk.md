@@ -41,7 +41,7 @@ Legend: "(dep: Lx Py)" means this cell is blocked by that layer's prior-phase ou
 
 **Phase 1 — platform core.** The reflex path works end-to-end: Gemma 4 answers, the state machine fires, the onboarding wizard completes, the policy engine gates, basic memory persists, the persona compiler emits a system prompt. No avatar, no remote models, no tools. The product is a premium-feeling local text chat with trust scaffolding.
 
-**Phase 2 — conversation core.** Voice in, voice out, streaming ack, router escalation, durable memory, full trust center v1. This is the "companion product shape" milestone — the first release where Aether Pro feels like the vision. L3 is still absent (state indicator strip, no avatar).
+**Phase 2 — conversation core.** Voice in, voice out, streaming ack, router escalation, durable memory, full trust center v1. This is the "companion product shape" milestone — the first release where Companion feels like the vision. L3 is still absent (state indicator strip, no avatar).
 
 **Phase 3 — avatar & presence.** Presence engine lands. Rendering surface decision is committed. Avatar mode is a separate mode, not a default. No new memory/router/policy work — this is the presence sprint.
 
@@ -61,7 +61,7 @@ Cells whose slip cascades across the most other work:
 2. **L5 Phase 0 (capability/risk model).** Blocks every tool call forever; L7 cannot render permission UI without it; L4 cannot gate tool plans; L2 cannot tag provenance. If this isn't right, Phase 4 cannot ship.
 3. **L7 Phase 0 (design-system foundation).** Blocks every user-visible surface in every other layer. L3's avatar mode, L5's approval prompts, L2's memory-review, L4's routing-audit UI all depend on it.
 4. **L1 Phase 1 (Rust state machine + event bus).** Every other layer emits events here; slip kills Phase 2 for all downstream layers.
-5. **L4 Phase 2 (local-vs-remote router).** Blocks Phase 2 for Aether Pro as a product — the "feels like the vision" milestone can't hit without it.
+5. **L4 Phase 2 (local-vs-remote router).** Blocks Phase 2 for Companion as a product — the "feels like the vision" milestone can't hit without it.
 6. **L3 Phase 3 (rendering-surface decision committed).** The single longest-leaving Phase-0/1 open question. If it slips into Phase 3 unresolved, Phase 3 itself slips.
 
 ---

@@ -1,6 +1,6 @@
 # X4 v1.0 Content Port — Execution Agent Briefing
 
-You are the Aether **v1.0 Content Port** agent. You port remaining valuable v1.0 content — per the locked content manifest — into the new planning/build. Narrow scope. You do not revive v1.0 architecture. Don is the coordinator.
+You are the Companion **v1.0 Content Port** agent. You port remaining valuable v1.0 content — per the locked content manifest — into the new planning/build. Narrow scope. You do not revive v1.0 architecture. Don is the coordinator.
 
 ## Required reading (in order)
 
@@ -17,7 +17,7 @@ You are the Aether **v1.0 Content Port** agent. You port remaining valuable v1.0
 
 **You own — exactly these artifacts (and nothing else):**
 1. **Wizard spec** — migrate v1.0 ONBOARDING-SPEC.md detail into L7's plan directory (do not duplicate into multiple places).
-2. **Guest mode / Aether Guest endpoint** — spec for L4's Guest provider + infra surface for X1's Worker deployment.
+2. **Guest mode / Companion Guest endpoint** — spec for L4's Guest provider + infra surface for X1's Worker deployment.
 3. **Distribution playbook** — channel matrix + metrics scaffold (copy **not** ported; it is retired).
 4. **BYOK cost-visibility UX spec** — rolling costs + budget caps spec handed to L4 (data) + L5 (hard-cap enforcement) + L7 (UI).
 5. **Inno Setup installer scaffold** — for OSS Preview only (X3 Tauri updater supersedes for Pro).
