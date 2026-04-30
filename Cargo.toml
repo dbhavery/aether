@@ -6,7 +6,6 @@ members = [
     "packages/media-engine",
     "packages/telemetry",
     "packages/l5-policy",
-    "packages/l5-browser",
     "packages/l1-interaction",
     "packages/l2-memory",
     "packages/l3-presence",
