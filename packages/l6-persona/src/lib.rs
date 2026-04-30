@@ -16,6 +16,7 @@
 pub mod compiler;
 pub mod default_compiler;
 pub mod error;
+pub mod install;
 pub mod pack_loader;
 pub mod profile;
 
@@ -26,5 +27,9 @@ pub use compiler::{
 };
 pub use default_compiler::DefaultPersonaCompiler;
 pub use error::L6Error;
+pub use install::{
+    extract_pack_zip, read_current_persona, uninstall_pack, verify_zip_sha256,
+    write_current_persona, CurrentPersonaState, InstallError,
+};
 pub use pack_loader::{load_pack_dir, load_pack_file, PackLoadError, PersonaPackFile};
 pub use profile::{Humor, PersonaProfile, Stance, Tone, Verbosity};
