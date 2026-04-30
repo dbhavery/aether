@@ -70,14 +70,17 @@ Run `python scripts/current_status.py` for the live state. Highlights as of sess
 ### Cross-reference debt (small, fixable later)
 - T1.3 proposal cites "ADR-0009 (policy decisions)" but ADR-0009 is `retrieval-augmented-utterance-audit-reach`. There is no policy-doctrine ADR by that number. Either add one or correct the cite in the proposal. Flagged 2026-04-30.
 
-## What's actively in flight as of session-mid (Wave 4)
+## Waves through 6 — completed since handoff drafted
 
-- Agent: **T1.3 l5-files skeleton** — second skeleton PR per §5.5 lock. Mirrors l5-browser exactly.
-- Agent: **T2.4 persona switcher UI** — post-onboarding switch surface in SettingsDrawer or Trust drawer.
+**Wave 4** (post-handoff-draft): T1.3 l5-files skeleton (`f0f8e70`), T2.4 persona switcher UI (`776f9e0` / `614fdf5` / `05cdf88`). Both clean, no race.
 
-Both dispatched with explicit-paths `git add` rule. Disjoint paths.
+**Wave 5**: Memory V2 step 6 audit (stale-confirm, no commits), sign_manifest end-to-end exercise (runbook at `999f40b`, real-key roundtrip PASS).
 
-## Wave 5+ queued (will dispatch when Wave 4 lands cleanly)
+**Wave 6** (worktree-isolated to defeat the index race that bit Wave 4): docs/AC-STYLE.md (Gap #6, `70786a2`), planning/plans/T1.3_approval_scope_design.md (`3a858a8`), docs/RTM.md (Gap #5, `bbe0d5c`), GLOSSARY follow-ups (`27a7307`), OPEN_QUESTIONS doctrine §6 cleanup (`3bd02a5`, `5e66344`), RTM PD2/PD3 stale correction (`ee54b04`).
+
+**Currently in flight**: doctrine §8 used-as-user verify on T2.3 + T2.4 (Vite/playwright agent in worktree).
+
+## Wave 7+ queued (will dispatch when current agent lands)
 
 - **T2.5 Memory tab/drawer consolidation.** HANDOFF_2026-05-18 Risk D/E. Decide one surface, retire the other, migrate users. Frontend, doctrine §8 used-as-user gate.
 - **First T1.3 implementation slice — `BrowserOpen` + `BrowserNavigate` capabilities** in `packages/l5-browser/`. Adds Playwright dep, `BrowserCapability` variants, and the additive entries on `aether_l5_policy::Capability`. Multi-layer; needs a cross-layer coordinator pass per CLAUDE.md §1.
