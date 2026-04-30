@@ -1,18 +1,42 @@
 //! L5 browser-automation capability surface.
 //!
-//! **Skeleton only.** Per CLAUDE.md §3 (coordinator-gated package
-//! creation), this crate ships in two PRs: this skeleton + later
-//! implementation slices. Implementation lands in follow-up sessions
-//! per the T1.3 sub-decisions.
+//! **Status (T1.3 first impl slice):** Trait + types are now real, plus
+//! a capability map and a default Playwright backend stub. Every stub
+//! method returns [`BrowserExecError::BackendDisabled`]; the real
+//! subprocess wiring (Node Playwright driver) lands in a later slice.
+//!
+//! # Surface
+//!
+//! - [`BrowserExecutor`] — object-safe async trait every backend
+//!   implements.
+//! - [`SessionId`], [`PageSnapshot`], [`FormField`], [`BrowserExecError`]
+//!   — the value types the trait operates on.
+//! - [`capability_for_method`] — maps trait method names to existing
+//!   variants on [`aether_l5_policy::Capability`]. The integration
+//!   point where future Tauri commands check L5 policy BEFORE invoking
+//!   the executor.
+//! - [`playwright_stub::PlaywrightExecutor`] — default backend. Gated
+//!   behind the `playwright` feature; every method returns
+//!   [`BrowserExecError::BackendDisabled`] today.
+//!
+//! # Layer rules
+//!
+//! Per CLAUDE.md §1.4 + §1.5, this crate:
+//!
+//! - extends the existing capability surface in
+//!   [`aether_l5_policy`] additively (new variants already landed in
+//!   [`Capability`](aether_l5_policy::Capability));
+//! - does not perform its own policy check — call sites resolve a
+//!   [`Capability`](aether_l5_policy::Capability) via
+//!   [`capability_for_method`], ask L5 for `Decision::Allow`, and only
+//!   then invoke a method on `dyn BrowserExecutor`.
 //!
 //! # Scope (frozen by Don 2026-04-30)
 //!
-//! - L5-gated browser automation: `BrowserOpen`, `BrowserNavigate`,
-//!   `BrowserClick`, `BrowserFillForm`, `BrowserExtract`,
-//!   `BrowserScreenshot`.
-//! - Each primitive becomes a variant on the existing
-//!   `aether_l5_policy::Capability` enum (additive; this crate does
-//!   not fork the policy enum).
+//! - L5-gated browser automation: `BrowserOpen`, `BrowserReadPage`,
+//!   `BrowserExtractData`, `BrowserFillForm`, `BrowserSubmit` (and the
+//!   `BrowserUpload` / `BrowserDownload` / `BrowserLoginReuse`
+//!   capabilities for later slices).
 //! - Backend: Playwright via subprocess. Cross-platform, headless-safe.
 //!   No WebView2 coupling, no CDP-direct re-implementation.
 //! - Approval mode follows the active autonomy preset:
@@ -28,24 +52,24 @@
 //! # References
 //!
 //! - `planning/plans/T1.3_browser_file_workflow_proposal.md` §2.1 — the
-//!   Approved coordinator proposal. Status flipped to Approved
-//!   2026-04-30 under Don's "1–5 are your decisions now" delegation.
+//!   Approved coordinator proposal.
+//! - `planning/plans/T1.3_approval_scope_design.md` — recently-landed
+//!   ApprovalScope design (this slice does NOT implement new approval
+//!   modes; it only makes the executor surface compatible with existing
+//!   modes).
 //! - `planning/12_permissions_autonomy.md` §"Power User / Builder" —
 //!   user-tier rules this surface honors.
-//! - `aether_l5_policy::Capability` — the additive surface where new
-//!   variants land.
-//! - `tools/redteam/scenarios/browser_misuse/` — capability-specific
-//!   adversarial scenarios. The credential-fill scenario currently
-//!   stubbed (T2.2) unblocks once this crate's first impl PR lands.
+//! - [`aether_l5_policy::Capability`] — the additive surface this crate
+//!   plugs into.
 
 #![forbid(unsafe_code)]
 
-/// Placeholder browser-capability marker.
-///
-/// Implementation PRs replace this enum's empty variant set with the
-/// real capabilities, which then map onto
-/// `aether_l5_policy::Capability` additions. Today the type only
-/// exists so `cargo build -p aether-l5-browser` produces a real
-/// artifact and the workspace check passes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BrowserCapability {}
+pub mod capability_map;
+pub mod executor;
+#[cfg(feature = "playwright")]
+pub mod playwright_stub;
+pub mod types;
+
+pub use capability_map::capability_for_method;
+pub use executor::BrowserExecutor;
+pub use types::{BrowserExecError, FormField, PageSnapshot, SessionId};
