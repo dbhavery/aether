@@ -87,6 +87,47 @@ export async function switchPersona(id: string): Promise<CompanionBanner> {
   return invoke<CompanionBanner>("switch_persona", { id });
 }
 
+/**
+ * ADR-0012 Tier-2 install — fetches a signed persona manifest, verifies
+ * the signature against the bundled release public key, downloads the
+ * pack zip, SHA-checks, atomically extracts, and refreshes the live
+ * persona catalog. Returns the number of newly-added catalog entries
+ * (0 if the slug was already installed).
+ *
+ * The `manifestUrl` is the absolute URL of the slug's `manifest.json`.
+ * Resolution lives at the call site so the backend stays
+ * registry-agnostic — see `personaManifestUrl` for the current
+ * convention.
+ */
+export async function installPersona(
+  slug: string,
+  manifestUrl: string,
+): Promise<number> {
+  return invoke<number>("install_persona", { slug, manifestUrl });
+}
+
+/**
+ * Resolve the manifest URL for a persona slug. Today the persona
+ * registry / CDN base URL is not yet configured (see HANDOFF
+ * 2026-04-29 — RELEASE_PUBLIC_KEY_B64 + manifest base are still
+ * pending). Reads from the build-time env var
+ * `VITE_PERSONA_MANIFEST_BASE`; returns `null` when unset so the
+ * caller can surface an honest "install registry not configured"
+ * error instead of issuing a doomed network request.
+ *
+ * Convention: `${base}/${slug}/manifest.json`, matching the format
+ * `install_persona_via_http` already exercises in its end-to-end
+ * test (`apps/desktop/src-tauri/src/main.rs` line 1058).
+ */
+export function personaManifestUrl(slug: string): string | null {
+  const base = import.meta.env?.VITE_PERSONA_MANIFEST_BASE as
+    | string
+    | undefined;
+  if (!base) return null;
+  const trimmed = base.replace(/\/+$/, "");
+  return `${trimmed}/${slug}/manifest.json`;
+}
+
 export async function setAutonomyPreset(
   preset: string | null,
 ): Promise<CompanionBanner> {
