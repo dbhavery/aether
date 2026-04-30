@@ -170,8 +170,13 @@ pub async fn install_persona(
         ));
     }
     let dir_for_task = personas_dir.clone();
+    // Decode the bundled release public key once on the IPC thread —
+    // failure here is a build-time corruption signal, surfaced as a
+    // command error before we spawn the background task.
+    let pk = crate::decode_bundled_release_public_key()
+        .map_err(|e| format!("bundled release public key invalid: {e:?}"))?;
     let install_outcome = tauri::async_runtime::spawn_blocking(move || {
-        crate::install_persona_via_http(&manifest_url, &slug, &dir_for_task)
+        crate::install_persona_via_http(&manifest_url, &slug, &dir_for_task, &pk)
     })
     .await
     .map_err(|e| format!("install task failed to join: {e}"))?;

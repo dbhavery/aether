@@ -41,7 +41,7 @@ use tauri::Manager;
 /// Until then, the constant is wired so callers can be tested
 /// end-to-end against the fixture, and the swap-to-real-key
 /// motion is a single-line edit.
-const RELEASE_PUBLIC_KEY_B64: &str = "6kpsY+KcUgq+9VB7Ey7F+ZVHdq6+vnuSQh7qaRRG0iw=";
+const RELEASE_PUBLIC_KEY_B64: &str = "d5MxCr5Z7VRiJkqBqP7Hm3eg/2k7oDYQshiCsa5jMzQ=";
 
 /// Verify a signed persona manifest with the bundled public key.
 ///
@@ -56,17 +56,24 @@ const RELEASE_PUBLIC_KEY_B64: &str = "6kpsY+KcUgq+9VB7Ey7F+ZVHdq6+vnuSQh7qaRRG0i
 fn verify_persona_manifest_with_bundled_key(
     manifest_bytes: &[u8],
 ) -> Result<(), aether_l6_persona::ManifestVerifyError> {
+    let pk = decode_bundled_release_public_key()?;
+    aether_l6_persona::verify_signed_manifest(manifest_bytes, &pk)
+}
+
+/// Decode the bundled [`RELEASE_PUBLIC_KEY_B64`] const into 32 raw
+/// bytes. Returns the L6 verifier's `PublicKeyInvalid` variant on
+/// malformed input — only reachable if the const is hand-edited to
+/// non-base64 or the build-time include corrupts.
+///
+/// Exposed so production callers (the install orchestrator) can
+/// decode once and pass `&pk` to the parameterized install/resolve
+/// helpers below; tests bypass this entirely and pass a fixture pk.
+pub(crate) fn decode_bundled_release_public_key(
+) -> Result<Vec<u8>, aether_l6_persona::ManifestVerifyError> {
     use base64::engine::general_purpose::STANDARD as B64;
     use base64::Engine as _;
-    let pk = B64.decode(RELEASE_PUBLIC_KEY_B64).map_err(|_| {
-        // Treat a malformed bundled key as a verifier-side public-key
-        // problem — the only reasons this can fail are (a) someone
-        // hand-edited the const to non-base64, (b) build-time
-        // include from a corrupted file. Either way this is a
-        // runtime failure, not a signature-validity question.
-        aether_l6_persona::ManifestVerifyError::PublicKeyInvalid
-    })?;
-    aether_l6_persona::verify_signed_manifest(manifest_bytes, &pk)
+    B64.decode(RELEASE_PUBLIC_KEY_B64)
+        .map_err(|_| aether_l6_persona::ManifestVerifyError::PublicKeyInvalid)
 }
 
 /// Poll interval for the presence attention loop. 1 Hz is coarse
@@ -748,12 +755,13 @@ pub(crate) fn install_persona_from_local_files(
     zip_path: &std::path::Path,
     slug: &str,
     dest_dir: &std::path::Path,
+    pk: &[u8],
 ) -> Result<std::path::PathBuf, PersonaInstallError> {
     let manifest_bytes = std::fs::read(manifest_path).map_err(|e| PersonaInstallError::Io {
         path: manifest_path.to_path_buf(),
         source: e,
     })?;
-    verify_persona_manifest_with_bundled_key(&manifest_bytes)
+    aether_l6_persona::verify_signed_manifest(&manifest_bytes, pk)
         .map_err(|source| PersonaInstallError::ManifestSignature { source })?;
     let manifest: serde_json::Value = serde_json::from_slice(&manifest_bytes)
         .map_err(|source| PersonaInstallError::ManifestJson { source })?;
@@ -838,8 +846,9 @@ pub(crate) fn fetch_url_to_file(
 pub(crate) fn resolve_pack_asset_for_slug(
     manifest_bytes: &[u8],
     slug: &str,
+    pk: &[u8],
 ) -> Result<String, PersonaInstallError> {
-    verify_persona_manifest_with_bundled_key(manifest_bytes)
+    aether_l6_persona::verify_signed_manifest(manifest_bytes, pk)
         .map_err(|source| PersonaInstallError::ManifestSignature { source })?;
     let manifest: serde_json::Value = serde_json::from_slice(manifest_bytes)
         .map_err(|source| PersonaInstallError::ManifestJson { source })?;
@@ -877,6 +886,7 @@ pub(crate) fn install_persona_via_http(
     manifest_url: &str,
     slug: &str,
     dest_dir: &std::path::Path,
+    pk: &[u8],
 ) -> Result<std::path::PathBuf, PersonaInstallError> {
     // Stage manifest + zip in a tempdir so a partial download doesn't
     // pollute the personas dir; tempdir self-deletes on drop.
@@ -891,10 +901,10 @@ pub(crate) fn install_persona_via_http(
             path: manifest_path.clone(),
             source,
         })?;
-    let asset_url = resolve_pack_asset_for_slug(&manifest_bytes, slug)?;
+    let asset_url = resolve_pack_asset_for_slug(&manifest_bytes, slug, pk)?;
     let zip_path = staging.path().join("pack.zip");
     fetch_url_to_file(&asset_url, &zip_path)?;
-    install_persona_from_local_files(&manifest_path, &zip_path, slug, dest_dir)
+    install_persona_from_local_files(&manifest_path, &zip_path, slug, dest_dir, pk)
 }
 
 #[cfg(test)]
@@ -908,6 +918,17 @@ mod http_install_tests {
     use std::net::TcpListener;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
+
+    /// Read the L6 cross-language fixture public key (32 raw bytes).
+    /// Tests pass this to the parameterized install/resolve helpers
+    /// instead of the bundled production key — the production key's
+    /// secret lives offline, so tests cannot sign against it.
+    fn fixture_public_key() -> Vec<u8> {
+        use std::path::PathBuf;
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../packages/l6-persona/tests/fixtures/release_public_key.bin");
+        std::fs::read(&path).unwrap_or_else(|e| panic!("read fixture pk {}: {e}", path.display()))
+    }
 
     /// Build a deterministic in-memory zip with a single
     /// `alice/persona.yaml` entry — same shape `extract_pack_zip`
@@ -929,8 +950,11 @@ mod http_install_tests {
     }
 
     /// Build a manifest-and-zip pair for slug `alice`, signed by the
-    /// fixture key (seed `[7u8; 32]`) so it verifies against the
-    /// bundled `RELEASE_PUBLIC_KEY_B64`. Embeds `asset_url` so the
+    /// fixture key (seed `[7u8; 32]`). After T1.5's real-key swap the
+    /// bundled `RELEASE_PUBLIC_KEY_B64` is no longer this fixture pk;
+    /// tests pass [`fixture_public_key`] explicitly to the
+    /// parameterized install/resolve helpers so the fixture-signed
+    /// manifests still verify in test mode. Embeds `asset_url` so the
     /// runtime install path can fetch the zip back from a test server.
     fn fixture_signed_manifest_with_url(asset_url: &str) -> (Vec<u8>, Vec<u8>, String) {
         use ed25519_dalek::Signer as _;
@@ -940,9 +964,9 @@ mod http_install_tests {
         let zip = build_alice_zip_bytes();
         let sha = format!("{:x}", Sha256::digest(&zip));
 
-        // Same seed used in cross_language_verify.rs — keeps the bundled
-        // RELEASE_PUBLIC_KEY_B64 const a valid verifier for our re-signed
-        // manifest.
+        // Same seed used in cross_language_verify.rs — pairs with
+        // `fixture_public_key()` above so test-time
+        // verification round-trips through the L6 verifier.
         let signing = SigningKey::from_bytes(&[7u8; 32]);
 
         let manifest_personas = serde_json::json!([{
@@ -1032,7 +1056,8 @@ mod http_install_tests {
         let stop = serve_listener(listener, manifest_bytes, zip_bytes);
 
         let manifest_url = format!("{}/manifest.json", base);
-        let result = install_persona_via_http(&manifest_url, "alice", dest.path());
+        let pk = fixture_public_key();
+        let result = install_persona_via_http(&manifest_url, "alice", dest.path(), &pk);
         stop.store(true, Ordering::Relaxed);
         let final_dir = result.expect("install_persona_via_http should succeed");
         assert!(final_dir.is_dir(), "final dir not created: {final_dir:?}");
@@ -1061,38 +1086,48 @@ mod http_install_tests {
 #[cfg(test)]
 mod bundled_release_key_tests {
     //! Locks the contract between `RELEASE_PUBLIC_KEY_B64` (the bundled
-    //! constant) and the L6 verifier. Today's value is the cross-language
-    //! fixture key; when Don swaps it for a real release key, this test
-    //! must be updated to point at a real-key signed fixture (or removed
-    //! and replaced with a CI-driven check). A future signing PR that
-    //! changes the const without updating the test breaks here, which is
-    //! the early-warning we want.
+    //! constant) and the L6 verifier.
+    //!
+    //! As of T1.5's real-key swap (2026-04-30) the bundled const is the
+    //! production Ed25519 public key whose secret lives offline at
+    //! `~/.aether/release-key/aether-release-ed25519.sk`. The
+    //! cross-language fixture under
+    //! `packages/l6-persona/tests/fixtures/` remains the seed-derived
+    //! interop pair (Python signer ↔ Rust verifier). Bundled const and
+    //! fixture pk are intentionally different — tests sign against the
+    //! fixture pk via the parameterized install/resolve helpers; the
+    //! bundled const is exercised here only for shape (length, base64
+    //! decode, ≠ fixture).
 
-    use super::{verify_persona_manifest_with_bundled_key, RELEASE_PUBLIC_KEY_B64};
+    use super::{decode_bundled_release_public_key, RELEASE_PUBLIC_KEY_B64};
     use std::path::PathBuf;
 
+    fn fixture_dir() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../packages/l6-persona/tests/fixtures")
+    }
+
     fn fixture_signed_manifest() -> Vec<u8> {
-        // The cross-language fixture lives in the L6 crate and was
-        // generated by the Python signer under seed [7;32]. Reading
-        // it from the workspace path keeps the desktop-side test
-        // honest about cross-crate provenance — if the fixture moves
-        // or regenerates with a new key, this test fails.
-        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../../packages/l6-persona/tests/fixtures/signed_manifest.json");
+        let path = fixture_dir().join("signed_manifest.json");
         std::fs::read(&path).unwrap_or_else(|e| panic!("read fixture {}: {e}", path.display()))
     }
 
+    fn fixture_public_key() -> Vec<u8> {
+        let path = fixture_dir().join("release_public_key.bin");
+        std::fs::read(&path).unwrap_or_else(|e| panic!("read fixture pk {}: {e}", path.display()))
+    }
+
     #[test]
-    fn bundled_key_verifies_cross_language_fixture() {
-        verify_persona_manifest_with_bundled_key(&fixture_signed_manifest())
-            .expect("bundled key must verify the cross-language fixture");
+    fn fixture_pk_verifies_cross_language_fixture() {
+        let pk = fixture_public_key();
+        aether_l6_persona::verify_signed_manifest(&fixture_signed_manifest(), &pk)
+            .expect("fixture pk must verify the cross-language fixture");
     }
 
     #[test]
     fn bundled_key_const_decodes_to_32_bytes() {
-        use base64::engine::general_purpose::STANDARD as B64;
-        use base64::Engine as _;
-        let raw = B64.decode(RELEASE_PUBLIC_KEY_B64).expect("base64 decode");
+        let raw = decode_bundled_release_public_key()
+            .expect("bundled const must decode at runtime");
         assert_eq!(
             raw.len(),
             32,
@@ -1102,16 +1137,32 @@ mod bundled_release_key_tests {
     }
 
     #[test]
-    fn bundled_key_rejects_tampered_personas_array() {
+    fn bundled_key_const_differs_from_fixture_pk() {
+        // After the T1.5 real-key swap, the bundled const is Don's
+        // production pk. The fixture pk is the seed-derived test pair.
+        // These MUST differ — equality means a regression rolled the
+        // const back to the fixture key.
+        let fixture_b64_path = fixture_dir().join("release_public_key.b64");
+        let fixture_b64 = std::fs::read_to_string(&fixture_b64_path)
+            .unwrap_or_else(|e| panic!("read {}: {e}", fixture_b64_path.display()))
+            .trim()
+            .to_string();
+        assert_ne!(
+            RELEASE_PUBLIC_KEY_B64, fixture_b64,
+            "bundled const equals fixture pk — real-key swap regressed",
+        );
+    }
+
+    #[test]
+    fn fixture_pk_rejects_tampered_personas_array() {
         // The cross-language fixture has alice's sha256 set to
         // "a"*64. Flip a byte and the verify should fail.
-        let mut bytes = fixture_signed_manifest();
-        // The fixture is JSON; do a string-level replace on a span
-        // that's known to live inside the personas array.
-        let s = String::from_utf8(bytes.clone()).unwrap();
+        let bytes = fixture_signed_manifest();
+        let s = String::from_utf8(bytes).unwrap();
         let tampered = s.replace(&"a".repeat(64), &"f".repeat(64));
-        bytes = tampered.into_bytes();
-        let err = verify_persona_manifest_with_bundled_key(&bytes).unwrap_err();
+        let pk = fixture_public_key();
+        let err = aether_l6_persona::verify_signed_manifest(&tampered.into_bytes(), &pk)
+            .unwrap_err();
         assert!(
             matches!(err, aether_l6_persona::ManifestVerifyError::BadSignature),
             "expected BadSignature, got {err:?}"
@@ -1134,9 +1185,22 @@ mod persona_install_orchestration_tests {
     use std::path::{Path, PathBuf};
     use tempfile::TempDir;
 
-    fn fixture_signed_manifest_path() -> PathBuf {
+    fn fixture_dir() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../../packages/l6-persona/tests/fixtures/signed_manifest.json")
+            .join("../../../packages/l6-persona/tests/fixtures")
+    }
+
+    fn fixture_signed_manifest_path() -> PathBuf {
+        fixture_dir().join("signed_manifest.json")
+    }
+
+    /// Read the L6 cross-language fixture pk. Tests pass this to
+    /// `install_persona_from_local_files` directly — the bundled
+    /// production const is unrelated to the seed-derived fixture pair
+    /// after T1.5's real-key swap.
+    fn fixture_public_key() -> Vec<u8> {
+        let path = fixture_dir().join("release_public_key.bin");
+        fs::read(&path).unwrap_or_else(|e| panic!("read fixture pk {}: {e}", path.display()))
     }
 
     /// Build a deterministic zip with a couple of files, return
@@ -1197,8 +1261,9 @@ mod persona_install_orchestration_tests {
         let manifest = signed_manifest_with_sha(&tmp, &sha);
         let dest = tmp.path().join("install");
 
-        let result =
-            install_persona_from_local_files(&manifest, &zip, "alice", &dest).expect("install");
+        let pk = fixture_public_key();
+        let result = install_persona_from_local_files(&manifest, &zip, "alice", &dest, &pk)
+            .expect("install");
         assert_eq!(result, dest.join("alice"));
         assert!(dest.join("alice/alice/persona.yaml").exists());
     }
@@ -1210,7 +1275,9 @@ mod persona_install_orchestration_tests {
         let manifest = signed_manifest_with_sha(&tmp, &sha);
         let dest = tmp.path().join("install");
 
-        let err = install_persona_from_local_files(&manifest, &zip, "ghost", &dest).unwrap_err();
+        let pk = fixture_public_key();
+        let err = install_persona_from_local_files(&manifest, &zip, "ghost", &dest, &pk)
+            .unwrap_err();
         assert!(matches!(
             err,
             super::PersonaInstallError::SlugNotInManifest { .. }
@@ -1230,7 +1297,9 @@ mod persona_install_orchestration_tests {
         fs::write(&manifest, serde_json::to_vec(&m).unwrap()).unwrap();
 
         let dest = tmp.path().join("install");
-        let err = install_persona_from_local_files(&manifest, &zip, "alice", &dest).unwrap_err();
+        let pk = fixture_public_key();
+        let err = install_persona_from_local_files(&manifest, &zip, "alice", &dest, &pk)
+            .unwrap_err();
         assert!(matches!(
             err,
             super::PersonaInstallError::ManifestSignature { .. }
@@ -1247,7 +1316,9 @@ mod persona_install_orchestration_tests {
         let manifest = signed_manifest_with_sha(&tmp, &"f".repeat(64));
         let dest = tmp.path().join("install");
 
-        let err = install_persona_from_local_files(&manifest, &zip, "alice", &dest).unwrap_err();
+        let pk = fixture_public_key();
+        let err = install_persona_from_local_files(&manifest, &zip, "alice", &dest, &pk)
+            .unwrap_err();
         assert!(matches!(err, super::PersonaInstallError::Sha256 { .. }));
         assert!(!dest.join("alice").exists());
     }
