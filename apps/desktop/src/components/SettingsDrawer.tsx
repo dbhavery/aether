@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 
 import {
+  currentAutonomyPreset,
   getMediaPermissions,
   getMemoryConfig,
   getMicPermission,
   getPresenceConfig,
+  setAutonomyPreset,
   setMediaPermission,
   setMemoryConfig,
   setMicPermission,
@@ -76,11 +78,14 @@ export function SettingsDrawer({ open, onClose }: Props) {
   const [mic, setMic] = useState<MicPermission | null>(null);
   const [presence, setPresence] = useState<PresenceConfig | null>(null);
   const [memory, setMemory] = useState<MemoryConfig | null>(null);
+  const [autonomy, setAutonomy] = useState<string | null>(null);
+  const [autonomyLoaded, setAutonomyLoaded] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [busyKind, setBusyKind] = useState<MediaKind | null>(null);
   const [busyMic, setBusyMic] = useState(false);
   const [busyPresence, setBusyPresence] = useState(false);
   const [busyMemory, setBusyMemory] = useState(false);
+  const [busyAutonomy, setBusyAutonomy] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -110,6 +115,16 @@ export function SettingsDrawer({ open, onClose }: Props) {
     getMemoryConfig()
       .then((m) => {
         if (!cancelled) setMemory(m);
+      })
+      .catch((e) => {
+        if (!cancelled) setErr(String(e));
+      });
+    currentAutonomyPreset()
+      .then((p) => {
+        if (!cancelled) {
+          setAutonomy(p);
+          setAutonomyLoaded(true);
+        }
       })
       .catch((e) => {
         if (!cancelled) setErr(String(e));
@@ -159,6 +174,19 @@ export function SettingsDrawer({ open, onClose }: Props) {
       setErr(String(e));
     } finally {
       setBusyPresence(false);
+    }
+  };
+
+  const updateAutonomy = async (next: string | null) => {
+    setBusyAutonomy(true);
+    setErr(null);
+    try {
+      await setAutonomyPreset(next);
+      setAutonomy(next);
+    } catch (e) {
+      setErr(String(e));
+    } finally {
+      setBusyAutonomy(false);
     }
   };
 
@@ -265,6 +293,31 @@ export function SettingsDrawer({ open, onClose }: Props) {
               value={mic?.state ?? "ask"}
               busy={busyMic}
               onChange={(next) => handleMicChange(next)}
+            />
+          </div>
+        </section>
+
+        <section
+          aria-labelledby="settings-autonomy-heading"
+          className="mt-6 border-t border-aether-border pt-4"
+        >
+          <h2
+            id="settings-autonomy-heading"
+            className="text-[11px] uppercase tracking-[0.18em] text-aether-dim"
+          >
+            Autonomy
+          </h2>
+          <p className="mt-1 text-[12px] text-aether-muted">
+            How much Companion does on its own. Overrides the per-capability
+            defaults set by the active persona. Picked once during onboarding
+            and changeable here.
+          </p>
+
+          <div className="mt-4">
+            <AutonomyRow
+              value={autonomy}
+              busy={busyAutonomy || !autonomyLoaded}
+              onChange={updateAutonomy}
             />
           </div>
         </section>
@@ -695,6 +748,117 @@ function ThresholdEditor({
           Saved: {presence.idle_after_s}s / {presence.away_after_s}s
         </span>
       </div>
+    </div>
+  );
+}
+
+type AutonomyChoice = "observer" | "assistant" | "operator" | "later";
+
+const AUTONOMY_CHOICES: {
+  id: AutonomyChoice;
+  label: string;
+  hint: string;
+  color: string;
+}[] = [
+  {
+    id: "observer",
+    label: "Observer",
+    hint: "Read-only — watches and answers, never acts.",
+    color: "text-aether-ok",
+  },
+  {
+    id: "assistant",
+    label: "Assistant",
+    hint: "Helps with files, asks before anything risky. Recommended.",
+    color: "text-aether-text",
+  },
+  {
+    id: "operator",
+    label: "Operator",
+    hint: "Acts within pre-approved folders after explicit grants.",
+    color: "text-aether-warn",
+  },
+  {
+    id: "later",
+    label: "No override",
+    hint: "Persona-adjusted defaults only — no extra overlay.",
+    color: "text-aether-dim",
+  },
+];
+
+function autonomyChoiceFromBackend(value: string | null): AutonomyChoice {
+  // Backend reports the *active overlay* — null means no overlay (i.e.
+  // baseline persona-adjusted Assistant). The frontend wire-string
+  // contract from the onboarding picker (`later`) is *not* what the
+  // backend round-trips, so we map null → "later" for UX consistency.
+  if (value === "observer" || value === "assistant" || value === "operator")
+    return value;
+  return "later";
+}
+
+/**
+ * Post-onboarding autonomy preset row — mirrors the onboarding
+ * `PresetPicker` but inline in Settings so the user can change posture
+ * after first run. The backend `set_autonomy_preset` is idempotent;
+ * passing `null` clears the overlay (Assistant baseline).
+ *
+ * T2.3 — autonomy preset picker UI.
+ */
+function AutonomyRow({
+  value,
+  busy,
+  onChange,
+}: {
+  value: string | null;
+  busy: boolean;
+  onChange: (next: string | null) => void;
+}) {
+  const active = autonomyChoiceFromBackend(value);
+  const activeMeta = AUTONOMY_CHOICES.find((c) => c.id === active)!;
+  return (
+    <div className="rounded-md border border-aether-border bg-aether-elevated/40 px-3 py-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="text-[13px] font-medium text-aether-text">
+          Active preset
+        </div>
+        <div className={`text-[11px] ${activeMeta.color}`}>
+          {activeMeta.label}
+        </div>
+      </div>
+      <p className="mt-1 text-[11.5px] text-aether-muted">
+        {activeMeta.hint}
+      </p>
+      <div
+        role="radiogroup"
+        aria-label="Autonomy preset"
+        className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4"
+      >
+        {AUTONOMY_CHOICES.map((c) => {
+          const selected = c.id === active;
+          return (
+            <button
+              key={c.id}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              onClick={() => onChange(c.id === "later" ? null : c.id)}
+              disabled={busy}
+              title={c.hint}
+              className={`rounded-md px-2 py-1.5 text-[11.5px] transition-colors ${
+                selected
+                  ? "border border-aether-borderHi bg-aether-elevated text-aether-text"
+                  : "border border-aether-border bg-transparent text-aether-muted hover:border-aether-borderHi hover:text-aether-text"
+              } ${busy ? "opacity-60" : ""}`}
+            >
+              {c.label}
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-2 text-[11px] text-aether-dim">
+        Power User and Custom presets are not yet available — they require
+        capability-axis controls that land in a later slice.
+      </p>
     </div>
   );
 }
