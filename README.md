@@ -1,11 +1,13 @@
-# Free Companion — Community Edition (OSS Preview)
+# Companion
 
-> A local-first, desktop-native AI companion architecture. Rust-first engines, a
-> non-bypassable policy gate, explicit trust surfaces. Early preview — the
-> foundations are in place, most engine logic is not yet.
+> A local-first, desktop-native AI companion. Rust-first engines, a
+> non-bypassable policy gate, explicit trust surfaces, photoreal full-body
+> characters. Early build — foundations are in place, photoreal pipeline and
+> runtime renderer are in active development.
 
-**Status:** `dev` branch, pre-0.1 preview. The repository is under active
-architecture. Expect breaking changes.
+**Public name:** Companion. **Internal codename / repo / database / Tauri identifier:** `aether` (preserved).
+
+**Status:** `dev` branch, pre-release. The repository is under active development. **Companion ships once — when complete** (doctrine §6). No interim wedge product. The prior "Free Companion — Community Edition (OSS Preview)" framing was retired 2026-05-18 — see `planning/01_product_doctrine.md` §6 and `planning/roadmaps/aether_oss_preview.md` (tombstoned).
 
 **▶ Live showcase:** [dbhavery.dev/aether](https://dbhavery.dev/aether) — the
 architectural tour, the seven layers, the trust model, and the end-product tease.
@@ -36,9 +38,7 @@ Shared infrastructure (`event-bus`, `storage`, `telemetry`, `types`, `ui-kit`,
 `media-engine`) sits underneath. Everything routes through L5 for
 side-effectful actions — there is no back door.
 
-**Free Companion — Community Edition** is the open-source preview track. A
-separate Pro flagship and a private build (Isabelle) exist in the doctrine
-but are out of scope for this repository.
+**Companion** is one product (doctrine §6). A private overlay (Isabelle) exists for Don's personal use and is overlay-only at runtime — never enters public distributables (lint-enforced).
 
 ---
 
@@ -387,4 +387,4 @@ responsibly. Do **not** file public issues for security problems.
 
 ## 10. License
 
-Companion Community Edition is released under the [MIT License](LICENSE).
+Companion is released under the [MIT License](LICENSE).

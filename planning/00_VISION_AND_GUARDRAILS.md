@@ -1,14 +1,18 @@
-# Aether — Vision & Guardrails
+# Companion — Vision & Guardrails
 
+> **Public name:** Companion. **Internal codename:** `aether` (preserved for repo / database / Tauri identifier / Cargo workspace).
+>
 > **Status:** Canonical. Single source of truth for high-level vision and guardrails. Sits above `01_product_doctrine.md`; where this file and any other planning file conflict, this file wins until a `DECISION_LOCK_PASS_*.md` updates it.
-> **Added:** 2026-04-19 (Wave 4 session, Don-authored).
+>
+> **Added:** 2026-04-19 (Wave 4 session, Don-authored). **Updated:** 2026-05-18 (rename + doctrine §5/§6/§7/§8 cross-reference).
+>
 > **Change control:** updates require an explicit entry in a `DECISION_LOCK_PASS_*.md` AND a note in the corresponding Wave execution report.
 
 ---
 
 ## 1. One-sentence vision
 
-Aether is a **local-first, desktop-native AI companion** that feels like a real presence: it remembers, reasons, speaks, and acts within a strict policy and trust framework, not just a chat window.
+Companion is a **local-first, desktop-native AI companion** that feels like a real presence: it remembers, reasons, speaks, and acts within a strict policy and trust framework, not just a chat window. The visible characters are **photoreal full-body, indistinguishable from real human**, from the first ship — no headshot intermediate (see doctrine §5).
 
 ## 2. Core principles
 
@@ -31,8 +35,9 @@ Aether is a **local-first, desktop-native AI companion** that feels like a real 
    - Remote calls (models, tools, research) are deliberate, visible, and policy-governed.
 
 4. **Desktop-first product**
-   - Primary surface is a desktop app (Tauri long-term, pywebview tactical for OSS preview).
+   - Primary surface is a desktop app (Tauri long-term).
    - Browser UI is an implementation detail, not the core product.
+   - The "OSS preview" wedge thesis is retired (doctrine §6); pywebview's tactical role expired with it.
 
 5. **Rust-first for engines and infra**
    - Timing, policy, storage, routing, and memory engines are primarily Rust crates.

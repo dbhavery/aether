@@ -1,165 +1,105 @@
-# 02 — Product Family
+# 02 — Product Structure
 
-Three distinct but related products under the **Aether** umbrella. Each has its own planning track, its own codebase boundary (TBD in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md)), and its own cut line.
+> **REWRITTEN 2026-05-18.** Doctrine §6 collapsed the prior three-product structure (OSS Preview / Pro / Isabelle) into **one product (Companion) + one private overlay (Isabelle)**. The OSS Preview was retired; Pro was renamed to Companion; the umbrella name "Aether" is preserved as internal codename only. Prior version of this file is in git history.
 
 ---
 
-## Umbrella: Aether
+## One product: **Companion**
 
-Aether is the master platform family for a multimodal AI assistant centered on:
-- conversational interaction
+**Public name:** Companion. **Internal codename / repo / database / Tauri identifier / Cargo workspace:** `aether` (preserved — see doctrine naming-convention block).
+
+Companion is the multimodal AI assistant product centered on:
+- conversational interaction (text, voice, avatar — interoperable, not separate "modes")
 - local-first responsiveness
-- customizable identity
-- high-trust user experience
+- photoreal full-body characters (doctrine §5)
+- long-lived companion relationship, not single-session Q&A
+- non-bypassable policy + visible trust UX
+- hardware-aware tier model (Lite / Balanced / Full)
 
-The umbrella name holds both the open-source community product and the premium flagship. Alternative umbrella names if Aether is dropped: Astrae, Vesper, Eidolon, Lumen, Serein, Auralis.
+**Companion ships once — when complete** (doctrine §6). No interim wedge product. No headshot-only release. No voice-only release. No chat-only release. The OSS-friendly engineering posture (clean Tauri shell, layer scaffolds, open-weights tooling) remains correct as engineering practice — it just does not ship as a separate product.
 
----
+### Companion scope (target end-state)
 
-## 1. Aether OSS Preview (free, open-source)
+- Photoreal full-body 9-persona public cast (Aurora + 8 others) per ADR-0014.
+- Pre-generated motion clip library + runtime blend + lip-sync overlay per ADR-0013.
+- Text chat / mic input / voice output / avatar mode — interoperable; voice and avatar are sub-features, not separate products.
+- Multi-tier performance (Lite / Balanced / Full); 50% VRAM default for Full.
+- Capability-based permissions, 5-preset autonomy ladder, full trust center.
+- Desktop primary (Tauri + React/TS + Rust core); mobile companion later (per Phase 5).
+- Local-first state; cloud opt-in, scoped.
 
-### Role
-Free, open-source, launch-fast preview and showcase product. Wedge for adoption, visibility, and community.
+### Cast ownership
 
-### Scope
-- Desktop-first
-- Text chat (primary mode)
-- Mic input (optional)
-- Voice output (optional)
-- Headshot / bust-level avatar with real-time lip-sync
-- Onboarding wizard with info-explainers
-- T&S and disclosures
-- Simplified permissions (least-privilege presets)
-- Performance tier recommendation
-- First-run tutorial / checklist
-- Teaser surfaces for future features (future-roadmap views, locked modes)
-
-### Policy
-- Uses **open-source / available-now components aggressively** — MuseTalk, TalkingHead, Wav2Lip-style refs, Whisper/Parakeet/Distil-Whisper STT, open TTS, Tauri shell, etc.
-- Distribution-friendly, contributor-friendly packaging.
-- Updates optional / opt-in favored (critical security updates excepted).
-- Release channels: stable + experimental; beta if volume justifies it.
-
-### Primary users
-- Open-source community and early adopters
-- Design-forward early adopters
-- Curious mainstream users sampling the concept
-- Future contributors / testers / evangelists
-
-### What it is NOT
-- Not the flagship.
-- Not a placeholder for Pro's missing features.
-- Not a polished demo without trust/permissions (those are first-class even here).
-
-### Success profile
-Install easy; non-technical users complete onboarding confidently; interact with believable assistant presence; understand what is and isn't permitted; leave with a strong sense the flagship is being built to a serious quality bar.
-
-### Working name
-Aether OSS Preview (may shorten to Aether OSS or Aether Preview).
+The 9-persona public cast is shipped under cast-creator authority (per Don's 2026-04-28 directive). Don retains override. Persona pipeline (ADR-0014) and runtime architecture (ADR-0013) govern technical assembly; persona content (look, voice, persona YAML) is delegated.
 
 ---
 
-## 2. Aether Pro (public flagship, commercial)
+## Private overlay: **Isabelle / Isabelle_Kunstig**
 
 ### Role
-Full-performance public flagship platform. Commercial-grade multimodal assistant with advanced memory, permissions, avatar, multi-device continuity.
+Don's private avatar / persona overlay on top of Companion. Same codebase, separate persona pack and voice training. Overlay-only at runtime for Don's profile. **Never enters public distributables** — build-time lint enforces (`tools/lint-private-asset-leak/`).
 
-### Scope (target end-state)
-- Desktop + mobile continuity
-- Richer avatar system (photoreal target)
-- Advanced multimodal memory
-- Text chat + mic + full voice + avatar modes
-- Tool use and research (browser, files, email, system, etc.)
-- Local/remote model router with latency-aware escalation
-- Full performance tiers (Lite / Balanced / Full)
-- Downloadable model/asset packs
-- Strong permission and autonomy system
-- Trust center with action logs and audits
-- Red-team readiness built in
+### Architecture
+**Isabelle is a privileged profile / persona pack on top of the Companion platform — not a separate codebase.** Rationale unchanged from prior version: separate codebase = maintenance drag; one shared platform with a private overlay = sustainable.
 
-### Policy
-- **We write our own software from here on.** Primarily custom-built.
-- Borrowed primitives only where they don't cap the ceiling or become the moat — and only behind our own interfaces.
-- Updates recommended-on by default; mandatory only for critical security/compatibility/trust fixes.
-- Release channels: stable + beta + experimental.
-- Premium trust posture; survives red-team review.
-
-### What it is NOT
-- Not a wrapper around off-the-shelf SaaS.
-- Not a superset of OSS Preview — it is a separate architecture that shares identity, onboarding patterns, and trust design principles but not the shortcut stack.
-- Not blocked by OSS Preview's constraints.
-
-### Success profile
-Clearly not a wrapper product; core user-relationship layers are custom-controlled; feels premium and socially coherent under real use; trust and permissions are legible and auditable; hardware adaptation scales from mainstream to high-performance without losing core identity.
-
-### Working names
-Aether Pro, Aether Core, Aether One. [OPEN — see OPEN_QUESTIONS.md]
-
----
-
-## 3. Isabelle / Isabelle_Kunstig (private personal branch)
-
-### Role
-Private customized profile/branch on top of Aether Pro. Personal assistant/companion instance for Don.
-
-### Architecture recommendation
-**Isabelle is a privileged profile / branch / configuration super-layer on top of the Aether Pro platform — not a completely separate foundational codebase.**
-
-Rationale: separate codebase = maintenance drag. One shared platform with a private "god-tier profile" layer only Don can access = sustainable.
-
-### Scope (private extensions on top of Pro)
+### Scope (private extensions on top of Companion)
 - Custom persona (identity, tone, relationship style)
-- Custom appearance (avatar pack)
+- Custom appearance (private avatar pack — separate photoreal pipeline run on X2 cadence per ADR-0014's out-of-scope clause)
 - Custom voice
 - Private memory tuning (salience, retention, provenance rules)
 - Private permissions (wider autonomy, private domain/folder allowlists)
 - Private workflows (Don-specific automations, integrations, triggers)
-- Private-only features intentionally excluded from public distribution
 - Tight integration with Don's existing systems (Isabelle_Kunstig data, Tailscale network, existing project tooling)
 
 ### Policy
 - Not distributed publicly.
-- Built on Aether Pro; does not diverge at the platform layer.
-- All Pro doctrine applies; Isabelle is strictly additive on top.
+- Built on Companion; does not diverge at the platform layer.
+- All Companion doctrine applies; Isabelle is strictly additive on top.
 
-### What it is NOT
-- Not a parallel codebase.
-- Not the free version's personal skin — it's the companion-grade instance.
-
-### Success profile
-Isabelle feels like Don's companion — not a generic assistant with a different name. The customization reaches voice, appearance, memory emphasis, workflows, and relationship style without forking the platform.
-
-### Working names
-Isabelle / Isabelle_Kunstig. [OPEN — which becomes formal]
+### Working name
+Isabelle / Isabelle_Kunstig (decision deferred — see [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md)).
 
 ---
 
 ## Brand hierarchy summary
 
-| Tier | Working name | Role |
-|------|--------------|------|
-| Umbrella | **Aether** | Product family / master brand |
-| Free public | **Aether OSS Preview** | Open-source wedge, community launch |
-| Paid public | **Aether Pro** (or Core / One) | Flagship commercial platform |
-| Private | **Isabelle** / **Isabelle_Kunstig** | Don's personal companion instance |
+| Tier | Public name | Internal codename / role |
+|------|-------------|---------------------------|
+| Product | **Companion** | Internal codename `aether`. Repo `Projects/aether/`. The product. |
+| Private overlay | **Isabelle** / **Isabelle_Kunstig** | Don's personal companion instance. Overlay-only at runtime. |
 
 Public-facing names for related Don projects (memory-index reference):
-- Aether (Isabelle), Vault (Library), Forge (CIGE), Herald (Morning Intel), VoxType (VoiceType), FuelFleet (StaFull).
+- Vault (Library), Forge (CIGE), Herald (Morning Intel), VoxType (VoiceType), FuelFleet (StaFull), Snap (screenshot-clipboard).
+
+---
+
+## Retired structures
+
+These were collapsed by doctrine §6 (2026-05-18):
+
+- **"Aether OSS Preview" as standalone wedge product** — RETIRED. Tombstoned at `roadmaps/aether_oss_preview.md`. The OSS-friendly engineering posture remains correct; standalone OSS distribution does not.
+- **"Aether Pro" as separate flagship distinct from OSS Preview** — RENAMED. Aether Pro is now simply Companion (one product, ships when complete).
+- **"Aether umbrella name"** — preserved as internal codename `aether` only. Public branding is Companion.
 
 ---
 
 ## Separation rules
 
-- **Planning tracks are separate** — each product has its own roadmap in `roadmaps/`.
-- **Cut lines are separate** — MVP scope for OSS Preview does not bleed into Pro milestone cut line.
-- **Shared concerns** (onboarding patterns, permission architecture, trust UX, design language) may be carried across products, but are defined once in the cross-cutting spec files (`04`–`16`).
-- **Isabelle does not drive the public product** — her private needs cannot compromise public product design.
+- **Public Companion vs private Isabelle** — same codebase, separated by build-time lint. Isabelle assets must never appear in public distributable manifests.
+- **Cast vs overlay** — public 9-persona cast (Aurora et al.) is part of Companion. Isabelle is its own private persona, never bundled.
+- **Shared concerns** (onboarding patterns, permission architecture, trust UX, design language) are defined once in the cross-cutting spec files (`04`–`16`).
 
 ---
 
 ## Cross-references
-- Doctrine: [01_product_doctrine.md](01_product_doctrine.md)
-- OSS Preview roadmap: [roadmaps/aether_oss_preview.md](roadmaps/aether_oss_preview.md)
-- Pro roadmap: [roadmaps/aether_pro.md](roadmaps/aether_pro.md)
-- Isabelle roadmap: [roadmaps/isabelle_private.md](roadmaps/isabelle_private.md)
-- Naming decisions: [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md#naming)
+- Doctrine: [01_product_doctrine.md](01_product_doctrine.md) (§5+§6+§7+§8 are the most recent — added 2026-05-18).
+- Vision & guardrails: [00_VISION_AND_GUARDRAILS.md](00_VISION_AND_GUARDRAILS.md).
+- Companion roadmap: [roadmaps/aether_pro.md](roadmaps/aether_pro.md) (renamed-in-place; file path retained).
+- OSS Preview tombstone: [roadmaps/aether_oss_preview.md](roadmaps/aether_oss_preview.md).
+- Isabelle roadmap: [roadmaps/isabelle_private.md](roadmaps/isabelle_private.md).
+- Avatar runtime: [docs/adr/ADR-0013-avatar-runtime-architecture.md](../docs/adr/ADR-0013-avatar-runtime-architecture.md).
+- Per-persona pipeline: [docs/adr/ADR-0014-per-persona-character-pipeline.md](../docs/adr/ADR-0014-per-persona-character-pipeline.md).
+- Reference-gen ownership: [docs/adr/ADR-0015-reference-image-generation-inside-companion.md](../docs/adr/ADR-0015-reference-image-generation-inside-companion.md).
+- GPU queue: [plans/gpu_queue.md](plans/gpu_queue.md).
+- Parallel software tracks: [plans/parallel_software_tracks.md](plans/parallel_software_tracks.md).
+- Naming decisions: [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md#naming).

@@ -1,8 +1,10 @@
-# Aether — Repo-Level AI Agent Operating Rules
+# Companion — Repo-Level AI Agent Operating Rules
 
+> **Public name:** Companion. **Internal codename / repo / database / Tauri identifier / Cargo workspace:** `aether` (preserved). Both correct in their own context.
+>
 > **Scope:** Applies to every AI agent (Claude Code, coding agents, sub-agents, and worktree spawns) that opens this repo. Narrower than Don's global rules in [file:///C:/Users/dbhav/.claude/CLAUDE.md](file:///C:/Users/dbhav/.claude/CLAUDE.md); stricter where it needs to be.
 >
-> **Last updated:** 2026-04-19 (Wave 1).
+> **Last updated:** 2026-05-18 (doctrine §5+§6+§7+§8 added — see `planning/01_product_doctrine.md`).
 
 ---
 
@@ -19,11 +21,13 @@
 
 Before editing or scaffolding, read in order:
 
-1. `planning/HANDOFF_2026-04-18.md`
-2. `planning/DECISION_LOCK_PASS_2026-04-18c.md`
-3. `planning/OPEN_QUESTIONS.md` (search for `[DECIDED` locks relevant to your scope)
-4. `planning/planning/monorepo_plan_draft.md`
-5. The layer-specific plan under `planning/plans/L*_*.md` and `planning/plans/implementation_prep/L*_interface_pack.md`
+1. **Run `./scripts/current_status.sh`** (or `python scripts/current_status.py`). This is the authoritative current state — kills the stale-prompt drift pattern. **Trust the script over any prompt.**
+2. The latest `HANDOFF_*.md` at repo root (the script identifies it).
+3. `planning/01_product_doctrine.md` (governing rules — §5/§6/§7/§8 are the most recent).
+4. `planning/DECISION_LOCK_PASS_2026-04-18c.md` (foundational architectural decisions).
+5. `planning/OPEN_QUESTIONS.md` (search for `[DECIDED` locks relevant to your scope).
+6. `planning/plans/00_ORCHESTRATION_MAP.md`.
+7. The layer-specific plan under `planning/plans/L*_*.md` and `planning/plans/implementation_prep/L*_interface_pack.md`.
 
 Do not trust memory. Re-read.
 
@@ -81,3 +85,14 @@ Every user-facing path in an agent response must be a bare `file:///C:/...` or `
 - Stop and report, don't guess.
 - A partial scaffold with a clear TODO beats fake completeness.
 - Flag blockers in the wave execution report, not inline in code.
+
+## 10. Doctrine §5–§8 cross-reference (added 2026-05-18)
+
+These doctrine rules govern every session and every PR:
+
+- **§5 Photoreal full-body characters from the start.** No headshot intermediate. See `docs/adr/ADR-0014-per-persona-character-pipeline.md`.
+- **§6 Single product, ships when complete.** No interim release. The "Aether OSS Preview as wedge" thesis is retired (`planning/roadmaps/aether_oss_preview.md` is tombstoned).
+- **§7 Voice does not ship as standalone.** Voice subsystem is integrated continuously; voice-as-product surface ships only with the complete Companion.
+- **§8 Self-test before Don review.** Visual artifacts get multimodal-vision self-test against acceptance criteria. Frontend changes get used-as-user via automation. Diff-only or unit-tests-only is **not sufficient.** Failed self-tests do not reach Don.
+
+GPU work runs sequentially per `planning/plans/gpu_queue.md`. Software/integration work runs in parallel per `planning/plans/parallel_software_tracks.md`. Sessions never wait on the GPU queue — they pick from the parallel-tracks list.
