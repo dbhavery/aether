@@ -82,9 +82,9 @@ The "no close-enough SaaS" and "custom moat layers" rules from above apply acros
 
 ---
 
-## Must-own layers (custom-built, Aether Pro onward)
+## Must-own layers (custom-built)
 
-These are the layers that define the user relationship and the product moat. They are **non-negotiable custom-built** for Aether Pro. As of [DECIDED 2026-04-18] the planning model uses **seven** must-own layers (L1–L7); the reflex router remains a distinct *concept* embedded inside L1 Interaction Timing rather than a separate layer. See [`plans/00_ORCHESTRATION_MAP.md`](plans/00_ORCHESTRATION_MAP.md) §1 for the reconciliation and [`OPEN_QUESTIONS.md`](OPEN_QUESTIONS.md) for the live decision log.
+These are the layers that define the user relationship and the product moat. They are **non-negotiable custom-built** for Companion. As of [DECIDED 2026-04-18] the planning model uses **seven** must-own layers (L1–L7); the reflex router remains a distinct *concept* embedded inside L1 Interaction Timing rather than a separate layer. See [`plans/00_ORCHESTRATION_MAP.md`](plans/00_ORCHESTRATION_MAP.md) §1 for the reconciliation and [`OPEN_QUESTIONS.md`](OPEN_QUESTIONS.md) for the live decision log.
 
 1. **Interaction timing (L1)** — turn-state machine, acknowledgment phrase pool, timing contracts (250 ms / 800 ms / 2000 ms / 4000 ms behavior), and the **embedded reflex router**: the fast-path classifier that decides each turn (direct local / acknowledge-and-wait / search / tool plan / remote escalation / safety deflection / memory write). Reflex is tested against L1 acceptance criteria and sequenced with L1 across P0–P4; it is not demoted, only co-owned with timing.
 2. **Companion memory kernel (L2)** — multimodal ingestion, novelty filtering, scoped recall, editable memories, provenance, confidence decay, user-enforced forgetting.
@@ -101,7 +101,7 @@ These are the layers that define the user relationship and the product moat. The
 [DECIDED 2026-04-18] — see [`plans/00_ORCHESTRATION_MAP.md`](plans/00_ORCHESTRATION_MAP.md) §2 and [`OPEN_QUESTIONS.md`](OPEN_QUESTIONS.md).
 
 - **UI stack:** HTML / CSS / JS across the Aether family. No Tkinter, no Qt for visual UI.
-- **Family desktop default (long-term):** **Tauri.** Rust shell + WebView2; the signed-updater and native-integration path for Aether Pro and Isabelle.
+- **Family desktop default (long-term):** **Tauri.** Rust shell + WebView2; the signed-updater and native-integration path for Companion and Isabelle.
 - **pywebview:** tactical OSS-Preview-only exception, used only if speed-to-demo requires it. Explicitly **non-doctrinal**. Any reference to pywebview outside OSS Preview is a drift and must be flagged.
 
 ---

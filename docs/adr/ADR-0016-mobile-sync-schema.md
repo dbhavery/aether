@@ -1,8 +1,8 @@
 # ADR-0016: Mobile companion sync schema
 
-- **Status:** **Proposed** (drafted 2026-04-29 under T2.1; awaits Don's acceptance).
-- **Date:** 2026-04-29
-- **Deciders:** Don (final). Drafted by parallel-tracks coordinator under doctrine §6 (single product) authorization.
+- **Status:** **Accepted (body) — 10 OQs explicitly deferred (see §9).** Accepted 2026-04-29 under Don's "decisions 1–4 are yours to make" delegation.
+- **Date:** 2026-04-29 (drafted), 2026-04-29 (accepted body).
+- **Deciders:** Don (delegated to parallel-tracks coordinator). Drafted under doctrine §6 (single product) + delegation lock for the body of the design; OQ-1 through OQ-10 remain open and reserved for Don.
 - **Supersedes:** nothing.
 - **Superseded by:** nothing yet.
 - **Related:**

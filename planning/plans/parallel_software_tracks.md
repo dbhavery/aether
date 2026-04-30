@@ -20,14 +20,14 @@
 ## Tier 1 — Closes moat layers (high leverage, no GPU)
 
 ### T1.1 — Memory V2 step 5 (retention sweep)
-**Status:** Available — `MemoryDomain` reconciliation was already locked by [ADR-0001](../../docs/adr/ADR-0001-memory-domain-reconciliation.md) on 2026-04-23 (Option 3: retire L2 kernel stub, shell six-domain taxonomy canonical). HANDOFF_2026-05-18 Risk A was stale-prompt drift; reconciliation is done in code (`packages/l2-memory/src/domain.rs`). T1.2 — also flagged as blocked in earlier handoffs — already shipped (`tools/lint-quality-doc/`, commit `4b0a5ce`). Repo beats prompt per Decision #32.
+**Status:** DONE — verified shipped in `apps/desktop/src-tauri/src/memory_service.rs::run_retention_sweep` + `main.rs::RETENTION_SWEEP_INTERVAL_MS` (boot + hourly tick) + `packages/l2-memory/src/sqlite_session.rs::prune_before`. Seven sweep tests + 75 l2-memory tests + lint-memory-doc all green. ADR-0001 already locked the `MemoryDomain` reconciliation on 2026-04-23 (Option 3); HANDOFF_2026-05-18 Risk A was stale-prompt drift. Repo beats prompt per Decision #32.
 **Layer:** L2.
-**Self-test gate:** unit + integration tests on retention behavior across all six domains.
-**Notes:** Highest-priority moat work. Can start any time.
+**Self-test gate:** unit + integration tests on retention behavior across all six domains — all passing.
+**Notes:** No new work needed. Optional follow-up: belt-and-suspenders explicit "kill mid-sweep + restart" test (current coverage is implicit via SQL-row atomicity + next-sweep idempotency).
 
 ### T1.2 — Quality-Eval Tier 2B (rot guard + doc flip)
-**Status:** Available now.
-**Scope:** `tools/lint-quality-doc/` mirroring `tools/lint-presence-doc/check.py`. Flip `docs/QUALITY-EVAL-V1-ARCHITECTURE.md` from "Design-only" → "Current as of 2026-05-18". Reconcile any drift surfaced by anchor seeding.
+**Status:** DONE — `tools/lint-quality-doc/check.py` shipped in commit `4b0a5ce` (60 anchors, 19 files); `docs/QUALITY-EVAL-V1-ARCHITECTURE.md` flipped to "Current as of 2026-04-23". The earlier "BLOCKED" claim in handoffs was stale.
+**Scope (historical):** `tools/lint-quality-doc/` mirroring `tools/lint-presence-doc/check.py`. Flip `docs/QUALITY-EVAL-V1-ARCHITECTURE.md` from "Design-only" → "Current". Reconcile any drift surfaced by anchor seeding.
 **Self-test gate:** rot guard runs green; doc anchors all resolve.
 **Notes:** Mechanical work. Closes Risk G from HANDOFF_2026-05-18.
 
