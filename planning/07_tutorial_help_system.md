@@ -142,15 +142,15 @@ This is mandatory, not optional. Defined in [06_onboarding_spec.md](06_onboardin
 
 ---
 
-## OSS Preview vs Pro differences
+## Tutorial / help scope (single product)
 
-| Element | OSS Preview | Pro |
-|---------|-------------|-----|
-| First-run checklist | 3 items | 5 items |
-| Inline walkthroughs | Core features only (chat, avatar, permissions) | All major features |
-| Reference center | Basic | Full + troubleshooting + sync |
-| Short videos | Optional / community-contributed | Polished, produced |
-| Search | Basic full-text | Full-text + suggestions |
+Companion ships as a single product (doctrine §6). The tutorial and help system covers the full surface in one coherent reference center:
+
+- **First-run checklist** — full 5-item checklist; non-essential items are skippable rather than hidden behind a tier.
+- **Inline walkthroughs** — all major features (chat, avatar, permissions, memory, sync, persona customization).
+- **Reference center** — full reference plus troubleshooting and sync help.
+- **Short videos** — polished, produced content for the flagship surfaces; community contribution welcomed but not required.
+- **Search** — full-text plus suggestions across all help content.
 
 ---
 
