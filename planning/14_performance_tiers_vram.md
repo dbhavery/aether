@@ -164,7 +164,7 @@ Variant selection is automatic during onboarding based on detected VRAM. Advance
 - Tier preference is preserved; only the active runtime behavior adjusts temporarily.
 
 ### Tier-specific defaults
-Settings honor tier context: defaults shown on a Lite system differ from defaults on a Pro system. The info-explainer for each setting notes "Recommended for your tier."
+Settings honor tier context: defaults shown on a Lite system differ from defaults on a Full-tier system. The info-explainer for each setting notes "Recommended for your tier."
 
 ### Cross-tier consistency
 The **product identity is the same across tiers.** Only the performance ceiling changes. A Lite user should feel they're using the same product as a Full user — just with lighter local capability. All tiers render the same photoreal full-body character (doctrine §5).
