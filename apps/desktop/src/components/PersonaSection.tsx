@@ -222,7 +222,11 @@ export function PersonaSection({ open }: Props) {
         </div>
       )}
 
-      {!rows && (
+      {/* Hide the "Loading…" line once an error has surfaced — otherwise
+       * the catalog stays null forever and the user sees a perpetual
+       * loading spinner above the error banner. Doctrine §8 used-as-user
+       * verify caught this 2026-04-30. */}
+      {!rows && !err && (
         <p className="mt-4 text-[11.5px] text-aether-dim">Loading personas…</p>
       )}
 
@@ -291,6 +295,11 @@ export function PersonaSection({ open }: Props) {
                           type="button"
                           role="radio"
                           aria-checked={active}
+                          aria-label={
+                            active
+                              ? `${r.display_name} (active persona)`
+                              : `Switch to ${r.display_name}`
+                          }
                           onClick={() => handleSwitch(r.slug)}
                           disabled={active || busy}
                           className={`rounded-md border px-2.5 py-1 text-[11px] transition-colors ${

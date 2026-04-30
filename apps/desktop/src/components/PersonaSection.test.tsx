@@ -148,8 +148,13 @@ describe("PersonaSection", () => {
     // Wait for initial load to settle on Aurora.
     await screen.findByLabelText("active persona");
 
-    // Sable's switch button.
-    const sableBtn = await screen.findByRole("radio", { name: /^Switch$/i });
+    // Sable's switch button. After the doctrine §8 a11y fix
+    // (PersonaSection 2026-04-30), each switch radio carries an
+    // aria-label of "Switch to <persona name>" so screen-reader
+    // users hear which persona they're targeting.
+    const sableBtn = await screen.findByRole("radio", {
+      name: /Switch to Sable/i,
+    });
     fireEvent.click(sableBtn);
 
     await waitFor(() =>
@@ -207,7 +212,9 @@ describe("PersonaSection", () => {
     render(<PersonaSection open={true} />);
 
     await screen.findByLabelText("active persona");
-    const sableBtn = await screen.findByRole("radio", { name: /^Switch$/i });
+    const sableBtn = await screen.findByRole("radio", {
+      name: /Switch to Sable/i,
+    });
     fireEvent.click(sableBtn);
 
     await screen.findByText(/persona not found/);

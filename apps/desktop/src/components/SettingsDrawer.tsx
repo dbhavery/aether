@@ -81,6 +81,12 @@ export function SettingsDrawer({ open, onClose }: Props) {
   const [memory, setMemory] = useState<MemoryConfig | null>(null);
   const [autonomy, setAutonomy] = useState<string | null>(null);
   const [autonomyLoaded, setAutonomyLoaded] = useState(false);
+  // The shared `err` shows at the top of the drawer. Doctrine §8
+  // used-as-user verify (2026-04-30) caught that an Autonomy-section
+  // failure was rendering far above the section the user was looking
+  // at. Section-scoped error states let each panel render its own
+  // alert next to the controls that produced it.
+  const [autonomyErr, setAutonomyErr] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busyKind, setBusyKind] = useState<MediaKind | null>(null);
   const [busyMic, setBusyMic] = useState(false);
@@ -128,7 +134,7 @@ export function SettingsDrawer({ open, onClose }: Props) {
         }
       })
       .catch((e) => {
-        if (!cancelled) setErr(String(e));
+        if (!cancelled) setAutonomyErr(String(e));
       });
     return () => {
       cancelled = true;
@@ -180,12 +186,12 @@ export function SettingsDrawer({ open, onClose }: Props) {
 
   const updateAutonomy = async (next: string | null) => {
     setBusyAutonomy(true);
-    setErr(null);
+    setAutonomyErr(null);
     try {
       await setAutonomyPreset(next);
       setAutonomy(next);
     } catch (e) {
-      setErr(String(e));
+      setAutonomyErr(String(e));
     } finally {
       setBusyAutonomy(false);
     }
@@ -318,6 +324,15 @@ export function SettingsDrawer({ open, onClose }: Props) {
             defaults set by the active persona. Picked once during onboarding
             and changeable here.
           </p>
+
+          {autonomyErr && (
+            <div
+              role="alert"
+              className="mt-3 rounded-md border border-aether-err/40 bg-aether-err/5 px-3 py-2 text-[11.5px] text-aether-err"
+            >
+              {autonomyErr}
+            </div>
+          )}
 
           <div className="mt-4">
             <AutonomyRow
