@@ -231,16 +231,16 @@ The policy / authorization engine (one of the six engines in [08_system_architec
 
 ---
 
-## OSS Preview vs Pro differences
+## Permissions scope (single product)
 
-| Feature | OSS Preview | Pro |
-|---------|-------------|-----|
-| Preset options | Observer + Assistant (simplified) | Full 5-preset ladder + Custom |
-| Resource scoping | Workspace-only default; selected folders advanced | Full custom folder / domain scoping |
-| Capability coverage | Files (read/draft), Browser (read), Memory, Clipboard, Media | Full capability matrix including Email, Terminal, Integrations |
-| Temporary grants | Session-bound only | Full duration ladder (action/task/session/persistent) |
-| Audit log | Recent actions view | Full replayable action history |
-| Emergency revoke | Yes (basic) | Yes (with per-category granularity) |
+Companion ships as a single product (doctrine §6) with the full permission and autonomy surface available to every user:
+
+- **Preset options** — full 5-preset ladder + Custom; the recommended preset surfaces first, others available behind expansion.
+- **Resource scoping** — full custom folder and domain scoping; workspace-only is the safe default.
+- **Capability coverage** — full capability matrix (Files, Browser, Memory, Clipboard, Media, Email, Terminal, Integrations).
+- **Temporary grants** — full duration ladder (action / task / session / persistent).
+- **Audit log** — full replayable action history.
+- **Emergency revoke** — full revoke with per-category granularity.
 
 ---
 
