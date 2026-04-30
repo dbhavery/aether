@@ -552,3 +552,93 @@ export async function onTierChanged(
 ): Promise<UnlistenFn> {
   return listen<TierConfig>("tier:changed", (e) => cb(e.payload));
 }
+
+// --- T1.3 — L5-gated browser automation surface ----------------------
+//
+// Thin wrappers around the seven `browser_*` Tauri commands. The
+// backend is currently the `PlaywrightExecutor` stub: every call below
+// will reject with a `BackendDisabled` error string until the real
+// Node-subprocess driver lands. The shape is locked now so the UI can
+// build against it.
+
+/** Opaque identifier for a live browser session. Round-trip through
+ * the `browser_*` surface only — the contents are backend-defined. */
+export interface SessionId {
+  /** Backend-defined session identifier. */
+  0: string;
+}
+
+/** A read-only snapshot of a browser page. Returned by
+ * {@link browserReadPage}. `text_content` is post-JS visible text. */
+export interface PageSnapshot {
+  url: string;
+  title: string;
+  text_content: string;
+  captured_at_ms: number;
+}
+
+/** A single form-field write request. `selector` is interpreted by the
+ * backend (Playwright supports CSS / text / role / chained selectors). */
+export interface FormField {
+  selector: string;
+  value: string;
+}
+
+/** Open a fresh browser session and navigate to `url`. Gated by L5
+ * `BrowserOpen` — the call rejects when the policy denies. */
+export async function browserOpen(url: string): Promise<SessionId> {
+  return invoke<SessionId>("browser_open", { url });
+}
+
+/** Navigate an existing session to a new URL. In policy terms this is
+ * a re-open and is gated by L5 `BrowserOpen` (same scope-allowlist). */
+export async function browserNavigate(
+  session: SessionId,
+  url: string,
+): Promise<void> {
+  return invoke<void>("browser_navigate", { session, url });
+}
+
+/** Read a snapshot of the current page contents. Gated by L5
+ * `BrowserReadPage`. */
+export async function browserReadPage(
+  session: SessionId,
+): Promise<PageSnapshot> {
+  return invoke<PageSnapshot>("browser_read_page", { session });
+}
+
+/** Extract text values matching `selector`. Gated by L5
+ * `BrowserExtractData`. The selector grammar is backend-defined. */
+export async function browserExtract(
+  session: SessionId,
+  selector: string,
+): Promise<string[]> {
+  return invoke<string[]>("browser_extract", { session, selector });
+}
+
+/** Fill one or more form fields. Does NOT submit — submission goes
+ * through {@link browserSubmit} under a separate capability. Gated by
+ * L5 `BrowserFillForm`. */
+export async function browserFillForm(
+  session: SessionId,
+  fields: FormField[],
+): Promise<void> {
+  return invoke<void>("browser_fill_form", { session, fields });
+}
+
+/** Submit a form, identified by `selector` (typically the form element
+ * or its submit button). Gated by L5 `BrowserSubmit` — the
+ * Critical-risk capability that mutates remote state. */
+export async function browserSubmit(
+  session: SessionId,
+  selector: string,
+): Promise<void> {
+  return invoke<void>("browser_submit", { session, selector });
+}
+
+/** Close the session and release its resources. Intentionally ungated
+ * per the L5-browser wiring contract — releasing a session is always
+ * permitted, otherwise a denied close would leak browser processes. */
+export async function browserClose(session: SessionId): Promise<void> {
+  return invoke<void>("browser_close", { session });
+}
