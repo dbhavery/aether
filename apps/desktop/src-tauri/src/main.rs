@@ -5,6 +5,7 @@ mod adapter;
 mod backfill;
 mod browser_commands;
 mod commands;
+mod files_commands;
 mod hardware;
 mod idle_probe;
 mod media_permissions;
