@@ -25,9 +25,11 @@
   behavioural acceptance criteria live in tests and
   `tools/evals/`, not here. Per `docs/GLOSSARY.md` §6, rot guards
   and AC must not be collapsed.
-- **Product tiers are a cross-cutting lens.** §8 names the
-  tiering once; other sections reference it rather than restating
-  tier-specific expectations inline.
+- **Performance tiers are a cross-cutting lens.** §8 names the
+  Lite / Balanced / Full performance tiers once; other sections
+  reference it rather than restating tier-specific expectations
+  inline. Companion is a single product (doctrine §6); these
+  tiers describe hardware capability classes, not product SKUs.
 - **No premature numbers.** Fields labelled `TODO(numbers)`
   deliberately have no value yet. Populate only when a baseline
   measurement, a Quality-Eval scenario, or an explicit design
@@ -47,8 +49,7 @@ NFRs describe *how* it behaves.
 
 ### In scope (initial pass)
 
-- Desktop companion (OSS Preview): single-user, local-only,
-  Windows-first.
+- Desktop Companion: single-user, local-only, Windows-first.
 - L1–L7 engine layers + the Tauri shell.
 - The provider adapters in L4 (Ollama, whisper.cpp, etc.) to the
   extent they affect latency, resource budgets, and reliability.
@@ -57,12 +58,12 @@ NFRs describe *how* it behaves.
 
 - Concrete numeric budgets, SLAs, or percentiles — see §10 open
   decisions.
-- Regional or fleet-wide rollout constraints — Pro tier only,
-  deferred.
+- Regional or fleet-wide rollout constraints — not relevant to a
+  single-user desktop product.
 - Cross-platform parity beyond "macOS / Linux follow Windows as
   platform probes land".
-- Compliance regimes (SOC 2, HIPAA, etc.) — deferred until the
-  Pro track formalises.
+- Compliance regimes (SOC 2, HIPAA, etc.) — not in scope for a
+  local-only single-user desktop product.
 
 ### Relationship to other docs
 
@@ -132,8 +133,8 @@ TODO(numbers): no explicit target. Measurement harness TBD.
 
 ### 2.4 Background and sync latency
 
-Placeholder for background sync (Isabelle, future Pro tier).
-Not active in OSS Preview.
+Placeholder for future background-sync work (Isabelle / cross-device).
+Not active in Companion v1.
 
 See `docs/SYNC-ISABELLE.md` once it exists.
 
@@ -143,17 +144,20 @@ See `docs/SYNC-ISABELLE.md` once it exists.
 
 ### 3.1 Availability model
 
-- **OSS Preview**: local-only. "Availability" means the desktop
-  app boots and remains responsive on the user's machine. No
-  uptime SLA; no remote service on the critical path.
-- **Pro (future)**: opt-in remote services (sync, shared
-  personas, etc.) may enter the critical path. Availability
-  expectations for those services live here when they land; they
-  must be **scoped to the feature** (sync-only, not the whole
-  companion) so local-only use continues to work offline.
-- **Private / internal**: inherits OSS Preview expectations;
-  additional telemetry or logging is an operator concern, not an
-  NFR.
+- **Companion (v1)**: local-only. "Availability" means the
+  desktop app boots and remains responsive on the user's
+  machine. No uptime SLA; no remote service on the critical
+  path. Single product per doctrine §6 — no separate preview /
+  pro split.
+- **Future opt-in remote features** (sync, shared personas, etc.)
+  may eventually enter the critical path for the user who opts
+  in. Availability expectations for those features live here
+  when they land; they must be **scoped to the feature**
+  (sync-only, not the whole companion) so local-only use
+  continues to work offline.
+- **Don's private / internal build**: same posture as the
+  shipped Companion; additional telemetry or logging is an
+  operator concern, not an NFR.
 
 ### 3.2 Degradation posture
 
@@ -238,15 +242,15 @@ TODO(numbers): cap per session / per install.
 
 ## 5. Sync and convergence
 
-Out of the critical path for OSS Preview. Included here so the
+Out of the critical path for Companion v1. Included here so the
 category exists before Isabelle / sync work lands.
 
 - **Convergence model** (CRDT vs server-authoritative) — **open
   decision**. See §10.
 - **Conflict resolution** — user-first: never lose user-authored
   content without an explicit user action.
-- **Offline behaviour** — the OSS Preview assumes offline is
-  normal, not exceptional.
+- **Offline behaviour** — Companion assumes offline is normal,
+  not exceptional.
 
 TODO: populate once the Isabelle / sync track has a design doc.
 
@@ -300,29 +304,38 @@ resource profiling) is an open question — see §10.
 
 ### 7.3 Reporting posture
 
-Measurements are **internal** in OSS Preview. No telemetry
-leaves the device unless the user explicitly opts in. When Pro
-telemetry lands, it will be scoped as an opt-in capability, not
-an always-on pipe.
+Measurements are **internal** to Companion. No telemetry
+leaves the device unless the user explicitly opts in. Any
+future telemetry capability will be scoped as an opt-in
+feature, not an always-on pipe.
 
 ---
 
-## 8. Product tiers and NFRs
+## 8. Performance tiers and NFRs
+
+Companion is a **single product** (doctrine §6). The tiers below
+are **hardware capability classes**, not product SKUs — every
+install is the same Companion; the tier dictates which models
+and rendering paths are feasible. See
+`planning/14_performance_tiers_vram.md` for the canonical tier
+definitions.
 
 Tiering affects expectations, not categories. A tier cannot
 introduce a new NFR category; it can only set or relax targets
 within the categories this doc enumerates.
 
-| Tier              | Expectation posture                                             |
-| ----------------- | --------------------------------------------------------------- |
-| **OSS Preview**   | Local-only; best-effort; no SLA; documented degradation modes. |
-| **Pro (future)**  | Opt-in remote features with scoped SLAs (per-feature, not      |
-|                   | companion-wide); offline local mode remains the default.        |
-| **Private / internal** | Same category posture as OSS Preview; operational concerns |
-|                   | (logging, alerting) are deployment-side, not NFR-spec-side.     |
+| Performance tier | Expectation posture                                                                                  |
+| ---------------- | ---------------------------------------------------------------------------------------------------- |
+| **Lite**         | Lowest-VRAM hosts; smallest model variants; aggressive remote fallback for non-reflex paths; reduced cache footprint; latency posture is best-effort. |
+| **Balanced**     | Mid-range GPU or strong CPU; mid-size model variants; more work stays local; standard latency posture. |
+| **Full**         | Flagship GPU hosts; largest model variants; richest avatar rendering; tightest local latency posture. |
 
-TODO(numbers): no cross-tier SLA commitments until the Pro track
-formalises.
+Future opt-in remote features (e.g. sync) will carry their own
+per-feature availability targets and apply across all
+performance tiers; they are not a separate product tier.
+
+TODO(numbers): no cross-tier SLA commitments until baselines per
+tier are measured.
 
 ---
 
@@ -343,9 +356,9 @@ formalises.
 1. **Concrete latency budgets** (interaction, model, UI) — no
    target locked until we have a Quality-Eval-driven baseline
    on reference hardware.
-2. **Availability targets for Pro remote features** — deferred
-   until the Pro track has a design pass. Must be per-feature,
-   not companion-wide.
+2. **Availability targets for opt-in remote features** —
+   deferred until those features have a design pass. Must be
+   per-feature, not companion-wide.
 3. **Resource budget numbers** — pull from
    `planning/14_performance_tiers_vram.md` once that table is
    stable; mirror the performance-tier taxonomy here rather
