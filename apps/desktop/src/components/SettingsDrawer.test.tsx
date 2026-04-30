@@ -22,6 +22,29 @@ vi.mock("../lib/api", () => ({
   setPresenceConfig: vi.fn(),
   currentAutonomyPreset: vi.fn(),
   setAutonomyPreset: vi.fn(),
+  // T2.4 — PersonaSection ships inside SettingsDrawer. Stub its
+  // backend calls so the parent test stays focused on the Autonomy
+  // contract.
+  listPersonas: vi.fn().mockResolvedValue([]),
+  switchPersona: vi.fn(),
+  installPersona: vi.fn(),
+  companionBanner: vi.fn().mockResolvedValue({
+    persona_id: "aurora",
+    persona_name: "Aurora",
+    persona_version: "0.1.0",
+    preferred_tier: "T2",
+    provider_mode: "ollama",
+    provider_label: "Ollama",
+    output_detail: "balanced",
+    tagline: "",
+    system_prompt: "",
+  }),
+  personaManifestUrl: vi.fn().mockReturnValue(null),
+}));
+
+vi.mock("../lib/personaPreviews", () => ({
+  loadPersonaPreviews: vi.fn().mockResolvedValue([]),
+  previewAssetUrl: (rel: string) => `/personas-previews/${rel}`,
 }));
 
 import * as api from "../lib/api";
