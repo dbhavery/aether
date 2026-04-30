@@ -166,6 +166,14 @@ pub struct AppState {
     /// interval; transitions are emitted as `presence:attention`
     /// events and pushed into `presence_history` for the Trust drawer.
     pub attention: Arc<UserAttentionController>,
+    /// T1.3 — L5-gated browser automation executor. The trait object
+    /// is kept on `AppState` so every browser_* Tauri command can
+    /// share one Playwright session map (when the real backend lands).
+    /// Today this is the [`PlaywrightExecutor`] stub from
+    /// `aether-l5-browser`; every method returns
+    /// `BrowserExecError::BackendDisabled`. The stub-to-real swap is
+    /// a single-line change in `build()`.
+    pub browser_executor: Arc<dyn aether_l5_browser::BrowserExecutor>,
     /// Bounded, UX-only history of attention transitions for the
     /// Trust drawer's History tab. Does NOT go through the L5 audit
     /// store — presence is observational per design §4. Cleared on
@@ -584,6 +592,9 @@ impl AppState {
             presence_config: RwLock::new(cfg),
             presence_config_path: None,
             attention,
+            browser_executor: Arc::new(
+                aether_l5_browser::playwright_stub::PlaywrightExecutor::new(),
+            ),
             presence_history: Mutex::new(VecDeque::with_capacity(PRESENCE_HISTORY_CAPACITY)),
             memory_config: RwLock::new(MemoryConfig::defaults()),
             memory_config_path: None,

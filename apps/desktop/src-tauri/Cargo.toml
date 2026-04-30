@@ -51,6 +51,12 @@ aether-l2-memory      = { path = "../../../packages/l2-memory", features = ["sql
 aether-l3-presence    = { path = "../../../packages/l3-presence" }
 aether-l4-router      = { path = "../../../packages/l4-router" }
 aether-l5-policy      = { path = "../../../packages/l5-policy" }
+# T1.3 Tauri-wiring slice — pull in the L5 browser-automation surface with
+# the playwright stub backend so the shell can wire `Arc<dyn BrowserExecutor>`
+# through to Tauri commands. Every executor method returns
+# `BrowserExecError::BackendDisabled` until the real Node-subprocess driver
+# lands in a later slice.
+aether-l5-browser     = { path = "../../../packages/l5-browser", features = ["playwright"] }
 aether-l6-persona     = { path = "../../../packages/l6-persona" }
 aether-l7-trust       = { path = "../../../packages/l7-trust" }
 # ADR-0012 §6 — base64-decode the bundled Ed25519 release public key
@@ -95,6 +101,11 @@ tauri = { version = "2", features = ["test"] }
 ed25519-dalek = "2"
 sha2          = "0.10"
 zip           = { version = "2", default-features = false, features = ["deflate"] }
+# T1.3 — browser_commands tests build a tracking mock that implements
+# `aether_l5_browser::BrowserExecutor`, which uses `#[async_trait]`. The
+# proc-macro is dev-only because no production module in the desktop
+# crate authors its own `async fn` trait.
+async-trait   = "0.1"
 
 [[bin]]
 name = "aether-desktop"
