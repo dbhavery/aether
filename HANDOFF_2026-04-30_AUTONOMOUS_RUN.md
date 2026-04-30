@@ -38,10 +38,10 @@ The `feedback_stale_prompt_drift.md` rule fired twice today. Handoff documents c
 Run `python scripts/current_status.py` for the live state. Highlights as of session-mid:
 
 - All 7 doc rot guards green (presence, vision, voice, quality, memory, policy, media-permissions).
-- Boundary lint green: 12 crates / 8 engines / 4 shared infra (will move to 13/9/4 once l5-files lands).
+- Boundary lint green: **13 crates / 9 engines / 4 shared infra** (l5-browser + l5-files skeletons landed).
 - All workspace `cargo test`s green.
-- Desktop crate `cargo test --bin aether-desktop`: 306+ green (new sweep idempotency test added this session).
-- Frontend `pnpm exec tsc --noEmit` clean; `pnpm exec vitest run` 261+ pass (new SettingsDrawer Autonomy tests added; persona-switcher tests pending wave-4 finish).
+- Desktop crate `cargo test --bin aether-desktop`: 306+ green (kill-mid-sweep idempotency test added; bundled-key tests reshaped post-real-key-swap).
+- Frontend `pnpm exec tsc --noEmit` clean; `pnpm exec vitest run` **268+ pass** (PersonaSection 7 cases added).
 
 ## Decisions locked this run
 
