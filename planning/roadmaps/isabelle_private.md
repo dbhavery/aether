@@ -1,5 +1,7 @@
 # Isabelle / Isabelle_Kunstig — Private Branch Specification
 
+> **Updated 2026-05-18** for the Pro→Companion rename and doctrine §5/§6/§7/§8. Isabelle is the private overlay on **Companion** (the single product). Prior "Pro" references throughout this file have been rewritten as "Companion." Isabelle's roadmap rides on Companion's roadmap; the underlying phase structure is unchanged.
+
 ## Role
 
 Isabelle is Don's **private personal assistant/companion** — a customized profile/branch built on top of Companion. This is not a separate product and not a separate codebase. It is a **privileged profile layer** on the Companion platform.
@@ -26,7 +28,7 @@ A separate codebase would create maintenance drag:
 
 ---
 
-## Scope (private extensions on top of Pro)
+## Scope (private extensions on top of Companion)
 
 ### Persona
 - Custom identity and personality tuning
@@ -80,7 +82,7 @@ A separate codebase would create maintenance drag:
 - **Not distributed publicly.** Private only.
 - **Built on Companion.** Does not diverge at the platform layer.
 - **All Companion doctrine applies.** Isabelle is strictly additive on top.
-- **Private overlay structure** — Isabelle configurations, models, and packs live separately from the public Pro codebase.
+- **Private overlay structure** — Isabelle configurations, models, and packs live separately from the public Companion codebase.
 - **Memory / data isolation** — Isabelle's memory database is never accessed by public product code paths.
 
 ---
@@ -100,7 +102,7 @@ A separate codebase would create maintenance drag:
 - Review each category for relevance to new Isabelle.
 - Structured import into Companion memory engine (with proper provenance, confidence, and governance).
 - Old Isabelle_Kunstig data preserved read-only during migration.
-- Migration tooling lives in Pro's offline tooling layer (Python OK for this — non-runtime).
+- Migration tooling lives in Companion's offline tooling layer (Python OK for this — non-runtime).
 
 See [../OPEN_QUESTIONS.md](../OPEN_QUESTIONS.md#architecture-decisions-deferred) for deferred decisions.
 
@@ -132,9 +134,9 @@ This is personal context that makes Isabelle feel like Don's assistant from sess
 - Runtime: Rust
 - Local LLM: Gemma 4 (Full variant given Don's hardware class)
 - Remote LLM: frontier for hardest tasks (scoped)
-- All moat layers: the Pro custom implementations
+- All moat layers: the Companion custom implementations
 - Memory: SQLite + vector, encrypted, with Isabelle-specific schema extensions
-- Avatar: Pro rendering surface with Isabelle-specific appearance pack
+- Avatar: Companion rendering surface with Isabelle-specific appearance pack
 
 See [../16_tech_stack.md](../16_tech_stack.md).
 
@@ -184,14 +186,14 @@ See [../16_tech_stack.md](../16_tech_stack.md).
 
 Isabelle's roadmap depends on Companion reaching each phase:
 
-- **Pro Phase 0–1 (platform core)** → Isabelle preparation: persona pack spec, appearance pack spec, migration plan for Isabelle_Kunstig data
-- **Pro Phase 2 (conversation core)** → Isabelle alpha: basic persona + voice + memory on Don's desktop
-- **Pro Phase 3 (avatar)** → Isabelle avatar: custom appearance pack integrated
-- **Pro Phase 4 (tools/autonomy)** → Isabelle autonomy: wider permissions, private integrations
-- **Pro Phase 5 (memory/continuity)** → Isabelle memory migration from old Isabelle_Kunstig + mobile companion
-- **Pro Phase 6 (companion quality)** → Isabelle becomes the full companion
+- **Companion Phase 0–1 (platform core)** → Isabelle preparation: persona pack spec, appearance pack spec, migration plan for Isabelle_Kunstig data
+- **Companion Phase 2 (conversation core)** → Isabelle alpha: basic persona + voice + memory on Don's desktop
+- **Companion Phase 3 (avatar)** → Isabelle avatar: custom appearance pack integrated (photoreal full-body per doctrine §5; X2 cadence per ADR-0014's out-of-scope clause)
+- **Companion Phase 4 (tools/autonomy)** → Isabelle autonomy: wider permissions, private integrations
+- **Companion Phase 5 (memory/continuity)** → Isabelle memory migration from old Isabelle_Kunstig + mobile companion
+- **Companion Phase 6 (companion quality)** → Isabelle becomes the full companion
 
-Isabelle does not race ahead of Pro. Pro's stability is Isabelle's stability.
+Isabelle does not race ahead of Companion. Companion's stability is Isabelle's stability. Doctrine §6 (single product, ships when complete) means Isabelle is also gated on the complete Companion ship — there is no early Isabelle-only release.
 
 ---
 
@@ -212,7 +214,7 @@ Isabelle is successful when:
 4. Memory migration from old Isabelle_Kunstig preserves what matters and discards noise.
 5. Isabelle coexists with VoiceType, Morning Intel, Claude Code, and other Don tooling without conflict.
 6. Private features stay private; public repos stay clean.
-7. Isabelle benefits from every Pro improvement automatically.
+7. Isabelle benefits from every Companion improvement automatically.
 
 ---
 
@@ -220,7 +222,7 @@ Isabelle is successful when:
 
 - **Separate codebase for Isabelle** — creates maintenance drag, duplicates moat layers
 - **Public leakage of private Isabelle data** — never in public repos
-- **Isabelle-first development that branches the platform** — Pro must be the canonical source
+- **Isabelle-first development that branches the platform** — Companion must be the canonical source
 - **Auto-import of all old Isabelle_Kunstig data** — curated migration only
 - **Wider autonomy without wider logging** — Don's trust center still shows everything
 - **Isabelle models in public model packs** — private models stay in private distribution
