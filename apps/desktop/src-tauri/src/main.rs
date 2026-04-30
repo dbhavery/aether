@@ -679,6 +679,106 @@ mod bundled_persona_pack_tests {
     }
 }
 
+/// Errors surfaced by [`install_persona_from_local_files`].
+///
+/// Each variant maps cleanly to a user-facing reason string the
+/// wizard surfaces in the install-failed state. The orchestrator
+/// treats every error as terminal — no partial install survives a
+/// failed run thanks to L6's `.partial → final` rename.
+#[derive(Debug, thiserror::Error)]
+#[allow(dead_code)] // Surfaced by Tier-2 install flow (HTTP wrapper lands later).
+enum PersonaInstallError {
+    #[error("read failed at {path:?}: {source}")]
+    Io {
+        path: std::path::PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("manifest is not valid JSON: {source}")]
+    ManifestJson {
+        #[source]
+        source: serde_json::Error,
+    },
+    #[error("manifest signature did not verify: {source}")]
+    ManifestSignature {
+        #[source]
+        source: aether_l6_persona::ManifestVerifyError,
+    },
+    #[error("manifest does not declare a persona named {slug:?}")]
+    SlugNotInManifest { slug: String },
+    #[error("manifest entry for {slug:?} is missing required field {field:?}")]
+    SlugEntryMalformed { slug: String, field: String },
+    #[error("pack download did not match the manifest's declared SHA-256: {source}")]
+    Sha256 {
+        #[source]
+        source: aether_l6_persona::InstallError,
+    },
+    #[error("extraction failed: {source}")]
+    Extract {
+        #[source]
+        source: aether_l6_persona::InstallError,
+    },
+}
+
+/// Orchestrate a Tier-2 persona install from on-disk inputs.
+///
+/// The HTTP fetching layer wraps this function with ureq (or
+/// equivalent). Decoupling the orchestration from the network keeps
+/// the security loop unit-testable: tests drive every branch with
+/// fixture files. The HTTP wrapper only adds two thin layers
+/// (download manifest, download zip) on top.
+///
+/// Steps, in order — any failure aborts:
+///   1. Read manifest bytes from `manifest_path`.
+///   2. Verify Ed25519 signature against the bundled public key.
+///   3. Locate the persona entry for `slug`; pull `sha256`.
+///   4. Verify `zip_path` SHA-256 matches the manifest claim.
+///   5. Extract zip into `dest_dir/<slug>/` via the L6 atomic
+///      `.partial → rename` install primitive.
+///
+/// On success returns the final extracted directory path. The
+/// caller is responsible for catalog refresh — the live catalog in
+/// `AppState` is hard-coded today; ADR-0012 §Switch flow expects an
+/// "engine pause / install / resume" wrapper which lands when the
+/// catalog gains interior mutability.
+#[allow(dead_code)] // Same caveat as the helper above.
+fn install_persona_from_local_files(
+    manifest_path: &std::path::Path,
+    zip_path: &std::path::Path,
+    slug: &str,
+    dest_dir: &std::path::Path,
+) -> Result<std::path::PathBuf, PersonaInstallError> {
+    let manifest_bytes = std::fs::read(manifest_path).map_err(|e| PersonaInstallError::Io {
+        path: manifest_path.to_path_buf(),
+        source: e,
+    })?;
+    verify_persona_manifest_with_bundled_key(&manifest_bytes)
+        .map_err(|source| PersonaInstallError::ManifestSignature { source })?;
+    let manifest: serde_json::Value = serde_json::from_slice(&manifest_bytes)
+        .map_err(|source| PersonaInstallError::ManifestJson { source })?;
+    let entry = manifest
+        .get("personas")
+        .and_then(|v| v.as_array())
+        .and_then(|arr| {
+            arr.iter()
+                .find(|e| e.get("slug").and_then(|v| v.as_str()) == Some(slug))
+        })
+        .ok_or_else(|| PersonaInstallError::SlugNotInManifest {
+            slug: slug.to_string(),
+        })?;
+    let expected_sha = entry
+        .get("sha256")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| PersonaInstallError::SlugEntryMalformed {
+            slug: slug.to_string(),
+            field: "sha256".to_string(),
+        })?;
+    aether_l6_persona::verify_zip_sha256(zip_path, expected_sha)
+        .map_err(|source| PersonaInstallError::Sha256 { source })?;
+    aether_l6_persona::extract_pack_zip(zip_path, dest_dir, slug)
+        .map_err(|source| PersonaInstallError::Extract { source })
+}
+
 #[cfg(test)]
 mod bundled_release_key_tests {
     //! Locks the contract between `RELEASE_PUBLIC_KEY_B64` (the bundled
@@ -741,6 +841,145 @@ mod bundled_release_key_tests {
             ),
             "expected BadSignature, got {err:?}"
         );
+    }
+}
+
+#[cfg(test)]
+mod persona_install_orchestration_tests {
+    //! Drives `install_persona_from_local_files` through every
+    //! branch using the cross-language fixture + a freshly-built
+    //! zip whose SHA-256 we inject into a copy of the fixture. This
+    //! locks the manifest-signature → sha-verify → atomic-extract
+    //! pipeline at unit-test time so the HTTP wrapper that lands
+    //! later only has to test fetching.
+
+    use super::install_persona_from_local_files;
+    use std::fs;
+    use std::io::Write;
+    use std::path::{Path, PathBuf};
+    use tempfile::TempDir;
+
+    fn fixture_signed_manifest_path() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../packages/l6-persona/tests/fixtures/signed_manifest.json")
+    }
+
+    /// Build a deterministic zip with a couple of files, return
+    /// (zip_path, hex_sha256).
+    fn build_zip_with_known_sha(dir: &Path, name: &str) -> (PathBuf, String) {
+        use sha2::{Digest, Sha256};
+        use zip::write::SimpleFileOptions;
+
+        let zip_path = dir.join(name);
+        let f = fs::File::create(&zip_path).unwrap();
+        let mut w = zip::ZipWriter::new(f);
+        let opts = SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
+        w.start_file("alice/persona.yaml", opts).unwrap();
+        w.write_all(b"id: alice\nversion: 1\nname: Alice\ndescription: x\n")
+            .unwrap();
+        w.start_file("alice/avatar/anchor.png", opts).unwrap();
+        w.write_all(b"\x89PNG\r\n\x1a\nfake").unwrap();
+        w.finish().unwrap();
+
+        let mut h = Sha256::new();
+        h.update(fs::read(&zip_path).unwrap());
+        let sha = format!("{:x}", h.finalize());
+        (zip_path, sha)
+    }
+
+    /// Re-sign a copy of the fixture manifest with alice's sha
+    /// updated to match a freshly-built zip. We can do this in the
+    /// test because the fixture's deterministic seed is also baked
+    /// into the L6 verifier's cross-language test, so we know the
+    /// secret key.
+    fn signed_manifest_with_sha(tmp: &TempDir, alice_sha: &str) -> PathBuf {
+        use base64::engine::general_purpose::STANDARD as B64;
+        use base64::Engine as _;
+        use ed25519_dalek::{Signer, SigningKey};
+
+        let raw = fs::read(fixture_signed_manifest_path()).unwrap();
+        let mut manifest: serde_json::Value = serde_json::from_slice(&raw).unwrap();
+        manifest["personas"][0]["sha256"] =
+            serde_json::Value::String(alice_sha.to_string());
+
+        // Re-sign with the same deterministic key the fixture used
+        // (seed [7;32], also the cross-language Rust test seed).
+        let sk = SigningKey::from_bytes(&[7u8; 32]);
+        let body = serde_json::to_vec(manifest.get("personas").unwrap()).unwrap();
+        let sig = sk.sign(&body);
+        manifest["signature"] =
+            serde_json::Value::String(format!("ed25519:{}", B64.encode(sig.to_bytes())));
+
+        let path = tmp.path().join("manifest.json");
+        fs::write(&path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+        path
+    }
+
+    #[test]
+    fn happy_path_installs_alice() {
+        let tmp = TempDir::new().unwrap();
+        let (zip, sha) = build_zip_with_known_sha(tmp.path(), "alice.zip");
+        let manifest = signed_manifest_with_sha(&tmp, &sha);
+        let dest = tmp.path().join("install");
+
+        let result = install_persona_from_local_files(&manifest, &zip, "alice", &dest)
+            .expect("install");
+        assert_eq!(result, dest.join("alice"));
+        assert!(dest.join("alice/alice/persona.yaml").exists());
+    }
+
+    #[test]
+    fn slug_not_in_manifest_errors_cleanly() {
+        let tmp = TempDir::new().unwrap();
+        let (zip, sha) = build_zip_with_known_sha(tmp.path(), "alice.zip");
+        let manifest = signed_manifest_with_sha(&tmp, &sha);
+        let dest = tmp.path().join("install");
+
+        let err = install_persona_from_local_files(&manifest, &zip, "ghost", &dest)
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            super::PersonaInstallError::SlugNotInManifest { .. }
+        ));
+    }
+
+    #[test]
+    fn manifest_with_bad_signature_aborts_before_extract() {
+        let tmp = TempDir::new().unwrap();
+        let (zip, sha) = build_zip_with_known_sha(tmp.path(), "alice.zip");
+        let manifest = signed_manifest_with_sha(&tmp, &sha);
+
+        // Corrupt the manifest signature post-sign.
+        let mut m: serde_json::Value =
+            serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+        m["personas"][0]["display_name"] =
+            serde_json::Value::String("Corrupted".to_string());
+        fs::write(&manifest, serde_json::to_vec(&m).unwrap()).unwrap();
+
+        let dest = tmp.path().join("install");
+        let err = install_persona_from_local_files(&manifest, &zip, "alice", &dest)
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            super::PersonaInstallError::ManifestSignature { .. }
+        ));
+        // No extract happened.
+        assert!(!dest.join("alice").exists());
+    }
+
+    #[test]
+    fn zip_with_wrong_sha_aborts_before_extract() {
+        let tmp = TempDir::new().unwrap();
+        let (zip, _real_sha) = build_zip_with_known_sha(tmp.path(), "alice.zip");
+        // Tell the manifest to expect a different sha.
+        let manifest = signed_manifest_with_sha(&tmp, &"f".repeat(64));
+        let dest = tmp.path().join("install");
+
+        let err = install_persona_from_local_files(&manifest, &zip, "alice", &dest)
+            .unwrap_err();
+        assert!(matches!(err, super::PersonaInstallError::Sha256 { .. }));
+        assert!(!dest.join("alice").exists());
     }
 }
 

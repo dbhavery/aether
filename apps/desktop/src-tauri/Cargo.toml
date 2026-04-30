@@ -85,6 +85,12 @@ tempfile = "3"
 # (timing, double-start guard, cancel cadence). Enabled only for tests
 # so the bin build never carries the mock runtime.
 tauri = { version = "2", features = ["test"] }
+# ADR-0012 install-orchestration tests build deterministic zips and
+# re-sign the cross-language manifest fixture. These deps land at
+# test-time only.
+ed25519-dalek = "2"
+sha2          = "0.10"
+zip           = { version = "2", default-features = false, features = ["deflate"] }
 
 [[bin]]
 name = "aether-desktop"
