@@ -351,19 +351,19 @@ export function SettingsDrawer({ open, onClose }: Props) {
       <div className="border-t border-aether-border px-5 py-3 text-[11px] text-aether-muted">
         Stored locally at{" "}
         <code className="font-mono text-aether-dim">
-          %APPDATA%/Aether/media_permissions.json
+          %APPDATA%/Companion/media_permissions.json
         </code>
         ,{" "}
         <code className="font-mono text-aether-dim">
-          %APPDATA%/Aether/mic_permissions.json
+          %APPDATA%/Companion/mic_permissions.json
         </code>
         ,{" "}
         <code className="font-mono text-aether-dim">
-          %APPDATA%/Aether/presence.json
+          %APPDATA%/Companion/presence.json
         </code>
         , and{" "}
         <code className="font-mono text-aether-dim">
-          %APPDATA%/Aether/memory.json
+          %APPDATA%/Companion/memory.json
         </code>
       </div>
     </div>

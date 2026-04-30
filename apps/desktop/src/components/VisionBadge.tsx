@@ -30,7 +30,7 @@ const TEXT_ONLY_VALUE = "__text_only__";
  * Tells the user which vision route the next "Analyze" call will
  * take — Ollama vision, llama.cpp vision, or text-only fallback —
  * and lets them swap among the registered providers without
- * restarting Aether. Selection is persisted server-side
+ * restarting Companion. Selection is persisted server-side
  * (`vision_provider.json`) so the choice survives the next launch.
  *
  * When no vision provider is registered (no env opt-in), the

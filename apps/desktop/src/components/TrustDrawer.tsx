@@ -78,7 +78,7 @@ const DECISION_META: Record<
 
 /**
  * First trust-centre slice — a read-only view of the L5 audit rows this
- * session generated. Answers "what did Aether just decide, and why do I
+ * session generated. Answers "what did Companion just decide, and why do I
  * trust that?" per planning/05_ux_principles §Information architecture
  * ("Action history is always reviewable").
  */
@@ -416,7 +416,7 @@ export const AUDIT_SCHEMA_VERSION_V2 = 2;
  *
  * **v2 (ADR-0009)** — the user's typed text is the headline. The
  * capability + scope drop to a secondary line. A details/summary
- * disclosure surfaces "what Aether also saw" — currently just the
+ * disclosure surfaces "what Companion also saw" — currently just the
  * retrieval-block summary (`N memories from {domains}`); the full
  * model-input string is intentionally NOT rendered (Open Item #3,
  * deferred to a future ADR per `DECISIONS_LOG.md` D-001).
@@ -813,7 +813,7 @@ function HistoryList({
 /**
  * Single presence-transition row. Deliberately muted — presence is
  * context, not action. "You became Idle" doesn't need the same
- * visual weight as "Aether routed a turn to a model that took 3.2 s".
+ * visual weight as "Companion routed a turn to a model that took 3.2 s".
  *
  * Presence V1 step 3.
  */

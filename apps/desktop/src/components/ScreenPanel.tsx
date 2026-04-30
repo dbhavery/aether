@@ -26,7 +26,7 @@ interface Props {
  * Screen-capture sibling to CameraPanel.
  *
  * Uses `navigator.mediaDevices.getDisplayMedia` (the standard browser
- * screen-capture API) so the OS picker drives source selection — Aether
+ * screen-capture API) so the OS picker drives source selection — Companion
  * never enumerates open windows itself, which keeps this surface
  * minimal and OS-policy-aligned. Same start/stop/sample-frame model as
  * CameraPanel; same in-app permission gate; same `analyze_frame`

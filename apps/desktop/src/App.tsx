@@ -427,7 +427,7 @@ export function App() {
       {/* Run 5 (2026-04-23): the legacy `MemoryDrawer` was retired now
        * that Memory V2 is closed. The header Memory button opens the
        * Trust drawer on the Memory tab — one canonical surface for
-       * "what does Aether remember about me", with forget/edit/approval
+       * "what does Companion remember about me", with forget/edit/approval
        * flows living next to audit + history. Both drawer states
        * (`"memory"` and `"trust"`) render the same component; the
        * `"memory"` state just picks the Memory tab initially. */}
