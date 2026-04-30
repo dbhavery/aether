@@ -1,0 +1,14 @@
+[package]
+name = "aether-l5-browser"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Aether L5 — browser-automation capability surface (T1.3 §2.1). Skeleton-only; capabilities + Playwright wrapper land in follow-up PRs."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]

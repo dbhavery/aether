@@ -36,6 +36,7 @@
 # non-bypassable authorization gate.
 /packages/l5-policy/            @dbhavery
 /packages/l5-policy-ts/         @dbhavery
+/packages/l5-browser/           @dbhavery
 # Wave 4 (2026-04-19) — engine stubs coordinator-owned until agents assigned.
 /packages/l1-interaction/       @dbhavery
 /packages/l2-memory/            @dbhavery

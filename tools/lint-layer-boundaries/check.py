@@ -54,6 +54,7 @@ ENGINE_CRATES: frozenset[str] = frozenset(
         "aether-l3-presence",
         "aether-l4-router",
         "aether-l5-policy",
+        "aether-l5-browser",
         "aether-l6-persona",
         "aether-l7-trust",
     }
@@ -94,6 +95,11 @@ ALLOWED: dict[str, frozenset[str]] = {
     "aether-l5-policy":      frozenset(
         {"aether-event-bus", "aether-storage", "aether-telemetry"}
     ),
+    # T1.3 §2.1 — l5-browser is a sibling capability surface that
+    # extends `l5-policy::Capability` additively. Skeleton has no
+    # deps; impl PRs will add `aether-l5-policy` (and any subprocess /
+    # transport infra crates) as needed.
+    "aether-l5-browser":     frozenset(),
     "aether-l6-persona":     frozenset({"aether-l5-policy"}),
     "aether-l7-trust":       frozenset({"aether-l5-policy"}),
     # ------ shared infra ------
