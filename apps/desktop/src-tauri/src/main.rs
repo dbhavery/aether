@@ -212,6 +212,16 @@ fn main() {
             browser_commands::browser_fill_form,
             browser_commands::browser_submit,
             browser_commands::browser_close,
+            // T1.3 — L5-gated file-workflow surface. Backed by the
+            // `aether-l5-files` StdFsExecutor stub today; every method
+            // propagates BackendDisabled until the real `std::fs` /
+            // `tokio::fs` driver lands.
+            files_commands::files_read,
+            files_commands::files_create,
+            files_commands::files_edit,
+            files_commands::files_rename,
+            files_commands::files_delete,
+            files_commands::files_grep,
         ])
         .run(tauri::generate_context!())
         .expect("error while running aether-desktop");

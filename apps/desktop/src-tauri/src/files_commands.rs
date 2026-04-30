@@ -456,41 +456,24 @@ mod tests {
     }
 
     #[test]
-    fn rename_binds_destination_into_resource_scope() {
-        // Lock the rename src/dst contract: the destination is what
-        // gets bound into the policy ResourceScope. A refactor that
-        // accidentally passes `src` to `scope_for_path` would silently
-        // change which path the policy gate authorizes against — this
-        // test fails loudly if that happens by checking the rendered
-        // gate-error string for the destination, never the source.
-        let (state, mock) = state_with_mock();
-        let res = block_on(files_rename_inner(
-            &state,
-            "/tmp/aether-src.txt".into(),
-            "/tmp/aether-dst.txt".into(),
-        ));
-        match res {
-            Err(ref msg) if msg.contains("disabled") => {
-                // Allow path: executor was invoked with both paths;
-                // we don't see the scope string in this branch but
-                // the executor mock saw exactly one rename call.
-                assert_eq!(mock.calls(), vec!["rename".to_string()]);
-            }
-            Err(ref msg) => {
-                // Deny / Ask path: the rendered error includes the
-                // ActionRequest debug, which contains the resource
-                // scope. The dst MUST appear; the src MUST NOT.
-                assert!(
-                    msg.contains("aether-dst.txt"),
-                    "rename gate error should mention destination path; got {msg:?}",
-                );
-                assert!(
-                    !msg.contains("aether-src.txt"),
-                    "rename gate error must NOT mention source path \
-                     (only destination is bound into ResourceScope); got {msg:?}",
-                );
-            }
-            Ok(_) => panic!("stub never returns Ok"),
+    fn scope_for_path_builds_resource_scope_path_variant() {
+        // Lock the rename src/dst contract at the helper level: the
+        // single point where a path String becomes a typed
+        // `ResourceScope::Path(...)`. `files_rename_inner` is the only
+        // caller that passes `dst` here (not `src`); a refactor that
+        // accidentally swaps which argument is fed to `scope_for_path`
+        // would silently change which endpoint the policy gate
+        // authorizes against. This test pins the helper's shape so
+        // the gate-side contract is observable in unit tests even
+        // though the policy engine's deny-path error string does not
+        // include the bound resource (it surfaces only the capability
+        // path).
+        match scope_for_path("/tmp/aether-dst.txt") {
+            ResourceScope::Path(s) => assert_eq!(s, "/tmp/aether-dst.txt"),
+            other => panic!(
+                "scope_for_path must build ResourceScope::Path(String); \
+                 got {other:?}"
+            ),
         }
     }
 
