@@ -75,9 +75,9 @@
 **Self-test gate (doctrine §8):** agent uses the picker as a user — switch personas, confirm voice + name + identity update across UI, confirm memory continuity per ADR-0001.
 
 ### T2.5 — Memory tab / MemoryDrawer consolidation (HANDOFF_2026-05-18 Risk D/E)
-**Status:** Both surfaces live; consolidation deferred.
-**Scope:** Decide one surface, remove the other, migrate users across.
-**Self-test gate (doctrine §8):** agent uses memory surface as a user — list, forget, edit, lane-level forget-all, approval flow on Facts/Artifacts. All paths exercised.
+**Status:** DONE — closed at Run 5 (2026-04-23). Per `apps/desktop/src/App.tsx:427`: "the legacy `MemoryDrawer` was retired now that Memory V2 is closed. The header Memory button opens the Trust drawer on the Memory tab — one canonical surface for 'what does Companion remember about me'." HANDOFF_2026-05-18 Risk D/E was stale-prompt drift.
+**Scope (historical):** Decide one surface, remove the other, migrate users across.
+**Self-test gate (doctrine §8) — historical:** memory surface used-as-user via Trust drawer's Memory tab.
 
 ---
 
