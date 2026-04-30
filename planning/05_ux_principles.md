@@ -1,6 +1,6 @@
 # 05 — UX Principles
 
-The governing UX principles for Companion. These apply to both OSS Preview and Pro; the bar is the same.
+The governing UX principles for Companion. Companion ships as a single product (doctrine §6); these principles apply uniformly across all performance tiers (Lite / Balanced / Full).
 
 ---
 
@@ -62,7 +62,7 @@ Modular, chapter-based, "choose your path" where appropriate. Not a single long 
 2. **Choose your style** — persona / appearance customization preview
 3. **See how permissions work** — trust and autonomy demonstration
 4. **Watch a task happen** — end-to-end scripted demo
-5. **Explore future modes** — teaser of upcoming capabilities (Pro roadmap features shown as future, not fake)
+5. **Explore future modes** — teaser of upcoming capabilities (post-launch roadmap features shown as future, not fake)
 
 ### Placement
 - Available from onboarding's welcome screen (optional)
@@ -112,7 +112,7 @@ Companion uses a **custom design system**, not template UI. Tokenized components
 - Chat message bubbles and status lines
 - Showcase narrative segments
 
-The component library is built once and used across OSS Preview and Pro. Isabelle inherits it.
+The component library is built once and used across the entire Companion product. Isabelle inherits it.
 
 ---
 
