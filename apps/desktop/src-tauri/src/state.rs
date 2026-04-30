@@ -174,6 +174,19 @@ pub struct AppState {
     /// `BrowserExecError::BackendDisabled`. The stub-to-real swap is
     /// a single-line change in `build()`.
     pub browser_executor: Arc<dyn aether_l5_browser::BrowserExecutor>,
+    /// T1.3 file-workflow — L5-gated files executor. The trait object
+    /// is kept on `AppState` so every `files_*` Tauri command can share
+    /// one backend (and, when the real backend lands, one
+    /// [`ScopeAllowlist`](aether_l5_files::ScopeAllowlist) /
+    /// blocking-pool handle). Today this is the
+    /// [`StdFsExecutor`](aether_l5_files::std_fs_stub::StdFsExecutor)
+    /// stub from `aether-l5-files`; every method returns
+    /// `FilesExecError::BackendDisabled`. The wiring contract this
+    /// field implements is verified in `files_commands::tests` against
+    /// those same `BackendDisabled` returns; the stub-to-real swap is
+    /// a single-line change in `build()` once the `std::fs` /
+    /// `tokio::fs` driver lands in a later slice.
+    pub files_executor: Arc<dyn aether_l5_files::FilesExecutor>,
     /// Bounded, UX-only history of attention transitions for the
     /// Trust drawer's History tab. Does NOT go through the L5 audit
     /// store — presence is observational per design §4. Cleared on
@@ -595,6 +608,7 @@ impl AppState {
             browser_executor: Arc::new(
                 aether_l5_browser::playwright_stub::PlaywrightExecutor::new(),
             ),
+            files_executor: Arc::new(aether_l5_files::std_fs_stub::StdFsExecutor::new()),
             presence_history: Mutex::new(VecDeque::with_capacity(PRESENCE_HISTORY_CAPACITY)),
             memory_config: RwLock::new(MemoryConfig::defaults()),
             memory_config_path: None,
