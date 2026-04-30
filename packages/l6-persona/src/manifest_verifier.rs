@@ -113,8 +113,8 @@ pub fn verify_signed_manifest(
     }
     let mut pk_arr = [0u8; 32];
     pk_arr.copy_from_slice(public_key_32);
-    let verifying_key = VerifyingKey::from_bytes(&pk_arr)
-        .map_err(|_| ManifestVerifyError::PublicKeyInvalid)?;
+    let verifying_key =
+        VerifyingKey::from_bytes(&pk_arr).map_err(|_| ManifestVerifyError::PublicKeyInvalid)?;
 
     let manifest: Value = serde_json::from_slice(manifest_json)
         .map_err(|source| ManifestVerifyError::Json { source })?;
@@ -127,11 +127,12 @@ pub fn verify_signed_manifest(
         .filter(|v| v.is_array())
         .ok_or(ManifestVerifyError::PersonasMissing)?;
 
-    let sig_field = obj.get("signature").and_then(|v| v.as_str()).ok_or_else(|| {
-        ManifestVerifyError::SignatureShape {
+    let sig_field = obj
+        .get("signature")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| ManifestVerifyError::SignatureShape {
             got: format!("{:?}", obj.get("signature")),
-        }
-    })?;
+        })?;
     let sig_b64 =
         sig_field
             .strip_prefix("ed25519:")
@@ -223,12 +224,14 @@ mod tests {
         sign_in_test(&sk, &mut m);
         // After signing, mutate the personas array — the signature
         // covers personas, so any change must invalidate.
-        m["personas"][0]["sha256"] =
-            serde_json::Value::String("f".repeat(64));
+        m["personas"][0]["sha256"] = serde_json::Value::String("f".repeat(64));
         let body = serde_json::to_vec(&m).unwrap();
         let pk = sk.verifying_key().to_bytes();
         let err = verify_signed_manifest(&body, &pk).unwrap_err();
-        assert!(matches!(err, ManifestVerifyError::BadSignature), "got {err:?}");
+        assert!(
+            matches!(err, ManifestVerifyError::BadSignature),
+            "got {err:?}"
+        );
     }
 
     #[test]
@@ -255,14 +258,20 @@ mod tests {
         // Verify under a DIFFERENT key.
         let other = SigningKey::from_bytes(&[42u8; 32]);
         let err = verify_signed_manifest(&body, &other.verifying_key().to_bytes()).unwrap_err();
-        assert!(matches!(err, ManifestVerifyError::BadSignature), "got {err:?}");
+        assert!(
+            matches!(err, ManifestVerifyError::BadSignature),
+            "got {err:?}"
+        );
     }
 
     #[test]
     fn public_key_wrong_length_returns_typed_error() {
         let m = serde_json::to_vec(&fixture_manifest_unsigned()).unwrap();
         let err = verify_signed_manifest(&m, &[0u8; 31]).unwrap_err();
-        assert!(matches!(err, ManifestVerifyError::PublicKeyLength { got: 31 }));
+        assert!(matches!(
+            err,
+            ManifestVerifyError::PublicKeyLength { got: 31 }
+        ));
     }
 
     #[test]
@@ -270,14 +279,16 @@ mod tests {
         let body = b"{\"schema_version\":1,\"signature\":\"ed25519:AAAA\"}";
         let pk = fresh_keypair().verifying_key().to_bytes();
         let err = verify_signed_manifest(body, &pk).unwrap_err();
-        assert!(matches!(err, ManifestVerifyError::PersonasMissing), "got {err:?}");
+        assert!(
+            matches!(err, ManifestVerifyError::PersonasMissing),
+            "got {err:?}"
+        );
     }
 
     #[test]
     fn malformed_signature_prefix_returns_typed_error() {
         let mut m = fixture_manifest_unsigned();
-        m["signature"] =
-            serde_json::Value::String("not-an-ed25519-prefix:zzz".into());
+        m["signature"] = serde_json::Value::String("not-an-ed25519-prefix:zzz".into());
         let body = serde_json::to_vec(&m).unwrap();
         let pk = fresh_keypair().verifying_key().to_bytes();
         let err = verify_signed_manifest(&body, &pk).unwrap_err();
@@ -288,11 +299,13 @@ mod tests {
     fn signature_short_returns_typed_error() {
         let mut m = fixture_manifest_unsigned();
         // Valid base64 but only 8 bytes when decoded.
-        m["signature"] =
-            serde_json::Value::String(format!("ed25519:{}", B64.encode([1u8; 8])));
+        m["signature"] = serde_json::Value::String(format!("ed25519:{}", B64.encode([1u8; 8])));
         let body = serde_json::to_vec(&m).unwrap();
         let pk = fresh_keypair().verifying_key().to_bytes();
         let err = verify_signed_manifest(&body, &pk).unwrap_err();
-        assert!(matches!(err, ManifestVerifyError::SignatureLength { got: 8 }));
+        assert!(matches!(
+            err,
+            ManifestVerifyError::SignatureLength { got: 8 }
+        ));
     }
 }

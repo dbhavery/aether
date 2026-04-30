@@ -126,7 +126,9 @@ pub fn verify_zip_sha256(zip_path: &Path, expected_hex: &str) -> Result<(), Inst
     let mut f = fs::File::open(zip_path).map_err(|e| InstallError::io(zip_path, e))?;
     let mut buf = [0u8; 65536];
     loop {
-        let n = f.read(&mut buf).map_err(|e| InstallError::io(zip_path, e))?;
+        let n = f
+            .read(&mut buf)
+            .map_err(|e| InstallError::io(zip_path, e))?;
         if n == 0 {
             break;
         }
@@ -250,7 +252,9 @@ pub struct CurrentPersonaState {
 /// returns [`InstallError::StateMalformed`] when the file exists
 /// but parses as something else. Callers should treat the missing
 /// case as "no selection yet" and surface the wizard.
-pub fn read_current_persona(state_path: &Path) -> Result<Option<CurrentPersonaState>, InstallError> {
+pub fn read_current_persona(
+    state_path: &Path,
+) -> Result<Option<CurrentPersonaState>, InstallError> {
     match fs::read(state_path) {
         Ok(bytes) => {
             let parsed: CurrentPersonaState =
@@ -297,8 +301,8 @@ mod tests {
     fn write_zip(zip_path: &Path, entries: &[(&str, &[u8])]) {
         let f = fs::File::create(zip_path).expect("create zip");
         let mut w = zip::ZipWriter::new(f);
-        let opts = SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Deflated);
+        let opts =
+            SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
         for (name, body) in entries {
             w.start_file(*name, opts).expect("start_file");
             w.write_all(body).expect("write zip body");
@@ -327,10 +331,13 @@ mod tests {
     fn extract_unpacks_zip_and_atomic_renames_partial() {
         let tmp = TempDir::new().unwrap();
         let zip = tmp.path().join("alice.zip");
-        write_zip(&zip, &[
-            ("alice/persona.yaml", b"id: alice\n"),
-            ("alice/avatar/anchor.png", b"\x89PNG\r\n\x1a\n..."),
-        ]);
+        write_zip(
+            &zip,
+            &[
+                ("alice/persona.yaml", b"id: alice\n"),
+                ("alice/avatar/anchor.png", b"\x89PNG\r\n\x1a\n..."),
+            ],
+        );
         let dest = tmp.path().join("install");
         let result = extract_pack_zip(&zip, &dest, "alice").expect("extract");
         assert_eq!(result, dest.join("alice"));
