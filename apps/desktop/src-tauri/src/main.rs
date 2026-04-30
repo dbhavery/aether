@@ -265,7 +265,8 @@ fn seed_persona_pack_dir(
     let resource_dir = app
         .path()
         .resolve("resources/personas", tauri::path::BaseDirectory::Resource)?;
-    if !resource_dir.is_dir() {
+    let report = seed_persona_pack_dir_from(&resource_dir, dest)?;
+    if matches!(report, PersonaSeedOutcome::NoSource) {
         // Bundled resources weren't packaged (e.g. dev runs without
         // `tauri build`, or a custom build that strips resources).
         // Treat as a no-op rather than an error — the loader still
@@ -276,10 +277,53 @@ fn seed_persona_pack_dir(
         );
         return Ok(());
     }
+    if let PersonaSeedOutcome::Copied { copied, skipped } = report {
+        tracing::info!(
+            "persona pack seed: copied {copied} new file(s), skipped {skipped} existing in {}",
+            dest.display()
+        );
+    }
+    Ok(())
+}
+
+/// Outcome of [`seed_persona_pack_dir_from`]. Surfaced as a typed
+/// return so tests can pattern-match without parsing log output.
+#[cfg(feature = "sqlite-backend")]
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum PersonaSeedOutcome {
+    /// Resource dir is missing or not a directory; nothing to do.
+    NoSource,
+    /// Walked the source dir; copied N new files, skipped M existing.
+    Copied { copied: u32, skipped: u32 },
+}
+
+/// Pure, side-effect-only-on-the-filesystem core of the persona-pack
+/// seed. Extracted from [`seed_persona_pack_dir`] so tests can drive
+/// it with tempdirs instead of a real `tauri::AppHandle`.
+///
+/// Contract:
+/// - If `source` is not a directory → `Ok(NoSource)`. No `dest`
+///   touch.
+/// - Otherwise: `dest` is created (and parents) if missing. Each
+///   `*.yaml` / `*.yml` file in `source` is copied into `dest` only
+///   if the destination filename is missing — existing files are
+///   never overwritten.
+/// - Non-yaml entries (sub-directories, other extensions, dotfiles
+///   without yaml extension) are silently skipped.
+/// - Returns the (copied, skipped) counts so the caller can log /
+///   tests can assert.
+#[cfg(feature = "sqlite-backend")]
+fn seed_persona_pack_dir_from(
+    source: &std::path::Path,
+    dest: &std::path::Path,
+) -> Result<PersonaSeedOutcome, Box<dyn std::error::Error>> {
+    if !source.is_dir() {
+        return Ok(PersonaSeedOutcome::NoSource);
+    }
     std::fs::create_dir_all(dest)?;
     let mut copied = 0u32;
     let mut skipped = 0u32;
-    for entry in std::fs::read_dir(&resource_dir)? {
+    for entry in std::fs::read_dir(source)? {
         let entry = entry?;
         let src = entry.path();
         let ext = src.extension().and_then(|e| e.to_str()).unwrap_or("");
@@ -297,11 +341,7 @@ fn seed_persona_pack_dir(
         std::fs::copy(&src, &target)?;
         copied += 1;
     }
-    tracing::info!(
-        "persona pack seed: copied {copied} new file(s), skipped {skipped} existing in {}",
-        dest.display()
-    );
-    Ok(())
+    Ok(PersonaSeedOutcome::Copied { copied, skipped })
 }
 
 /// Build the vision provider registry — register every provider whose
@@ -590,5 +630,157 @@ mod bundled_persona_pack_tests {
                 p.persona_id.0
             );
         }
+    }
+}
+
+#[cfg(all(test, feature = "sqlite-backend"))]
+mod persona_seed_tests {
+    //! Tests for the pure file-copy core of the persona-pack seed.
+    //!
+    //! `seed_persona_pack_dir_from` is the testable extract of the
+    //! Tauri-bound `seed_persona_pack_dir`. We drive it with
+    //! `tempfile::TempDir`s so the test never touches the user's real
+    //! `<app_data>/personas/` and the assertions stay reproducible
+    //! across machines.
+
+    use super::{seed_persona_pack_dir_from, PersonaSeedOutcome};
+    use std::fs;
+    use tempfile::TempDir;
+
+    fn write(dir: &std::path::Path, name: &str, body: &str) {
+        fs::write(dir.join(name), body).expect("write fixture");
+    }
+
+    #[test]
+    fn missing_source_returns_no_source_and_does_not_touch_dest() {
+        let dest = TempDir::new().expect("dest tempdir");
+        let nonexistent = dest.path().join("does_not_exist");
+        let outcome = seed_persona_pack_dir_from(&nonexistent, dest.path())
+            .expect("seed should not error on missing source");
+        assert_eq!(outcome, PersonaSeedOutcome::NoSource);
+        // Dest contents unchanged (still empty).
+        let entries: Vec<_> = fs::read_dir(dest.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .collect();
+        assert!(
+            entries.is_empty(),
+            "no-source case should not create files in dest"
+        );
+    }
+
+    #[test]
+    fn empty_dest_gets_every_yaml_file_copied() {
+        let src = TempDir::new().unwrap();
+        let dest = TempDir::new().unwrap();
+        write(src.path(), "alice.yaml", "id: alice\n");
+        write(src.path(), "bob.yml", "id: bob\n");
+        // Non-yaml — must be ignored.
+        write(src.path(), "readme.md", "not a pack");
+
+        let outcome =
+            seed_persona_pack_dir_from(src.path(), dest.path()).expect("seed");
+        assert_eq!(
+            outcome,
+            PersonaSeedOutcome::Copied {
+                copied: 2,
+                skipped: 0
+            }
+        );
+        assert!(dest.path().join("alice.yaml").exists());
+        assert!(dest.path().join("bob.yml").exists());
+        assert!(!dest.path().join("readme.md").exists());
+    }
+
+    #[test]
+    fn existing_dest_files_are_never_overwritten() {
+        let src = TempDir::new().unwrap();
+        let dest = TempDir::new().unwrap();
+        write(src.path(), "alice.yaml", "id: alice_NEW\n");
+        // Pre-existing user-edited copy at dest.
+        write(dest.path(), "alice.yaml", "id: alice_USER\n");
+
+        let outcome =
+            seed_persona_pack_dir_from(src.path(), dest.path()).expect("seed");
+        assert_eq!(
+            outcome,
+            PersonaSeedOutcome::Copied {
+                copied: 0,
+                skipped: 1
+            }
+        );
+        // User edit survives — overwrite would have replaced this.
+        let body = fs::read_to_string(dest.path().join("alice.yaml")).unwrap();
+        assert!(body.contains("alice_USER"), "user edit was overwritten: {body:?}");
+    }
+
+    #[test]
+    fn missing_dest_dir_is_created() {
+        let src = TempDir::new().unwrap();
+        write(src.path(), "alice.yaml", "id: alice\n");
+        let parent = TempDir::new().unwrap();
+        let dest = parent.path().join("nested/personas");
+        assert!(!dest.exists(), "precondition: dest must not yet exist");
+
+        let outcome = seed_persona_pack_dir_from(src.path(), &dest).expect("seed");
+        assert_eq!(
+            outcome,
+            PersonaSeedOutcome::Copied {
+                copied: 1,
+                skipped: 0
+            }
+        );
+        assert!(dest.join("alice.yaml").exists());
+    }
+
+    #[test]
+    fn second_run_skips_everything_already_present() {
+        let src = TempDir::new().unwrap();
+        let dest = TempDir::new().unwrap();
+        write(src.path(), "alice.yaml", "id: alice\n");
+        write(src.path(), "bob.yaml", "id: bob\n");
+
+        let first =
+            seed_persona_pack_dir_from(src.path(), dest.path()).expect("seed1");
+        assert_eq!(
+            first,
+            PersonaSeedOutcome::Copied {
+                copied: 2,
+                skipped: 0
+            }
+        );
+
+        let second =
+            seed_persona_pack_dir_from(src.path(), dest.path()).expect("seed2");
+        assert_eq!(
+            second,
+            PersonaSeedOutcome::Copied {
+                copied: 0,
+                skipped: 2
+            }
+        );
+    }
+
+    #[test]
+    fn newly_added_resource_lands_on_existing_install() {
+        // Simulates a future release adding a new pack: user's dest
+        // already has alice from the prior install; release adds bob.
+        let src = TempDir::new().unwrap();
+        let dest = TempDir::new().unwrap();
+        write(src.path(), "alice.yaml", "id: alice\n");
+        write(src.path(), "bob.yaml", "id: bob\n");
+        // Pre-existing install: only alice is on disk.
+        write(dest.path(), "alice.yaml", "id: alice\n");
+
+        let outcome =
+            seed_persona_pack_dir_from(src.path(), dest.path()).expect("seed");
+        assert_eq!(
+            outcome,
+            PersonaSeedOutcome::Copied {
+                copied: 1,
+                skipped: 1
+            }
+        );
+        assert!(dest.path().join("bob.yaml").exists());
     }
 }
