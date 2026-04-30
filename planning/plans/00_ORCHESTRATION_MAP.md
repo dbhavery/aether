@@ -6,6 +6,8 @@ owner: Don (human coordinator)
 
 # 00 — Orchestration Map
 
+> **2026-04-30 banner.** Several entries in this doc reference "Aether Pro" as a separate product, "OSS Preview" as a separate ship surface, or "pywebview tactical exception." Doctrine §6 (`../01_product_doctrine.md`, locked 2026-05-18) retired all of those: **Companion ships once, when complete; no separate Pro/Preview products; Tauri is the single shell.** Phase nomenclature ("Pro Phase 0 → 1", etc.) is preserved as a release-planning lens onto the L1..L7 work, not as a product split. A full sweep of this doc against doctrine §6 is owed but out of scope for the current cleanup pass.
+
 Authoritative coordination artifact for the Companion planning + build phase. Defines the operating model, agent roster, ownership matrix, dependencies, checkpoints, human decision gates, conflict-escalation protocol, and the two doctrine reconciliations (Tauri vs pywebview; 7-vs-8 layer count) locked this session.
 
 ---
@@ -149,7 +151,7 @@ Reserved for Don, not agents:
 
 - Rendering engine for Pro avatar (Unreal-class / custom GL / hybrid).
 - Sync architecture (CRDT vs op-log).
-- OSS Preview MVP cut line (which features ship in hours/days vs are teaser-only).
+- ~~OSS Preview MVP cut line~~ — **MOOT 2026-04-30** (doctrine §6: no MVP cut; Companion ships when complete).
 - ms budgets and framerate targets by performance tier.
 - Final naming (Companion / Core / One; Isabelle formal name).
 - Hosted frontier-LLM acceptable-use rules for the deliberative path.
