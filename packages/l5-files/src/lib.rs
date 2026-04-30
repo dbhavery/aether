@@ -1,53 +1,76 @@
 //! L5 file-workflow capability surface.
 //!
-//! **Skeleton only.** Per CLAUDE.md §3 (coordinator-gated package
-//! creation), this crate ships in two PRs: this skeleton + later
-//! implementation slices. Implementation lands in follow-up sessions
-//! per the T1.3 sub-decisions.
+//! **Status (T1.3 first impl slice):** Trait + types are now real, plus
+//! a capability map and a default `std::fs` backend stub. Every stub
+//! method returns [`FilesExecError::BackendDisabled`]; the real
+//! `std::fs` / `tokio::fs` wiring lands in a later slice.
+//!
+//! # Surface
+//!
+//! - [`FilesExecutor`] — object-safe async trait every backend
+//!   implements.
+//! - [`GrepHit`], [`ScopeAllowlist`], [`FilesExecError`] — the value
+//!   types the trait operates on.
+//! - [`capability_for_method`] — maps trait method names to existing
+//!   variants on [`aether_l5_policy::Capability`]. The integration
+//!   point where future Tauri commands check L5 policy BEFORE invoking
+//!   the executor.
+//! - [`std_fs_stub::StdFsExecutor`] — default backend. Gated behind the
+//!   `std-fs` feature; every method returns
+//!   [`FilesExecError::BackendDisabled`] today.
+//!
+//! # Layer rules
+//!
+//! Per CLAUDE.md §1.4 + §1.5, this crate:
+//!
+//! - extends the existing capability surface in
+//!   [`aether_l5_policy`] additively (the file-related variants
+//!   `FilesRead`, `FilesCreate`, `FilesEdit`, `FilesRenameMove`,
+//!   `FilesDelete`, `FilesBulkOp` already live on
+//!   [`Capability`](aether_l5_policy::Capability));
+//! - does not perform its own policy check — call sites resolve a
+//!   [`Capability`](aether_l5_policy::Capability) via
+//!   [`capability_for_method`], ask L5 for `Decision::Allow`, and only
+//!   then invoke a method on `dyn FilesExecutor`.
 //!
 //! # Scope (frozen by Don 2026-04-30)
 //!
-//! - L5-gated file workflow primitives. `FilesRead` and `FilesCreate`
-//!   already exist on `aether_l5_policy::Capability`; this crate adds
-//!   `FilesEdit`, `FilesDelete`, `FilesMove`, `FilesArchive`,
-//!   `FilesGrep` in follow-up impl PRs. Each is additive — this crate
-//!   does not fork the policy enum.
 //! - **Scope model: explicit allowlist** (locked T1.3 §5.2). The
-//!   approved scope for any file capability is the directory tree the
-//!   user explicitly granted via the existing approval framework.
-//!   Matches the `MediaPermissions` shape already in the policy layer.
+//!   approved scope is the set of directory roots the user explicitly
+//!   granted via the existing approval framework. No glob whitelists,
+//!   no implicit project-tree expansion. See [`ScopeAllowlist`].
+//! - **No credential persistence.** OS keychain / secret-file handling
+//!   is out of scope for T1.3 (locked §5.4) and lands in its own
+//!   threat-modeled slice.
 //! - Outside-scope writes are **Deny** in Observer / Assistant /
 //!   Operator presets. Power User may grant outside-scope access on a
 //!   per-session basis only.
 //! - Approval mode follows the active autonomy preset:
-//!   - **Observer** — Deny (all write capabilities; reads gated separately).
-//!   - **Assistant** — Ask (read + edit + grep), Ask (delete / move / archive).
-//!   - **Operator** — Auto for `FilesRead` + `FilesCreate` + `FilesEdit`
-//!     + `FilesGrep` inside approved scope; `FilesDelete` + `FilesMove`
-//!     stay Ask; outside-scope writes Deny.
+//!   - **Observer** — Deny.
+//!   - **Assistant** — Ask (read + grep + edit), Ask (delete / rename).
+//!   - **Operator** — Auto for `FilesRead` / `FilesCreate` /
+//!     `FilesEdit` / `grep` inside approved scope; `FilesDelete` /
+//!     `FilesRenameMove` stay Ask; outside-scope writes Deny.
 //!   - **Power User** — additionally permits per-session grants for
 //!     outside-scope access.
 //!
 //! # References
 //!
 //! - `planning/plans/T1.3_browser_file_workflow_proposal.md` §2.2 — the
-//!   Approved coordinator proposal. Status flipped to Approved
-//!   2026-04-30 under Don's "1–5 are your decisions now" delegation.
+//!   Approved coordinator proposal.
 //! - `planning/12_permissions_autonomy.md` §"Power User / Builder" —
 //!   user-tier rules this surface honors.
-//! - `aether_l5_policy::Capability` — the additive surface where new
-//!   variants land. `FilesRead` and `FilesCreate` already live there;
-//!   `FilesEdit`, `FilesDelete`, `FilesMove`, `FilesArchive`,
-//!   `FilesGrep` arrive in follow-up impl PRs.
+//! - [`aether_l5_policy::Capability`] — the additive surface this crate
+//!   plugs into. The file-related variants already live there.
 
 #![forbid(unsafe_code)]
 
-/// Placeholder file-capability marker.
-///
-/// Implementation PRs replace this enum's empty variant set with the
-/// real capabilities, which then map onto
-/// `aether_l5_policy::Capability` additions. Today the type only
-/// exists so `cargo build -p aether-l5-files` produces a real artifact
-/// and the workspace check passes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FilesCapability {}
+pub mod capability_map;
+pub mod executor;
+#[cfg(feature = "std-fs")]
+pub mod std_fs_stub;
+pub mod types;
+
+pub use capability_map::capability_for_method;
+pub use executor::FilesExecutor;
+pub use types::{FilesExecError, GrepHit, ScopeAllowlist};

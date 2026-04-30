@@ -1,14 +1,34 @@
 [package]
 name = "aether-l5-files"
-version = "0.0.0"
+version = "0.0.1"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
-description = "Aether L5 — file-workflow capability surface (T1.3 §2.2). Skeleton-only; capabilities + executor wiring land in follow-up PRs."
+description = "Aether L5 — file-workflow capability surface (T1.3 §2.2). Trait + types + std::fs-stub backend; real std::fs / tokio::fs wiring lands in a later slice."
 
 [lib]
 path = "src/lib.rs"
 
 [dependencies]
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+# T1.3 — async trait surface for `FilesExecutor`. `async-trait` is the
+# de-facto crate for object-safe async traits on stable Rust 1.78. Version
+# pinned locally to match `aether-l5-browser`; promote to workspace deps
+# when a third crate adopts it.
+async-trait = "0.1"
+
+aether-l5-policy = { path = "../l5-policy" }
+
+[features]
+# Default build ships the trait + types + capability map only. The
+# `std::fs`-backed executor is gated behind the `std-fs` feature so
+# default builds do not pull `tokio::fs` (or any blocking-pool infra).
+# The real `std::fs` / `tokio::fs` impl lands in a later slice; the
+# current `std_fs_stub` module is structurally complete but every
+# method returns `FilesExecError::BackendDisabled`.
+default = []
+std-fs = []
