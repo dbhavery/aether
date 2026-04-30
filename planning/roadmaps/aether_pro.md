@@ -1,17 +1,21 @@
-# Aether Pro — Specification & Roadmap
+# Companion — Specification & Roadmap
+
+> **Renamed 2026-05-18.** Public product = **Companion**. Internal codename / repo / database / Tauri identifier / Cargo workspace remain `aether`. The "Aether OSS Preview" wedge thesis was retired in the same doctrine pass — see `aether_oss_preview.md` tombstone and `01_product_doctrine.md` §6.
 
 ## Purpose
 
-Aether Pro is the **full-performance public flagship** of the Aether product family. A commercial-grade multimodal AI assistant platform with advanced avatar presence, deep memory, multi-tier performance, strong permissions, mobile continuity, and premium trust posture.
+Companion is the **full-performance multimodal AI assistant product**. Photoreal full-body characters, deep memory, advanced avatar presence, multi-tier performance, strong permissions, mobile continuity, premium trust posture.
 
-**From Aether Pro onward, we write our own software.** Borrowed primitives are isolated behind our own interfaces and replaceable. The must-own moat layers are all custom-built.
+**Companion ships once — when it is complete.** No early-launch wedge. No headshot-only intermediate. No voice-only or chat-only release. See doctrine §5+§6+§7.
+
+**Borrowed primitives are isolated behind our own interfaces and replaceable. The must-own moat layers are all custom-built.**
 
 ---
 
-## Product doctrine (Pro context)
+## Product doctrine (Companion context)
 
 ### Not a wrapper product
-Aether Pro is explicitly not:
+Companion is explicitly not:
 - A ChatGPT wrapper
 - A thin shell over avatar SaaS
 - A "close enough" SaaS feature matcher
@@ -22,6 +26,9 @@ Aether Pro is explicitly not:
 - **Bare-metal / custom creation is required** for strategic subsystems.
 - **Highest-tier companion relationship** is the experience north star.
 - **User experience outranks implementation convenience** in architecture decisions.
+- **Photoreal full-body characters from the start — no headshot intermediate** (doctrine §5).
+- **Single product, ships when complete — no interim release** (doctrine §6).
+- **Self-test before Don review — visual artifacts via multimodal vision; frontend via use-as-user** (doctrine §8).
 
 ### Must-own moat layers (custom-built)
 1. Presence controller
@@ -62,12 +69,12 @@ Operationalized through measurable elements:
 - All modes interoperable — not artificial "mode switches"
 
 ### Avatar
-- Rich facial animation (state-linked + speech-linked)
-- Full presence controller (must-own)
-- Gaze / blink / idle / listening / thinking / speaking / yielding states
-- Head + shoulders at launch
-- Body / gesture in later phases
-- Photoreal target (path through custom or Unreal-class rendering)
+- **Photoreal full-body characters from the start** (doctrine §5; ADR-0014 7-step pipeline; ADR-0013 runtime architecture).
+- Rich facial animation (state-linked + speech-linked).
+- Full presence controller (must-own; L3 Presence V1 DONE 2026-05-17 as state machine; renderer extension per ADR-0013).
+- Gaze / blink / idle / listening / thinking / speaking / yielding states.
+- 9-persona public cast — Aurora vertically first (recipe-proving), then 8 batched horizontally (per ADR-0014 sequencing).
+- Pre-generated motion clip library + runtime blend + lip-sync overlay (per ADR-0013 — option chosen over on-demand video gen for latency, determinism, GPU-saturation discipline).
 
 ### Cognition
 - Two-speed: reflex (local Gemma 4) + deliberative (local Gemma 4 large variant OR remote frontier)
@@ -253,6 +260,18 @@ See [../05_ux_principles.md](../05_ux_principles.md).
 
 ---
 
+## Operating model — GPU long-arc + parallel software (added 2026-05-18)
+
+The character pipeline (ADR-0014 Steps 1–7 across 9 personas) is the dominant GPU workload from Phase 3 onward. The operating discipline:
+
+- **GPU axis** — single sequential queue per `planning/plans/gpu_queue.md`. Pinned near 100% utilization. As one job finishes, output is staged and the next starts. **No parallel GPU jobs.**
+- **Software axis** — runs in parallel on CPU per `planning/plans/parallel_software_tracks.md`. Sessions never wait on GPU; they claim from the parallel-track list. Tier 1 (close moat layers), Tier 2 (long-arc software), Tier 3 (finish-line work), Tier 4 (hygiene/governance).
+- **Self-test gate** (doctrine §8) — every visual artifact and every frontend change is self-tested before reaching Don. Frontend = used-as-user via automation. Visual = multimodal vision evaluation against acceptance criteria. Failed self-tests do not reach Don.
+
+This operating model holds through Phase 6 unless explicitly amended by a follow-up ADR.
+
+---
+
 ## Roadmap phases
 
 ### Phase 0 — Doctrine and architecture lock
@@ -285,14 +304,16 @@ See [../05_ux_principles.md](../05_ux_principles.md).
 - Trust center v1 (permissions + action history)
 - Info-explainer system on all settings
 
-### Phase 3 — Avatar and presence
-- Higher-quality facial animation
-- Gaze / blink system
-- Listening / thinking / speaking state behaviors
-- Presence controller v1 (rule-based core)
-- Stronger voice-avatar timing (viseme sync)
-- Rendering surface decision + implementation
-- Anti-uncanny stabilizer v1
+### Phase 3 — Avatar and presence (REVISED 2026-05-18)
+**Status note:** L3 Presence V1 already DONE rot-guarded as state machine + bridge events (2026-05-17). Phase 3 from here forward = visual rendering + photoreal character delivery via the GPU long-arc.
+
+- ADR-0013 runtime architecture: pre-generated motion clip library + runtime blend + lip-sync overlay.
+- ADR-0014 per-persona character pipeline (7 steps): reference gen → identity LoRA → voice clone → video LoRA → motion library → lip-sync fine-tune → quality eval.
+- ADR-0015 reference-gen lives inside Companion (not in CIGE/Forge).
+- Aurora end-to-end first; remaining 8 batched horizontally after recipe locks.
+- L3 Presence renderer scaffold (consumes motion library when it lands; logs state transitions until then) — claimable software work per `parallel_software_tracks.md` T1.4.
+- Anti-uncanny stabilizer in clip-curation criteria + lip-sync model selection per ADR-0013 bake-off.
+- **GPU pipeline is the long pole** — see `planning/plans/gpu_queue.md` for sequential job schedule. **Software-track sessions run in parallel** while GPU bakes; never wait on GPU.
 
 ### Phase 4 — Tools and autonomy
 - Browser workflow capability (scoped)
@@ -311,14 +332,16 @@ See [../05_ux_principles.md](../05_ux_principles.md).
 - Longer-session continuity improvements
 - Behavior memory (persona drift, adaptation)
 
-### Phase 6 — Highest-tier companion quality
-- Deeper presence realism (richer motion, gesture)
-- Richer motion scheduling
+### Phase 6 — Highest-tier companion quality (REVISED 2026-05-18)
+**Note:** "Full-body avatar" and "photoreal rendering" are no longer Phase 6 stretch — they are Phase 3 required, locked by doctrine §5 and ADR-0014.
+
+- Deeper presence realism (richer motion, broader gesture vocabulary)
+- Richer motion scheduling (rare emotional registers, context-specific gestures)
 - Improved relationship continuity
 - Advanced personal workflows (integrations, triggers)
 - Tighter human-standard UX refinement loops
-- Full-body avatar (stretch milestone)
-- Photoreal rendering path (stretch)
+- Possible escalation to ADR-0013 hybrid mode (on-demand generation for clips outside library coverage)
+- Quality-Eval V2+ for ongoing regression watch
 
 ---
 
@@ -337,13 +360,17 @@ Aether Pro is successful when:
 
 ## Failure modes to avoid
 
-- **Close-enough quality** in must-own layers (violates doctrine)
-- **Borrowed moat** — depending on vendor for presence / memory / router / policy
-- **Full-body before reliability** — impressive but unreliable is a liability
-- **Hidden permissions** — destroys trust
-- **Cloud-first defaults** — violates local-first doctrine
-- **Feature-matching competitors** — the product is a relationship, not a checklist
-- **Premature mobile parity** — desktop must be rock-solid first
+- **Close-enough quality** in must-own layers (violates doctrine §1).
+- **Borrowed moat** — depending on vendor for presence / memory / router / policy.
+- **Headshot-first character work** — explicitly forbidden by doctrine §5; reintroduces the transition problem the photoreal full-body pipeline exists to avoid.
+- **Interim release of any subsystem** — voice-only, chat-only, headshot-only, OSS-preview-only — all forbidden by doctrine §6.
+- **Surfacing un-self-tested work to Don** — violates doctrine §8.
+- **Hidden permissions** — destroys trust.
+- **Cloud-first defaults** — violates local-first doctrine.
+- **Feature-matching competitors** — the product is a relationship, not a checklist.
+- **Premature mobile parity** — desktop must be rock-solid first.
+- **Parallel GPU jobs** — violates GPU-saturation discipline; queue is single sequential per `gpu_queue.md`.
+- **Software sessions waiting on GPU** — violates parallel-software-tracks operating model; pick from `parallel_software_tracks.md` instead.
 
 ---
 

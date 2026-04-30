@@ -1,4 +1,18 @@
-# Aether OSS Preview — Specification & Roadmap
+# Aether OSS Preview — RETIRED 2026-05-18
+
+> **STATUS: RETIRED.** This roadmap is preserved as historical record only. The "OSS Preview as wedge" thesis was retired on 2026-05-18 by doctrine §6 (`../01_product_doctrine.md`) — Companion ships once, when complete; no interim wedge product.
+>
+> **What replaces this:**
+> - The single product is **Companion** — see `aether_pro.md` (renamed from "Aether Pro" in the same doctrine pass).
+> - The OSS-friendly engineering posture (clean Tauri shell, layer scaffolds, open-weights tooling) remains correct as engineering practice. It just does not ship as a separate product.
+> - The headshot avatar pieces of this roadmap (MuseTalk / TalkingHead / Wav2Lip / bust-level talking avatar) are **explicitly forbidden** by doctrine §5 — characters are photoreal full-body from the start. See ADR-0014 for the replacement pipeline.
+> - The voice-as-preview-feature framing was always understood as a sub-feature; doctrine §7 confirms voice does not ship standalone.
+>
+> **Do not implement against this document.** Anything below this banner is historical context only.
+>
+> **Tombstoned by:** doctrine §5+§6+§7 (2026-05-18).
+
+---
 
 ## Purpose
 
