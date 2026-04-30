@@ -1,6 +1,8 @@
 # 01 — Product Doctrine
 
-This is the governing doctrine for the entire Aether product family. Every architecture decision, library choice, and roadmap item is evaluated against the rules here.
+This is the governing doctrine for the entire Companion product family (internal codename: `aether`). Every architecture decision, library choice, and roadmap item is evaluated against the rules here.
+
+> **Naming convention.** Public product = **Companion**. Internal codename / repo / database filenames / Tauri identifier / Cargo workspace = `aether`. Both are correct in their own context. Product-facing references say "Companion"; codebase-internal references stay `aether`. [DECIDED 2026-05-18, supersedes the partial 2026-04-28 rename.]
 
 ---
 
@@ -25,22 +27,58 @@ These are **proven-possible** — the engineering work is in assembly, integrati
 ### 4. User experience is the top-priority constraint
 When architecture, model routing, rendering, permissions, or update behavior is evaluated, **the effect on perceived interaction quality, trust, and continuity outranks implementation convenience**. If a simpler implementation compromises the user experience on the flagship, it is the wrong implementation.
 
+### 5. Photoreal full-body characters from the start — no headshot intermediate
+[DECIDED 2026-05-18.] Companion characters are created as photoreal, full-body, indistinguishable from real human, **from the very first identity training run**. The headshot-only intermediate is **explicitly rejected** — it does not transition cleanly into a full-body video pipeline (identity drift between face-only and body models, lighting/skin coherence breaks at the neck seam, motion priors learned on cropped headshots fail to generalize to gait/posture/gesture, lip-sync model trained on tight headshots needs retraining for wider framing). Each persona's identity is trained whole — face, body, and voice locked together — so stills, talking video, and full-body motion all draw from the same character.
+
+Full-body photoreal is the **eventual locked target**, not optional, not deferred indefinitely. Headshot-only releases are not on the path.
+
+### 6. No interim public release — Companion ships when complete
+[DECIDED 2026-05-18.] There is no early-launch wedge product, no OSS preview, no headshot-only release, no voice-only release, no chat-only release. Companion ships once — when the full product (photoreal full-body cast + complete moat layers + integrated voice + presence + memory + trust) is complete. Releasing intermediate versions of any subsystem in isolation will not generate market interest sufficient to justify the integration debt and direction-setting noise.
+
+This rule supersedes the prior "OSS Preview as wedge" thesis and retires the `aether_oss_preview` roadmap as an independent release track.
+
+### 7. Voice does not ship as a standalone product
+[DECIDED 2026-05-18.] Voice (STT + TTS + push-to-talk + presence-aware turn-taking) is a sub-feature of the complete Companion. It is not released as its own product or as an early-access slice. Voice subsystem code may be built and integrated continuously (Voice V1 already shipped as an internal subsystem 2026-05-13), but the product surface that exposes voice ships only as part of the complete Companion launch.
+
+### 8. Self-test before review — visual and frontend
+[DECIDED 2026-05-18.] Don's review time is the scarce resource. Nothing reaches him for review until the agent has self-tested it.
+
+- **Visual artifacts** (reference images, identity-LoRA samples, motion clips, video, lip-sync output, any generated visual). The agent uses multimodal vision to evaluate against acceptance criteria (identity consistency across the set, motion smoothness, anti-uncanny defects, lip-sync drift on speaking clips, framing, lighting coherence). Self-test report attached to the artifact when surfaced. Failed self-tests re-loop the producing step — they do not reach Don.
+- **Frontend changes** (any change to `apps/desktop/` UI, Trust drawer, wizard, settings, persona surface, runtime renderer). The agent uses the frontend **as a user** — browser/Tauri automation, click through the flow, fill the forms, observe state changes — before claiming the change is ready for Don's review. "Looks fine in the diff" or "unit tests pass" is **not** sufficient. Real usage proves real behavior. The dev server / built app must be exercised end-to-end on the affected flow.
+
+This rule is not a recommendation — it is the gate. A surface that has not been self-tested does not get sent to Don. The cost of a failed self-test is the agent's; the cost of a defect Don finds is the project's.
+
 ---
 
-## Product-specific boundary
+## Product structure
 
-### Aether OSS Preview
-- **Open-source and available-now components are acceptable** for speed to launch.
-- Used as a wedge to demonstrate vision, gather community, and establish trust.
-- Polish and experience quality still apply — no shallow quality acceptance.
-- Preview may leverage: MuseTalk, TalkingHead, Wav2Lip-style primitives, Whisper/Parakeet STT, open TTS, Tauri shell, etc.
-- **Goal:** Launch fast and prove the product family is being built to a serious quality bar.
+There is **one product**: Companion. It has surfaces, not separate releases.
 
-### Aether Pro (flagship) and Isabelle (private)
-- **We write our own software from here on.**
-- Every must-own layer (see below) is custom-built.
+### Companion (the product)
+- The complete photoreal full-body multimodal companion. Ships when complete.
+- Internal codename `aether` — preserved for repo, code, databases, Tauri identifier, license IDs.
+- Includes all seven must-own layers (L1–L7), the photoreal character cast, voice, presence, memory, trust UX, persona pack delivery, autonomy controls.
+
+### Isabelle (private overlay)
+- Don's private avatar / persona overlay on top of Companion.
+- Overlay-only at runtime for Don's profile. Never enters public distributables. Build-time lint enforces.
+- Same codebase, separate persona pack and voice training.
+
+### "Aether OSS Preview" — RETIRED
+- The wedge thesis is dead. No standalone OSS preview release.
+- The `aether_oss_preview` roadmap is retired (see `roadmaps/aether_oss_preview.md` — tombstoned).
+- The OSS-friendly architecture posture (clean Tauri shell, layer scaffolds, open-weights tooling) remains correct as engineering practice. It just does not ship as a separate product.
+
+---
+
+## Components — borrowed vs custom
+
+The "no close-enough SaaS" and "custom moat layers" rules from above apply across the entire product:
+
+- **Every must-own layer (L1–L7) is custom-built.**
 - Borrowed primitives are permitted **only** where they do not cap the product ceiling or become the moat — and even then, must be isolated behind our own interfaces so they can be swapped or replaced later.
 - Audio2Face, MetaHuman, Unreal rigs, WebRTC — studied as baselines and ceilings, not locked as dependencies.
+- For the photoreal character pipeline (reference image gen, identity LoRA, video character LoRA, motion library, lip-sync), the **pipeline itself lives inside Companion** (not in CIGE/Forge as upstream) so the public-facing characters are produced and controlled entirely within the product repo. See ADR-0015.
 
 ---
 
