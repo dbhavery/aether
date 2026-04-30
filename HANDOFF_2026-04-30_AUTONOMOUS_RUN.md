@@ -83,6 +83,19 @@ Run `python scripts/current_status.py` for the live state. Highlights as of sess
 
 **Wave 8** (worktree-isolated): T1.3 first impl slice — `aether-l5-files` with `FilesExecutor` trait + types + `ScopeAllowlist` + capability map + `StdFsExecutor` stub (`3293844`..`f4fce68`, 6 atomic commits). T1.3 Tauri command surface wiring `BrowserExecutor` end-to-end through L5 PolicyEngine (`f8c22d4`..`54776ef`, 4 atomic commits, +4 desktop tests).
 
+**Wave 9** (worktree-isolated): real Playwright Node-subprocess driver replacing the stub — `PlaywrightExecutor` now spawns `node packages/l5-browser/scripts/driver.mjs` with length-prefixed JSON-lines IPC (`2c056af`..`c2d9c4b`, 4 atomic commits, 13 driver tests under `--features playwright`). l5-files Tauri command surface wiring `FilesExecutor` end-to-end (`3ffe041`..`b1b0447`, 4 atomic commits cherry-picked from worktree branch, +4 desktop tests = **315 total**). Real regression caught + fixed in foreground (`e2690d5`): Playwright driver's `spawn()` now checks `Handle::try_current()` so synchronous test harnesses self-degrade to `BackendDisabled` instead of panicking.
+
+## Final tallies (run total)
+
+- **97 commits** on `origin/dev` between 2026-04-29 ~21:00 PT and 2026-04-30 ~mid-day PT.
+- **5/5 Don-delegated decisions** resolved (1–5).
+- **4 stale-prompt drift catches** (T1.1, T1.2, MemV2 step 6, T2.5) — all four claimed pending in HANDOFF_2026-05-18, all four shipped weeks-to-months earlier.
+- **3 real bugs caught by doctrine §8 used-as-user verification** (a11y label, loading-stuck-after-error, drawer-wide error visibility). All three fixed in foreground.
+- **1 real regression caught + fixed during the run** (Playwright `tokio::spawn` outside-of-runtime panic).
+- **9 waves of parallel work**, with **worktree isolation** adopted at Wave 6 after a multi-agent commit race in Wave 4.
+- Workspace: 13 crates / 9 engines / 4 shared infra. l5-browser + l5-files now live with first impl slices, real-key bundled, Tauri commands wired, Playwright driver real (gracefully degrades when Node/playwright absent).
+- Tests: cargo desktop **315 passed**, vitest **268 passed / 24 files**, l5-browser **13 with `--features playwright`**, l5-files **13 default + 19 with `--features std-fs`**, all 7 rot guards green.
+
 ## Wave 9+ queued (next session work)
 
 - **Real Playwright Node-subprocess driver inside `playwright_stub.rs`.** Graduates the stub to a real backend — spawn long-lived Node child running the Playwright driver script, length-prefixed JSON over stdio, `HashMap<SessionId, BrowserContext>` session tracking, typed `BrowserExecError` mapping. Tauri wiring landed today is fully ready; only the `state.rs::build` constructor flips. Single-layer (`packages/l5-browser/`).
