@@ -8,10 +8,17 @@
 //!
 //! # Architecture
 //!
-//! - Holds an immutable [`ScopeAllowlist`]; every input path is
-//!   canonicalized BEFORE the allowlist check, so a symlink whose
-//!   target falls outside the allowlist is rejected even if the symlink
-//!   itself sits inside an approved root.
+//! - Holds a [`ScopeAllowlist`] behind an `Arc<RwLock<...>>` so callers
+//!   (the L5 policy layer) can swap the live scope wholesale at runtime
+//!   without rebuilding the executor. The threat model is unchanged:
+//!   every input path is canonicalized BEFORE the allowlist check, so
+//!   a symlink whose target falls outside the allowlist is rejected
+//!   even if the symlink itself sits inside an approved root. Only the
+//!   wholesale-swap path is exposed (no per-entry add/remove) — this
+//!   keeps the auditable surface to two methods,
+//!   [`StdFsExecutor::set_allowlist`] and
+//!   [`StdFsExecutor::update_allowlist_from_paths`], both of which
+//!   atomically replace the live scope.
 //! - `create` / `edit` are atomic: write to a sibling tempfile in the
 //!   destination's parent directory, then `tokio::fs::rename` to the
 //!   final path. `create` rejects pre-existing destinations; `edit`
