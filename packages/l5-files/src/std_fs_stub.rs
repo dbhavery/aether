@@ -51,6 +51,7 @@
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, RwLock};
 
 use async_trait::async_trait;
 use tokio::fs;
@@ -63,12 +64,31 @@ use crate::types::{FilesExecError, GrepHit, ScopeAllowlist};
 ///
 /// Construct via [`StdFsExecutor::new`] with the
 /// [`ScopeAllowlist`](crate::types::ScopeAllowlist) the caller has
-/// already negotiated through L5 policy. The allowlist is held by
-/// value; clone it before constructing if the caller needs to keep a
-/// copy.
-#[derive(Debug, Clone)]
+/// already negotiated through L5 policy.
+///
+/// Internally the allowlist is held in an `Arc<RwLock<ScopeAllowlist>>`
+/// so the executor's scope can be widened or narrowed at runtime
+/// (e.g. when the user grants or revokes a fresh scope through L5
+/// policy) without rebuilding the executor and without disrupting
+/// in-flight operations. Cloning the executor is cheap — clones share
+/// the same lock and therefore the same live scope state. See
+/// [`set_allowlist`](Self::set_allowlist) and
+/// [`update_allowlist_from_paths`](Self::update_allowlist_from_paths).
+#[derive(Debug)]
 pub struct StdFsExecutor {
-    scope: ScopeAllowlist,
+    scope: Arc<RwLock<ScopeAllowlist>>,
+}
+
+impl Clone for StdFsExecutor {
+    /// Clones share the same allowlist state via `Arc`. Mutating the
+    /// scope on any clone (via [`set_allowlist`](Self::set_allowlist) or
+    /// [`update_allowlist_from_paths`](Self::update_allowlist_from_paths))
+    /// is observed by every other clone immediately.
+    fn clone(&self) -> Self {
+        Self {
+            scope: Arc::clone(&self.scope),
+        }
+    }
 }
 
 impl StdFsExecutor {
@@ -80,7 +100,51 @@ impl StdFsExecutor {
     /// canonicalizes its input path and then path-prefix-matches it
     /// against the (already-canonical) roots.
     pub fn new(scope: ScopeAllowlist) -> Self {
-        Self { scope }
+        Self {
+            scope: Arc::new(RwLock::new(scope)),
+        }
+    }
+
+    /// Atomically replace the active allowlist.
+    ///
+    /// All in-flight operations that have already cloned the previous
+    /// allowlist (inside `canonicalize_and_authorize` /
+    /// `canonicalize_parent_and_authorize`) finish under the previous
+    /// scope; subsequent calls observe the new scope. The roots are
+    /// stored verbatim — canonicalize them first if symlink-safe
+    /// semantics are required (see
+    /// [`update_allowlist_from_paths`](Self::update_allowlist_from_paths)
+    /// for a helper that does this).
+    pub fn set_allowlist(&self, scope: ScopeAllowlist) {
+        // Poisoned locks are treated as an unrecoverable invariant
+        // violation in this stub; unwrap matches the convention used
+        // elsewhere in this crate's tests.
+        let mut guard = self.scope.write().expect("scope lock poisoned");
+        *guard = scope;
+    }
+
+    /// Build a new allowlist by canonicalizing each supplied path
+    /// (synchronously, via [`std::fs::canonicalize`] — matching what
+    /// L5 policy does at grant time) and atomically swap it in.
+    ///
+    /// Each path must already exist; a path that fails canonicalization
+    /// returns [`FilesExecError::Io`] and the existing allowlist is
+    /// left untouched. Empty input is allowed and clears the scope
+    /// (every subsequent call will reject paths with
+    /// [`FilesExecError::NotInScope`]).
+    pub fn update_allowlist_from_paths<I>(&self, roots: I) -> Result<(), FilesExecError>
+    where
+        I: IntoIterator<Item = PathBuf>,
+    {
+        let mut canonical = Vec::new();
+        for root in roots {
+            let resolved = std::fs::canonicalize(&root).map_err(|e| {
+                FilesExecError::Io(format!("canonicalize {}: {}", root.display(), e))
+            })?;
+            canonical.push(resolved);
+        }
+        self.set_allowlist(ScopeAllowlist::new(canonical));
+        Ok(())
     }
 }
 
@@ -103,12 +167,21 @@ fn require_runtime() -> Result<(), FilesExecError> {
     Ok(())
 }
 
-/// Canonicalize `path` and authorize the canonical form against
-/// `scope`. Returns the canonical path on success.
+/// Snapshot the current allowlist by cloning it under a short read
+/// guard. The guard is released before this function returns, which is
+/// required because callers go on to `.await` and `RwLockReadGuard`
+/// from `std::sync` is not safe to hold across await points.
+fn snapshot_scope(scope: &Arc<RwLock<ScopeAllowlist>>) -> ScopeAllowlist {
+    scope.read().expect("scope lock poisoned").clone()
+}
+
+/// Canonicalize `path` and authorize the canonical form against the
+/// current contents of `scope`. Returns the canonical path on success.
 async fn canonicalize_and_authorize(
-    scope: &ScopeAllowlist,
+    scope: &Arc<RwLock<ScopeAllowlist>>,
     path: &Path,
 ) -> Result<PathBuf, FilesExecError> {
+    let snapshot = snapshot_scope(scope);
     let canonical = fs::canonicalize(path).await.map_err(|e| {
         if e.kind() == std::io::ErrorKind::NotFound {
             FilesExecError::NotFound(path.display().to_string())
@@ -116,7 +189,7 @@ async fn canonicalize_and_authorize(
             FilesExecError::Io(format!("canonicalize {}: {}", path.display(), e))
         }
     })?;
-    if !scope.is_within_scope(&canonical) {
+    if !snapshot.is_within_scope(&canonical) {
         return Err(FilesExecError::NotInScope(canonical.display().to_string()));
     }
     Ok(canonical)
@@ -131,9 +204,10 @@ async fn canonicalize_and_authorize(
 /// check, which is the property the locked T1.3 §5.2 sub-decision
 /// requires.
 async fn canonicalize_parent_and_authorize(
-    scope: &ScopeAllowlist,
+    scope: &Arc<RwLock<ScopeAllowlist>>,
     path: &Path,
 ) -> Result<PathBuf, FilesExecError> {
+    let snapshot = snapshot_scope(scope);
     let parent = path
         .parent()
         .ok_or_else(|| FilesExecError::Io(format!("path has no parent: {}", path.display())))?;
@@ -150,7 +224,7 @@ async fn canonicalize_parent_and_authorize(
     })?;
     let mut canonical = canonical_parent;
     canonical.push(file_name);
-    if !scope.is_within_scope(&canonical) {
+    if !snapshot.is_within_scope(&canonical) {
         return Err(FilesExecError::NotInScope(canonical.display().to_string()));
     }
     Ok(canonical)
