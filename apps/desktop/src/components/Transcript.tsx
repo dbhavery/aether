@@ -35,6 +35,26 @@ function MessageBubble({ message }: { message: TranscriptMessage }) {
     );
   }
   if (message.role === "system") {
+    if (message.variant === "draft_only") {
+      // Wave 16 — DeferToDraft Turn-path affordance. Distinct amber
+      // styling + a "DRAFT ONLY" badge cue the user that the engine
+      // recorded the intent (Decision::DraftOnly { source: UserChoice })
+      // but suppressed any side effect. The Rust-side audit row carries
+      // the truth; this is purely the chat-surface affordance.
+      return (
+        <div
+          data-testid="draft-only-bubble"
+          className="self-center max-w-[85%] rounded-md border border-aether-warn/60 bg-aether-warn/10 px-3 py-2 text-center animate-fadeIn"
+        >
+          <div className="mb-1 inline-block rounded-sm border border-aether-warn/70 px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.18em] text-aether-warn">
+            Draft only
+          </div>
+          <div className="text-[11.5px] font-mono leading-snug text-aether-muted">
+            {message.content}
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="self-center max-w-[85%] rounded-md border border-aether-border bg-aether-bg/60 px-3 py-1.5 text-center text-[11.5px] font-mono text-aether-muted animate-fadeIn">
         {message.content}

@@ -1,11 +1,33 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
+import { render, screen } from "@testing-library/react";
+
+// JSDOM does not implement scrollIntoView; the Transcript scrolls the
+// bottom sentinel into view on mount, which would otherwise throw.
+beforeAll(() => {
+  Element.prototype.scrollIntoView = function () {};
+});
 
 import {
+  Transcript,
   buildMetaParts,
   originChipForFooter,
   tierChipForFooter,
 } from "./Transcript";
-import type { MessageMeta } from "../lib/types";
+import type { MessageMeta, TranscriptMessage } from "../lib/types";
+
+function systemMessage(
+  overrides: Partial<TranscriptMessage> = {},
+): TranscriptMessage {
+  return {
+    id: "msg-system-test",
+    role: "system",
+    content: "Draft only — no side effects were produced.",
+    sequence: 0,
+    timestamp_ms: 0,
+    meta: null,
+    ...overrides,
+  };
+}
 
 function meta(overrides: Partial<MessageMeta> = {}): MessageMeta {
   return {
@@ -170,5 +192,63 @@ describe("tierChipForFooter", () => {
         }),
       ),
     ).toBeNull();
+  });
+});
+
+describe("Transcript — Wave 16 draft_only affordance", () => {
+  it("renders generic system bubble without the draft-only badge when variant is unset", () => {
+    render(<Transcript messages={[systemMessage()]} />);
+    // The Wave 16 bubble carries data-testid="draft-only-bubble"; a
+    // plain system message must not.
+    expect(screen.queryByTestId("draft-only-bubble")).toBeNull();
+    // Plain system message renders the content text directly.
+    expect(
+      screen.getByText("Draft only — no side effects were produced."),
+    ).toBeTruthy();
+  });
+
+  it("renders the dedicated DRAFT ONLY badge + bubble when variant is draft_only", () => {
+    render(
+      <Transcript
+        messages={[systemMessage({ variant: "draft_only" })]}
+      />,
+    );
+    const bubble = screen.getByTestId("draft-only-bubble");
+    expect(bubble).toBeTruthy();
+    // The badge sits inside the bubble and contains the literal label
+    // "Draft only" (separate from the body copy).
+    expect(bubble.textContent).toMatch(/Draft only/);
+    // Original system content still renders inside the bubble.
+    expect(bubble.textContent).toContain(
+      "Draft only — no side effects were produced.",
+    );
+  });
+
+  it("does not affect user or assistant message rendering", () => {
+    render(
+      <Transcript
+        messages={[
+          {
+            id: "u1",
+            role: "user",
+            content: "hello",
+            sequence: 0,
+            timestamp_ms: 0,
+            meta: null,
+          },
+          {
+            id: "a1",
+            role: "assistant",
+            content: "world",
+            sequence: 1,
+            timestamp_ms: 0,
+            meta: null,
+          },
+        ]}
+      />,
+    );
+    expect(screen.queryByTestId("draft-only-bubble")).toBeNull();
+    expect(screen.getByText("hello")).toBeTruthy();
+    expect(screen.getByText("world")).toBeTruthy();
   });
 });

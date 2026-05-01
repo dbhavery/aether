@@ -43,6 +43,14 @@ export interface TranscriptMessage {
   sequence: number;
   timestamp_ms: number;
   meta: MessageMeta | null;
+  /**
+   * Wave 16 — frontend-only variant tag set by the chat surface when
+   * appending an outcome whose `TurnOutcomeKind === "draft_only"`. The
+   * Rust side does not populate this field; it is purely a renderer
+   * cue so Transcript.tsx can show a distinct "DRAFT ONLY" affordance
+   * instead of the generic system-message styling.
+   */
+  variant?: "draft_only";
 }
 
 export interface ApprovalPayload {

@@ -182,7 +182,17 @@ export function App() {
 
   const appendOutcome = useCallback((outcome: TurnOutcome) => {
     if (outcome.message) {
-      setMessages((prev) => [...prev, outcome.message!]);
+      // Wave 16 — tag draft_only outcomes so Transcript can render the
+      // dedicated "DRAFT ONLY" affordance instead of the generic
+      // system-message styling. The Rust side ships a system message
+      // with stable phrasing ("Draft only — no side effects were
+      // produced.") and TurnOutcomeKind = "draft_only"; the variant
+      // tag lives only on the renderer side.
+      const message =
+        outcome.kind === "draft_only"
+          ? { ...outcome.message, variant: "draft_only" as const }
+          : outcome.message;
+      setMessages((prev) => [...prev, message]);
     }
     setMemoryRefreshKey((k) => k + 1);
   }, []);
