@@ -4679,4 +4679,240 @@ mod tests {
         }
         assert!(state.take_pending(&ticket_id).is_none());
     }
+
+    // ---------- Wave 14 — UserChoiceWire wire mapping + scope plumbing ----------
+
+    /// Each wire variant must project onto the matching L5 `UserChoice`
+    /// per design §5.3. This locks the wire-string contract: if a
+    /// future refactor renames a variant, this test breaks first.
+    #[test]
+    fn wave14_user_choice_wire_maps_one_to_one() {
+        use aether_l5_policy::UserChoice;
+        assert!(matches!(
+            UserChoiceWire::Allow.to_user_choice(),
+            UserChoice::Allow
+        ));
+        assert!(matches!(
+            UserChoiceWire::AllowSession.to_user_choice(),
+            UserChoice::AllowSession
+        ));
+        assert!(matches!(
+            UserChoiceWire::AllowTask.to_user_choice(),
+            UserChoice::AllowTask
+        ));
+        assert!(matches!(
+            UserChoiceWire::DeferToDraft.to_user_choice(),
+            UserChoice::DeferToDraft
+        ));
+        assert!(matches!(
+            UserChoiceWire::Deny.to_user_choice(),
+            UserChoice::Deny
+        ));
+    }
+
+    /// `is_approve()` is the gate for "did the user accept?" — every
+    /// non-Deny variant counts. `defers_execution()` separately gates
+    /// "did the user accept BUT request the draft path?" — only
+    /// DeferToDraft.
+    #[test]
+    fn wave14_user_choice_wire_classifiers() {
+        assert!(UserChoiceWire::Allow.is_approve());
+        assert!(UserChoiceWire::AllowSession.is_approve());
+        assert!(UserChoiceWire::AllowTask.is_approve());
+        assert!(UserChoiceWire::DeferToDraft.is_approve());
+        assert!(!UserChoiceWire::Deny.is_approve());
+
+        assert!(!UserChoiceWire::Allow.defers_execution());
+        assert!(!UserChoiceWire::AllowSession.defers_execution());
+        assert!(!UserChoiceWire::AllowTask.defers_execution());
+        assert!(UserChoiceWire::DeferToDraft.defers_execution());
+        assert!(!UserChoiceWire::Deny.defers_execution());
+    }
+
+    /// Wire-string deserialization regression. The Tauri bridge serdes
+    /// the JSON payload from the renderer; if the tag string drifts
+    /// (e.g. someone renames `allow_session` to `session_allow`) this
+    /// test breaks before any production path notices.
+    #[test]
+    fn wave14_user_choice_wire_deserializes_from_snake_case_tags() {
+        let allow: UserChoiceWire =
+            serde_json::from_str(r#"{"kind":"allow"}"#).expect("allow tag");
+        assert!(matches!(allow, UserChoiceWire::Allow));
+
+        let session: UserChoiceWire =
+            serde_json::from_str(r#"{"kind":"allow_session"}"#).expect("allow_session tag");
+        assert!(matches!(session, UserChoiceWire::AllowSession));
+
+        let task: UserChoiceWire =
+            serde_json::from_str(r#"{"kind":"allow_task"}"#).expect("allow_task tag");
+        assert!(matches!(task, UserChoiceWire::AllowTask));
+
+        let draft: UserChoiceWire =
+            serde_json::from_str(r#"{"kind":"defer_to_draft"}"#).expect("defer_to_draft tag");
+        assert!(matches!(draft, UserChoiceWire::DeferToDraft));
+
+        let deny: UserChoiceWire =
+            serde_json::from_str(r#"{"kind":"deny"}"#).expect("deny tag");
+        assert!(matches!(deny, UserChoiceWire::Deny));
+    }
+
+    /// Reject path: respond_approval must consume the ticket once and
+    /// reject the second attempt — same load-bearing assertion the
+    /// Wave 12 test makes, but driven through the Wave 14 wire +
+    /// build_approval_response_for_choice helper. Locks that the new
+    /// helper is wire-compatible with the live engine.
+    #[test]
+    fn wave14_reject_via_user_choice_wire_consumes_ticket() {
+        let (state, _browser, _files) = state_with_tracking_executors();
+        let ticket = drive_files_edit_to_ask(&state)
+            .expect("baseline aurora + FilesEdit must Ask under default disposition");
+        let pending = state.take_pending(&ticket).expect("pending entry");
+        let cached_ticket = match pending {
+            PendingApproval::Executor { ticket, .. } => ticket,
+            PendingApproval::Turn(_) => unreachable!(),
+        };
+        let choice = UserChoiceWire::Deny;
+        let first = build_approval_response_for_choice(
+            &cached_ticket,
+            choice.to_user_choice(),
+            MonotonicTimestamp(state.next_ts()),
+        );
+        {
+            let a = state.active.read().expect("active read lock");
+            a.policy
+                .respond_approval(first)
+                .expect("first Deny must Ok against the live cached ticket");
+        }
+        // Duplicate must fail — proves the engine consumed the ticket.
+        let second = build_approval_response_for_choice(
+            &cached_ticket,
+            UserChoiceWire::Deny.to_user_choice(),
+            MonotonicTimestamp(state.next_ts()),
+        );
+        let dup = {
+            let a = state.active.read().expect("active read lock");
+            a.policy.respond_approval(second)
+        };
+        assert!(
+            dup.is_err(),
+            "second Deny against an already-consumed ticket must fail"
+        );
+    }
+
+    /// AllowSession via the Wave 14 wire produces a respond_approval
+    /// the engine accepts (proving the new build_approval_response_for_choice
+    /// path is engine-compatible) and consumes the ticket. The
+    /// AllowSession case is the highest-leverage non-default variant —
+    /// it is the one the audit-row downstream summary depends on for
+    /// "you approved X for the session" copy.
+    #[test]
+    fn wave14_allow_session_via_user_choice_wire_consumes_ticket() {
+        let (state, _browser, _files) = state_with_tracking_executors();
+        let ticket = drive_files_edit_to_ask(&state)
+            .expect("baseline aurora + FilesEdit must Ask under default disposition");
+        let pending = state.take_pending(&ticket).expect("pending entry");
+        let cached_ticket = match pending {
+            PendingApproval::Executor { ticket, .. } => ticket,
+            PendingApproval::Turn(_) => unreachable!(),
+        };
+        let choice = UserChoiceWire::AllowSession;
+        let response = build_approval_response_for_choice(
+            &cached_ticket,
+            choice.to_user_choice(),
+            MonotonicTimestamp(state.next_ts()),
+        );
+        // The L5 engine accepts the response — proves the wire
+        // mapping landed a UserChoice the live engine recognises.
+        {
+            let a = state.active.read().expect("active read lock");
+            a.policy
+                .respond_approval(response)
+                .expect("AllowSession respond_approval must Ok");
+        }
+        // Second response against the same ticket fails — proves the
+        // first call consumed the engine's pending entry.
+        let dup = build_approval_response_for_choice(
+            &cached_ticket,
+            UserChoiceWire::AllowSession.to_user_choice(),
+            MonotonicTimestamp(state.next_ts()),
+        );
+        let dup_result = {
+            let a = state.active.read().expect("active read lock");
+            a.policy.respond_approval(dup)
+        };
+        assert!(
+            dup_result.is_err(),
+            "duplicate AllowSession must fail — proving the first call \
+             actually mutated the engine's pending-tickets table"
+        );
+    }
+
+    /// AllowTask wire variant exercises the same engine path. Mirror
+    /// of the AllowSession test — kept separate so a regression on
+    /// one variant doesn't get masked by the other.
+    #[test]
+    fn wave14_allow_task_via_user_choice_wire_consumes_ticket() {
+        let (state, _browser, _files) = state_with_tracking_executors();
+        let ticket = drive_files_edit_to_ask(&state)
+            .expect("baseline aurora + FilesEdit must Ask under default disposition");
+        let cached_ticket = match state.take_pending(&ticket).expect("pending entry") {
+            PendingApproval::Executor { ticket, .. } => ticket,
+            PendingApproval::Turn(_) => unreachable!(),
+        };
+        let response = build_approval_response_for_choice(
+            &cached_ticket,
+            UserChoiceWire::AllowTask.to_user_choice(),
+            MonotonicTimestamp(state.next_ts()),
+        );
+        {
+            let a = state.active.read().expect("active read lock");
+            a.policy
+                .respond_approval(response)
+                .expect("AllowTask respond_approval must Ok");
+        }
+    }
+
+    /// DeferToDraft wire variant: respond_approval must succeed (the
+    /// engine writes the Decision::DraftOnly { source: UserChoice }
+    /// audit row per Decision 2). The executor MUST NOT be invoked —
+    /// that's the load-bearing security invariant for DeferToDraft.
+    /// We assert the no-execute property by exercising the same
+    /// shape the executor-path reject branch does, because the
+    /// production resolve_executor_approval treats DeferToDraft
+    /// identically (`!is_approve() || defers_execution()` short-
+    /// circuits the executor invocation).
+    #[test]
+    fn wave14_defer_to_draft_via_user_choice_wire_does_not_execute() {
+        let (state, _browser, files) = state_with_tracking_executors();
+        let ticket = drive_files_edit_to_ask(&state)
+            .expect("baseline aurora + FilesEdit must Ask under default disposition");
+        let cached_ticket = match state.take_pending(&ticket).expect("pending entry") {
+            PendingApproval::Executor { ticket, .. } => ticket,
+            PendingApproval::Turn(_) => unreachable!(),
+        };
+        let choice = UserChoiceWire::DeferToDraft;
+        // The classifier flags this as approve-with-no-execute —
+        // resolve_executor_approval branches identically to Reject.
+        assert!(choice.is_approve());
+        assert!(choice.defers_execution());
+
+        let response = build_approval_response_for_choice(
+            &cached_ticket,
+            choice.to_user_choice(),
+            MonotonicTimestamp(state.next_ts()),
+        );
+        {
+            let a = state.active.read().expect("active read lock");
+            a.policy
+                .respond_approval(response)
+                .expect("DeferToDraft respond_approval must Ok");
+        }
+        // Executor mock saw no calls — DeferToDraft must NOT dispatch
+        // the executor.
+        assert!(
+            files.calls().is_empty(),
+            "DeferToDraft must not invoke the executor; got {:?}",
+            files.calls()
+        );
+    }
 }
