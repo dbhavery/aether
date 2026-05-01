@@ -54,20 +54,20 @@
 ## Tier 2 — Long-arc software (high value, no GPU)
 
 ### T2.1 — Mobile companion architecture + sync schema
-**Status:** Greenfield. Design-only — no app yet.
-**Scope:** Sync schema decisions, event-log shape, conflict resolution, offline behavior. Lock now to avoid retrofit pain later.
-**Self-test gate:** schema validation tests; conflict-resolution unit tests on synthetic event streams.
-**Notes:** Decisions made now lock you in. Critical to do **before** Pro P4 tools work commits to a single-device shape.
+**Status:** DONE — design draft committed 2026-04-29 (`39439b6` — `planning/plans/T2.1_mobile_sync_schema.md`). ADR-0016 (mobile sync schema) body Accepted 2026-04-29; all 10 OQs locked at recommended defaults 2026-04-30. Two-master + per-domain conflict rules; revoke-precedence with otherwise LWW by Lamport on `policy_grants`. Stale-prompt drift catch — patched 2026-04-30.
+**Scope (historical):** Sync schema decisions, event-log shape, conflict resolution, offline behavior. Lock now to avoid retrofit pain later.
+**Self-test gate:** schema validation tests; conflict-resolution unit tests on synthetic event streams. Implementation tests follow when mobile companion app builds against the locked schema.
+**Notes:** Decisions are now load-bearing for the policy_grants sync filter that ApprovalScope::OncePerSession assumes (see ADR-0016 §"What does NOT sync" + the T1.3 ApprovalScope design §7).
 
 ### T2.2 — Red-team scenario harness
-**Status:** Greenfield. Audit chain exists; scenarios don't.
-**Scope:** Prompt attacks, memory poisoning, browser misuse, permission bypass, exfiltration test scenarios. Replayable. Integrates with Quality-Eval V1 capture/replay.
-**Self-test gate:** each scenario runs deterministically; failure modes log clearly.
+**Status:** DONE — shipped 2026-04-30 across `2706395` (harness scaffold + CLI), `f05cc8f` (scenarios + adversarial canaries + unit tests), `d798d89` (README + `tools/lint-redteam-coverage/` guard for ≥2 scenarios per category). Integrates with Quality-Eval V1 capture/replay. Stale-prompt drift catch — patched 2026-04-30.
+**Scope (historical):** Prompt attacks, memory poisoning, browser misuse, permission bypass, exfiltration test scenarios. Replayable. Integrates with Quality-Eval V1 capture/replay.
+**Self-test gate:** each scenario runs deterministically; failure modes log clearly. Coverage lint enforces ≥2 scenarios per category.
 
 ### T2.3 — Autonomy preset picker UI (Tier 2C)
-**Status:** Backend ready (`AppState::apply_preset`). UI missing.
-**Scope:** UI surface for autonomy presets (Observer / Assistant / Operator / Power User / Custom per `planning/12_permissions_autonomy.md`).
-**Self-test gate (doctrine §8):** agent uses the picker as a user — selects each preset, confirms persisted state, confirms downstream behavior changes (e.g., approval modal appears for Ask actions in Observer, suppressed in Operator). Manual click-through, not just unit tests.
+**Status:** DONE — `apps/desktop/src/components/PresetPicker.tsx` lives in the desktop crate, wired into `App.tsx` + `SettingsDrawer.tsx`. Backend (`AppState::apply_preset`) covers Observer / Assistant / Operator / Power User / Custom. Stale-prompt drift catch — patched 2026-04-30.
+**Scope (historical):** UI surface for autonomy presets (Observer / Assistant / Operator / Power User / Custom per `planning/12_permissions_autonomy.md`).
+**Self-test gate (doctrine §8):** agent uses the picker as a user — selects each preset, confirms persisted state, confirms downstream behavior changes (e.g., approval modal appears for Ask actions in Observer, suppressed in Operator). Used-as-user verification owed; banner here flags it.
 
 ### T2.4 — Persona picker UI (Tier 2D)
 **Status:** Wizard exists; switcher UI for post-onboarding persona swap pending.
