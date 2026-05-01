@@ -1,23 +1,44 @@
 # Handoff — 2026-04-30 Autonomous Run Continuation
 
-> **Purpose.** Successor to `HANDOFF_2026-04-30_AUTONOMOUS_RUN.md`. Records the second wave of the 12-hour autonomous mandate (mid-day → afternoon PT). Read **after** the parent handoff (`HANDOFF_2026-04-30_AUTONOMOUS_RUN.md`) for full context.
+> **Purpose.** Successor to `HANDOFF_2026-04-30_AUTONOMOUS_RUN.md`. Records the second wave of the 12-hour autonomous mandate (mid-day → evening PT). Read **after** the parent handoff for full context.
 >
-> **Branch:** `dev` (pushed). Tip at handoff write: `8bea4e3` (Wave 14 merge).
-> **This session:** **26 commits** between parent handoff tip `be82563` and `8bea4e3`. **5 waves landed** (10A, 10B, 11, 12, 14) plus 1 doc sweep + 6 stale-prompt patch commits.
+> **Branch:** `dev` (pushed). **Tip at handoff write: `189a087`** (CI prevention commit).
+> **This session:** **30 commits** between parent handoff tip `be82563` and `189a087`. **5 feature waves** (10A, 10B, 11, 12, 14) + 1 doctrine §6 banner sweep + 6 stale-prompt patch commits + **3 CI-prevention commits** (the recurring red-X root-caused, fixed, and gated by a committed pre-commit hook).
+> **CI:** green at `189a087`. All 5 jobs success.
 
 ---
 
-## TL;DR
+## TL;DR (for fast recovery)
 
-End-to-end **ApprovalScope flow is now fully wired**, from the policy-crate enum to the L7 user-choice picker:
+Two complete tracks landed this session:
+
+### Track A — End-to-end ApprovalScope flow now wired
+
+From the policy-crate enum (Wave 10B) through pending-approval routing (Wave 11), reject-path audit parity (Wave 12), and the user-facing 4-option radio with full wire-shape plumbing (Wave 14):
 
 1. **Wave 10A** — `packages/l5-files/` `StdFsExecutor` graduated from `BackendDisabled` stub to real `tokio::fs` backend (atomic write-temp-rename, canonicalize-before-allowlist, runtime-absent self-degrade).
 2. **Wave 10B** — `aether_l5_policy::ApprovalScope` enum + storage migration `0006_policy_grants_approval_scope.sql` + §4.2 consume-while-valid rule + 86 l5-policy tests + 10 struct-literal call-site sweep.
-3. **Wave 11** — `Decision::Ask` from browser/files gates now routes through the same pending-approval registry that `submit_turn` uses. Pending registry widened to a sum (`PendingApproval::{Turn, Executor}`); `resolve_approval` now returns a tagged `ResolveApprovalReply { kind: "turn" | "executor", ... }`. Approve path issues a one-shot grant + replays the executor invocation.
-4. **Wave 12** — Reject path on the executor flow now calls `policy.respond_approval(Reject)` for L5 audit-row completeness. `PendingApproval::Executor` now caches the live `ApprovalTicket`.
+3. **Wave 11** — `Decision::Ask` from browser/files gates now routes through the same pending-approval registry that `submit_turn` uses. Pending registry widened to a sum (`PendingApproval::{Turn, Executor}`); `resolve_approval` returns a tagged `ResolveApprovalReply { kind: "turn" | "executor", ... }`. Approve path issues a one-shot grant + replays the executor invocation.
+4. **Wave 12** — Reject path on the executor flow now calls `policy.respond_approval(Reject)` for L5 audit-row completeness. `PendingApproval::Executor` caches the live `ApprovalTicket`.
 5. **Wave 14** — L7 approval modal surfaces the **4-option ApprovalScope radio** per T1.3 §2.3 design §5: `allow_once` / `allow_task` / `allow_session` / `defer_draft` + separate Deny button. `resolve_approval(ticket, UserChoiceWire)` widening on both Rust and TS sides. Engine receives the chosen `UserChoice` so `policy_grants` rows are written with the correct `ApprovalScope` (`PerAction` / `OncePerSession` / `OncePerTask`).
 
-Plus **15 stale-prompt drift catches** in `parallel_software_tracks.md`. The doc is now an evidence-backed mirror of repo state for every Tier 1/2/4 entry. Tier 3 finish-line items left as-is per the doc's own "defer until close to launch" intent.
+### Track B — Recurring CI red-X root-caused and gated permanently
+
+CI was red on every push for ~10 commits across multiple sessions. Root cause + fix:
+
+- **Rust job** (`cargo fmt --all -- --check`) was failing because agents wrote multi-line trait signatures + array literals that rustfmt collapses under default `max_width = 100`. Their local `cargo build` + `cargo test` were clean; `cargo fmt --check` was not part of their verification flow.
+- **Legacy-python job** (`ruff check src/ tests/`) was failing on `tests/unit/persona_reference_gen/` for I001 (import sort), F401 (unused imports), and RUF003 (Unicode `×` in a comment).
+
+Three commits fixed it:
+- `322744b` `cargo fmt --all` reflow across 7 files in l5-browser + l5-files + l5-policy. Pure formatting.
+- `e7d547d` `ruff --fix` on the two persona-reference-gen test files + one manual `× → x` substitution.
+- `189a087` Pre-commit hook + scripts at `tools/check-pre-commit.sh` / `tools/git-hooks/pre-commit` / `tools/setup-hooks.sh` + CLAUDE.md §9.5 mandate.
+
+CI then went green: `gh run view 25199422814` shows all 5 jobs success.
+
+### Track C — `parallel_software_tracks.md` reconciled
+
+**15 stale-prompt drift catches** in `parallel_software_tracks.md`. The doc is now an evidence-backed mirror of repo state for every Tier 1/2/4 entry. Tier 3 finish-line items left as-is per the doc's own "defer until close to launch" rule.
 
 ---
 
@@ -42,9 +63,9 @@ Tests: default 13 / `--features std-fs` 28. Boundary lint: 0 violations.
 - `7f02280` feat(l5-policy): wire ApprovalScope through evaluate + respond_approval (§4.2 consume-while-valid)
 - `3e1e1cc` test(l5-policy): ApprovalScope behavioral + round-trip + re-eval regression suite
 
-Tests: 86 l5-policy / 409 workspace. Storage migration smoke-tested via `db.rs::run_pending_migrations`. 10 struct-literal call sites touched.
+Tests: 86 l5-policy / 409 workspace. Migration smoke-tested via `db.rs::run_pending_migrations`. 10 struct-literal call sites touched.
 
-### Stale-prompt + docs commits (interleaved)
+### Stale-prompt + docs commits (interleaved across the session)
 
 - `7d88c0c` docs(planning): doctrine §6 banner-only sweep on L2-L7 system_design docs (T4.7) — 6 banners, 1 atomic commit
 - `0e16f0c` docs(planning): mark T1.4 L3 renderer scaffold DONE — stale-prompt drift catch
@@ -56,7 +77,7 @@ Tests: 86 l5-policy / 409 workspace. Storage migration smoke-tested via `db.rs::
 
 ### Wave 11 — Decision::Ask routing for browser/files
 
-- `85437f4` fix(desktop): adapt StdFsExecutor::new() → ::default() after L5-files real-backend graduation **[Wave 10A regression caught + fixed]**
+- `85437f4` fix(desktop): adapt StdFsExecutor::new() → ::default() after L5-files real-backend graduation **[Wave 10A regression caught + fixed by Wave 11 agent]**
 - `0b3d80c` feat(desktop): widen pending registry to PendingApproval sum + dispatch resolve_approval
 - `7e015d1` feat(desktop): route Decision::Ask through pending registry for browser_*/files_* gates
 - `0c57ec0` test(desktop): Wave 11 routing tests — Decision::Ask → executor replay end-to-end
@@ -82,48 +103,84 @@ Tests: 319 → 320 desktop. Load-bearing assertion: a *second* `respond_approval
 
 Tests: 320 → 327 desktop (+7 wire-mapping tests). vitest 268 → 279, 24 → 25 files (+11 modal tests). tsc clean.
 
+### Session handoff doc
+
+- `0ae2b3c` docs(handoff): autonomous run continuation — 26 commits, 5 waves, end-to-end ApprovalScope wired
+
+### CI red-X resolution (Track B) — 3 commits
+
+- `322744b` style: cargo fmt --all across l5-browser + l5-files + l5-policy — 7 files reformatted, no behavior change. Mechanical reflow generated by `cargo fmt --all`. Closes the recurring CI Rust-job red-X.
+- `e7d547d` style(tests): ruff lint pass on tests/unit/persona_reference_gen/ — autofixes I001 + F401 (5 errors), manual RUF003 `×` → `x` substitution. Closes the recurring CI legacy-python red-X.
+- `189a087` build(tools): add pre-commit hook mirroring CI's blocking lints — `tools/check-pre-commit.sh` + `tools/git-hooks/pre-commit` + `tools/setup-hooks.sh` + CLAUDE.md §9.5. Hook is committed to repo; one-time `bash tools/setup-hooks.sh` per clone wires `core.hooksPath`. Hook fired on its own commit (dogfooded). **CI is green at this tip.**
+
 ---
 
-## Lessons learned, applied this session
+## Lessons learned this session, applied immediately
 
-### Wave 10A regression: cross-layer ABI breakage on signature change
+### 1. Cross-layer constructor ABI changes need same-PR call-site audits
 
-When `StdFsExecutor::new()` was rewritten to take a `ScopeAllowlist` argument, the desktop crate's call site (which passes no args) became an immediate build break. The Wave 11 agent caught it on its `cargo build` floor verification and fixed it preemptively in commit `85437f4` by switching the call to `::default()`.
+Wave 10A rewrote `StdFsExecutor::new()` to take a `ScopeAllowlist` argument. This silently broke `apps/desktop/src-tauri/src/state.rs::AppState::new()` which was calling the old zero-arg form. Wave 11's agent hit the build break on its `cargo build` floor verification and fixed it preemptively in commit `85437f4` by switching to `::default()`.
 
-**Rule for future cross-layer constructor changes:** when graduating a stub into a real backend with new constructor args, audit every call site in `apps/desktop/src-tauri/src/state.rs` (which holds the `Arc<dyn FilesExecutor>` etc.) in the SAME PR. If the slice is one-layer-bound and the call site lives in another layer, bake a `Default` impl into the new shape so the call site can stay on `::default()` until plumbed properly.
+**Rule for future cross-layer constructor changes:** when graduating a stub into a real backend with new constructor args, audit every call site in `apps/desktop/src-tauri/src/state.rs` (which holds the `Arc<dyn FilesExecutor>` etc.) **in the same PR**. If the slice is one-layer-bound and the call site lives in another layer, bake a `Default` impl into the new shape so the call site can stay on `::default()` until plumbed properly.
 
-### Stale-prompt drift recurs at scale
+### 2. Stale-prompt drift recurs at scale
 
-`parallel_software_tracks.md` had **15 stale entries** at session start — every Tier 1, every Tier 2, two Tier 4 entries plus T4.2 (which had 6 commits proving completion). The pattern is now exhaustively validated: **the tracks doc lags the repo by weeks**. `python scripts/current_status.py` + `git log` are authoritative.
+`parallel_software_tracks.md` had **15 stale entries** at session start — every Tier 1, every Tier 2, two Tier 4 entries plus T4.2 (which had 6 commits proving completion). Pattern is now exhaustively validated: **the tracks doc lags the repo by weeks**. `python scripts/current_status.py` + `git log` are authoritative.
 
 This session patched all 15 in 6 atomic commits with evidence pointers (commit shas + file paths). The doc is now honest. Future sessions should still run the `repo beats prompt` audit before treating any "Available" / "Greenfield" entry as actually pending.
 
-### Worktree-isolation works; explicit-path commits still required
+### 3. Worktree-isolation works; explicit-path commits still required
 
-5 background agents dispatched across the session. None hit a multi-agent commit race (the failure mode that bit Wave 4 yesterday). Combined with `git commit -- <explicit paths>` discipline, the worktree-isolation pattern is durable. Adopt as default for every parallel dispatch.
+5 background agents dispatched across the session (10A, 10B, 11, 12, 14). None hit a multi-agent commit race (the failure mode that bit Wave 4 yesterday). Combined with `git commit -- <explicit paths>` discipline, the worktree-isolation pattern is durable. **Adopt as default for every parallel dispatch.**
 
-### `git checkout -b X origin/Y` from a different CWD can target the wrong worktree
+### 4. `git checkout -b X origin/Y` from a different CWD can target the wrong worktree
 
 When merging worktree-branch commits back to `dev`, `git checkout -b temp-rebase-X origin/worktree-agent-Y` from the main checkout's CWD silently retargets the agent's worktree if that worktree is currently checked out at `worktree-agent-Y`. Result: the rebase happens "in" the agent's worktree, not the main checkout. Mitigation: always `cd /c/Users/dbhav/Projects/aether && git ...` before merge-up. This bit me twice this session; recovered both times via `git stash` + `git merge --no-ff` from the main checkout.
 
+### 5. CI fmt drift is invisible to the agent's `cargo build` / `cargo test` floor
+
+CI's Rust job runs `cargo fmt --all -- --check` (line 41 of `.github/workflows/ci.yml`) which is **not** equivalent to `cargo build` or `cargo test`. Agents wrote code that compiled, tested, and clippy'd cleanly in their worktree but failed CI fmt because rustfmt collapses multi-line signatures that fit under `max_width = 100`.
+
+**Fix shipped:** `tools/check-pre-commit.sh` mirrors CI's blocking lints (`cargo fmt --check` + `ruff check`). Wired into `core.hooksPath` via `bash tools/setup-hooks.sh`. CLAUDE.md §9.5 mandates running it before every commit.
+
+**Rule for agent dispatch boilerplate:** every wave-prompt's "Hard constraints" section now requires `bash tools/check-pre-commit.sh` to exit clean before staging any commit. Add to the verification step alongside cargo build / cargo test / vitest / tsc.
+
+### 6. Non-blocking CI failures still mask blocking ones in the email digest
+
+The legacy-python job has `continue-on-error: true` so its failure doesn't fail the run. But it still surfaces as a red X in the GitHub email digest, which masks any blocking failure underneath it. The Rust fmt failure went unnoticed for ~10 commits because the pattern was "CI is always red" → "ignore the email." Don's "this happens every time" message was the trigger that finally surfaced it.
+
+**Implication:** treat any red-X email as actionable. Even non-blocking failures should be fixed promptly.
+
 ---
 
-## State as of latest commit
+## State as of latest commit (`189a087`)
 
-Run `python scripts/current_status.py` for live state. Highlights:
+Run `python scripts/current_status.py` for live state.
 
-- Branch: `dev` at `8bea4e3` (pushed).
-- Tests:
-  - cargo `aether-desktop`: **327 passed** (up from 315 at session start).
-  - cargo `aether-l5-policy`: **86 passed** (up from 71).
-  - cargo `aether-l5-files`: 13 default / 28 with `--features std-fs`.
-  - workspace `cargo test --workspace --all-features`: **409+ passed**.
-  - vitest from `apps/desktop/`: **279 passed / 25 files** (up from 268 / 24).
-  - tsc clean.
+**Branch:** `dev` at `189a087`, pushed to `origin/dev`.
+
+**CI:** green. Run `25199422814`. All 5 jobs success: Rust, Layer boundaries, Legacy-python, TypeScript, Governance.
+
+**Tests:**
+- cargo `aether-desktop`: **327 passed** (up from 315 at session start).
+- cargo `aether-l5-policy`: **86 passed** (up from 71).
+- cargo `aether-l5-files`: 13 default / 28 with `--features std-fs`.
+- workspace `cargo test --workspace --all-features`: **409+ passed**.
+- vitest from `apps/desktop/`: **279 passed / 25 files** (up from 268 / 24).
+- tsc clean. ruff clean. cargo fmt clean.
 - All 7 doc rot guards green.
 - Boundary lint: 13 crates / 9 engines / 4 shared infra, 0 violations.
-- Storage migrations: 0001 → 0006 (new `0006_policy_grants_approval_scope.sql` smoke-tested green).
-- ADRs: 0001-0010, 0012-0016 (no 0011) all in place.
+
+**Storage migrations:** 0001 → 0006 (new `0006_policy_grants_approval_scope.sql` smoke-tested green).
+
+**ADRs:** 0001-0010, 0012-0016 (no 0011) all in place.
+
+**Working-tree dirty state (pre-existing, do NOT touch in any commit):**
+- `Cargo.lock` (modified — pre-existing churn from Wave 10A's `tokio` dep being added behind a feature)
+- 9 `apps/desktop/public/personas-previews/*/preview_voice.opus` files (modified — auto-regenerated)
+- ~36 untracked LoRA training checkpoint dirs under `planning/session_2026-04-26/training/checkpoints_v2..v9c/` + eval/logs subdirs
+
+These were already dirty when this session started. None are session work. Leave them alone — they get cleaned up by Don or the harness.
 
 ---
 
@@ -135,24 +192,27 @@ Run `python scripts/current_status.py` for live state. Highlights:
 | storage migration 0006 | additive `policy_grants.approval_scope TEXT NULL` | Wave 10B | Shipped |
 | §4.2 consume-while-valid (not consume-once-per-N) | matches user mental model of "remember for this session" | T1.3 §2.3 design §4.2 | Implemented |
 | Audit HMAC: ApprovalScope NOT folded into v2 canonical seal | freeze v2 chain integrity; future v3 bump can fold | T1.3 §2.3 design §3.3 | Honored |
-| OncePerSession outbound sync = device-local | ADR-0016 §"What does NOT sync" | T1.3 §2.3 design §7 | Honored (sync filter hook deferred — see Wave 13 below) |
+| OncePerSession outbound sync = device-local | ADR-0016 §"What does NOT sync" | T1.3 §2.3 design §7 | Honored (sync filter hook deferred — see Wave 17 below) |
 | Approval modal: radio with 4 fixed-order options + separate Deny button | "remember unchecked + AllowSession" contradiction prevented | T1.3 §2.3 design §5.1 | Implemented in Wave 14 |
 | `apps/desktop/build_approval_response_for_choice` owns choice→response mapping | `aether_l7_trust::build_approval_response` is `ApprovalResolution`-shaped only; widening it would cross layers | Wave 14 implementation choice | Locked; documented in commit body |
 | `auto_approved_under_grant` = first-class column, NOT folded into stage_trace | faster filter, clearer schema | T1.3 §2.3 design §10.OQ-3 | Implemented |
 | Legacy NULL-scope grants treated as PerAction at read time, no backfill | zero behavior change, zero migration cost | T1.3 §2.3 design §10.OQ-4 | Implemented |
+| Pre-commit hook in `tools/git-hooks/` wired via `core.hooksPath` | hook travels with the repo; one-time `bash tools/setup-hooks.sh` per clone | CI red-X investigation | Shipped 2026-05-01 |
+| `tools/check-pre-commit.sh` mirrors CI's blocking lints | local <10s feedback before push | CI red-X investigation | Shipped |
 
 ---
 
-## Carry-forward open items
+## Carry-forward open items (next-session queue)
 
 ### Reserved for Don
 - **Backup the release secret key** (still owed from yesterday's handoff). `C:\Users\dbhav\.aether\release-key\aether-release-ed25519.sk`. Backed up to `I:/IsabelleData/_keys/aether-release-key-backup-2026-04-30/`. Make at least one more copy off-machine.
 - **`tools/persona-reference-gen/`** Aurora reference batch — Don-driven (`python tools/persona-reference-gen/__main__.py --persona aurora --batch <id>`).
 - **GPU queue** Aurora pipeline kickoff — Don-driven.
+- **Run `bash tools/setup-hooks.sh` on any other clone** of this repo. Already installed on the current main checkout.
 
-### Software follow-ups (next session candidates)
+### Software follow-ups (next-session candidates, ranked by value)
 
-#### Wave 13 — `StdFsExecutor` allowlist plumbing (cross-layer)
+#### Wave 13 — `StdFsExecutor` allowlist plumbing (cross-layer; HIGHEST VALUE)
 **Why this matters now:** `StdFsExecutor::default()` (empty allowlist) is the Wave 11 build-unblocker. Today every `files_*` invocation falls through to `FilesExecError::NotInScope`. Files commands have a fully-wired approval flow but no operative backend.
 
 **Scope:** plumb a real allowlist sourced from approved-scope ledger (the `policy_grants` SQL table). Allowlist updates on grant changes. Cross-layer (l5-files setter + apps/desktop wire-up + grant-change listener). Per CLAUDE.md §1, this should split into:
@@ -161,19 +221,19 @@ Run `python scripts/current_status.py` for live state. Highlights:
 
 Estimated 4-6 commits each.
 
-#### Wave 15 — affordance gating on the Wave 14 radio
+#### Wave 15 — affordance gating on the Wave 14 radio (medium value)
 Today's modal renders all 4 options unconditionally. Per design §5.1, `allow_task` should require task lineage and `defer_draft` should require side-effecting capability. Both gates need additional fields on `ApprovalPayload` (`task_id_present: bool` + capability metadata). Single-layer (apps/desktop). 2-4 commits.
 
-#### Wave 16 — DeferToDraft Turn-path UI
+#### Wave 16 — DeferToDraft Turn-path UI (medium value)
 Currently surfaces denied-shape on the chat wire because the chat surface doesn't yet render a "draft ready" affordance. Engine writes the `Decision::DraftOnly` audit row regardless. Add a dedicated `draft_only` `TurnOutcomeKind`. Single-layer (apps/desktop). 2-4 commits.
 
-#### Wave 17 — OncePerSession outbound sync filter
+#### Wave 17 — OncePerSession outbound sync filter (deferred until sync layer ships)
 Per ADR-0016 §"What does NOT sync" / OQ-2. When the sync layer lands (post-mobile), drop outbound `policy_grants` rows where `approval_scope == Some(OncePerSession)` and log inbound drops. Out of any current PR's scope; tracked here so it doesn't get lost.
 
-#### Wave 18 — L7_trust_ux_onboarding_system_design.md §16 surgical sweep
+#### Wave 18 — `L7_trust_ux_onboarding_system_design.md` §16 surgical sweep (low value)
 Today's T4.7 banner-only pass acknowledges the §16 "OSS Preview vs Pro divergence" section is doctrine-§6-violating. A surgical sweep is owed (rewrite to "single product divergence-free model" or tombstone the section). Lower priority — author-focused, not load-bearing.
 
-#### Wave 19 — Doctrine §8 used-as-user verification on the Wave 14 modal
+#### Wave 19 — Doctrine §8 used-as-user verification on the Wave 14 modal (medium value, owed)
 vitest+RTL tests pass; cargo wire-string regression tests pass. Real Playwright-driven verification (`pnpm tauri dev` + `mcp__playwright__browser_*`) was out of scope per Wave 14 prompt. The user-as-user pass is owed before the modal ships to Don's daily-driver build.
 
 ### Cross-reference debt
@@ -184,29 +244,58 @@ vitest+RTL tests pass; cargo wire-string regression tests pass. Real Playwright-
 
 ## State of `parallel_software_tracks.md` after this session
 
-Every Tier 1, Tier 2, and Tier 4 entry now carries an evidence-backed status — DONE with commit shas, or substantially-DONE with explicit carryover. T4.7 added to the doc as a new entry (the doctrine §6 banner sweep). Tier 3 finish-line items intentionally left as-is per the doc's own "defer until close to launch" rule.
+**Every Tier 1, Tier 2, and Tier 4 entry now carries an evidence-backed status** — DONE with commit shas, or substantially-DONE with explicit carryover. T4.7 was added to the doc as a new entry (the doctrine §6 banner sweep). Tier 3 finish-line items intentionally left as-is per the doc's own "defer until close to launch" rule.
 
 Next-session reading order:
+
 1. `python scripts/current_status.py`
 2. `HANDOFF_2026-04-30_AUTONOMOUS_RUN.md` (parent)
 3. **THIS document** (continuation)
-4. `aether/CLAUDE.md` (rules)
+4. `aether/CLAUDE.md` (rules — note new §9.5 pre-commit hygiene)
 5. `planning/01_product_doctrine.md` (§5/§6/§7/§8)
 6. `planning/plans/parallel_software_tracks.md` (now honest)
-7. `planning/plans/T1.3_approval_scope_design.md` (still load-bearing for follow-ups)
+7. `planning/plans/T1.3_approval_scope_design.md` (still load-bearing for Wave 13/15/16/19 follow-ups)
+
+---
+
+## Pre-flight for the next session — MANDATORY before any commit
+
+**Run these once at session start:**
+
+```bash
+cd /c/Users/dbhav/Projects/aether
+python scripts/current_status.py            # confirms tip + branch
+git status --short                          # review pre-existing dirty state
+bash tools/check-pre-commit.sh              # confirm cargo fmt + ruff clean
+```
+
+If `bash tools/setup-hooks.sh` hasn't been run on this clone, run it once:
+
+```bash
+bash tools/setup-hooks.sh                   # one-time per clone; idempotent
+```
+
+After that, every `git commit` will trigger `tools/check-pre-commit.sh` automatically. If the hook fails, fix locally before the commit lands — do NOT bypass with `--no-verify`.
+
+**Agent-dispatch boilerplate update:** every wave-prompt's "Hard constraints" section must require `bash tools/check-pre-commit.sh` to exit clean before staging any commit. Add to the verification step alongside cargo build / cargo test / vitest / tsc.
 
 ---
 
 ## Useful reference paths
 
 - file:///C:/Users/dbhav/Projects/aether/scripts/current_status.py
-- file:///C:/Users/dbhav/Projects/aether/aether/CLAUDE.md
+- file:///C:/Users/dbhav/Projects/aether/CLAUDE.md
+- file:///C:/Users/dbhav/Projects/aether/tools/check-pre-commit.sh
+- file:///C:/Users/dbhav/Projects/aether/tools/setup-hooks.sh
+- file:///C:/Users/dbhav/Projects/aether/tools/git-hooks/pre-commit
+- file:///C:/Users/dbhav/Projects/aether/.github/workflows/ci.yml
 - file:///C:/Users/dbhav/Projects/aether/planning/01_product_doctrine.md
 - file:///C:/Users/dbhav/Projects/aether/planning/plans/parallel_software_tracks.md
 - file:///C:/Users/dbhav/Projects/aether/planning/plans/T1.3_approval_scope_design.md
 - file:///C:/Users/dbhav/Projects/aether/planning/plans/T1.3_browser_file_workflow_proposal.md
 - file:///C:/Users/dbhav/Projects/aether/HANDOFF_2026-04-30_AUTONOMOUS_RUN.md
 - file:///C:/Users/dbhav/Projects/aether/HANDOFF_2026-04-30_AUTONOMOUS_RUN_CONTINUATION.md (this file)
+- file:///C:/Users/dbhav/Projects/aether/STARTING_PROMPT_2026-05-01.md (clean-session priming prompt)
 - file:///C:/Users/dbhav/Projects/aether/packages/l5-files/src/std_fs_stub.rs
 - file:///C:/Users/dbhav/Projects/aether/packages/l5-policy/src/approval.rs
 - file:///C:/Users/dbhav/Projects/aether/packages/storage/migrations/0006_policy_grants_approval_scope.sql
@@ -219,4 +308,4 @@ Next-session reading order:
 
 ---
 
-*Run total this session: 26 commits, 5 waves, 15 stale-prompt drift catches, 1 cross-layer regression caught + fixed (Wave 10A → Wave 11 prep), 1 doctrine §6 banner sweep. End-to-end ApprovalScope flow now wired from L5 enum to L7 user picker.*
+*Run total this session: 30 commits, 5 feature waves (10A, 10B, 11, 12, 14), 15 stale-prompt drift catches, 1 cross-layer regression caught + fixed (Wave 10A → Wave 11 prep), 1 doctrine §6 banner sweep (T4.7), 1 CI red-X root-caused + fixed + permanently gated by committed pre-commit hook. End-to-end ApprovalScope flow now wired from L5 enum to L7 user picker. CI green at `189a087`.*
