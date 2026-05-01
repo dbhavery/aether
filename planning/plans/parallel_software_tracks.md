@@ -38,10 +38,10 @@
 **Notes:** Pro doctrine requires this — without it, Companion is "chat with permissions," not the agent doctrine §3 promises.
 
 ### T1.4 — L3 Presence runtime renderer scaffold
-**Status:** Available — Presence V1 is DONE rot-guarded; renderer is additive.
-**Scope:** Stub the runtime renderer's input contract (motion clip library + L3 events + TTS audio stream) per ADR-0013. Wire L3's existing state machine to a no-op rendering surface that logs state transitions. When motion library lands from GPU pipeline, swap log-stub for actual playback.
+**Status:** DONE — shipped 2026-04-29 in commit `2035822` ("feat(l3-presence): runtime renderer trait + opaque handle types (ADR-0013 scaffold)"). `packages/l3-presence/src/runtime.rs` ships the `Renderer` trait, `LogStubRenderer` (no-op log-only impl), `MotionClipLibraryHandle` + `MotionClipId` + `AudioStreamHandle` opaque input-contract types, `RendererEvent` + `RENDERER_EVENT_LOG_CAP`, `BoxedRendererController`, and `RenderingPresenceController`. All exported from `lib.rs`. Stale-prompt drift catch — repo beat prompt (Decision #32). Patched 2026-04-30 during the autonomous run continuation.
+**Scope (historical):** Stub the runtime renderer's input contract (motion clip library + L3 events + TTS audio stream) per ADR-0013. Wire L3's existing state machine to a no-op rendering surface that logs state transitions. When motion library lands from GPU pipeline, swap log-stub for actual playback.
 **Self-test gate:** L3 state transitions visibly logged in the surface; presence-bridge tests still green.
-**Notes:** Lets the runtime side advance in parallel with the GPU asset side.
+**Notes:** When the motion library lands from the GPU pipeline (per ADR-0014 Step 5), implement a real `Renderer` (replacing `LogStubRenderer`) and swap the controller's renderer field. The trait + handle types + event log are stable.
 
 ### T1.5 — Persona pack release infrastructure (Tier-2 closure)
 **Status:** DONE — closed 2026-04-30 in commit `91f23a9`. Real Ed25519 key generated (`~/.aether/release-key/`, backed up to `I:/IsabelleData/_keys/`); bundled `RELEASE_PUBLIC_KEY_B64` swapped; install orchestrator parameterized on `pk`; tests use the L6 fixture pk explicitly. Desktop test suite: 306/306 green.
