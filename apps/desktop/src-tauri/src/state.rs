@@ -608,7 +608,18 @@ impl AppState {
             browser_executor: Arc::new(
                 aether_l5_browser::playwright_stub::PlaywrightExecutor::new(),
             ),
-            files_executor: Arc::new(aether_l5_files::std_fs_stub::StdFsExecutor::new()),
+            // L5-files graduated to a real `tokio::fs` backend (commit
+            // e28a293) and now requires a `ScopeAllowlist` at construction.
+            // Wave 11 prep: pass `Default::default()` (empty allowlist) so
+            // the shell still boots — every `files_*` invocation falls
+            // through to `FilesExecError::NotInScope`, which is the same
+            // observable behaviour the previous `StdFsExecutor::new()`
+            // stub produced (it returned `BackendDisabled`). The wiring
+            // contract in `files_commands.rs` is exercised against either
+            // failure-string in tests, so the floor is preserved. A later
+            // slice can plumb a real allowlist sourced from the user's
+            // approved-scope ledger.
+            files_executor: Arc::new(aether_l5_files::std_fs_stub::StdFsExecutor::default()),
             presence_history: Mutex::new(VecDeque::with_capacity(PRESENCE_HISTORY_CAPACITY)),
             memory_config: RwLock::new(MemoryConfig::defaults()),
             memory_config_path: None,
