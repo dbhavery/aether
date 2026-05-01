@@ -23,7 +23,7 @@ non_goals:
 
 # L7 — Trust UX & Onboarding (system design)
 
-> **2026-04-30 banner.** This doc has the heaviest doctrine-§6 residue of the L1..L7 system_design set: a full §16 "OSS Preview vs Pro divergence" section, plus references throughout to "Guest mode (OSS Preview only)", "pywebview adapter parity (OSS Preview)", and "Pro" build-flag splits. Doctrine §6 (`../01_product_doctrine.md`, locked 2026-05-18) retired the OSS-Preview-as-wedge thesis: Companion ships once, when complete; pywebview is retired (Tauri is the single shell per the ADR-0008-superseding desktop framework doctrine). §16 in particular should be read as historical scoping work, not active divergence. Body content unchanged; a full surgical sweep is meaningful here and owed — the current pass is banner-only per the low-priority T4.7 scope.
+> **2026-04-30 banner (updated 2026-05-01, Wave 18).** This doc has the heaviest doctrine-§6 residue of the L1..L7 system_design set. Doctrine §6 (`../01_product_doctrine.md`, locked 2026-05-18) retired the OSS-Preview-as-wedge thesis: Companion ships once, when complete; pywebview is retired (Tauri is the single shell per the ADR-0008-superseding desktop framework doctrine). **§16 ("OSS Preview vs Pro divergence") was tombstoned on 2026-05-01 (Wave 18)** — the divergence matrix is removed from the active spec; rationale lives in git history. Remaining residue of the retired model still threads through "Guest mode (OSS Preview only)" passages (§4.5), "pywebview adapter parity" wording (§2.3), and pending-approvals-drawer footnotes (§3.6). Those are lower-priority surgical follow-ups; the §16 tombstone closes the load-bearing piece.
 
 > Scope: the user-facing shell. Onboarding wizard, trust center, permission approval UX, cost visibility, persona picker surface, degraded-mode banners, tutorial/help, action-history replay. Shell-agnostic React components talking to Rust (Tauri) or Python (pywebview) through a single adapter.
 >
@@ -852,24 +852,13 @@ Styling implementation deferred to UI-phase pass.
 
 ---
 
-## 16. OSS Preview vs Pro divergence
+## 16. OSS Preview vs Pro divergence — RETIRED (Wave 18, 2026-05-01)
 
-Single codebase; divergence via build flags (`X3 §9`).
-
-| Feature | OSS Preview | Pro |
-|---|---|---|
-| Onboarding wizard | 8 screens, simplified LLM step (Ollama / Guest / BYOK basic) | 8 screens, full BYOK + provider picker |
-| Preset ladder | Observer / Assistant only (plus locked preview of others) | Full 5-preset ladder |
-| Trust center | 4 tabs (Can do / Will ask / Will never / Recent activity) | Full 7 tabs |
-| BYOK wallet | Not shown (Guest / Ollama `$0.00` only) | Full wallet + caps |
-| Guest mode | Available | Not shown |
-| Audit view | Last 7 days, no replay | Full history + replay |
-| Persona picker | Fixed starter pack | Full persona catalog + custom |
-| Banners | Same (L5/L4/L2 banners shipped in both) | Same |
-| Help / tutorials | First-run, permission explainer | Full set including BYOK + cost-cap tutorials |
-| Export audit | Not available | Available (re-auth) |
-
-Divergence by **build-time feature flag**, not separate components. Components accept an `edition` prop or read a single `useEdition()` hook to conditionally render advanced affordances. This keeps the component tree identical so the shell-adapter story from §2 holds.
+> **Tombstone.** This section described an OSS-Preview-vs-Pro feature divergence (8-screen wizard variants, preset-ladder splits, 4-vs-7-tab trust center, BYOK gating, Guest mode, audit-export gating, etc.) gated by build-time feature flags. Doctrine §6 (`../01_product_doctrine.md`, locked 2026-05-18) retired the OSS-Preview-as-wedge thesis: **Companion ships once, when complete.** There is no "Preview" edition, no "Pro" edition, no `useEdition()` hook, no `edition` prop. Components are written for the single product surface.
+>
+> The historical content of this section (the divergence matrix and the build-flag mechanism) is preserved in git history at `f7b929d^` and `git log -- planning/plans/L7_trust_ux_onboarding_system_design.md` if the rationale ever needs reconstruction. It is removed from the active design contract because it is doctrine-violating and reading it as current spec would mislead any agent or contributor.
+>
+> Cross-references that previously pointed at "OSS Preview" features in this document (e.g. §3.6 "Pending-approvals drawer" footnotes, §4.5 "Guest mode (OSS Preview only)") are residue of the same retired model. Treat them as historical until §4.5 + the §3.6 footnotes get a follow-up surgical sweep — owed but lower priority than the §16 tombstone above. See banner at the top of this file for the full residue list.
 
 ---
 

@@ -156,8 +156,9 @@ Tooling at `tools/rename_companion_tier1b.py` + `tools/rename_companion_tier1b_d
 
 ### T4.7 — Doctrine §6 banner sweep on `L*_system_design.md`
 **Status:** DONE (banner-only) — 6 banners landed 2026-04-30 in commit `7d88c0c` ("docs(planning): doctrine §6 banner-only sweep on L2-L7 system_design docs"). Each banner names the file's specific OSS-Preview / Pro-Phase residue, points at doctrine §6, explicitly preserves body content. L1 already clean.
-**Carryover:** Surgical sweep is owed for at least L7 (which carries a full §16 "OSS Preview vs Pro divergence" section). Banner explicitly flags this.
-**Self-test gate:** banner present in each of L2..L7 system_design docs; verified via grep for "2026-04-30 banner" — all 6 hit.
+**Surgical sweep on L7 §16 — DONE 2026-05-01 (Wave 18):** the load-bearing OSS-Preview-vs-Pro divergence matrix in §16 was tombstoned in `planning/plans/L7_trust_ux_onboarding_system_design.md`. The body now points at git history for the rationale and at doctrine §6 for the active spec. L7 banner updated to reflect Wave 18 closure.
+**Carryover (lower priority):** smaller residue still threads through L7 §4.5 ("Guest mode (OSS Preview only)"), L7 §2.3 ("pywebview adapter parity"), and L7 §3.6 footnotes. Surgical sweeps owed but not load-bearing — the §16 tombstone closed the doctrine-§6-violating piece.
+**Self-test gate:** banner present in each of L2..L7 system_design docs; verified via grep for "2026-04-30 banner" — all 6 hit. L7 §16 tombstoned (verified by grep for "RETIRED (Wave 18").
 
 ---
 
