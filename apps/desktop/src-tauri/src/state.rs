@@ -187,6 +187,16 @@ pub struct AppState {
     /// a single-line change in `build()` once the `std::fs` /
     /// `tokio::fs` driver lands in a later slice.
     pub files_executor: Arc<dyn aether_l5_files::FilesExecutor>,
+    /// Wave 13b — concrete handle on the same `StdFsExecutor` that
+    /// `files_executor` wraps as a trait object. Cloning the inner
+    /// `Arc<StdFsExecutor>` yields a second outer `Arc` whose internal
+    /// `Arc<RwLock<ScopeAllowlist>>` is *shared* with `files_executor`
+    /// (Wave 13a contract). The handle exists so the boot path and the
+    /// L5 event sink can call `set_allowlist` /
+    /// `update_allowlist_from_paths` on the concrete type without
+    /// extending the public `FilesExecutor` trait surface that
+    /// `files_commands.rs` consumes.
+    pub files_executor_handle: Arc<aether_l5_files::std_fs_stub::StdFsExecutor>,
     /// Bounded, UX-only history of attention transitions for the
     /// Trust drawer's History tab. Does NOT go through the L5 audit
     /// store — presence is observational per design §4. Cleared on
@@ -662,6 +672,16 @@ impl AppState {
             Arc::new(FlatFileEmbeddingStore::in_memory());
         let embedding_provider: Arc<dyn EmbeddingProvider> =
             Arc::new(OllamaEmbeddingProvider::from_env());
+
+        // Wave 13b — concrete StdFsExecutor handle. Both `files_executor`
+        // and `files_executor_handle` wrap clones of the SAME inner Arc,
+        // so the internal Arc<RwLock<ScopeAllowlist>> is shared. The
+        // handle exists so the boot-time seed step and the L5 event sink
+        // can call `set_allowlist`/`update_allowlist_from_paths` on the
+        // concrete type without extending the FilesExecutor trait.
+        let files_executor_handle: Arc<aether_l5_files::std_fs_stub::StdFsExecutor> =
+            Arc::new(aether_l5_files::std_fs_stub::StdFsExecutor::default());
+
         Ok(Self {
             catalog: RwLock::new(catalog),
             presence,
@@ -698,7 +718,8 @@ impl AppState {
             // failure-string in tests, so the floor is preserved. A later
             // slice can plumb a real allowlist sourced from the user's
             // approved-scope ledger.
-            files_executor: Arc::new(aether_l5_files::std_fs_stub::StdFsExecutor::default()),
+            files_executor: files_executor_handle.clone(),
+            files_executor_handle: files_executor_handle.clone(),
             presence_history: Mutex::new(VecDeque::with_capacity(PRESENCE_HISTORY_CAPACITY)),
             memory_config: RwLock::new(MemoryConfig::defaults()),
             memory_config_path: None,
