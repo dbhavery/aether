@@ -23,6 +23,7 @@ import type {
   PresenceHistoryEntry,
   PresencePayload,
   PresenceStatusPayload,
+  ResolveApprovalReply,
   SpeechModelList,
   TranscribeUtteranceRequest,
   TranscriptMessage,
@@ -45,14 +46,44 @@ export async function submitTurn(text: string): Promise<TurnOutcome> {
   return invoke<TurnOutcome>("submit_turn", { text });
 }
 
+/**
+ * Wave 11 — `resolve_approval` now returns a tagged
+ * `ResolveApprovalReply` so the same wire surface serves both the
+ * chat-surface (`kind: "turn"`) and the executor flavour
+ * (`kind: "executor"`). The chat surface should call
+ * [`resolveApprovalForTurn`] which preserves the pre-Wave-11
+ * `Promise<TurnOutcome>` ergonomics; new executor surfaces should call
+ * the raw `resolveApproval` and dispatch on `kind`.
+ */
 export async function resolveApproval(
   ticketId: string,
   approve: boolean,
-): Promise<TurnOutcome> {
-  return invoke<TurnOutcome>("resolve_approval", {
+): Promise<ResolveApprovalReply> {
+  return invoke<ResolveApprovalReply>("resolve_approval", {
     ticketId,
     approve,
   });
+}
+
+/**
+ * Chat-surface convenience: resolve a pending Turn-flavoured approval
+ * and unwrap to a `TurnOutcome` for `appendOutcome` consumers. Throws
+ * if the backend reports the pending registry held an
+ * `Executor`-flavoured row instead — that should never happen on the
+ * chat surface (`submit_turn` only registers Turn rows).
+ */
+export async function resolveApprovalForTurn(
+  ticketId: string,
+  approve: boolean,
+): Promise<TurnOutcome> {
+  const reply = await resolveApproval(ticketId, approve);
+  if (reply.kind === "turn") {
+    return reply.outcome;
+  }
+  throw new Error(
+    `resolve_approval returned executor-flavoured reply for chat ticket ${ticketId}; ` +
+      `method=${reply.method}`,
+  );
 }
 
 export async function presenceCurrent(): Promise<PresencePayload> {

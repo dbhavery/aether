@@ -7,7 +7,7 @@ import {
   memoryRecent,
   onPresence,
   presenceCurrent,
-  resolveApproval,
+  resolveApprovalForTurn,
   setAutonomyPreset,
   submitTurn,
   switchPersona as apiSwitchPersona,
@@ -222,7 +222,7 @@ export function App() {
       if (!pendingApproval) return;
       setBusy(true);
       try {
-        const outcome = await resolveApproval(
+        const outcome = await resolveApprovalForTurn(
           pendingApproval.ticket_id,
           approve,
         );

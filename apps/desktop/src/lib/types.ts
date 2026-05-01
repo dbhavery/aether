@@ -69,6 +69,41 @@ export interface TurnOutcome {
   error_note: string | null;
 }
 
+/**
+ * Wave 11 — `resolve_approval` Tauri command now returns a tagged
+ * variant so the same wire surface serves both the chat-surface
+ * (`PendingApproval::Turn`) and Wave 11 executor
+ * (`PendingApproval::Executor`) flavours. The renderer dispatches on
+ * `kind`:
+ *
+ * - `"turn"` carries the original `TurnOutcome` shape so the chat
+ *   surface keeps working with zero TS-side branching.
+ * - `"executor"` carries `{ approved, method, result, error }`. The
+ *   renderer routes the reply by `method` to whichever surface
+ *   originally issued the call.
+ */
+export type ResolveApprovalReply =
+  | { kind: "turn"; outcome: TurnOutcome }
+  | {
+      kind: "executor";
+      approved: boolean;
+      method: string;
+      result: string | null;
+      error: string | null;
+    };
+
+/**
+ * Wave 11 — payload carried on the `executor:awaiting_approval` Tauri
+ * event. Same shape as `ApprovalPayload`; emitted by the gate's Ask
+ * branch alongside the sentinel error string `awaiting_approval:<id>`
+ * surfaced as the inner's `Result` so the renderer can show the modal
+ * even if the event listener isn't attached.
+ */
+export type ExecutorAwaitingApproval = ApprovalPayload;
+
+/** Wire prefix for the gate's "awaiting approval" sentinel error string. */
+export const AWAITING_APPROVAL_SENTINEL_PREFIX = "awaiting_approval:";
+
 export type PresenceStateLabel =
   | "quiet"
   | "listening"
