@@ -379,6 +379,7 @@ fn ttl_expiry_drops_grant_before_next_evaluate() {
         issued_at: MonotonicTimestamp(10),
         expires_at: Some(MonotonicTimestamp(50)), // already past
         preset_version_issued_under: 1,
+        approval_scope: None,
     });
     assert_eq!(ledger.active_len(), 1);
 

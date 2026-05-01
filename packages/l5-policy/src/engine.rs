@@ -730,6 +730,7 @@ impl DefaultPolicyEngine {
             issued_at: req.emitted_at,
             expires_at: None,
             preset_version_issued_under: preset_version,
+            approval_scope: None,
         };
         let grant_id = new_grant.grant_id.clone();
         self.ledger.issue(new_grant.clone());
