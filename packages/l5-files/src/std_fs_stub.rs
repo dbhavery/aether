@@ -363,3 +363,250 @@ async fn grep_one_file(path: &Path, pattern: &str) -> Result<Vec<GrepHit>, Files
     }
     Ok(hits)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    use tempfile::TempDir;
+
+    /// Build a `StdFsExecutor` whose scope is the canonicalized form
+    /// of the supplied `TempDir` — `tempfile` returns a path that may
+    /// itself contain symlinks (e.g. /tmp -> /private/tmp on macOS,
+    /// short-name expansion on Windows), so canonicalize at scope
+    /// construction time to match what `canonicalize_and_authorize`
+    /// will see at call time.
+    fn exec_for(dir: &TempDir) -> StdFsExecutor {
+        let canonical = std::fs::canonicalize(dir.path()).expect("canonicalize tmpdir");
+        StdFsExecutor::new(ScopeAllowlist::new([canonical]))
+    }
+
+    #[tokio::test]
+    async fn read_round_trips_existing_file() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("hello.txt");
+        std::fs::write(&path, b"hello world").unwrap();
+        let exec = exec_for(&dir);
+
+        let bytes = exec.read(&path).await.unwrap();
+        assert_eq!(bytes, b"hello world");
+    }
+
+    #[tokio::test]
+    async fn read_missing_path_returns_not_found() {
+        let dir = TempDir::new().unwrap();
+        let exec = exec_for(&dir);
+
+        let err = exec.read(&dir.path().join("nope.txt")).await.unwrap_err();
+        assert!(matches!(err, FilesExecError::NotFound(_)), "got {err:?}");
+    }
+
+    #[tokio::test]
+    async fn create_writes_new_file_atomically() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("new.txt");
+        let exec = exec_for(&dir);
+
+        exec.create(&path, b"first write").await.unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"first write");
+
+        // No leftover tempfile sibling.
+        let leftovers: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().contains(".aether-tmp."))
+            .collect();
+        assert!(leftovers.is_empty(), "leftover tempfile(s): {leftovers:?}");
+    }
+
+    #[tokio::test]
+    async fn create_refuses_existing_destination() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("existing.txt");
+        std::fs::write(&path, b"old").unwrap();
+        let exec = exec_for(&dir);
+
+        let err = exec.create(&path, b"new").await.unwrap_err();
+        assert!(matches!(err, FilesExecError::AlreadyExists(_)), "got {err:?}");
+        // Original content preserved.
+        assert_eq!(std::fs::read(&path).unwrap(), b"old");
+    }
+
+    #[tokio::test]
+    async fn edit_replaces_existing_file() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("e.txt");
+        std::fs::write(&path, b"v1").unwrap();
+        let exec = exec_for(&dir);
+
+        exec.edit(&path, b"v2 longer").await.unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"v2 longer");
+    }
+
+    #[tokio::test]
+    async fn edit_missing_file_is_not_found() {
+        let dir = TempDir::new().unwrap();
+        let exec = exec_for(&dir);
+
+        let err = exec.edit(&dir.path().join("absent.txt"), b"x").await.unwrap_err();
+        assert!(matches!(err, FilesExecError::NotFound(_)), "got {err:?}");
+    }
+
+    #[tokio::test]
+    async fn rename_moves_within_scope() {
+        let dir = TempDir::new().unwrap();
+        let src = dir.path().join("a.txt");
+        let dst = dir.path().join("b.txt");
+        std::fs::write(&src, b"payload").unwrap();
+        let exec = exec_for(&dir);
+
+        exec.rename(&src, &dst).await.unwrap();
+        assert!(!src.exists());
+        assert_eq!(std::fs::read(&dst).unwrap(), b"payload");
+    }
+
+    #[tokio::test]
+    async fn rename_refuses_to_clobber_existing_dst() {
+        let dir = TempDir::new().unwrap();
+        let src = dir.path().join("src.txt");
+        let dst = dir.path().join("dst.txt");
+        std::fs::write(&src, b"src").unwrap();
+        std::fs::write(&dst, b"dst").unwrap();
+        let exec = exec_for(&dir);
+
+        let err = exec.rename(&src, &dst).await.unwrap_err();
+        assert!(matches!(err, FilesExecError::AlreadyExists(_)), "got {err:?}");
+        // Both still present.
+        assert!(src.exists());
+        assert_eq!(std::fs::read(&dst).unwrap(), b"dst");
+    }
+
+    #[tokio::test]
+    async fn delete_removes_file() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("doomed.txt");
+        std::fs::write(&path, b"x").unwrap();
+        let exec = exec_for(&dir);
+
+        exec.delete(&path).await.unwrap();
+        assert!(!path.exists());
+    }
+
+    #[tokio::test]
+    async fn delete_refuses_directory() {
+        let dir = TempDir::new().unwrap();
+        let sub = dir.path().join("subdir");
+        std::fs::create_dir(&sub).unwrap();
+        let exec = exec_for(&dir);
+
+        let err = exec.delete(&sub).await.unwrap_err();
+        assert!(matches!(err, FilesExecError::Io(_)), "got {err:?}");
+        assert!(sub.exists()); // untouched
+    }
+
+    #[tokio::test]
+    async fn grep_finds_substring_hits() {
+        let dir = TempDir::new().unwrap();
+        std::fs::write(
+            dir.path().join("a.txt"),
+            b"first line\nTODO: fix this\nthird\n",
+        )
+        .unwrap();
+        std::fs::write(dir.path().join("b.txt"), b"no hits here\n").unwrap();
+        std::fs::write(dir.path().join("c.txt"), b"another TODO line\nclean\n").unwrap();
+        let exec = exec_for(&dir);
+
+        let hits = exec.grep(dir.path(), "TODO").await.unwrap();
+        assert_eq!(hits.len(), 2);
+        // Both hits should report 1-indexed line numbers.
+        for h in &hits {
+            assert!(h.line_text.contains("TODO"));
+            assert!(h.line_no >= 1);
+        }
+    }
+
+    #[tokio::test]
+    async fn grep_single_file_root_works() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("solo.txt");
+        std::fs::write(&path, b"alpha\nbeta TODO\ngamma\n").unwrap();
+        let exec = exec_for(&dir);
+
+        let hits = exec.grep(&path, "TODO").await.unwrap();
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].line_no, 2);
+        assert_eq!(hits[0].line_text, "beta TODO");
+    }
+
+    #[tokio::test]
+    async fn out_of_scope_path_is_rejected() {
+        let scope_dir = TempDir::new().unwrap();
+        let other_dir = TempDir::new().unwrap();
+        let path = other_dir.path().join("file.txt");
+        std::fs::write(&path, b"x").unwrap();
+        let exec = exec_for(&scope_dir);
+
+        let err = exec.read(&path).await.unwrap_err();
+        assert!(matches!(err, FilesExecError::NotInScope(_)), "got {err:?}");
+    }
+
+    /// `..` segments must resolve BEFORE the allowlist check — any
+    /// path that canonicalizes outside the allowlist is rejected, even
+    /// if its lexical form lives inside an approved root.
+    #[tokio::test]
+    async fn parent_dir_traversal_is_rejected() {
+        let outer = TempDir::new().unwrap();
+        let inner = outer.path().join("inner");
+        std::fs::create_dir(&inner).unwrap();
+        let escape_target = outer.path().join("escape.txt");
+        std::fs::write(&escape_target, b"secret").unwrap();
+
+        // Allowlist is `inner/` only. Lexical path `inner/../escape.txt`
+        // canonicalizes to `outer/escape.txt`, which is outside scope.
+        let canonical_inner = std::fs::canonicalize(&inner).unwrap();
+        let exec = StdFsExecutor::new(ScopeAllowlist::new([canonical_inner]));
+
+        let traversal: PathBuf = inner.join("..").join("escape.txt");
+        let err = exec.read(&traversal).await.unwrap_err();
+        assert!(matches!(err, FilesExecError::NotInScope(_)), "got {err:?}");
+    }
+
+    /// On a thread without a Tokio runtime, every method must
+    /// self-degrade to `BackendDisabled` rather than panicking inside
+    /// `tokio::fs`. Mirrors the playwright slice's runtime check
+    /// (e2690d5).
+    #[test]
+    fn runtime_absent_yields_backend_disabled() {
+        std::thread::spawn(|| {
+            // No tokio runtime in this thread.
+            let exec = StdFsExecutor::default();
+            // Build a tiny ad-hoc poll loop so we can drive the future
+            // to completion without borrowing a tokio runtime.
+            use std::future::Future;
+            use std::sync::Arc;
+            use std::task::{Context, Poll, Wake, Waker};
+            struct NoopWaker;
+            impl Wake for NoopWaker {
+                fn wake(self: Arc<Self>) {}
+            }
+            let waker = Waker::from(Arc::new(NoopWaker));
+            let mut ctx = Context::from_waker(&waker);
+            let fut = exec.read(Path::new("/anywhere"));
+            let mut fut = Box::pin(fut);
+            let result = loop {
+                match fut.as_mut().poll(&mut ctx) {
+                    Poll::Ready(v) => break v,
+                    Poll::Pending => {
+                        // Should NOT pend — `require_runtime()` returns
+                        // synchronously. If we ever reach Pending here,
+                        // the self-degrade has regressed.
+                        panic!("require_runtime() should short-circuit synchronously");
+                    }
+                }
+            };
+            assert!(matches!(result, Err(FilesExecError::BackendDisabled)));
+        })
+        .join()
+        .unwrap();
+    }
+}
