@@ -38,6 +38,7 @@ fn grant_survives_a_process_restart() {
         issued_at: MonotonicTimestamp(1_000_000),
         expires_at: None,
         preset_version_issued_under: 1,
+        approval_scope: None,
     };
 
     // Cold open + issue.
@@ -83,6 +84,7 @@ fn revoke_persists_across_restart() {
         issued_at: MonotonicTimestamp(42),
         expires_at: None,
         preset_version_issued_under: 1,
+        approval_scope: None,
     };
 
     {
