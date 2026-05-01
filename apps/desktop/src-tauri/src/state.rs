@@ -2920,4 +2920,107 @@ humor: "playful"
         let state = AppState::new_with_db_path(&bogus).expect("fallback AppState");
         assert!(matches!(state.memory_backend(), MemoryBackend::InMemory));
     }
+
+    // -----------------------------------------------------------------
+    // Wave 13b — boot seed + grant-event allowlist plumbing.
+    // -----------------------------------------------------------------
+
+    /// Boot wires `files_executor` and `files_executor_handle` to the
+    /// SAME backing executor (Arc-shared scope state per Wave 13a).
+    /// Mutating the allowlist via the handle must be observable through
+    /// the trait-object surface.
+    #[tokio::test]
+    async fn files_executor_and_handle_share_scope_state() {
+        use aether_l5_files::{FilesExecutor, ScopeAllowlist};
+
+        let state = AppState::new().expect("AppState::new");
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("hi.txt");
+        std::fs::write(&path, b"hi").unwrap();
+
+        // Boot allowlist is empty (the ledger is empty on first build)
+        // — the trait-object read rejects.
+        let err = state.files_executor.read(&path).await.unwrap_err();
+        assert!(
+            matches!(err, aether_l5_files::FilesExecError::NotInScope(_)),
+            "got {err:?}"
+        );
+
+        // Mutate the allowlist via the concrete handle.
+        let canonical = std::fs::canonicalize(dir.path()).unwrap();
+        state
+            .files_executor_handle
+            .set_allowlist(ScopeAllowlist::new([canonical]));
+
+        // The trait-object surface sees the new scope immediately.
+        let bytes = state.files_executor.read(&path).await.unwrap();
+        assert_eq!(bytes, b"hi");
+    }
+
+    /// `seed_executor_allowlist_from_ledger` must mirror an active
+    /// `FilesRead` grant's path into the executor's allowlist and
+    /// ignore non-File grants. Tests the boot helper directly without
+    /// rebuilding `AppState`.
+    #[tokio::test]
+    async fn seed_helper_mirrors_active_files_grants() {
+        use aether_l5_files::{FilesExecutor, ScopeAllowlist};
+        use aether_l5_policy::{
+            ApprovalMode, ApprovalScope, Grant, GrantDuration, GrantId, GrantLedger,
+            InMemoryGrantLedger, MonotonicTimestamp, PersonaId, ResourceScope,
+        };
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let canonical = std::fs::canonicalize(dir.path()).unwrap();
+        let file = dir.path().join("h.txt");
+        std::fs::write(&file, b"x").unwrap();
+
+        let executor = aether_l5_files::std_fs_stub::StdFsExecutor::default();
+        // Pre-condition: empty ledger seeds an empty allowlist (no-op).
+        let empty_ledger = InMemoryGrantLedger::new();
+        seed_executor_allowlist_from_ledger(&empty_ledger, &executor);
+        let err = executor.read(&file).await.unwrap_err();
+        assert!(
+            matches!(err, aether_l5_files::FilesExecError::NotInScope(_)),
+            "got {err:?}"
+        );
+
+        // Populate the ledger with one File grant + one non-File grant.
+        let ledger = InMemoryGrantLedger::new();
+        ledger
+            .issue(Grant {
+                grant_id: GrantId("file-g".to_string()),
+                capability: aether_l5_policy::Capability::FilesRead,
+                resource_pattern: ResourceScope::Path(canonical.display().to_string()),
+                persona_id: PersonaId("test".to_string()),
+                approval_mode: ApprovalMode::Ask,
+                duration: GrantDuration::Session,
+                issued_at: MonotonicTimestamp(0),
+                expires_at: None,
+                preset_version_issued_under: 0,
+                approval_scope: Some(ApprovalScope::PerAction),
+            })
+            .expect("issue file grant");
+        ledger
+            .issue(Grant {
+                grant_id: GrantId("url-g".to_string()),
+                capability: aether_l5_policy::Capability::BrowserOpen,
+                resource_pattern: ResourceScope::Url("https://example.com".to_string()),
+                persona_id: PersonaId("test".to_string()),
+                approval_mode: ApprovalMode::Ask,
+                duration: GrantDuration::Session,
+                issued_at: MonotonicTimestamp(0),
+                expires_at: None,
+                preset_version_issued_under: 0,
+                approval_scope: Some(ApprovalScope::PerAction),
+            })
+            .expect("issue url grant");
+
+        // Reset to empty (sanity), then seed.
+        executor.set_allowlist(ScopeAllowlist::default());
+        seed_executor_allowlist_from_ledger(&ledger, &executor);
+
+        // The File grant widened the scope; the URL grant did not.
+        let bytes = executor.read(&file).await.unwrap();
+        assert_eq!(bytes, b"x");
+    }
 }
