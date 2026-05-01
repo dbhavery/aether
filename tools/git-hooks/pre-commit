@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# .git/hooks/pre-commit (or tools/git-hooks/pre-commit when wired via
+# `git config core.hooksPath tools/git-hooks` — see tools/setup-hooks.sh).
+#
+# Thin wrapper around tools/check-pre-commit.sh. The wrapper exists so
+# the actual check logic can be edited without touching git hook plumbing.
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+exec "$REPO_ROOT/tools/check-pre-commit.sh"

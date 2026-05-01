@@ -86,6 +86,21 @@ Every user-facing path in an agent response must be a bare `file:///C:/...` or `
 - A partial scaffold with a clear TODO beats fake completeness.
 - Flag blockers in the wave execution report, not inline in code.
 
+## 9.5. Pre-commit hygiene (added 2026-05-01)
+
+CI's blocking lints (`cargo fmt --check`, `ruff check src/ tests/`) ran red on `dev` for **multiple consecutive sessions** in late April 2026 because agents wrote code that compiled + tested cleanly but broke formatting that rustfmt would auto-collapse. The fixes are mechanical; the missed signal was costly.
+
+**Local mirror of CI's blocking lints:** `tools/check-pre-commit.sh`. Runs in <10s. Mirrors the exact checks `.github/workflows/ci.yml` runs blocking on the `rust` job (`cargo fmt --all -- --check`) and the `legacy-python` job (`ruff check src/ tests/`).
+
+**Two ways to use it:**
+
+1. **Manual** — `bash tools/check-pre-commit.sh` before every `git commit`. **Mandatory for every agent before staging any commit.** Add it to wave-prompt boilerplate.
+2. **Automatic** — one-time per clone, `bash tools/setup-hooks.sh` wires `core.hooksPath` to `tools/git-hooks/`, so `pre-commit` runs the script automatically. The hooks travel with the repo via that config edge — they're committed to the repo, not living in the local `.git/hooks/`.
+
+If `cargo` or `ruff` aren't installed locally, the script warns and exits non-zero (so CI failures aren't silently masked).
+
+**Rule for agents:** add `bash tools/check-pre-commit.sh` to the verification step of every wave-prompt. Stage commits only after it exits clean. CI fmt failures are a session-ender — they block PR merges and pollute the email digest, masking real failures underneath.
+
 ## 10. Doctrine §5–§8 cross-reference (added 2026-05-18)
 
 These doctrine rules govern every session and every PR:
