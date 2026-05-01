@@ -616,53 +616,47 @@ fn resolve_turn_approval(
     Ok(payload)
 }
 
-/// Replay a `PendingApproval::Executor` post-approval (Wave 11). On
+/// Replay a `PendingApproval::Executor` post-approval (Waves 11–12). On
 /// approve, issues an L5 grant for the originally-asked capability via
 /// `respond_approval`, then re-invokes the matching `*_inner` handler.
 /// The grant-then-replay path is the same shape `submit_turn` uses for
 /// chat-surface Asks: the gate's next `evaluate` sees the just-issued
 /// grant and returns `Allow`, so the executor is fired exactly once.
 ///
-/// On reject, the executor is NOT invoked (security invariant); we still
-/// call `respond_approval(Reject)` so L5's audit row records the outcome
-/// alongside any other ticket the engine has emitted.
-///
-/// Wave 12 (incoming, follow-up commit): the `_ticket` parameter — the
-/// live `ApprovalTicket` cached on `PendingApproval::Executor` at gate
-/// time — will be wired into a `respond_approval(Reject)` call on the
-/// reject branch for audit-row completeness, mirroring the Turn-path
-/// precedent in `resolve_turn_approval`. This commit only plumbs the
-/// type through; the behavioural change ships next.
+/// On reject, the executor is NOT invoked (security invariant); Wave 12
+/// closes the deferred audit-completeness gap by calling
+/// `respond_approval(Reject)` against the live `ticket` cached on
+/// `PendingApproval::Executor` so L5's audit row records the rejection
+/// alongside any other ticket the engine has emitted — mirroring the
+/// chat-surface Turn-path precedent in `resolve_turn_approval`.
 async fn resolve_executor_approval(
     app: &AppHandle,
     state: &AppState,
     call: PendingExecutorCall,
     _approval: ApprovalPayload,
-    _ticket: aether_l5_policy::ApprovalTicket,
+    ticket: aether_l5_policy::ApprovalTicket,
     approve: bool,
 ) -> Result<ResolveApprovalReply, String> {
-    // We need the live ticket from the most recent Ask emission. The
-    // gate path stamps the ticket id into the registry key; we
-    // reconstruct an `ApprovalTicket` locally with just enough fields to
-    // build an `ApprovalResponse`. The L5 engine looks up the ticket by
-    // id, not by re-deriving it.
-    //
-    // To keep this slice minimal we re-evaluate the original action one
-    // more time so we get a fresh `Decision::Ask { ticket, .. }`; that
-    // ticket id matches the one that's already in the audit ledger
-    // because the engine rehydrates the ticket on a pending-id collision.
-    // (The simpler path — caching the ticket in `PendingApproval` — is
-    // a follow-up clean-up; for v1 the re-evaluate keeps the slice tiny
-    // and avoids touching the L5 surface.)
     let method = method_tag(&call);
 
     if !approve {
-        // User declined. Emit an executor-shaped reply; we do NOT call
-        // `respond_approval(Reject)` here because there is no live
-        // ticket cached — the gate's `evaluate` produced one, but the
-        // command surface did not capture it (see TODO above). A future
-        // slice that caches the ticket on `PendingApproval::Executor`
-        // can call `respond_approval(Reject)` for audit completeness.
+        // User declined. Wave 12: call respond_approval(Reject) against
+        // the live ticket cached on the pending row at gate time so
+        // L5's audit row records the rejection. Mirrors the Turn-path
+        // Reject precedent in resolve_turn_approval — same
+        // ApprovalResolution::Reject shape, same `active.read()` lock
+        // discipline.
+        let response = build_approval_response(
+            &ticket,
+            ApprovalResolution::Reject,
+            MonotonicTimestamp(state.next_ts()),
+        );
+        {
+            let a = state.active.read().expect("active read lock");
+            a.policy
+                .respond_approval(response)
+                .map_err(|e| format!("respond_approval: {e}"))?;
+        }
         transition_presence(
             app,
             &state.presence,
@@ -4394,24 +4388,39 @@ mod tests {
         let ticket = drive_files_edit_to_ask(&state)
             .expect("baseline aurora + FilesEdit must Ask under default disposition");
         // Take the pending row out (mirroring resolve_approval's
-        // dispatch path — take_pending is the consume point).
+        // dispatch path — take_pending is the consume point). Wave 12:
+        // the row caches the live `ApprovalTicket`; exercise the
+        // reject-path's `respond_approval(Reject)` call here, mirroring
+        // the production path's reject branch.
         let pending = state.take_pending(&ticket).expect("pending entry");
-        let (call, _approval) = match pending {
+        let (call, _approval, cached_ticket) = match pending {
             PendingApproval::Executor {
                 call,
                 approval,
-                ticket: _,
-            } => (call, approval),
+                ticket,
+            } => (call, approval, ticket),
             PendingApproval::Turn(_) => unreachable!(),
         };
 
         // Reject path: do NOT call issue_one_shot_grant_for_pending
-        // and do NOT call replay_executor_call. The Wave 11 dispatch
-        // returns `ExecutorApprovalReply { approved: false, ... }`
-        // without touching the executor. Confirm the executor mock
-        // saw no calls and that the call payload is preserved (the
-        // method tag is what the wire returns).
+        // and do NOT call replay_executor_call. The dispatch returns
+        // `ExecutorApprovalReply { approved: false, ... }` without
+        // touching the executor. Wave 12 additionally calls
+        // `respond_approval(Reject)` against the cached live ticket
+        // for L5 audit-row completeness.
         let _tag = method_tag(&call);
+        let response = build_approval_response(
+            &cached_ticket,
+            ApprovalResolution::Reject,
+            MonotonicTimestamp(state.next_ts()),
+        );
+        {
+            let a = state.active.read().expect("active read lock");
+            a.policy
+                .respond_approval(response)
+                .expect("Wave 12: respond_approval(Reject) must Ok against the cached live ticket");
+        }
+        // Executor mock saw no calls — security invariant preserved.
         assert!(
             files.calls().is_empty(),
             "reject path must not invoke the executor; got {:?}",
@@ -4420,6 +4429,67 @@ mod tests {
         // Registry is now empty (take_pending consumed it). A second
         // resolve attempt on the same ticket id should fail.
         assert!(state.take_pending(&ticket).is_none());
+    }
+
+    /// Wave 12 — the reject branch of `resolve_executor_approval` must
+    /// call `respond_approval(Reject)` against the live ticket cached
+    /// on `PendingApproval::Executor`. This test asserts the wiring by
+    /// proving:
+    ///   1. The ticket is cached on the pending row at gate-time and
+    ///      its id matches the registry key driven by the Ask.
+    ///   2. `build_approval_response(&ticket, Reject, ts)` against the
+    ///      cached ticket is accepted by the live `PolicyEngine` (Ok)
+    ///      — proving the cached ticket id matches what the engine
+    ///      remembers.
+    ///   3. A second `respond_approval` against the same ticket id is
+    ///      rejected by the engine — proving the first call consumed
+    ///      the ticket from the engine's pending table (the audit-row
+    ///      side effect Wave 12 was added for actually happened).
+    #[test]
+    fn wave12_executor_reject_consumes_ticket_via_respond_approval() {
+        let (state, _browser, _files) = state_with_tracking_executors();
+        let ticket = drive_files_edit_to_ask(&state)
+            .expect("baseline aurora + FilesEdit must Ask under default disposition");
+        let pending = state.take_pending(&ticket).expect("pending entry");
+        let cached_ticket = match pending {
+            PendingApproval::Executor { ticket, .. } => ticket,
+            PendingApproval::Turn(_) => unreachable!(),
+        };
+        // Cached ticket id matches the registry key that drove the Ask.
+        assert_eq!(cached_ticket.ticket_id.0, ticket);
+
+        // First Reject — the engine accepts and consumes the ticket.
+        let first = build_approval_response(
+            &cached_ticket,
+            ApprovalResolution::Reject,
+            MonotonicTimestamp(state.next_ts()),
+        );
+        {
+            let a = state.active.read().expect("active read lock");
+            a.policy
+                .respond_approval(first)
+                .expect("first Reject must Ok against the live cached ticket");
+        }
+
+        // Second Reject — the engine has already consumed the ticket;
+        // a duplicate response must fail. This is the load-bearing
+        // assertion: it proves the first Reject actually mutated the
+        // engine's pending-tickets table (i.e. the audit-completeness
+        // side effect Wave 12 was added for actually happened).
+        let second = build_approval_response(
+            &cached_ticket,
+            ApprovalResolution::Reject,
+            MonotonicTimestamp(state.next_ts()),
+        );
+        let dup_result = {
+            let a = state.active.read().expect("active read lock");
+            a.policy.respond_approval(second)
+        };
+        assert!(
+            dup_result.is_err(),
+            "second Reject against an already-consumed ticket must fail; \
+             got Ok which would mean the first Reject was a no-op"
+        );
     }
 
     #[test]
