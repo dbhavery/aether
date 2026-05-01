@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from prompt_matrix import (  # type: ignore[import-not-found]
     DEFAULT_FRAMINGS,
     DEFAULT_LIGHTINGS,

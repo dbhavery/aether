@@ -6,11 +6,7 @@ runner module so we don't write into the real `personas/` tree.
 
 from __future__ import annotations
 
-import os
-import shutil
 from pathlib import Path
-
-import pytest
 
 import runner  # type: ignore[import-not-found]
 from output_schema import read_manifest  # type: ignore[import-not-found]
@@ -50,7 +46,7 @@ def test_run_batch_stub_writes_manifest_and_images(tmp_path, monkeypatch):
     assert (out_dir / "manifest.json").exists()
     assert (out_dir / "images").is_dir()
 
-    # 2 prompts × 1 image_per_prompt = 2 candidates.
+    # 2 prompts x 1 image_per_prompt = 2 candidates.
     assert len(manifest.prompts) == 2
     assert len(manifest.candidates) == 2
 
