@@ -51,6 +51,14 @@ pub const MIGRATION_0005_DURABLE_LOG: Migration = Migration {
     sql: include_str!("../migrations/0005_durable_log.sql"),
 };
 
+/// T1.3 §2.3 — `policy_grants.approval_scope` column. Additive; NULL =
+/// legacy = PerAction-equivalent at read time. See
+/// `planning/plans/T1.3_approval_scope_design.md` §3.2.
+pub const MIGRATION_0006_POLICY_GRANTS_APPROVAL_SCOPE: Migration = Migration {
+    id: "0006_policy_grants_approval_scope",
+    sql: include_str!("../migrations/0006_policy_grants_approval_scope.sql"),
+};
+
 /// Ordered, append-only migration set. New migrations push to the tail.
 pub const MIGRATIONS: &[Migration] = &[
     MIGRATION_0001_INIT,
@@ -58,6 +66,7 @@ pub const MIGRATIONS: &[Migration] = &[
     MIGRATION_0003_AUDIT_SEAL,
     MIGRATION_0004_CONVERSATION_LOG,
     MIGRATION_0005_DURABLE_LOG,
+    MIGRATION_0006_POLICY_GRANTS_APPROVAL_SCOPE,
 ];
 
 /// Return the expected schema-version id after applying every known migration.
@@ -94,6 +103,6 @@ mod tests {
 
     #[test]
     fn head_id_matches_last_entry() {
-        assert_eq!(expected_head_id(), "0005_durable_log");
+        assert_eq!(expected_head_id(), "0006_policy_grants_approval_scope");
     }
 }
