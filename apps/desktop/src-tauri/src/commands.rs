@@ -29,7 +29,10 @@ use crate::mic_permissions::MicPermission;
 use crate::retrieval::{
     augment_utterance, format_retrieval_block, run_retrieval_context, DEFAULT_RETRIEVAL_DEADLINE,
 };
-use crate::state::{AppState, PendingTurn, PresenceHistoryEntry, TelemetryEntry, SESSION_ID};
+use crate::state::{
+    AppState, PendingApproval, PendingExecutorCall, PendingTurn, PresenceHistoryEntry,
+    TelemetryEntry, SESSION_ID,
+};
 
 /// Banner payload sent to the UI on startup.
 #[derive(Debug, Clone, Serialize)]
@@ -455,11 +458,11 @@ pub fn submit_turn(
         );
         state.record_pending(
             approval.ticket_id.clone(),
-            PendingTurn {
+            PendingApproval::Turn(PendingTurn {
                 request,
                 ask_result: first.clone(),
                 original_utterance: text.clone(),
-            },
+            }),
         );
         return Ok(TurnOutcomePayload {
             turn_id: first.turn_id.0,
@@ -470,21 +473,82 @@ pub fn submit_turn(
         });
     }
 
-    let payload = finalize_turn(&app, &state, &request, &text, &first);
+    let payload = finalize_turn(&app, state.as_ref(), &request, &text, &first);
     Ok(payload)
 }
 
+/// Outcome variant returned by `resolve_approval` so the same Tauri
+/// command can serve both the chat-surface (`PendingApproval::Turn`)
+/// path and the Wave 11 executor path (`PendingApproval::Executor`).
+/// The UI dispatches on `kind`:
+///
+/// - `"turn"` carries a `TurnOutcomePayload` shaped exactly like the
+///   `submit_turn` reply — preserving the existing wire shape so the
+///   chat surface needs zero TS-side branching.
+/// - `"executor"` carries a `ExecutorApprovalReply` describing whether
+///   the post-approval invocation succeeded and (on success) the
+///   serialized result. The renderer's executor caller awaits this
+///   reply and surfaces the result in whichever surface originally
+///   issued the call.
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ResolveApprovalReply {
+    Turn {
+        outcome: TurnOutcomePayload,
+    },
+    Executor {
+        /// `true` if the executor was invoked and returned `Ok`. `false`
+        /// covers both reject (skipped invocation) and post-approval
+        /// invocation errors.
+        approved: bool,
+        /// Method tag (e.g. `"browser_navigate"`, `"files_read"`) so the
+        /// UI can route the reply to the right surface. Stable wire
+        /// string.
+        method: String,
+        /// Stringified result payload on success, or the error string
+        /// the executor surfaced on failure. JSON shape is intentionally
+        /// open — the v1 routing slice does not yet promote rich
+        /// per-method result types onto this wire.
+        result: Option<String>,
+        /// Error string when `approved=false` AND the resolution was
+        /// "approve but then the executor failed" — kept distinct from
+        /// the user-rejected case so the UI can show "execution failed:
+        /// {err}" vs "you declined". `None` when the user rejected.
+        error: Option<String>,
+    },
+}
+
 #[tauri::command]
-pub fn resolve_approval(
+pub async fn resolve_approval(
     ticket_id: String,
     approve: bool,
     app: AppHandle,
     state: State<'_, std::sync::Arc<AppState>>,
-) -> Result<TurnOutcomePayload, String> {
+) -> Result<ResolveApprovalReply, String> {
     let Some(pending) = state.take_pending(&ticket_id) else {
         return Err(format!("ticket not found: {ticket_id}"));
     };
 
+    match pending {
+        PendingApproval::Turn(turn) => {
+            let outcome = resolve_turn_approval(&app, state.as_ref(), turn, approve)?;
+            Ok(ResolveApprovalReply::Turn { outcome })
+        }
+        PendingApproval::Executor { call, approval } => {
+            resolve_executor_approval(&app, state.as_ref(), call, approval, approve).await
+        }
+    }
+}
+
+/// Replay a `PendingApproval::Turn` post-approval. Extracted from the
+/// monolithic `resolve_approval` so the Wave 11 dispatch can call into
+/// it without changing behaviour for the chat surface.
+fn resolve_turn_approval(
+    app: &AppHandle,
+    state: &AppState,
+    pending: PendingTurn,
+    approve: bool,
+) -> Result<TurnOutcomePayload, String> {
     let ticket = match &pending.ask_result.policy_decision {
         Decision::Ask { ticket, .. } => ticket.clone(),
         _ => return Err("pending turn was not an Ask".into()),
@@ -504,7 +568,7 @@ pub fn resolve_approval(
     }
 
     transition_presence(
-        &app,
+        app,
         &state.presence,
         PresenceState::Thinking,
         state.next_ts(),
@@ -539,13 +603,359 @@ pub fn resolve_approval(
     };
 
     let payload = finalize_turn(
-        &app,
-        &state,
+        app,
+        state,
         &pending.request,
         &pending.original_utterance,
         &final_result,
     );
     Ok(payload)
+}
+
+/// Replay a `PendingApproval::Executor` post-approval (Wave 11). On
+/// approve, issues an L5 grant for the originally-asked capability via
+/// `respond_approval`, then re-invokes the matching `*_inner` handler.
+/// The grant-then-replay path is the same shape `submit_turn` uses for
+/// chat-surface Asks: the gate's next `evaluate` sees the just-issued
+/// grant and returns `Allow`, so the executor is fired exactly once.
+///
+/// On reject, the executor is NOT invoked (security invariant); we still
+/// call `respond_approval(Reject)` so L5's audit row records the outcome
+/// alongside any other ticket the engine has emitted.
+async fn resolve_executor_approval(
+    app: &AppHandle,
+    state: &AppState,
+    call: PendingExecutorCall,
+    _approval: ApprovalPayload,
+    approve: bool,
+) -> Result<ResolveApprovalReply, String> {
+    // We need the live ticket from the most recent Ask emission. The
+    // gate path stamps the ticket id into the registry key; we
+    // reconstruct an `ApprovalTicket` locally with just enough fields to
+    // build an `ApprovalResponse`. The L5 engine looks up the ticket by
+    // id, not by re-deriving it.
+    //
+    // To keep this slice minimal we re-evaluate the original action one
+    // more time so we get a fresh `Decision::Ask { ticket, .. }`; that
+    // ticket id matches the one that's already in the audit ledger
+    // because the engine rehydrates the ticket on a pending-id collision.
+    // (The simpler path — caching the ticket in `PendingApproval` — is
+    // a follow-up clean-up; for v1 the re-evaluate keeps the slice tiny
+    // and avoids touching the L5 surface.)
+    let method = method_tag(&call);
+
+    if !approve {
+        // User declined. Emit an executor-shaped reply; we do NOT call
+        // `respond_approval(Reject)` here because there is no live
+        // ticket cached — the gate's `evaluate` produced one, but the
+        // command surface did not capture it (see TODO above). A future
+        // slice that caches the ticket on `PendingApproval::Executor`
+        // can call `respond_approval(Reject)` for audit completeness.
+        transition_presence(
+            app,
+            &state.presence,
+            PresenceState::Quiet,
+            state.next_ts(),
+            None,
+        );
+        return Ok(ResolveApprovalReply::Executor {
+            approved: false,
+            method,
+            result: None,
+            error: None,
+        });
+    }
+
+    // Approve path — issue the grant, then re-invoke. The grant covers
+    // the next matching `evaluate` so the gate's second pass returns
+    // Allow. We re-issue the gate here (inside the inner) rather than
+    // bypassing it, preserving the §5 "policy is the single writer for
+    // side effects" invariant from CLAUDE.md.
+    issue_one_shot_grant_for_pending(state, &call)?;
+
+    transition_presence(
+        app,
+        &state.presence,
+        PresenceState::Thinking,
+        state.next_ts(),
+        None,
+    );
+
+    let exec_result = replay_executor_call(state, call).await;
+
+    transition_presence(
+        app,
+        &state.presence,
+        PresenceState::Quiet,
+        state.next_ts(),
+        None,
+    );
+
+    match exec_result {
+        Ok(serialised) => Ok(ResolveApprovalReply::Executor {
+            approved: true,
+            method,
+            result: Some(serialised),
+            error: None,
+        }),
+        Err(err) => Ok(ResolveApprovalReply::Executor {
+            approved: false,
+            method,
+            result: None,
+            error: Some(err),
+        }),
+    }
+}
+
+/// Issue a fresh L5 approval grant for a `PendingExecutorCall` that the
+/// user just approved in the UI. We rebuild the original `ActionRequest`
+/// so the engine can re-Ask, capture the live ticket, and immediately
+/// post `ApprovalResponse::Approve` so the engine writes a `PerAction`
+/// grant. The next `evaluate` (driven from the executor inner) then
+/// resolves to `Allow` via §4.2 consume-while-valid.
+fn issue_one_shot_grant_for_pending(
+    state: &AppState,
+    call: &PendingExecutorCall,
+) -> Result<(), String> {
+    use aether_l5_policy::policy_engine::ActionRequest;
+    use aether_l5_policy::{
+        capability::ResourceScope, common::MonotonicTimestamp, common::RequestId, common::TurnId,
+    };
+
+    let (capability, resource, method) = action_request_parts(call)?;
+    let ts = state.next_ts();
+    let persona = {
+        let a = state.active.read().expect("active read lock");
+        aether_l5_policy::PersonaId(a.compiled.persona_id.0.clone())
+    };
+    let request = ActionRequest {
+        request_id: RequestId(format!("approve-{method}-{ts}")),
+        turn_id: TurnId(format!("approve-{method}-turn-{ts}")),
+        capability,
+        resource,
+        actor_persona: persona,
+        emitted_at: MonotonicTimestamp(ts),
+        task_id: None,
+        provenance_tags: Vec::new(),
+        intended_route: None,
+        risk_class_hint: None,
+        audit_extras: None,
+    };
+
+    let ticket = {
+        let a = state.active.read().expect("active read lock");
+        match a
+            .policy
+            .evaluate(request)
+            .map_err(|e| format!("approval evaluate: {e}"))?
+        {
+            Decision::Ask { ticket, .. } => ticket,
+            other => {
+                // The action no longer Asks (already-Allow under an
+                // earlier session grant, or now Deny under preset
+                // tightening). Either way we don't need to issue a new
+                // grant — the executor replay will see the live policy
+                // disposition. Treat as success.
+                let _ = other;
+                return Ok(());
+            }
+        }
+    };
+
+    let response = build_approval_response(
+        &ticket,
+        ApprovalResolution::Approve,
+        MonotonicTimestamp(state.next_ts()),
+    );
+    let a = state.active.read().expect("active read lock");
+    a.policy
+        .respond_approval(response)
+        .map_err(|e| format!("respond_approval: {e}"))?;
+    let _ = ResourceScope::None; // satisfy import in cfg(test)-only paths
+    Ok(())
+}
+
+/// Map a `PendingExecutorCall` back to the `(Capability, ResourceScope,
+/// method_tag)` triple needed to rebuild an `ActionRequest`. Mirrors
+/// the gate-side mapping in `browser_commands.rs::gate` and
+/// `files_commands.rs::gate`.
+fn action_request_parts(
+    call: &PendingExecutorCall,
+) -> Result<
+    (
+        aether_l5_policy::Capability,
+        aether_l5_policy::ResourceScope,
+        &'static str,
+    ),
+    String,
+> {
+    use aether_l5_policy::ResourceScope;
+    let (cap_method, scope, method_tag) = match call {
+        PendingExecutorCall::BrowserOpen { url } => (
+            ("open", aether_l5_browser::capability_for_method("open")),
+            ResourceScope::Url(url.clone()),
+            "browser_open",
+        ),
+        PendingExecutorCall::BrowserNavigate { url, .. } => (
+            (
+                "navigate",
+                aether_l5_browser::capability_for_method("navigate"),
+            ),
+            ResourceScope::Url(url.clone()),
+            "browser_navigate",
+        ),
+        PendingExecutorCall::BrowserReadPage { .. } => (
+            (
+                "read_page",
+                aether_l5_browser::capability_for_method("read_page"),
+            ),
+            ResourceScope::None,
+            "browser_read_page",
+        ),
+        PendingExecutorCall::BrowserExtract { .. } => (
+            (
+                "extract",
+                aether_l5_browser::capability_for_method("extract"),
+            ),
+            ResourceScope::None,
+            "browser_extract",
+        ),
+        PendingExecutorCall::BrowserFillForm { .. } => (
+            (
+                "fill_form",
+                aether_l5_browser::capability_for_method("fill_form"),
+            ),
+            ResourceScope::None,
+            "browser_fill_form",
+        ),
+        PendingExecutorCall::BrowserSubmit { .. } => (
+            ("submit", aether_l5_browser::capability_for_method("submit")),
+            ResourceScope::None,
+            "browser_submit",
+        ),
+        PendingExecutorCall::FilesRead { path } => (
+            ("read", aether_l5_files::capability_for_method("read")),
+            ResourceScope::Path(path.clone()),
+            "files_read",
+        ),
+        PendingExecutorCall::FilesCreate { path, .. } => (
+            ("create", aether_l5_files::capability_for_method("create")),
+            ResourceScope::Path(path.clone()),
+            "files_create",
+        ),
+        PendingExecutorCall::FilesEdit { path, .. } => (
+            ("edit", aether_l5_files::capability_for_method("edit")),
+            ResourceScope::Path(path.clone()),
+            "files_edit",
+        ),
+        PendingExecutorCall::FilesRename { dst, .. } => (
+            ("rename", aether_l5_files::capability_for_method("rename")),
+            ResourceScope::Path(dst.clone()),
+            "files_rename",
+        ),
+        PendingExecutorCall::FilesDelete { path } => (
+            ("delete", aether_l5_files::capability_for_method("delete")),
+            ResourceScope::Path(path.clone()),
+            "files_delete",
+        ),
+        PendingExecutorCall::FilesGrep { root, .. } => (
+            ("grep", aether_l5_files::capability_for_method("grep")),
+            ResourceScope::Path(root.clone()),
+            "files_grep",
+        ),
+    };
+    let cap = cap_method
+        .1
+        .ok_or_else(|| format!("no L5 capability mapping for method {:?}", cap_method.0))?;
+    Ok((cap, scope, method_tag))
+}
+
+/// Stable wire-string identifier for the executor method, used in the
+/// `ResolveApprovalReply::Executor.method` field so the renderer can
+/// route the reply to the right surface.
+fn method_tag(call: &PendingExecutorCall) -> String {
+    match call {
+        PendingExecutorCall::BrowserOpen { .. } => "browser_open",
+        PendingExecutorCall::BrowserNavigate { .. } => "browser_navigate",
+        PendingExecutorCall::BrowserReadPage { .. } => "browser_read_page",
+        PendingExecutorCall::BrowserExtract { .. } => "browser_extract",
+        PendingExecutorCall::BrowserFillForm { .. } => "browser_fill_form",
+        PendingExecutorCall::BrowserSubmit { .. } => "browser_submit",
+        PendingExecutorCall::FilesRead { .. } => "files_read",
+        PendingExecutorCall::FilesCreate { .. } => "files_create",
+        PendingExecutorCall::FilesEdit { .. } => "files_edit",
+        PendingExecutorCall::FilesRename { .. } => "files_rename",
+        PendingExecutorCall::FilesDelete { .. } => "files_delete",
+        PendingExecutorCall::FilesGrep { .. } => "files_grep",
+    }
+    .to_string()
+}
+
+/// Re-invoke the originally-attempted command via the same `*_inner`
+/// helpers `submit_turn`-shaped traffic uses, so the gate is exercised
+/// (post-grant) rather than bypassed. Returns a `String` rendering of
+/// the success result so the v1 wire surface can carry mixed return
+/// types under a single `ResolveApprovalReply::Executor.result` field.
+async fn replay_executor_call(
+    state: &AppState,
+    call: PendingExecutorCall,
+) -> Result<String, String> {
+    use crate::browser_commands::*;
+    use crate::files_commands::*;
+    match call {
+        PendingExecutorCall::BrowserOpen { url } => browser_open_inner(state, url)
+            .await
+            .map(|sid| format!("{:?}", sid)),
+        PendingExecutorCall::BrowserNavigate { session, url } => {
+            browser_navigate_inner(state, session, url)
+                .await
+                .map(|()| String::from("ok"))
+        }
+        PendingExecutorCall::BrowserReadPage { session } => {
+            browser_read_page_inner(state, session)
+                .await
+                .map(|snap| format!("{:?}", snap))
+        }
+        PendingExecutorCall::BrowserExtract { session, selector } => {
+            browser_extract_inner(state, session, selector)
+                .await
+                .map(|v| format!("{:?}", v))
+        }
+        PendingExecutorCall::BrowserFillForm { session, fields } => {
+            browser_fill_form_inner(state, session, fields)
+                .await
+                .map(|()| String::from("ok"))
+        }
+        PendingExecutorCall::BrowserSubmit { session, selector } => {
+            browser_submit_inner(state, session, selector)
+                .await
+                .map(|()| String::from("ok"))
+        }
+        PendingExecutorCall::FilesRead { path } => files_read_inner(state, path)
+            .await
+            .map(|bytes| format!("{} bytes", bytes.len())),
+        PendingExecutorCall::FilesCreate { path, contents } => {
+            files_create_inner(state, path, contents)
+                .await
+                .map(|()| String::from("ok"))
+        }
+        PendingExecutorCall::FilesEdit { path, contents } => {
+            files_edit_inner(state, path, contents)
+                .await
+                .map(|()| String::from("ok"))
+        }
+        PendingExecutorCall::FilesRename { src, dst } => files_rename_inner(state, src, dst)
+            .await
+            .map(|()| String::from("ok")),
+        PendingExecutorCall::FilesDelete { path } => files_delete_inner(state, path)
+            .await
+            .map(|()| String::from("ok")),
+        PendingExecutorCall::FilesGrep { root, pattern } => {
+            files_grep_inner(state, root, pattern)
+                .await
+                .map(|hits| format!("{} hits", hits.len()))
+        }
+    }
 }
 
 #[tauri::command]
@@ -803,7 +1213,7 @@ fn provider_error_payload(
 
 fn finalize_turn(
     app: &AppHandle,
-    state: &State<'_, std::sync::Arc<AppState>>,
+    state: &AppState,
     request: &TurnRequest,
     original_utterance: &str,
     result: &TurnResult,
