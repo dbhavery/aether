@@ -307,7 +307,13 @@ fn once_per_session_reuse_auto_approves_without_re_prompt() {
         ))
         .unwrap();
     assert!(
-        matches!(d2, Decision::Allow { grant_ref: Some(_), .. }),
+        matches!(
+            d2,
+            Decision::Allow {
+                grant_ref: Some(_),
+                ..
+            }
+        ),
         "expected Allow, got {:?}",
         d2,
     );

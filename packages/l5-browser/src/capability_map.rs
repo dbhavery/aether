@@ -118,7 +118,14 @@ mod tests {
     fn every_executor_method_maps() {
         // Method names taken verbatim from `BrowserExecutor` in
         // `executor.rs`. Keep this list in sync with the trait.
-        let gated = ["open", "navigate", "read_page", "extract", "fill_form", "submit"];
+        let gated = [
+            "open",
+            "navigate",
+            "read_page",
+            "extract",
+            "fill_form",
+            "submit",
+        ];
         let ungated = ["close"];
 
         for m in gated {

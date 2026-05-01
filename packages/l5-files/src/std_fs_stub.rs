@@ -134,14 +134,12 @@ async fn canonicalize_parent_and_authorize(
     scope: &ScopeAllowlist,
     path: &Path,
 ) -> Result<PathBuf, FilesExecError> {
-    let parent = path.parent().ok_or_else(|| {
-        FilesExecError::Io(format!("path has no parent: {}", path.display()))
-    })?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| FilesExecError::Io(format!("path has no parent: {}", path.display())))?;
     let file_name: OsString = path
         .file_name()
-        .ok_or_else(|| {
-            FilesExecError::Io(format!("path has no file name: {}", path.display()))
-        })?
+        .ok_or_else(|| FilesExecError::Io(format!("path has no file name: {}", path.display())))?
         .to_os_string();
     let canonical_parent = fs::canonicalize(parent).await.map_err(|e| {
         if e.kind() == std::io::ErrorKind::NotFound {
@@ -217,11 +215,7 @@ impl FilesExecutor for StdFsExecutor {
             .map_err(|e| FilesExecError::Io(format!("read {}: {}", canonical.display(), e)))
     }
 
-    async fn create(
-        &self,
-        path: &Path,
-        contents: &[u8],
-    ) -> Result<(), FilesExecError> {
+    async fn create(&self, path: &Path, contents: &[u8]) -> Result<(), FilesExecError> {
         require_runtime()?;
         // `create` MUST refuse to overwrite — see executor.rs trait doc.
         // Reject pre-existing destinations BEFORE we touch the parent.
@@ -232,22 +226,14 @@ impl FilesExecutor for StdFsExecutor {
         atomic_write(&canonical, contents).await
     }
 
-    async fn edit(
-        &self,
-        path: &Path,
-        contents: &[u8],
-    ) -> Result<(), FilesExecError> {
+    async fn edit(&self, path: &Path, contents: &[u8]) -> Result<(), FilesExecError> {
         require_runtime()?;
         // `edit` requires the file to already exist.
         let canonical = canonicalize_and_authorize(&self.scope, path).await?;
         atomic_write(&canonical, contents).await
     }
 
-    async fn rename(
-        &self,
-        src: &Path,
-        dst: &Path,
-    ) -> Result<(), FilesExecError> {
+    async fn rename(&self, src: &Path, dst: &Path) -> Result<(), FilesExecError> {
         require_runtime()?;
         let canonical_src = canonicalize_and_authorize(&self.scope, src).await?;
         // `dst` doesn't exist yet — canonicalize its parent.
@@ -275,25 +261,21 @@ impl FilesExecutor for StdFsExecutor {
     async fn delete(&self, path: &Path) -> Result<(), FilesExecError> {
         require_runtime()?;
         let canonical = canonicalize_and_authorize(&self.scope, path).await?;
-        let meta = fs::metadata(&canonical).await.map_err(|e| {
-            FilesExecError::Io(format!("metadata {}: {}", canonical.display(), e))
-        })?;
+        let meta = fs::metadata(&canonical)
+            .await
+            .map_err(|e| FilesExecError::Io(format!("metadata {}: {}", canonical.display(), e)))?;
         if meta.is_dir() {
             return Err(FilesExecError::Io(format!(
                 "refusing to delete directory (out of scope for this slice): {}",
                 canonical.display()
             )));
         }
-        fs::remove_file(&canonical).await.map_err(|e| {
-            FilesExecError::Io(format!("remove_file {}: {}", canonical.display(), e))
-        })
+        fs::remove_file(&canonical)
+            .await
+            .map_err(|e| FilesExecError::Io(format!("remove_file {}: {}", canonical.display(), e)))
     }
 
-    async fn grep(
-        &self,
-        root: &Path,
-        pattern: &str,
-    ) -> Result<Vec<GrepHit>, FilesExecError> {
+    async fn grep(&self, root: &Path, pattern: &str) -> Result<Vec<GrepHit>, FilesExecError> {
         require_runtime()?;
         let canonical_root = canonicalize_and_authorize(&self.scope, root).await?;
         let meta = fs::metadata(&canonical_root).await.map_err(|e| {
@@ -319,7 +301,11 @@ impl FilesExecutor for StdFsExecutor {
             FilesExecError::Io(format!("read_dir {}: {}", canonical_root.display(), e))
         })?;
         while let Some(entry) = entries.next_entry().await.map_err(|e| {
-            FilesExecError::Io(format!("dir entry under {}: {}", canonical_root.display(), e))
+            FilesExecError::Io(format!(
+                "dir entry under {}: {}",
+                canonical_root.display(),
+                e
+            ))
         })? {
             let entry_path = entry.path();
             let entry_meta = match entry.metadata().await {
@@ -427,7 +413,10 @@ mod tests {
         let exec = exec_for(&dir);
 
         let err = exec.create(&path, b"new").await.unwrap_err();
-        assert!(matches!(err, FilesExecError::AlreadyExists(_)), "got {err:?}");
+        assert!(
+            matches!(err, FilesExecError::AlreadyExists(_)),
+            "got {err:?}"
+        );
         // Original content preserved.
         assert_eq!(std::fs::read(&path).unwrap(), b"old");
     }
@@ -448,7 +437,10 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let exec = exec_for(&dir);
 
-        let err = exec.edit(&dir.path().join("absent.txt"), b"x").await.unwrap_err();
+        let err = exec
+            .edit(&dir.path().join("absent.txt"), b"x")
+            .await
+            .unwrap_err();
         assert!(matches!(err, FilesExecError::NotFound(_)), "got {err:?}");
     }
 
@@ -475,7 +467,10 @@ mod tests {
         let exec = exec_for(&dir);
 
         let err = exec.rename(&src, &dst).await.unwrap_err();
-        assert!(matches!(err, FilesExecError::AlreadyExists(_)), "got {err:?}");
+        assert!(
+            matches!(err, FilesExecError::AlreadyExists(_)),
+            "got {err:?}"
+        );
         // Both still present.
         assert!(src.exists());
         assert_eq!(std::fs::read(&dst).unwrap(), b"dst");

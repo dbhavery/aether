@@ -51,19 +51,12 @@ pub trait BrowserExecutor: Send + Sync {
     /// in policy terms — a navigation IS a re-open from L5's perspective
     /// (the agent is asking to point a browser at a new origin), so the
     /// same scope-allowlist check applies.
-    async fn navigate(
-        &self,
-        session: SessionId,
-        url: &str,
-    ) -> Result<(), BrowserExecError>;
+    async fn navigate(&self, session: SessionId, url: &str) -> Result<(), BrowserExecError>;
 
     /// Read a snapshot of the current page contents.
     ///
     /// Maps to [`Capability::BrowserReadPage`](aether_l5_policy::Capability::BrowserReadPage).
-    async fn read_page(
-        &self,
-        session: SessionId,
-    ) -> Result<PageSnapshot, BrowserExecError>;
+    async fn read_page(&self, session: SessionId) -> Result<PageSnapshot, BrowserExecError>;
 
     /// Extract text values matching `selector` from the current page.
     ///
@@ -90,11 +83,7 @@ pub trait BrowserExecutor: Send + Sync {
     /// element or its submit button).
     ///
     /// Maps to [`Capability::BrowserSubmit`](aether_l5_policy::Capability::BrowserSubmit).
-    async fn submit(
-        &self,
-        session: SessionId,
-        selector: &str,
-    ) -> Result<(), BrowserExecError>;
+    async fn submit(&self, session: SessionId, selector: &str) -> Result<(), BrowserExecError>;
 
     /// Close the session and release its resources.
     ///

@@ -308,7 +308,10 @@ impl PlaywrightExecutor {
         op: &str,
         args: Value,
     ) -> Result<T, BrowserExecError> {
-        let state = self.inner.as_ref().ok_or(BrowserExecError::BackendDisabled)?;
+        let state = self
+            .inner
+            .as_ref()
+            .ok_or(BrowserExecError::BackendDisabled)?;
         send_call(state, op, args).await
     }
 }
@@ -329,18 +332,17 @@ async fn send_call<T: for<'de> Deserialize<'de>>(
     }
 
     let req = DriverRequest { req_id, op, args };
-    let line = serde_json::to_string(&req).map_err(|e| {
-        BrowserExecError::Internal(format!("encoding driver request: {e}"))
-    })?;
+    let line = serde_json::to_string(&req)
+        .map_err(|e| BrowserExecError::Internal(format!("encoding driver request: {e}")))?;
 
     {
         let mut stdin_guard = state.stdin.lock().await;
-        let stdin = stdin_guard.as_mut().ok_or_else(|| {
-            BrowserExecError::Internal("driver stdin already closed".into())
-        })?;
-        write_line(stdin, &line).await.map_err(|e| {
-            BrowserExecError::Internal(format!("writing driver request: {e}"))
-        })?;
+        let stdin = stdin_guard
+            .as_mut()
+            .ok_or_else(|| BrowserExecError::Internal("driver stdin already closed".into()))?;
+        write_line(stdin, &line)
+            .await
+            .map_err(|e| BrowserExecError::Internal(format!("writing driver request: {e}")))?;
     }
 
     let reply = match timeout(REQUEST_TIMEOUT, rx).await {
@@ -406,17 +408,11 @@ impl BrowserExecutor for PlaywrightExecutor {
         if self.inner.is_none() {
             return Err(BrowserExecError::BackendDisabled);
         }
-        let id: String = self
-            .call("open", serde_json::json!({ "url": url }))
-            .await?;
+        let id: String = self.call("open", serde_json::json!({ "url": url })).await?;
         Ok(SessionId::new(id))
     }
 
-    async fn navigate(
-        &self,
-        session: SessionId,
-        url: &str,
-    ) -> Result<(), BrowserExecError> {
+    async fn navigate(&self, session: SessionId, url: &str) -> Result<(), BrowserExecError> {
         if self.inner.is_none() {
             return Err(BrowserExecError::BackendDisabled);
         }
@@ -429,15 +425,15 @@ impl BrowserExecutor for PlaywrightExecutor {
         Ok(())
     }
 
-    async fn read_page(
-        &self,
-        session: SessionId,
-    ) -> Result<PageSnapshot, BrowserExecError> {
+    async fn read_page(&self, session: SessionId) -> Result<PageSnapshot, BrowserExecError> {
         if self.inner.is_none() {
             return Err(BrowserExecError::BackendDisabled);
         }
         let snap: WirePageSnapshot = self
-            .call("read_page", serde_json::json!({ "session": session.as_str() }))
+            .call(
+                "read_page",
+                serde_json::json!({ "session": session.as_str() }),
+            )
             .await?;
         Ok(snap.into())
     }
@@ -474,11 +470,7 @@ impl BrowserExecutor for PlaywrightExecutor {
         Ok(())
     }
 
-    async fn submit(
-        &self,
-        session: SessionId,
-        selector: &str,
-    ) -> Result<(), BrowserExecError> {
+    async fn submit(&self, session: SessionId, selector: &str) -> Result<(), BrowserExecError> {
         if self.inner.is_none() {
             return Err(BrowserExecError::BackendDisabled);
         }
@@ -678,14 +670,11 @@ mod tests {
     /// `DriverReply` parses both `ok` and `err` shapes off the wire.
     #[test]
     fn driver_reply_parses_both_shapes() {
-        let ok: DriverReply =
-            serde_json::from_str(r#"{"req_id":7,"ok":"hello"}"#).unwrap();
+        let ok: DriverReply = serde_json::from_str(r#"{"req_id":7,"ok":"hello"}"#).unwrap();
         assert_eq!(ok.req_id, 7);
         assert!(ok.err.is_none());
-        let err: DriverReply = serde_json::from_str(
-            r#"{"req_id":8,"err":"nav failed","kind":"Navigation"}"#,
-        )
-        .unwrap();
+        let err: DriverReply =
+            serde_json::from_str(r#"{"req_id":8,"err":"nav failed","kind":"Navigation"}"#).unwrap();
         assert_eq!(err.req_id, 8);
         assert_eq!(err.kind.as_deref(), Some("Navigation"));
         assert_eq!(err.err.as_deref(), Some("nav failed"));

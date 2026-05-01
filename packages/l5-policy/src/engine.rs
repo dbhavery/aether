@@ -32,7 +32,9 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-use crate::approval::{ApprovalResponse, ApprovalScope, ApprovalTicket, ApprovalTicketId, UserChoice};
+use crate::approval::{
+    ApprovalResponse, ApprovalScope, ApprovalTicket, ApprovalTicketId, UserChoice,
+};
 use crate::audit::{AuditId, AuditRecordEvent, KeyId};
 use crate::capability::{Capability, CapabilityFilter, CapabilityInfo, CapabilityPath, RiskClass};
 use crate::common::{
@@ -981,8 +983,7 @@ impl PolicyEngine for DefaultPolicyEngine {
                     // Today's path. PerAction echoes for filterability;
                     // None (grant raced revoke) falls through to a
                     // PerAction-shaped Allow.
-                    let audit_id =
-                        self.write_audit(&req, DecisionKind::Allow, &change_id, None)?;
+                    let audit_id = self.write_audit(&req, DecisionKind::Allow, &change_id, None)?;
                     let d = Decision::Allow {
                         grant_ref: Some(grant_id),
                         audit_id,
@@ -1015,8 +1016,7 @@ impl PolicyEngine for DefaultPolicyEngine {
                     // grant (design §4.3). scope_permits_auto_approval
                     // returns None for it; this arm is unreachable but
                     // kept for exhaustiveness without a panic.
-                    let audit_id =
-                        self.write_audit(&req, DecisionKind::Allow, &change_id, None)?;
+                    let audit_id = self.write_audit(&req, DecisionKind::Allow, &change_id, None)?;
                     let d = Decision::Allow {
                         grant_ref: Some(grant_id),
                         audit_id,

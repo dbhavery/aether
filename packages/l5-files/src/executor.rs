@@ -58,11 +58,7 @@ pub trait FilesExecutor: Send + Sync {
     ///
     /// Maps to
     /// [`Capability::FilesCreate`](aether_l5_policy::Capability::FilesCreate).
-    async fn create(
-        &self,
-        path: &Path,
-        contents: &[u8],
-    ) -> Result<(), FilesExecError>;
+    async fn create(&self, path: &Path, contents: &[u8]) -> Result<(), FilesExecError>;
 
     /// Replace the contents of an existing file.
     ///
@@ -70,11 +66,7 @@ pub trait FilesExecutor: Send + Sync {
     /// [`Capability::FilesEdit`](aether_l5_policy::Capability::FilesEdit).
     /// Real backends SHOULD write atomically (write-to-temp + rename)
     /// to avoid partial-write windows.
-    async fn edit(
-        &self,
-        path: &Path,
-        contents: &[u8],
-    ) -> Result<(), FilesExecError>;
+    async fn edit(&self, path: &Path, contents: &[u8]) -> Result<(), FilesExecError>;
 
     /// Move or rename a file from `src` to `dst`.
     ///
@@ -82,11 +74,7 @@ pub trait FilesExecutor: Send + Sync {
     /// [`Capability::FilesRenameMove`](aether_l5_policy::Capability::FilesRenameMove).
     /// Both endpoints must be in approved scope; cross-scope renames
     /// are rejected by the policy boundary, not by this trait.
-    async fn rename(
-        &self,
-        src: &Path,
-        dst: &Path,
-    ) -> Result<(), FilesExecError>;
+    async fn rename(&self, src: &Path, dst: &Path) -> Result<(), FilesExecError>;
 
     /// Delete a file.
     ///
@@ -104,9 +92,5 @@ pub trait FilesExecutor: Send + Sync {
     /// — see [`capability_for_method`](crate::capability_map::capability_for_method)
     /// for the rationale. The pattern grammar is backend-defined; the
     /// real backend will use a regex crate.
-    async fn grep(
-        &self,
-        root: &Path,
-        pattern: &str,
-    ) -> Result<Vec<GrepHit>, FilesExecError>;
+    async fn grep(&self, root: &Path, pattern: &str) -> Result<Vec<GrepHit>, FilesExecError>;
 }
