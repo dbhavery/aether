@@ -6,9 +6,11 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::approval::ApprovalScope;
 use crate::capability::{Capability, ResourceScope};
 use crate::common::{ActorRef, ChangeId, MonotonicTimestamp, Seq, WallTimestamp};
 use crate::decision::{DecisionKind, StaticReasonId};
+use crate::grants::GrantId;
 
 /// Stable id of a single audit row.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -200,6 +202,26 @@ pub struct AuditRecordEvent {
     /// where retrieval did not run for the turn.
     #[serde(default)]
     pub retrieval_provenance: Option<RetrievalProvenance>,
+    /// Scope chosen on the user-facing approval that produced this row.
+    /// `None` for: pre-T1.3 rows, system-emitted decisions that never
+    /// went to the user (`Decision::Allow` from a pre-existing grant,
+    /// `Decision::Deny` from policy without prompting).
+    /// See `planning/plans/T1.3_approval_scope_design.md` §3.3.
+    ///
+    /// Note: not covered by HMAC chain — the v2 `CanonicalAuditPayloadV2`
+    /// shape is frozen, so adding this field does NOT alter
+    /// `canonical_bytes`. A future v3 schema bump can fold it in if
+    /// audit-integrity coverage is required. Until then this field is
+    /// audit-visible-but-not-sealed; trust-center filtering and human
+    /// review still benefit from it.
+    #[serde(default)]
+    pub approval_scope: Option<ApprovalScope>,
+    /// Backref to the grant that auto-approved this row. `Some(_)` only
+    /// when this row was a follow-on use of a `OncePerSession` /
+    /// `OncePerTask` grant (i.e. the user was *not* prompted). See
+    /// `planning/plans/T1.3_approval_scope_design.md` §3.3.
+    #[serde(default)]
+    pub auto_approved_under_grant: Option<GrantId>,
 }
 
 /// Resolver for the `schema_version` `serde(default)`. Returns v1 so
@@ -222,6 +244,10 @@ pub struct AuditFilter {
     pub until: Option<MonotonicTimestamp>,
     /// Limit to decision kinds.
     pub decisions: Option<Vec<DecisionKind>>,
+    /// Limit to rows whose `approval_scope` matches. `None` (the
+    /// default) does not filter on scope. See
+    /// `planning/plans/T1.3_approval_scope_design.md` §6.2.
+    pub approval_scope: Option<ApprovalScope>,
 }
 
 /// Lightweight audit summary returned by `policy.get_audit_summary`.
