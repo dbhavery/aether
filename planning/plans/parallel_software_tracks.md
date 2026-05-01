@@ -31,11 +31,21 @@
 **Self-test gate:** rot guard runs green; doc anchors all resolve.
 **Notes:** Mechanical work. Closes Risk G from HANDOFF_2026-05-18.
 
-### T1.3 — Browser + file workflow tools (Pro Phase 4)
-**Status:** Greenfield. Coordinator-gated (new module).
-**Scope:** L5-gated browser automation + file CRUD primitives. Action approval framework + audit replay surfaces.
-**Self-test gate (frontend portion):** any UI for approval flows must be exercised end-to-end as a user — click through approval modal, deny path, audit log review.
-**Notes:** Pro doctrine requires this — without it, Companion is "chat with permissions," not the agent doctrine §3 promises.
+### T1.3 — Browser + file workflow tools
+**Status:** Substantially DONE — shipped across 4 waves on 2026-04-30:
+- Wave 4: `packages/l5-browser/` skeleton (`1b8f3d4`) + `packages/l5-files/` skeleton (`f0f8e70`).
+- Waves 7-8: l5-browser first impl slice (`ca38a5a..1b22781` + `1b22781`); l5-files first impl slice (`3293844..f4fce68`); l5-browser Tauri command surface (`f8c22d4..54776ef`).
+- Wave 9: real Playwright Node-subprocess driver (`2c056af..c2d9c4b`); l5-files Tauri command surface (`3ffe041..b1b0447`).
+- Wave 10A: l5-files real tokio::fs backend graduation (`91479a5..a09c03d`) — atomic write-temp-rename, canonicalize-before-allowlist, runtime-absent self-degrade.
+- Wave 10B: T1.3 §2.3 ApprovalScope (`7969efb..3e1e1cc`) — `ApprovalScope` enum + storage migration 0006 + consume-while-valid rule + 86 l5-policy tests.
+- Wave 11: L5-gated approval routing for browser/files (`85437f4..bacc232`) — `Decision::Ask` routes through pending-approval registry, executor fires post-approval; 319 desktop tests.
+
+**Carryover (post-T1.3 follow-ups):**
+- L7 approval-modal radio surface per T1.3 §2.3 design §5 — 4-option scope picker (`Allow once` / `Allow for this task` / `Allow for this session` / `Draft only`). Wire shape locked; UI shipped today is binary approve/reject. Owed to a future T2.4-flavoured slice.
+- StdFsExecutor::default() fallback (empty allowlist) used as Wave 11 build-unblocker — files commands fall through to NotInScope today. Plumb a real allowlist sourced from approved-scope ledger in a follow-up.
+- Executor reject path `respond_approval(Reject)` for audit-row completeness — Wave 12 in flight 2026-04-30.
+
+**Self-test gate (frontend portion):** any UI for approval flows must be exercised end-to-end as a user — click through approval modal, deny path, audit log review. Modal radio surface is the next step; current Wave 11 routing is backend-only.
 
 ### T1.4 — L3 Presence runtime renderer scaffold
 **Status:** DONE — shipped 2026-04-29 in commit `2035822` ("feat(l3-presence): runtime renderer trait + opaque handle types (ADR-0013 scaffold)"). `packages/l3-presence/src/runtime.rs` ships the `Renderer` trait, `LogStubRenderer` (no-op log-only impl), `MotionClipLibraryHandle` + `MotionClipId` + `AudioStreamHandle` opaque input-contract types, `RendererEvent` + `RENDERER_EVENT_LOG_CAP`, `BoxedRendererController`, and `RenderingPresenceController`. All exported from `lib.rs`. Stale-prompt drift catch — repo beat prompt (Decision #32). Patched 2026-04-30 during the autonomous run continuation.
@@ -116,15 +126,22 @@ Per Task #9 in the active plan. `Aether` product references → `Companion` in `
 **Self-test gate:** grep for residual `Aether` product references; confirm internal `aether` codename references untouched.
 
 ### T4.3 — Companion rename Tier 2 — UI strings, persona YAMLs, glossary
-Per Task #10. Audit + finish what the 2026-04-28 5-commit rename missed.
-**Self-test gate (doctrine §8):** agent runs the built app as a user; confirms no `Aether` appears anywhere user-visible.
+**Status:** DONE — shipped 2026-04-28 night across 5 atomic commits `2cc40d2..3658242`: `8d480f3` (productName + Tauri window title), `cad2d0e` (persona YAML headers + metadata), `3ab5558` (UI strings), `3658242` (CHARACTERS.md + RENAME COMPLETE marker). Internal codename `aether` preserved per `aether/RENAME_TO_COMPANION.md` (repo / Tauri identifier / database / Cargo workspace). Stale-prompt patched 2026-04-30.
+**Scope (historical):** Audit + finish what the 2026-04-28 5-commit rename missed.
+**Self-test gate (doctrine §8):** agent runs the built app as a user; confirms no `Aether` appears anywhere user-visible. Used-as-user verification is owed against the latest production build; banner here flags it.
 
 ### T4.4 — Doctrine refresh propagation audit
 **Status:** DONE — propagation completed per HANDOFF_2026-04-30 §7: doctrine §5/§6/§7/§8 reflected consistently across `02_product_family.md`, `03_vision_and_thesis.md`, all roadmaps, all numbered specs (04, 05, 06, 07, 11, 12, 14, 16), all inbox docs. Plus `01_product_doctrine.md` "Aether Pro" heading flipped to "Companion." A residual banner-only sweep for the 6 `L*_system_design.md` files landed 2026-04-30 as part of T4.7. Stale-prompt patched 2026-04-30.
 **Scope (historical):** Confirm doctrine §5 / §6 / §7 / §8 (added 2026-05-18) are reflected consistently in `02_product_family.md`, `03_vision_and_thesis.md`, roadmaps, and inbox docs.
 
 ### T4.5 — `aether_oss_preview` roadmap retirement
-Per Task #8. Tombstone or rewrite per `01_product_doctrine.md` §6.
+**Status:** DONE — `planning/roadmaps/aether_oss_preview.md` tombstoned with "RETIRED 2026-05-18" header per doctrine §6. Body preserved as historical record. Companion-Phase Crosswalk + 00_ORCHESTRATION_MAP banners point at this retirement.
+**Scope (historical):** Tombstone or rewrite per `01_product_doctrine.md` §6.
+
+### T4.7 — Doctrine §6 banner sweep on `L*_system_design.md`
+**Status:** DONE (banner-only) — 6 banners landed 2026-04-30 in commit `7d88c0c` ("docs(planning): doctrine §6 banner-only sweep on L2-L7 system_design docs"). Each banner names the file's specific OSS-Preview / Pro-Phase residue, points at doctrine §6, explicitly preserves body content. L1 already clean.
+**Carryover:** Surgical sweep is owed for at least L7 (which carries a full §16 "OSS Preview vs Pro divergence" section). Banner explicitly flags this.
+**Self-test gate:** banner present in each of L2..L7 system_design docs; verified via grep for "2026-04-30 banner" — all 6 hit.
 
 ---
 
