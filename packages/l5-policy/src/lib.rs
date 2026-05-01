@@ -54,7 +54,7 @@ pub mod sink;
 pub mod sqlite_backends;
 pub mod storage_hooks;
 
-pub use approval::{ApprovalResponse, ApprovalTicket, ApprovalTicketId, UserChoice};
+pub use approval::{ApprovalResponse, ApprovalScope, ApprovalTicket, ApprovalTicketId, UserChoice};
 pub use audit::{
     AuditExtras, AuditFilter, AuditId, AuditRecordEvent, RetrievalProvenance, RetrievedMemoryRef,
     AUDIT_SCHEMA_VERSION_V1, AUDIT_SCHEMA_VERSION_V2, RETRIEVAL_PROVENANCE_HITS_CAP,
