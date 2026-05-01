@@ -142,7 +142,7 @@ Run `python scripts/current_status.py` for live state.
 **Status:** still deferred until sync layer ships post-mobile. Per ADR-0016 §"What does NOT sync".
 
 ### Wave 18 — `L7_trust_ux_onboarding_system_design.md` §16 surgical sweep
-**Status:** still owed. Low priority — author-focused doc cleanup, not load-bearing. The current banner-only T4.7 pass acknowledges §16 is doctrine-§6-violating; the surgical rewrite (or tombstone) is the follow-up.
+**Status:** DONE 2026-05-01 in commit `a2fcddd`. §16 body tombstoned in-place; rationale preserved in git history at `f7b929d^`. Banner at file head updated. T4.7 in `parallel_software_tracks.md` flipped to DONE for the §16 piece. Smaller residue (L7 §4.5 Guest-mode passages, §2.3 pywebview parity, §3.6 footnotes) is still owed but lower priority — the §16 tombstone closed the load-bearing piece.
 
 ### Wave 19 — Doctrine §8 used-as-user verification on the Wave 14/15 modal
 **Status:** owed. Vitest+RTL covers the modal at the React level; the Wave 13b allowlist plumbing covers the integration at the Rust level; Wave 11/12/14 covered the wire. **What's missing:** a real `pnpm tauri dev` + `mcp__playwright__browser_*` pass that drives a turn through the gate, picks an option from the live modal, and verifies the executor replay actually returns the file bytes (not stubbed). Owed before the Wave 14+15 modal ships to Don's daily-driver build.
