@@ -902,56 +902,64 @@ async fn replay_executor_call(
 ) -> Result<String, String> {
     use crate::browser_commands::*;
     use crate::files_commands::*;
+    // The replay path runs inside `resolve_approval` which has already
+    // emitted any presence/event side effects; pass `None` for the
+    // optional `AppHandle` so the inner does not double-emit
+    // `executor:awaiting_approval` if the gate happens to Ask again
+    // (which it shouldn't — the just-issued grant should resolve to
+    // Allow — but the None is a defensive belt).
     match call {
-        PendingExecutorCall::BrowserOpen { url } => browser_open_inner(state, url)
+        PendingExecutorCall::BrowserOpen { url } => browser_open_inner(state, None, url)
             .await
             .map(|sid| format!("{:?}", sid)),
         PendingExecutorCall::BrowserNavigate { session, url } => {
-            browser_navigate_inner(state, session, url)
+            browser_navigate_inner(state, None, session, url)
                 .await
                 .map(|()| String::from("ok"))
         }
         PendingExecutorCall::BrowserReadPage { session } => {
-            browser_read_page_inner(state, session)
+            browser_read_page_inner(state, None, session)
                 .await
                 .map(|snap| format!("{:?}", snap))
         }
         PendingExecutorCall::BrowserExtract { session, selector } => {
-            browser_extract_inner(state, session, selector)
+            browser_extract_inner(state, None, session, selector)
                 .await
                 .map(|v| format!("{:?}", v))
         }
         PendingExecutorCall::BrowserFillForm { session, fields } => {
-            browser_fill_form_inner(state, session, fields)
+            browser_fill_form_inner(state, None, session, fields)
                 .await
                 .map(|()| String::from("ok"))
         }
         PendingExecutorCall::BrowserSubmit { session, selector } => {
-            browser_submit_inner(state, session, selector)
+            browser_submit_inner(state, None, session, selector)
                 .await
                 .map(|()| String::from("ok"))
         }
-        PendingExecutorCall::FilesRead { path } => files_read_inner(state, path)
+        PendingExecutorCall::FilesRead { path } => files_read_inner(state, None, path)
             .await
             .map(|bytes| format!("{} bytes", bytes.len())),
         PendingExecutorCall::FilesCreate { path, contents } => {
-            files_create_inner(state, path, contents)
+            files_create_inner(state, None, path, contents)
                 .await
                 .map(|()| String::from("ok"))
         }
         PendingExecutorCall::FilesEdit { path, contents } => {
-            files_edit_inner(state, path, contents)
+            files_edit_inner(state, None, path, contents)
                 .await
                 .map(|()| String::from("ok"))
         }
-        PendingExecutorCall::FilesRename { src, dst } => files_rename_inner(state, src, dst)
-            .await
-            .map(|()| String::from("ok")),
-        PendingExecutorCall::FilesDelete { path } => files_delete_inner(state, path)
+        PendingExecutorCall::FilesRename { src, dst } => {
+            files_rename_inner(state, None, src, dst)
+                .await
+                .map(|()| String::from("ok"))
+        }
+        PendingExecutorCall::FilesDelete { path } => files_delete_inner(state, None, path)
             .await
             .map(|()| String::from("ok")),
         PendingExecutorCall::FilesGrep { root, pattern } => {
-            files_grep_inner(state, root, pattern)
+            files_grep_inner(state, None, root, pattern)
                 .await
                 .map(|hits| format!("{} hits", hits.len()))
         }
