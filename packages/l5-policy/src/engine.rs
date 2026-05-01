@@ -32,7 +32,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-use crate::approval::{ApprovalResponse, ApprovalTicket, ApprovalTicketId, UserChoice};
+use crate::approval::{ApprovalResponse, ApprovalScope, ApprovalTicket, ApprovalTicketId, UserChoice};
 use crate::audit::{AuditId, AuditRecordEvent, KeyId};
 use crate::capability::{Capability, CapabilityFilter, CapabilityInfo, CapabilityPath, RiskClass};
 use crate::common::{
@@ -639,6 +639,21 @@ impl DefaultPolicyEngine {
         change_id: &ChangeId,
         reason: Option<StaticReasonId>,
     ) -> Result<AuditId, PolicyEngineError> {
+        self.write_audit_scoped(req, decision, change_id, reason, None, None)
+    }
+
+    /// Variant of [`Self::write_audit`] that stamps the new T1.3 fields
+    /// (`approval_scope`, `auto_approved_under_grant`) on the audit row.
+    /// See `planning/plans/T1.3_approval_scope_design.md` §3.3.
+    fn write_audit_scoped(
+        &self,
+        req: &ActionRequest,
+        decision: DecisionKind,
+        change_id: &ChangeId,
+        reason: Option<StaticReasonId>,
+        approval_scope: Option<ApprovalScope>,
+        auto_approved_under_grant: Option<crate::grants::GrantId>,
+    ) -> Result<AuditId, PolicyEngineError> {
         let audit_id = self.next_audit_id();
         let (original_utterance, retrieval_provenance) = match &req.audit_extras {
             Some(x) => (x.original_utterance.clone(), x.retrieval_provenance.clone()),
@@ -676,8 +691,8 @@ impl DefaultPolicyEngine {
             schema_version: crate::audit::AUDIT_SCHEMA_VERSION_V2,
             original_utterance,
             retrieval_provenance,
-            approval_scope: None,
-            auto_approved_under_grant: None,
+            approval_scope,
+            auto_approved_under_grant,
         };
         self.audit
             .append(&row)
@@ -687,6 +702,20 @@ impl DefaultPolicyEngine {
     }
 
     fn emit_decision_event(&self, req: &ActionRequest, decision: &Decision, change_id: &ChangeId) {
+        self.emit_decision_event_with_scope(req, decision, change_id, None);
+    }
+
+    /// Variant of [`Self::emit_decision_event`] that stamps an explicit
+    /// `approval_scope` on the emitted [`PolicyDecisionEvent`]. Used by
+    /// the §4.2 consume-while-valid path and by `respond_approval` so
+    /// the persisted decision row carries the scope the user picked.
+    fn emit_decision_event_with_scope(
+        &self,
+        req: &ActionRequest,
+        decision: &Decision,
+        change_id: &ChangeId,
+        approval_scope: Option<ApprovalScope>,
+    ) {
         self.sink.emit(L5Event::PolicyDecision(PolicyDecisionEvent {
             request_id: req.request_id.clone(),
             decision: decision.kind(),
@@ -695,8 +724,78 @@ impl DefaultPolicyEngine {
             seq: self.next_seq(),
             reason: None,
             effective_mode: None,
-            approval_scope: None,
+            approval_scope,
         }));
+    }
+
+    /// Look up an active grant by id. Returns `None` if revoked /
+    /// missing. Linear scan; today's grant counts (≤ low hundreds per
+    /// session) keep this trivial — promote to a trait method when
+    /// the workload outgrows it.
+    fn fetch_grant(&self, grant_id: &crate::grants::GrantId) -> Option<Grant> {
+        self.ledger
+            .snapshot(&GrantFilter {
+                active_only: true,
+                ..Default::default()
+            })
+            .into_iter()
+            .find(|g| &g.grant_id == grant_id)
+    }
+
+    /// Per T1.3 design §4.2: given a grant matched by `covers(...)`,
+    /// decide whether the request can be auto-approved under that
+    /// grant's [`ApprovalScope`] without re-prompting.
+    ///
+    /// Returns `Some(scope)` when the grant covers the candidate under
+    /// its declared scope; the caller must then write an audit row
+    /// stamped `auto_approved_under_grant = Some(grant_id)`.
+    /// Returns `None` when the scope check fails — caller falls through
+    /// to today's per-action prompting.
+    fn scope_permits_auto_approval(
+        &self,
+        grant: &Grant,
+        req: &ActionRequest,
+    ) -> Option<ApprovalScope> {
+        match grant.approval_scope {
+            // Legacy / pre-T1.3 grants and explicit PerAction always
+            // cover (today's behaviour). Returning Some(PerAction)
+            // signals the caller to echo the scope on the follow-on
+            // audit row but treat it as the historical Allow path.
+            None | Some(ApprovalScope::PerAction) => Some(ApprovalScope::PerAction),
+            Some(ApprovalScope::OncePerSession) => {
+                // Sessions are device-local per ADR-0016. The engine
+                // currently runs one session per process lifetime; any
+                // active OncePerSession grant therefore matches the
+                // current session by definition. A future explicit
+                // session-id wire will tighten this check.
+                Some(ApprovalScope::OncePerSession)
+            }
+            Some(ApprovalScope::OncePerTask) => {
+                // Match when the candidate's task_id equals the
+                // grant's task_id (carried on GrantDuration::TaskScoped).
+                // Lineage-inclusive is design §10 OQ-1's recommended
+                // default; the in-memory engine only sees direct
+                // task_id equality today, so a request whose task_id
+                // matches the grant's task_id auto-approves. Sub-task
+                // lineage walking lands in the L1 turn-orchestrator
+                // and is out of scope here.
+                let grant_task_id = match &grant.duration {
+                    GrantDuration::TaskScoped(t) => Some(t.clone()),
+                    _ => None,
+                };
+                match (grant_task_id, req.task_id.as_ref()) {
+                    (Some(gt), Some(ct)) if &gt == ct => Some(ApprovalScope::OncePerTask),
+                    _ => None,
+                }
+            }
+            Some(ApprovalScope::DraftOnly) => {
+                // DraftOnly is not a grant scope — design §4.3 says
+                // DraftOnly does NOT issue a grant. If we ever see one
+                // tagged DraftOnly on disk, it's data corruption /
+                // forward-compat noise; do not auto-approve under it.
+                None
+            }
+        }
     }
 
     fn emit_action_request(&self, req: &ActionRequest, change_id: &ChangeId) {
@@ -722,6 +821,35 @@ impl DefaultPolicyEngine {
         change_id: &ChangeId,
         preset_version: u32,
     ) -> crate::grants::GrantId {
+        self.issue_and_emit_grant_scoped(
+            req,
+            mode,
+            duration,
+            scope,
+            issued_by,
+            audit_id,
+            change_id,
+            preset_version,
+            None,
+        )
+    }
+
+    /// Variant of [`Self::issue_and_emit_grant`] that stamps an explicit
+    /// [`ApprovalScope`] on both the persisted [`Grant`] and the emitted
+    /// [`GrantIssuedEvent`]. See T1.3 design §3.1 / §3.2.
+    #[allow(clippy::too_many_arguments)]
+    fn issue_and_emit_grant_scoped(
+        &self,
+        req: &ActionRequest,
+        mode: ApprovalMode,
+        duration: GrantDuration,
+        scope: crate::capability::ResourceScope,
+        issued_by: ActorRef,
+        audit_id: AuditId,
+        change_id: &ChangeId,
+        preset_version: u32,
+        approval_scope: Option<ApprovalScope>,
+    ) -> crate::grants::GrantId {
         let new_grant = Grant {
             grant_id: self.next_grant_id(),
             capability: req.capability.clone(),
@@ -732,7 +860,7 @@ impl DefaultPolicyEngine {
             issued_at: req.emitted_at,
             expires_at: None,
             preset_version_issued_under: preset_version,
-            approval_scope: None,
+            approval_scope,
         };
         let grant_id = new_grant.grant_id.clone();
         self.ledger.issue(new_grant.clone());
@@ -748,7 +876,7 @@ impl DefaultPolicyEngine {
             change_id: change_id.clone(),
             seq: self.next_seq(),
             preset_version_issued_under: preset_version,
-            approval_scope: None,
+            approval_scope,
         }));
         grant_id
     }
@@ -829,17 +957,74 @@ impl PolicyEngine for DefaultPolicyEngine {
         }
 
         // Stage 3+4 — action / resource: does an active grant already cover?
+        // Per T1.3 design §4.2: if a covering grant exists, branch on its
+        // approval_scope. OncePerSession / OncePerTask grants auto-approve
+        // matching candidates without re-prompting; the audit row stamps
+        // `auto_approved_under_grant = Some(grant_id)` and no
+        // `ApprovalPending` event is emitted. Legacy / PerAction grants
+        // keep today's behaviour (Allow + grant_ref, no auto-approval
+        // back-reference). DraftOnly is not a grant scope (design §4.3),
+        // so a grant tagged DraftOnly falls through to per-action prompting.
         if let Some(grant_id) =
             self.ledger
                 .covers(&req.capability, &req.resource, &req.actor_persona)
         {
-            let audit_id = self.write_audit(&req, DecisionKind::Allow, &change_id, None)?;
-            let d = Decision::Allow {
-                grant_ref: Some(grant_id),
-                audit_id,
-            };
-            self.emit_decision_event(&req, &d, &change_id);
-            return Ok(d);
+            // Look up the grant to inspect its scope. If the grant has
+            // raced revocation between covers() and fetch_grant(), fall
+            // through to per-action prompting — safer to re-ask than to
+            // auto-approve under a possibly-stale grant.
+            let scope_match = self
+                .fetch_grant(&grant_id)
+                .and_then(|g| self.scope_permits_auto_approval(&g, &req));
+            match scope_match {
+                Some(ApprovalScope::PerAction) | None => {
+                    // Today's path. PerAction echoes for filterability;
+                    // None (grant raced revoke) falls through to a
+                    // PerAction-shaped Allow.
+                    let audit_id =
+                        self.write_audit(&req, DecisionKind::Allow, &change_id, None)?;
+                    let d = Decision::Allow {
+                        grant_ref: Some(grant_id),
+                        audit_id,
+                    };
+                    self.emit_decision_event(&req, &d, &change_id);
+                    return Ok(d);
+                }
+                Some(scope @ (ApprovalScope::OncePerSession | ApprovalScope::OncePerTask)) => {
+                    // §4.2 consume-while-valid: auto-approve, stamp the
+                    // back-reference on the audit row. No ApprovalPending
+                    // emission. No counter decrement (the design
+                    // explicitly rules out a use-count cap).
+                    let audit_id = self.write_audit_scoped(
+                        &req,
+                        DecisionKind::Allow,
+                        &change_id,
+                        None,
+                        Some(scope),
+                        Some(grant_id.clone()),
+                    )?;
+                    let d = Decision::Allow {
+                        grant_ref: Some(grant_id),
+                        audit_id,
+                    };
+                    self.emit_decision_event_with_scope(&req, &d, &change_id, Some(scope));
+                    return Ok(d);
+                }
+                Some(ApprovalScope::DraftOnly) => {
+                    // Defensive — DraftOnly should never appear on a
+                    // grant (design §4.3). scope_permits_auto_approval
+                    // returns None for it; this arm is unreachable but
+                    // kept for exhaustiveness without a panic.
+                    let audit_id =
+                        self.write_audit(&req, DecisionKind::Allow, &change_id, None)?;
+                    let d = Decision::Allow {
+                        grant_ref: Some(grant_id),
+                        audit_id,
+                    };
+                    self.emit_decision_event(&req, &d, &change_id);
+                    return Ok(d);
+                }
+            }
         }
 
         // No covering grant — mode decides.
@@ -1001,18 +1186,29 @@ impl PolicyEngine for DefaultPolicyEngine {
                 Ok(change_id)
             }
             UserChoice::DeferToDraft => {
-                let audit_id = self.write_audit(
+                // Per T1.3 design §4.3: DraftOnly does NOT issue a grant.
+                // The audit row stamps approval_scope = Some(DraftOnly)
+                // so a single column filter finds every "draft-only via
+                // user choice" outcome in the trust center.
+                let audit_id = self.write_audit_scoped(
                     &pending.request,
                     DecisionKind::DraftOnlyUserChoice,
                     &change_id,
                     Some(StaticReasonId(String::from("user_deferred"))),
+                    Some(ApprovalScope::DraftOnly),
+                    None,
                 )?;
                 let d = Decision::DraftOnly {
                     audit_id,
                     source: DraftSource::UserChoice,
                     reason: None,
                 };
-                self.emit_decision_event(&pending.request, &d, &change_id);
+                self.emit_decision_event_with_scope(
+                    &pending.request,
+                    &d,
+                    &change_id,
+                    Some(ApprovalScope::DraftOnly),
+                );
                 Ok(change_id)
             }
             UserChoice::Allow
@@ -1040,10 +1236,23 @@ impl PolicyEngine for DefaultPolicyEngine {
                     _ => GrantDuration::Once,
                 };
 
-                let audit_id =
-                    self.write_audit(&pending.request, DecisionKind::Allow, &change_id, None)?;
+                // Per T1.3 design §2 mapping: lift the user's choice
+                // into a persisted, audit-visible ApprovalScope. The
+                // engine stamps the same scope on the issued grant, the
+                // audit row, and the PolicyDecisionEvent so downstream
+                // consumers see one coherent value.
+                let approval_scope = ApprovalScope::from_user_choice(&response.user_choice);
 
-                let _grant_id = self.issue_and_emit_grant(
+                let audit_id = self.write_audit_scoped(
+                    &pending.request,
+                    DecisionKind::Allow,
+                    &change_id,
+                    None,
+                    Some(approval_scope),
+                    None,
+                )?;
+
+                let _grant_id = self.issue_and_emit_grant_scoped(
                     &pending.request,
                     ApprovalMode::Ask,
                     duration,
@@ -1052,13 +1261,19 @@ impl PolicyEngine for DefaultPolicyEngine {
                     audit_id.clone(),
                     &change_id,
                     preset_version,
+                    Some(approval_scope),
                 );
 
                 let d = Decision::Allow {
                     grant_ref: Some(_grant_id),
                     audit_id,
                 };
-                self.emit_decision_event(&pending.request, &d, &change_id);
+                self.emit_decision_event_with_scope(
+                    &pending.request,
+                    &d,
+                    &change_id,
+                    Some(approval_scope),
+                );
                 Ok(change_id)
             }
         }
