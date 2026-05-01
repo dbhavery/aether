@@ -534,8 +534,12 @@ pub async fn resolve_approval(
             let outcome = resolve_turn_approval(&app, state.as_ref(), turn, approve)?;
             Ok(ResolveApprovalReply::Turn { outcome })
         }
-        PendingApproval::Executor { call, approval } => {
-            resolve_executor_approval(&app, state.as_ref(), call, approval, approve).await
+        PendingApproval::Executor {
+            call,
+            approval,
+            ticket,
+        } => {
+            resolve_executor_approval(&app, state.as_ref(), call, approval, ticket, approve).await
         }
     }
 }
@@ -622,11 +626,19 @@ fn resolve_turn_approval(
 /// On reject, the executor is NOT invoked (security invariant); we still
 /// call `respond_approval(Reject)` so L5's audit row records the outcome
 /// alongside any other ticket the engine has emitted.
+///
+/// Wave 12 (incoming, follow-up commit): the `_ticket` parameter — the
+/// live `ApprovalTicket` cached on `PendingApproval::Executor` at gate
+/// time — will be wired into a `respond_approval(Reject)` call on the
+/// reject branch for audit-row completeness, mirroring the Turn-path
+/// precedent in `resolve_turn_approval`. This commit only plumbs the
+/// type through; the behavioural change ships next.
 async fn resolve_executor_approval(
     app: &AppHandle,
     state: &AppState,
     call: PendingExecutorCall,
     _approval: ApprovalPayload,
+    _ticket: aether_l5_policy::ApprovalTicket,
     approve: bool,
 ) -> Result<ResolveApprovalReply, String> {
     // We need the live ticket from the most recent Ask emission. The
@@ -4311,9 +4323,17 @@ mod tests {
         // Registry holds an Executor variant (NOT Turn).
         let pending = state.take_pending(&ticket).expect("pending entry");
         match pending {
-            PendingApproval::Executor { call, approval } => {
+            PendingApproval::Executor {
+                call,
+                approval,
+                ticket: cached_ticket,
+            } => {
                 assert!(matches!(call, PendingExecutorCall::FilesEdit { .. }));
                 assert_eq!(approval.ticket_id, ticket);
+                // Wave 12: the live ticket is cached on the row so the
+                // reject path can call respond_approval(Reject) for
+                // audit completeness.
+                assert_eq!(cached_ticket.ticket_id.0, ticket);
             }
             PendingApproval::Turn(_) => {
                 panic!("Wave 11 must register Executor, not Turn");
@@ -4329,7 +4349,11 @@ mod tests {
         // Pull the entry back out and feed it to the resolve helper.
         let pending = state.take_pending(&ticket).expect("pending entry");
         let (call, approval) = match pending {
-            PendingApproval::Executor { call, approval } => (call, approval),
+            PendingApproval::Executor {
+                call,
+                approval,
+                ticket: _,
+            } => (call, approval),
             PendingApproval::Turn(_) => unreachable!("registered Executor above"),
         };
 
@@ -4373,7 +4397,11 @@ mod tests {
         // dispatch path — take_pending is the consume point).
         let pending = state.take_pending(&ticket).expect("pending entry");
         let (call, _approval) = match pending {
-            PendingApproval::Executor { call, approval } => (call, approval),
+            PendingApproval::Executor {
+                call,
+                approval,
+                ticket: _,
+            } => (call, approval),
             PendingApproval::Turn(_) => unreachable!(),
         };
 

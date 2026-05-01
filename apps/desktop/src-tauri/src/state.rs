@@ -508,9 +508,17 @@ pub enum PendingApproval {
     /// `payload` carries the `ApprovalPayload` shape the UI's modal
     /// already consumes so `resolve_approval` can mirror the chat-surface
     /// experience without inventing a second wire shape.
+    ///
+    /// Wave 12 added `ticket`: the live `ApprovalTicket` captured from
+    /// the gate's `Decision::Ask { ticket, .. }`. Cached so the reject
+    /// path in `resolve_executor_approval` can call
+    /// `respond_approval(Reject)` for L5 audit-row completeness — the
+    /// chat-surface Turn path already does this, the executor path now
+    /// matches.
     Executor {
         call: PendingExecutorCall,
         approval: crate::commands::ApprovalPayload,
+        ticket: aether_l5_policy::ApprovalTicket,
     },
 }
 

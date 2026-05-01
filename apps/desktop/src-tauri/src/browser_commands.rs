@@ -102,7 +102,15 @@ pub(crate) enum GateOutcome {
     /// [`awaiting_approval_sentinel`] so the IPC boundary signals
     /// "wait — UI will resolve" without inventing a new wire-success
     /// shape.
-    AwaitingApproval { approval: ApprovalPayload },
+    ///
+    /// Wave 12 added `ticket`: the live `ApprovalTicket` from the gate's
+    /// `Decision::Ask { ticket, .. }`. Cached on `PendingApproval::Executor`
+    /// so the reject path can call `respond_approval(Reject)` for L5
+    /// audit-row completeness.
+    AwaitingApproval {
+        approval: ApprovalPayload,
+        ticket: aether_l5_policy::ApprovalTicket,
+    },
 }
 
 /// Sentinel error string returned by `*_inner` when the gate Asks.
@@ -132,6 +140,10 @@ pub(crate) fn gate(
     match active.policy.evaluate(request) {
         Ok(Decision::Allow { .. }) => Ok(GateOutcome::Allow),
         Ok(Decision::Ask { ticket, .. }) => {
+            // Clone the live ticket so we can both build the human-shaped
+            // payload (consumed by the UI modal) AND cache it on the
+            // pending row (so the reject path can call respond_approval).
+            let ticket_for_pending = ticket.clone();
             let prompt = approval_prompt_from_ticket(ticket, None);
             let approval = ApprovalPayload {
                 ticket_id: prompt.ticket.ticket_id.0.clone(),
@@ -141,7 +153,10 @@ pub(crate) fn gate(
                 risk_hint:
                     "Session-only approval. This will not persist beyond this session.".into(),
             };
-            Ok(GateOutcome::AwaitingApproval { approval })
+            Ok(GateOutcome::AwaitingApproval {
+                approval,
+                ticket: ticket_for_pending,
+            })
         }
         Ok(other) => Err(format!("browser_{method} not permitted: {other:?}")),
         Err(e) => Err(format!("browser_{method} policy evaluate error: {e}")),
@@ -158,6 +173,7 @@ fn register_executor_pending(
     app: Option<&AppHandle>,
     call: PendingExecutorCall,
     approval: ApprovalPayload,
+    ticket: aether_l5_policy::ApprovalTicket,
 ) -> String {
     let sentinel = awaiting_approval_sentinel(&approval.ticket_id);
     state.record_pending(
@@ -165,6 +181,7 @@ fn register_executor_pending(
         PendingApproval::Executor {
             call,
             approval: approval.clone(),
+            ticket,
         },
     );
     if let Some(app) = app {
@@ -212,8 +229,8 @@ fn dispatch_gate(
 ) -> Result<(), String> {
     match outcome {
         GateOutcome::Allow => Ok(()),
-        GateOutcome::AwaitingApproval { approval } => {
-            let sentinel = register_executor_pending(state, app, build(), approval);
+        GateOutcome::AwaitingApproval { approval, ticket } => {
+            let sentinel = register_executor_pending(state, app, build(), approval, ticket);
             Err(sentinel)
         }
     }
