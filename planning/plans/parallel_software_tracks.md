@@ -122,8 +122,18 @@ Tauri bundle, signing, installer flows. Defer until everything else is locked.
 **Scope (historical):** Mirror existing `tools/lint-vision-doc/`, `tools/lint-voice-doc/`, `tools/lint-presence-doc/` patterns for the remaining critical arch docs.
 
 ### T4.2 — Companion rename Tier 1 — text-only pass
-Per Task #9 in the active plan. `Aether` product references → `Companion` in `planning/`, `docs/`, `README`, code comments. Preserve internal identifiers.
-**Self-test gate:** grep for residual `Aether` product references; confirm internal `aether` codename references untouched.
+**Status:** DONE — shipped across 6 atomic rename commits + supporting fixes:
+- `7980060` Tier 1A: Companion in load-bearing governing docs (`aether` codename preserved).
+- `158e495` Tier 1B-a: planning numbered specs + index docs.
+- `558dc22` Tier 1B-b: `plans/` + `prompts/` + monorepo plan.
+- `ff5fe74` Tier 1B-c: roadmaps + root governance.
+- `1a9db85` Tier 1B-d: community + security policy files.
+- `7d5bdb8` Tier 1B-e: `docs/` supplementary architecture + posts.
+- `d6deb34` + `34241f6` finish Pro→Companion rename in `aether_pro.md` + `isabelle_private.md` roadmaps.
+- `1b553e0` SettingsDrawer wrong-data-folder fix + UI JSDoc rename.
+Tooling at `tools/rename_companion_tier1b.py` + `tools/rename_companion_tier1b_diff.log` documents the rule set + diff. Stale-prompt patched 2026-04-30.
+**Scope (historical):** `Aether` product references → `Companion` in `planning/`, `docs/`, `README`, code comments. Preserve internal identifiers.
+**Self-test gate:** grep for residual `Aether` product references; confirm internal `aether` codename references untouched. Live grep on a clean checkout owed; current pass relied on the rename tool's diff log.
 
 ### T4.3 — Companion rename Tier 2 — UI strings, persona YAMLs, glossary
 **Status:** DONE — shipped 2026-04-28 night across 5 atomic commits `2cc40d2..3658242`: `8d480f3` (productName + Tauri window title), `cad2d0e` (persona YAML headers + metadata), `3ab5558` (UI strings), `3658242` (CHARACTERS.md + RENAME COMPLETE marker). Internal codename `aether` preserved per `aether/RENAME_TO_COMPANION.md` (repo / Tauri identifier / database / Cargo workspace). Stale-prompt patched 2026-04-30.
