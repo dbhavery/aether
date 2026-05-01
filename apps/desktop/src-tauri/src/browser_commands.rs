@@ -48,9 +48,11 @@ use aether_l5_policy::common::{MonotonicTimestamp, RequestId, TurnId};
 use aether_l5_policy::decision::Decision;
 use aether_l5_policy::policy_engine::ActionRequest;
 use aether_l5_policy::PersonaId;
-use tauri::State;
+use aether_l7_trust::{approval_prompt_from_ticket, human_capability, human_scope};
+use tauri::{AppHandle, Emitter, Manager, State};
 
-use crate::state::AppState;
+use crate::commands::ApprovalPayload;
+use crate::state::{AppState, PendingApproval, PendingExecutorCall};
 
 /// Build a one-off `ActionRequest` for a browser-method capability
 /// gate.
@@ -86,24 +88,100 @@ fn build_request(
     }
 }
 
-/// Resolve the capability for `method`, build an `ActionRequest`, and
-/// run it through the active L5 `PolicyEngine`. On `Allow` returns
-/// `Ok(())` and the executor invocation may proceed; otherwise returns
-/// an error string the IPC boundary surfaces verbatim to the renderer.
+/// Outcome of the L5 gate evaluation. Wave 11 split this from the
+/// previous binary `Result<(), String>` so a `Decision::Ask` can route
+/// through the existing approval flow instead of being collapsed into
+/// a "not permitted" error string.
+pub(crate) enum GateOutcome {
+    /// Policy granted the action. The executor invocation may proceed.
+    Allow,
+    /// Policy is asking for user approval. The caller should register a
+    /// `PendingApproval::Executor` row keyed on `approval.ticket_id`,
+    /// transition presence, emit `executor:awaiting_approval`, and
+    /// return the sentinel error string built by
+    /// [`awaiting_approval_sentinel`] so the IPC boundary signals
+    /// "wait — UI will resolve" without inventing a new wire-success
+    /// shape.
+    AwaitingApproval { approval: ApprovalPayload },
+}
+
+/// Sentinel error string returned by `*_inner` when the gate Asks.
+/// Stable wire format: `awaiting_approval:<ticket_id>` so the renderer
+/// can route the response to the modal awaiter without parsing the
+/// human-readable parts. The `executor:awaiting_approval` Tauri event
+/// carries the full `ApprovalPayload`; this string is just a
+/// machine-readable confirmation that a ticket was registered.
+pub(crate) fn awaiting_approval_sentinel(ticket_id: &str) -> String {
+    format!("awaiting_approval:{ticket_id}")
+}
+
+/// Resolve the capability for `method`, build an `ActionRequest`, run
+/// it through the active L5 `PolicyEngine`, and translate the decision
+/// into a [`GateOutcome`]. `Decision::Ask` is converted into an
+/// [`ApprovalPayload`] suitable for the existing UI modal so the caller
+/// can register pending state and emit the approval event.
 pub(crate) fn gate(
     state: &AppState,
     method: &'static str,
     resource: ResourceScope,
-) -> Result<(), String> {
+) -> Result<GateOutcome, String> {
     let cap = aether_l5_browser::capability_for_method(method)
         .ok_or_else(|| format!("browser method {method:?} has no L5 capability mapping"))?;
     let request = build_request(state, cap, resource, method);
     let active = state.active.read().expect("active read lock");
     match active.policy.evaluate(request) {
-        Ok(Decision::Allow { .. }) => Ok(()),
+        Ok(Decision::Allow { .. }) => Ok(GateOutcome::Allow),
+        Ok(Decision::Ask { ticket, .. }) => {
+            let prompt = approval_prompt_from_ticket(ticket, None);
+            let approval = ApprovalPayload {
+                ticket_id: prompt.ticket.ticket_id.0.clone(),
+                capability: human_capability(&prompt.capability).to_string(),
+                scope: human_scope(&prompt.resource),
+                reason: prompt.reason.0.clone(),
+                risk_hint:
+                    "Session-only approval. This will not persist beyond this session.".into(),
+            };
+            Ok(GateOutcome::AwaitingApproval { approval })
+        }
         Ok(other) => Err(format!("browser_{method} not permitted: {other:?}")),
         Err(e) => Err(format!("browser_{method} policy evaluate error: {e}")),
     }
+}
+
+/// Register the `PendingApproval::Executor` row, transition presence to
+/// AwaitingApproval (if an `AppHandle` was supplied), and emit
+/// `executor:awaiting_approval` so the renderer can show the modal.
+/// Returns the sentinel error string that the inner handler surfaces
+/// across the IPC boundary.
+fn register_executor_pending(
+    state: &AppState,
+    app: Option<&AppHandle>,
+    call: PendingExecutorCall,
+    approval: ApprovalPayload,
+) -> String {
+    let sentinel = awaiting_approval_sentinel(&approval.ticket_id);
+    state.record_pending(
+        approval.ticket_id.clone(),
+        PendingApproval::Executor {
+            call,
+            approval: approval.clone(),
+        },
+    );
+    if let Some(app) = app {
+        // Best-effort presence transition + event emit. Both are UX
+        // niceties; the renderer also listens for the inner's sentinel
+        // error string ("awaiting_approval:<ticket_id>") and falls back
+        // to the chat-surface modal flow if events are dropped.
+        let _ = app.emit("executor:awaiting_approval", approval);
+        // Presence transition mirrors `submit_turn`'s Ask path.
+        let _ = state.presence.set_state(
+            crate::state::SESSION_ID,
+            aether_l3_presence::PresenceState::AwaitingApproval,
+            state.next_ts(),
+            Some(sentinel.clone()),
+        );
+    }
+    sentinel
 }
 
 /// Map a `BrowserExecError` into the `String` shape the Tauri IPC
@@ -121,60 +199,108 @@ pub(crate) fn map_exec_err(e: aether_l5_browser::BrowserExecError) -> String {
 // `#[tauri::command]` wrappers below just unwrap the `State` and call
 // the inner.
 
+/// Dispatch on a [`GateOutcome`]. On `Allow`, returns `Ok(())` and the
+/// caller fires the executor. On `AwaitingApproval`, registers the
+/// pending row (carrying the `PendingExecutorCall` produced by `build`)
+/// and returns the sentinel error string so the IPC boundary can hand
+/// off to the modal-resolve flow.
+fn dispatch_gate(
+    state: &AppState,
+    app: Option<&AppHandle>,
+    outcome: GateOutcome,
+    build: impl FnOnce() -> PendingExecutorCall,
+) -> Result<(), String> {
+    match outcome {
+        GateOutcome::Allow => Ok(()),
+        GateOutcome::AwaitingApproval { approval } => {
+            let sentinel = register_executor_pending(state, app, build(), approval);
+            Err(sentinel)
+        }
+    }
+}
+
 pub(crate) async fn browser_open_inner(
     state: &AppState,
+    app: Option<&AppHandle>,
     url: String,
 ) -> Result<SessionId, String> {
-    gate(state, "open", ResourceScope::Url(url.clone()))?;
+    let outcome = gate(state, "open", ResourceScope::Url(url.clone()))?;
+    dispatch_gate(state, app, outcome, || PendingExecutorCall::BrowserOpen {
+        url: url.clone(),
+    })?;
     let exec = state.browser_executor.clone();
     exec.open(&url).await.map_err(map_exec_err)
 }
 
 pub(crate) async fn browser_navigate_inner(
     state: &AppState,
+    app: Option<&AppHandle>,
     session: SessionId,
     url: String,
 ) -> Result<(), String> {
-    gate(state, "navigate", ResourceScope::Url(url.clone()))?;
+    let outcome = gate(state, "navigate", ResourceScope::Url(url.clone()))?;
+    dispatch_gate(state, app, outcome, || PendingExecutorCall::BrowserNavigate {
+        session: session.clone(),
+        url: url.clone(),
+    })?;
     let exec = state.browser_executor.clone();
     exec.navigate(session, &url).await.map_err(map_exec_err)
 }
 
 pub(crate) async fn browser_read_page_inner(
     state: &AppState,
+    app: Option<&AppHandle>,
     session: SessionId,
 ) -> Result<PageSnapshot, String> {
-    gate(state, "read_page", ResourceScope::None)?;
+    let outcome = gate(state, "read_page", ResourceScope::None)?;
+    dispatch_gate(state, app, outcome, || PendingExecutorCall::BrowserReadPage {
+        session: session.clone(),
+    })?;
     let exec = state.browser_executor.clone();
     exec.read_page(session).await.map_err(map_exec_err)
 }
 
 pub(crate) async fn browser_extract_inner(
     state: &AppState,
+    app: Option<&AppHandle>,
     session: SessionId,
     selector: String,
 ) -> Result<Vec<String>, String> {
-    gate(state, "extract", ResourceScope::None)?;
+    let outcome = gate(state, "extract", ResourceScope::None)?;
+    dispatch_gate(state, app, outcome, || PendingExecutorCall::BrowserExtract {
+        session: session.clone(),
+        selector: selector.clone(),
+    })?;
     let exec = state.browser_executor.clone();
     exec.extract(session, &selector).await.map_err(map_exec_err)
 }
 
 pub(crate) async fn browser_fill_form_inner(
     state: &AppState,
+    app: Option<&AppHandle>,
     session: SessionId,
     fields: Vec<FormField>,
 ) -> Result<(), String> {
-    gate(state, "fill_form", ResourceScope::None)?;
+    let outcome = gate(state, "fill_form", ResourceScope::None)?;
+    dispatch_gate(state, app, outcome, || PendingExecutorCall::BrowserFillForm {
+        session: session.clone(),
+        fields: fields.clone(),
+    })?;
     let exec = state.browser_executor.clone();
     exec.fill_form(session, &fields).await.map_err(map_exec_err)
 }
 
 pub(crate) async fn browser_submit_inner(
     state: &AppState,
+    app: Option<&AppHandle>,
     session: SessionId,
     selector: String,
 ) -> Result<(), String> {
-    gate(state, "submit", ResourceScope::None)?;
+    let outcome = gate(state, "submit", ResourceScope::None)?;
+    dispatch_gate(state, app, outcome, || PendingExecutorCall::BrowserSubmit {
+        session: session.clone(),
+        selector: selector.clone(),
+    })?;
     let exec = state.browser_executor.clone();
     exec.submit(session, &selector).await.map_err(map_exec_err)
 }
@@ -193,53 +319,59 @@ pub(crate) async fn browser_close_inner(
 #[tauri::command]
 pub async fn browser_open(
     url: String,
+    app: AppHandle,
     state: State<'_, Arc<AppState>>,
 ) -> Result<SessionId, String> {
-    browser_open_inner(state.as_ref(), url).await
+    browser_open_inner(state.as_ref(), Some(&app), url).await
 }
 
 #[tauri::command]
 pub async fn browser_navigate(
     session: SessionId,
     url: String,
+    app: AppHandle,
     state: State<'_, Arc<AppState>>,
 ) -> Result<(), String> {
-    browser_navigate_inner(state.as_ref(), session, url).await
+    browser_navigate_inner(state.as_ref(), Some(&app), session, url).await
 }
 
 #[tauri::command]
 pub async fn browser_read_page(
     session: SessionId,
+    app: AppHandle,
     state: State<'_, Arc<AppState>>,
 ) -> Result<PageSnapshot, String> {
-    browser_read_page_inner(state.as_ref(), session).await
+    browser_read_page_inner(state.as_ref(), Some(&app), session).await
 }
 
 #[tauri::command]
 pub async fn browser_extract(
     session: SessionId,
     selector: String,
+    app: AppHandle,
     state: State<'_, Arc<AppState>>,
 ) -> Result<Vec<String>, String> {
-    browser_extract_inner(state.as_ref(), session, selector).await
+    browser_extract_inner(state.as_ref(), Some(&app), session, selector).await
 }
 
 #[tauri::command]
 pub async fn browser_fill_form(
     session: SessionId,
     fields: Vec<FormField>,
+    app: AppHandle,
     state: State<'_, Arc<AppState>>,
 ) -> Result<(), String> {
-    browser_fill_form_inner(state.as_ref(), session, fields).await
+    browser_fill_form_inner(state.as_ref(), Some(&app), session, fields).await
 }
 
 #[tauri::command]
 pub async fn browser_submit(
     session: SessionId,
     selector: String,
+    app: AppHandle,
     state: State<'_, Arc<AppState>>,
 ) -> Result<(), String> {
-    browser_submit_inner(state.as_ref(), session, selector).await
+    browser_submit_inner(state.as_ref(), Some(&app), session, selector).await
 }
 
 /// Close is intentionally ungated per the L5-browser README contract:
@@ -427,15 +559,19 @@ mod tests {
     }
 
     #[test]
-    fn gated_path_either_allows_through_to_stub_or_blocks_before_executor() {
+    fn gated_path_either_allows_through_to_stub_or_asks_or_blocks_before_executor() {
         // Security invariant: across all six gated commands, the
-        // executor is invoked at most once per call, and ONLY when
-        // the gate's Allow path was taken. A non-Allow decision MUST
-        // produce an error WITHOUT touching the executor.
+        // executor is invoked at most once per call, and ONLY when the
+        // gate's Allow path was taken. Wave 11 added a third branch:
+        // `Decision::Ask` now routes through the pending-approval
+        // registry — the inner returns the
+        // `awaiting_approval:<ticket_id>` sentinel, registers a
+        // `PendingApproval::Executor`, and the executor is NOT invoked
+        // until `resolve_approval(approve=true)` fires the second pass.
         //
         // We don't pin to the current default policy disposition for
-        // BrowserOpen et al. (it can be tuned independently); we
-        // verify the invariant holds in whichever branch we land in.
+        // BrowserOpen et al. (it can be tuned independently); we verify
+        // the invariant holds in whichever branch we land in.
         for (method, run) in browser_method_drivers() {
             let (state, mock) = state_with_mock();
             let res = run(&state);
@@ -451,10 +587,28 @@ mod tests {
                         "Allow path: expected single executor call to {method:?}, got {calls:?}",
                     );
                 }
+                Err(ref msg) if msg.starts_with("awaiting_approval:") => {
+                    // Wave 11 — gate Asked. Executor MUST NOT have
+                    // been invoked; the pending registry MUST hold
+                    // exactly one row keyed on the ticket id embedded
+                    // in the sentinel.
+                    assert!(
+                        calls.is_empty(),
+                        "{method:?} Asked by gate but executor was still called: {calls:?}",
+                    );
+                    let ticket_id = msg
+                        .strip_prefix("awaiting_approval:")
+                        .expect("sentinel prefix");
+                    assert!(
+                        state.take_pending(ticket_id).is_some(),
+                        "{method:?}: pending registry should hold a row keyed on the sentinel \
+                         ticket id ({ticket_id})",
+                    );
+                }
                 Err(_other_msg) => {
-                    // Gate denied / Asked. Executor MUST NOT have
-                    // been invoked. This is the security invariant
-                    // the wiring exists to enforce.
+                    // Gate denied. Executor MUST NOT have been
+                    // invoked. This is the security invariant the
+                    // wiring exists to enforce.
                     assert!(
                         calls.is_empty(),
                         "{method:?} denied by gate but executor was still called: {calls:?}",
@@ -473,7 +627,9 @@ mod tests {
     /// One driver per gated command. Each driver invokes the inner
     /// handler against the supplied state and returns a `Result<(), String>`
     /// with the success type unified to `()` so the test loop can be
-    /// uniform across return types.
+    /// uniform across return types. Tests pass `None` for the optional
+    /// `AppHandle` so the registry-side path is exercised without
+    /// requiring a Tauri runtime.
     #[allow(clippy::type_complexity)]
     fn browser_method_drivers(
     ) -> Vec<(&'static str, Box<dyn Fn(&AppState) -> Result<(), String>>)> {
@@ -481,7 +637,7 @@ mod tests {
             (
                 "open",
                 Box::new(|s: &AppState| {
-                    block_on(browser_open_inner(s, "https://example.com".into()))
+                    block_on(browser_open_inner(s, None, "https://example.com".into()))
                         .map(|_sid| ())
                 }),
             ),
@@ -490,6 +646,7 @@ mod tests {
                 Box::new(|s: &AppState| {
                     block_on(browser_navigate_inner(
                         s,
+                        None,
                         SessionId::new("s1"),
                         "https://example.com".into(),
                     ))
@@ -498,7 +655,7 @@ mod tests {
             (
                 "read_page",
                 Box::new(|s: &AppState| {
-                    block_on(browser_read_page_inner(s, SessionId::new("s1")))
+                    block_on(browser_read_page_inner(s, None, SessionId::new("s1")))
                         .map(|_snap| ())
                 }),
             ),
@@ -507,6 +664,7 @@ mod tests {
                 Box::new(|s: &AppState| {
                     block_on(browser_extract_inner(
                         s,
+                        None,
                         SessionId::new("s1"),
                         "h1".into(),
                     ))
@@ -518,6 +676,7 @@ mod tests {
                 Box::new(|s: &AppState| {
                     block_on(browser_fill_form_inner(
                         s,
+                        None,
                         SessionId::new("s1"),
                         vec![FormField {
                             selector: "#name".into(),
@@ -531,6 +690,7 @@ mod tests {
                 Box::new(|s: &AppState| {
                     block_on(browser_submit_inner(
                         s,
+                        None,
                         SessionId::new("s1"),
                         "#submit".into(),
                     ))
