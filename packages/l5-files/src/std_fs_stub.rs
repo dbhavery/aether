@@ -640,6 +640,158 @@ mod tests {
         assert!(matches!(err, FilesExecError::NotInScope(_)), "got {err:?}");
     }
 
+    // ---------------------------------------------------------------
+    // Wave 13a — runtime allowlist mutation
+    // ---------------------------------------------------------------
+
+    /// Widen the executor's scope at runtime. With an empty scope, a
+    /// read of an in-tempdir file fails as `NotInScope`; after
+    /// `set_allowlist` adds the canonical tempdir, the same read
+    /// succeeds.
+    #[tokio::test]
+    async fn set_allowlist_widens_scope_at_runtime() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("hello.txt");
+        std::fs::write(&path, b"hi").unwrap();
+
+        let exec = StdFsExecutor::default();
+        let err = exec.read(&path).await.unwrap_err();
+        assert!(matches!(err, FilesExecError::NotInScope(_)), "got {err:?}");
+
+        let canonical = std::fs::canonicalize(dir.path()).unwrap();
+        exec.set_allowlist(ScopeAllowlist::new([canonical]));
+
+        let bytes = exec.read(&path).await.unwrap();
+        assert_eq!(bytes, b"hi");
+    }
+
+    /// Narrow the executor's scope at runtime. A read that succeeds
+    /// under the original scope must fail with `NotInScope` after the
+    /// scope is cleared.
+    #[tokio::test]
+    async fn set_allowlist_narrows_scope_at_runtime() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("h.txt");
+        std::fs::write(&path, b"x").unwrap();
+        let exec = exec_for(&dir);
+
+        // Sanity: read succeeds under the seeded scope.
+        assert_eq!(exec.read(&path).await.unwrap(), b"x");
+
+        exec.set_allowlist(ScopeAllowlist::default());
+        let err = exec.read(&path).await.unwrap_err();
+        assert!(matches!(err, FilesExecError::NotInScope(_)), "got {err:?}");
+    }
+
+    /// `update_allowlist_from_paths` must run the inputs through
+    /// `std::fs::canonicalize` so a path containing `..` is stored in
+    /// its canonical form.
+    #[tokio::test]
+    async fn update_allowlist_from_paths_canonicalizes() {
+        let dir = TempDir::new().unwrap();
+        let inner = dir.path().join("inner");
+        std::fs::create_dir(&inner).unwrap();
+
+        // Lexical path with a `..` segment that resolves back to dir.
+        let traversal: PathBuf = inner.join("..");
+        let expected = std::fs::canonicalize(dir.path()).unwrap();
+
+        let exec = StdFsExecutor::default();
+        exec.update_allowlist_from_paths([traversal]).unwrap();
+
+        // Read the live allowlist to verify the canonical form landed.
+        let scope = exec.scope.read().expect("scope lock poisoned").clone();
+        assert_eq!(scope.roots.len(), 1);
+        assert_eq!(scope.roots[0], expected);
+    }
+
+    /// A nonexistent path fails canonicalize and surfaces as
+    /// `FilesExecError::Io`. The pre-existing allowlist must be left
+    /// untouched.
+    #[tokio::test]
+    async fn update_allowlist_from_paths_rejects_nonexistent() {
+        let dir = TempDir::new().unwrap();
+        let exec = exec_for(&dir);
+        let original = exec.scope.read().unwrap().clone();
+
+        let bogus = dir.path().join("does-not-exist-ever");
+        let err = exec.update_allowlist_from_paths([bogus]).unwrap_err();
+        assert!(matches!(err, FilesExecError::Io(_)), "got {err:?}");
+
+        let after = exec.scope.read().unwrap().clone();
+        assert_eq!(original, after, "failed update must not mutate scope");
+    }
+
+    /// Cloning the executor shares allowlist state via `Arc`. Mutating
+    /// scope on one clone must be observed by all the others.
+    #[tokio::test]
+    async fn clone_shares_allowlist_state() {
+        let exec = StdFsExecutor::default();
+        let twin = exec.clone();
+
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("shared.txt");
+        std::fs::write(&path, b"shared").unwrap();
+        let canonical = std::fs::canonicalize(dir.path()).unwrap();
+
+        // Mutate via the clone.
+        twin.set_allowlist(ScopeAllowlist::new([canonical]));
+
+        // The original sees the new scope.
+        let bytes = exec.read(&path).await.unwrap();
+        assert_eq!(bytes, b"shared");
+    }
+
+    /// Concurrency smoke: N readers race a writer that swaps
+    /// equivalent allowlists. Reads must all succeed and no thread may
+    /// deadlock or panic. Bounded iterations keep the test
+    /// deterministic.
+    #[tokio::test]
+    async fn concurrent_reads_and_set_allowlist_dont_deadlock() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("c.txt");
+        std::fs::write(&path, b"concurrent").unwrap();
+        let canonical_a = std::fs::canonicalize(dir.path()).unwrap();
+        // `canonical_b` is identical to `canonical_a` — both authorize
+        // the same file. We swap between two equivalent allowlists so
+        // every read is guaranteed to remain in-scope regardless of
+        // which scope was live at canonicalize time.
+        let canonical_b = canonical_a.clone();
+
+        let exec = StdFsExecutor::new(ScopeAllowlist::new([canonical_a.clone()]));
+
+        let writer_exec = exec.clone();
+        let writer = tokio::spawn(async move {
+            for i in 0..50usize {
+                let scope = if i % 2 == 0 {
+                    ScopeAllowlist::new([canonical_a.clone()])
+                } else {
+                    ScopeAllowlist::new([canonical_b.clone()])
+                };
+                writer_exec.set_allowlist(scope);
+                tokio::task::yield_now().await;
+            }
+        });
+
+        let mut readers = Vec::new();
+        for _ in 0..4 {
+            let exec = exec.clone();
+            let path = path.clone();
+            readers.push(tokio::spawn(async move {
+                for _ in 0..50usize {
+                    let bytes = exec.read(&path).await.expect("read should succeed");
+                    assert_eq!(bytes, b"concurrent");
+                    tokio::task::yield_now().await;
+                }
+            }));
+        }
+
+        writer.await.expect("writer task panicked");
+        for r in readers {
+            r.await.expect("reader task panicked");
+        }
+    }
+
     /// On a thread without a Tokio runtime, every method must
     /// self-degrade to `BackendDisabled` rather than panicking inside
     /// `tokio::fs`. Mirrors the playwright slice's runtime check
