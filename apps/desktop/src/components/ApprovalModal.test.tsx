@@ -21,11 +21,20 @@ const PAYLOAD: ApprovalPayload = {
   scope: "/tmp/aether-wave14.txt",
   reason: "approval_required",
   risk_hint: "Files-edit can mutate disk.",
+  // Wave 15 — both gates open so the existing Wave 14 surface tests
+  // observe all four radio options. Wave 15-specific gating tests
+  // override these flags below.
+  task_id_present: true,
+  side_effecting: true,
 };
 
-function renderModal(onResolve = vi.fn(), working = false) {
+function renderModal(
+  onResolve = vi.fn(),
+  working = false,
+  payload: ApprovalPayload = PAYLOAD,
+) {
   render(
-    <ApprovalModal payload={PAYLOAD} working={working} onResolve={onResolve} />,
+    <ApprovalModal payload={payload} working={working} onResolve={onResolve} />,
   );
   return onResolve;
 }
@@ -114,5 +123,61 @@ describe("ApprovalModal — Wave 14 radio surface", () => {
     expect(dialog.getAttribute("aria-modal")).toBe("true");
     expect(dialog.getAttribute("aria-labelledby")).toBe("approval-title");
     expect(screen.getByText(/permission to continue/i)).toBeTruthy();
+  });
+});
+
+describe("ApprovalModal — Wave 15 affordance gating", () => {
+  function payloadWith(
+    task_id_present: boolean,
+    side_effecting: boolean,
+  ): ApprovalPayload {
+    return { ...PAYLOAD, task_id_present, side_effecting };
+  }
+
+  it("hides allow_task when task_id_present is false", () => {
+    renderModal(vi.fn(), false, payloadWith(false, true));
+    const radios = screen.getAllByRole("radio") as HTMLInputElement[];
+    const ids = radios.map((r) => r.value);
+    expect(ids).toEqual(["allow_once", "allow_session", "defer_draft"]);
+  });
+
+  it("hides defer_draft when side_effecting is false", () => {
+    renderModal(vi.fn(), false, payloadWith(true, false));
+    const radios = screen.getAllByRole("radio") as HTMLInputElement[];
+    const ids = radios.map((r) => r.value);
+    expect(ids).toEqual(["allow_once", "allow_task", "allow_session"]);
+  });
+
+  it("hides both allow_task and defer_draft when both flags are false", () => {
+    renderModal(vi.fn(), false, payloadWith(false, false));
+    const radios = screen.getAllByRole("radio") as HTMLInputElement[];
+    const ids = radios.map((r) => r.value);
+    expect(ids).toEqual(["allow_once", "allow_session"]);
+  });
+
+  it("renders all four options when both flags are true", () => {
+    renderModal(vi.fn(), false, payloadWith(true, true));
+    const radios = screen.getAllByRole("radio") as HTMLInputElement[];
+    expect(radios.map((r) => r.value)).toEqual([
+      "allow_once",
+      "allow_task",
+      "allow_session",
+      "defer_draft",
+    ]);
+  });
+
+  it("keeps allow_once selected by default even when other options are gated out", () => {
+    renderModal(vi.fn(), false, payloadWith(false, false));
+    const radios = screen.getAllByRole("radio") as HTMLInputElement[];
+    const allowOnce = radios.find((r) => r.value === "allow_once");
+    expect(allowOnce?.checked).toBe(true);
+  });
+
+  it("Approve emits UserChoice::Allow on a fully-gated payload (only allow_once visible)", () => {
+    const onResolve = vi.fn();
+    renderModal(onResolve, false, payloadWith(false, false));
+    fireEvent.click(screen.getByRole("button", { name: /approve/i }));
+    expect(onResolve).toHaveBeenCalledTimes(1);
+    expect(onResolve).toHaveBeenCalledWith({ kind: "allow" } satisfies UserChoice);
   });
 });

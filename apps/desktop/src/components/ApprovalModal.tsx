@@ -38,20 +38,39 @@ const DEFAULT_RADIO_ID: RadioId = "allow_once";
  * `UserChoice::Deny`. Decline is the safety-default escape and is
  * NOT a scope choice, so it does not live inside the radio cluster.
  *
- * V1 affordance state: every radio option is rendered unconditionally.
- * Design §5.1 specifies `allow_task` should be available only when
- * the request carries a task lineage, and `defer_draft` only when
- * the capability has side effects. Gating both on the payload
- * requires adding `task_id_present: bool` and capability metadata
- * to `ApprovalPayload` — deferred to a follow-up wave; this slice
- * locks the wire surface so the engine receives the right
- * `UserChoice` regardless of UI gating.
+ * V2 affordance state (Wave 15) — gating now lives behind the
+ * payload's `task_id_present` and `side_effecting` flags per design
+ * §5.1:
+ *
+ *   - `allow_task` renders only when `payload.task_id_present` —
+ *     selecting it without a task lineage would be a no-op (the grant
+ *     scope falls back to per-action), so the option is hidden rather
+ *     than offered as a confusing choice.
+ *   - `defer_draft` renders only when `payload.side_effecting` —
+ *     read-only capabilities cannot meaningfully be "drafted" because
+ *     there is no pending mutation to defer.
+ *   - `allow_once` and `allow_session` always render. `allow_once`
+ *     is the safe default whenever the previously-selected option is
+ *     gated out for a particular payload.
+ *
+ * The Decline button stays outside the radio group; it is the
+ * safety-default escape regardless of payload shape.
  */
 export function ApprovalModal({ payload, working, onResolve }: Props) {
-  const [selected, setSelected] = useState<RadioId>(DEFAULT_RADIO_ID);
+  const visibleOptions = APPROVAL_RADIO_OPTIONS.filter((opt) => {
+    if (opt.id === "allow_task") return payload.task_id_present;
+    if (opt.id === "defer_draft") return payload.side_effecting;
+    return true;
+  });
+  const initialSelected: RadioId = visibleOptions.some(
+    (o) => o.id === DEFAULT_RADIO_ID,
+  )
+    ? DEFAULT_RADIO_ID
+    : (visibleOptions[0]?.id ?? DEFAULT_RADIO_ID);
+  const [selected, setSelected] = useState<RadioId>(initialSelected);
 
   const onApproveSubmit = () => {
-    const opt = APPROVAL_RADIO_OPTIONS.find((o) => o.id === selected);
+    const opt = visibleOptions.find((o) => o.id === selected);
     if (!opt) return;
     onResolve(opt.choice);
   };
@@ -120,7 +139,7 @@ export function ApprovalModal({ payload, working, onResolve }: Props) {
             aria-labelledby="approval-radio-legend"
             className="flex flex-col gap-1.5"
           >
-            {APPROVAL_RADIO_OPTIONS.map((opt) => {
+            {visibleOptions.map((opt) => {
               const inputId = `approval-radio-${opt.id}`;
               const isSelected = selected === opt.id;
               return (

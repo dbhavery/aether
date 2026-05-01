@@ -112,6 +112,57 @@ pub struct ApprovalPayload {
     pub scope: String,
     pub reason: String,
     pub risk_hint: String,
+    /// Wave 15 — whether the request belongs to a task lineage. Drives
+    /// whether the `allow_task` radio option is offered (T1.3 §5.1).
+    /// The affordance is *gated* — selecting `allow_task` when this is
+    /// `false` would be a no-op semantically (the grant scope would
+    /// fall back to per-action), so the modal hides the option.
+    pub task_id_present: bool,
+    /// Wave 15 — whether the capability has side effects. Drives
+    /// whether the `defer_draft` radio option is offered (T1.3 §5.1).
+    /// Read-only capabilities cannot meaningfully be "drafted" — there
+    /// is no pending mutation to defer.
+    pub side_effecting: bool,
+}
+
+/// Wave 15 — classify a `Capability` variant as side-effecting (mutating
+/// or producing observable external effects) versus read-only. Drives
+/// the `side_effecting` field on `ApprovalPayload`, which in turn gates
+/// the `defer_draft` radio option in the L7 approval modal (T1.3 §5.1).
+///
+/// The match is exhaustive against the current `Capability` enum
+/// (packages/l5-policy/src/capability.rs). The `_ => true` arm is
+/// defence-in-depth only — it should never match in practice. Adding a
+/// new variant should trip a compile error here only if explicit-match
+/// is restored, but we keep the conservative fallback so an unhandled
+/// variant errs on offering the affordance rather than hiding it.
+pub(crate) fn capability_is_side_effecting(cap: &aether_l5_policy::Capability) -> bool {
+    use aether_l5_policy::Capability::*;
+    match cap {
+        // ----- Read-only -----
+        FilesRead | BrowserReadPage | BrowserExtractData | EmailReadMetadata | EmailReadBody
+        | ClipboardRead | NotificationRead | MemoryRead | RetrievalContext => false,
+
+        // ----- Mutating / side-effecting -----
+        FilesCreate | FilesEdit | FilesRenameMove | FilesDelete | FilesBulkOp | BrowserOpen
+        | BrowserFillForm | BrowserUpload | BrowserDownload | BrowserSubmit
+        | BrowserLoginReuse | EmailDraft | EmailEditDraft | EmailSend
+        | EmailAttachmentAccess | ClipboardWrite | ShellExec | PackageInstall
+        | AutomationTrigger | MemoryWriteSession | MemoryWriteDurable
+        | MemoryWriteExtractedPref | MemoryUseInFutureTask | MemoryExport | MemoryDelete
+        | MemoryWrite | MemoryForget | MemoryEdit | MemoryEmbed | MediaMic | MediaCamera
+        | MediaScreenCapture | IntegrationUse(_) | IntegrationExternalApi(_)
+        | IntegrationTriggerAutomation(_) | RouterEscalateRemote | RouterOverrideTier
+        | RouterAllowRemoteWithPrivate | CostCapAdmin | AuditExport | PersonaDownload
+        | PersonaInstall | PersonaUninstall | PersonaSwitch => true,
+
+        // Defence in depth — unknown variants default to side-effecting
+        // so the modal still offers `defer_draft`. Should never match
+        // against the enum at HEAD; if it does, classify the new
+        // variant explicitly above.
+        #[allow(unreachable_patterns)]
+        _ => true,
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -443,12 +494,19 @@ pub fn submit_turn(
 
     if let Decision::Ask { ticket, .. } = &first.policy_decision {
         let prompt = approval_prompt_from_ticket(ticket.clone(), None);
+        let side_effecting = capability_is_side_effecting(&prompt.capability);
         let approval = ApprovalPayload {
             ticket_id: prompt.ticket.ticket_id.0.clone(),
             capability: human_capability(&prompt.capability).to_string(),
             scope: human_scope(&prompt.resource),
             reason: prompt.reason.0.clone(),
             risk_hint: "Session-only approval. This will not persist beyond this session.".into(),
+            // Wave 15 — task lineage is not yet threaded through
+            // submit_turn (every TurnRequest above has task_id: None).
+            // When a future wave plumbs task ids, switch to
+            // request.task_id.is_some().
+            task_id_present: false,
+            side_effecting,
         };
         transition_presence(
             &app,
@@ -3540,6 +3598,59 @@ pub fn drive_attention_tick(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ---------- Wave 15 — capability_is_side_effecting classifier ----------
+
+    #[test]
+    fn wave15_classifies_read_only_file_and_browser_caps_as_non_side_effecting() {
+        use aether_l5_policy::Capability::*;
+        for cap in [
+            FilesRead,
+            BrowserReadPage,
+            BrowserExtractData,
+            EmailReadMetadata,
+            EmailReadBody,
+            ClipboardRead,
+            NotificationRead,
+            MemoryRead,
+            RetrievalContext,
+        ] {
+            assert!(
+                !capability_is_side_effecting(&cap),
+                "{cap:?} should be classified read-only"
+            );
+        }
+    }
+
+    #[test]
+    fn wave15_classifies_mutating_caps_as_side_effecting() {
+        use aether_l5_policy::Capability::*;
+        for cap in [
+            FilesCreate,
+            FilesEdit,
+            FilesRenameMove,
+            FilesDelete,
+            FilesBulkOp,
+            BrowserOpen,
+            BrowserFillForm,
+            BrowserUpload,
+            BrowserDownload,
+            BrowserSubmit,
+            BrowserLoginReuse,
+            EmailDraft,
+            EmailEditDraft,
+            EmailSend,
+            EmailAttachmentAccess,
+            ClipboardWrite,
+            ShellExec,
+            PackageInstall,
+        ] {
+            assert!(
+                capability_is_side_effecting(&cap),
+                "{cap:?} should be classified side-effecting"
+            );
+        }
+    }
 
     // ---------- Memory V2 step 4 command helpers ----------
 

@@ -51,6 +51,18 @@ export interface ApprovalPayload {
   scope: string;
   reason: string;
   risk_hint: string;
+  /**
+   * Wave 15 — whether the request belongs to a task lineage. Gates the
+   * `allow_task` radio option in the modal (T1.3 §5.1). When false the
+   * modal hides the option because selecting it would be a no-op.
+   */
+  task_id_present: boolean;
+  /**
+   * Wave 15 — whether the capability has side effects. Gates the
+   * `defer_draft` radio option (T1.3 §5.1). Read-only capabilities
+   * cannot meaningfully be "drafted".
+   */
+  side_effecting: boolean;
 }
 
 /**

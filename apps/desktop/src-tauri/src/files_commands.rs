@@ -143,6 +143,7 @@ pub(crate) fn gate(
             // pending row (so the reject path can call respond_approval).
             let ticket_for_pending = ticket.clone();
             let prompt = approval_prompt_from_ticket(ticket, None);
+            let side_effecting = crate::commands::capability_is_side_effecting(&prompt.capability);
             let approval = ApprovalPayload {
                 ticket_id: prompt.ticket.ticket_id.0.clone(),
                 capability: human_capability(&prompt.capability).to_string(),
@@ -150,6 +151,11 @@ pub(crate) fn gate(
                 reason: prompt.reason.0.clone(),
                 risk_hint:
                     "Session-only approval. This will not persist beyond this session.".into(),
+                // Wave 15 — files executor gates are never inside a
+                // task lineage today (the gate's TurnRequest above has
+                // task_id: None). Future task-aware paths flip this.
+                task_id_present: false,
+                side_effecting,
             };
             Ok(GateOutcome::AwaitingApproval {
                 approval,
