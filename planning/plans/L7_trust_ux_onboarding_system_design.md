@@ -23,9 +23,9 @@ non_goals:
 
 # L7 — Trust UX & Onboarding (system design)
 
-> **2026-04-30 banner (updated 2026-05-01, Wave 18).** This doc has the heaviest doctrine-§6 residue of the L1..L7 system_design set. Doctrine §6 (`../01_product_doctrine.md`, locked 2026-05-18) retired the OSS-Preview-as-wedge thesis: Companion ships once, when complete; pywebview is retired (Tauri is the single shell per the ADR-0008-superseding desktop framework doctrine). **§16 ("OSS Preview vs Pro divergence") was tombstoned on 2026-05-01 (Wave 18)** — the divergence matrix is removed from the active spec; rationale lives in git history. Remaining residue of the retired model still threads through "Guest mode (OSS Preview only)" passages (§4.5), "pywebview adapter parity" wording (§2.3), and pending-approvals-drawer footnotes (§3.6). Those are lower-priority surgical follow-ups; the §16 tombstone closes the load-bearing piece.
+> **2026-04-30 banner (updated 2026-05-01, Wave 18).** This doc has the heaviest doctrine-§6 residue of the L1..L7 system_design set. Doctrine §6 (`../01_product_doctrine.md`, locked 2026-05-18) retired the OSS-Preview-as-wedge thesis: Companion ships once, when complete; pywebview is retired (Tauri is the single shell per the ADR-0008-superseding desktop framework doctrine). **Wave 18 (2026-05-01) tombstoned the load-bearing residue:** §16 ("OSS Preview vs Pro divergence" matrix), §4.5 ("Guest mode"), and §2.3 (two-implementations table → single Tauri row). Smaller language touches in §1 scope, §2.2/§2.4/§2.5 inline doc-comments, §4.1 wizard row 6, and §9 transport-failure detection language were also swept. The §20 open-questions list and §22 sections-accomplished checklist are intentionally left as-is — they are historical change-log style sections; reading them as current spec is a category error.
 
-> Scope: the user-facing shell. Onboarding wizard, trust center, permission approval UX, cost visibility, persona picker surface, degraded-mode banners, tutorial/help, action-history replay. Shell-agnostic React components talking to Rust (Tauri) or Python (pywebview) through a single adapter.
+> Scope: the user-facing shell. Onboarding wizard, trust center, permission approval UX, cost visibility, persona picker surface, degraded-mode banners, tutorial/help, action-history replay. React components talking to Rust through the single Tauri shell-adapter.
 >
 > Guiding contract: **L7 never decides, it renders.** Every capability-affecting action travels L5 → event → L7 UI → user choice → command back to L5. This pattern is repeated for router tier changes, memory edits, persona swaps, BYOK changes. Read every section with that asymmetry in mind.
 
@@ -94,7 +94,7 @@ interface ShellAdapter {
 
   // Tiny local state store (window layout, panel sizes, wizard step
   // drafts). NOT for secrets, NOT for memory, NOT for grants. Backed by
-  // tauri-plugin-store or pywebview JSON file.
+  // tauri-plugin-store.
   persistState<T>(key: StateKey, val: T): Promise<void>;
   loadState<T>(key: StateKey): Promise<T | undefined>;
 
@@ -123,19 +123,20 @@ type Projected<P> = {
 };
 ```
 
-### 2.3 Two implementations
+### 2.3 Single implementation (Tauri)
+
+> **Wave 18 sweep, 2026-05-01.** This subsection used to describe two implementations — `shell-adapter-tauri` (Pro + OSS Tauri build) and `shell-adapter-pywebview` (OSS Preview tactical only) — and required adapter parity between them. Doctrine §6 retired the OSS-Preview-as-wedge thesis and the pywebview build was retired alongside it. The shell-agnostic adapter pattern is preserved (because it remains a useful seam for testability and for any future shell), but there is now a single live implementation. The historical two-row table lives in git history.
 
 | Implementation | Target | Command transport | Event transport | Secret handling |
 |---|---|---|---|---|
-| `shell-adapter-tauri` | Pro + OSS Tauri build | `@tauri-apps/api/tauri::invoke` | `@tauri-apps/api/event::listen` | Secret typed through Rust `#[tauri::command]` that writes directly to OS keyring; never returned |
-| `shell-adapter-pywebview` | OSS Preview tactical only | `window.pywebview.api.<fn>` JSON bridge | Long-poll / injected event channel, seq-numbered | Secret sent via dedicated `secret_*` Python API that hands to `keyring` package |
+| `shell-adapter-tauri` | Companion (single shell) | `@tauri-apps/api/tauri::invoke` | `@tauri-apps/api/event::listen` | Secret typed through Rust `#[tauri::command]` that writes directly to OS keyring; never returned |
 
-Both must match shape for every command listed in §11. The component tree is **identical** — only the adapter differs. Cutover criterion is in `X3 §9.3` (OSS Preview Tauri build passes L7 onboarding happy-path + trust-center smoke tests).
+Component tree is implementation-agnostic by construction. The adapter seam stays so future shell choices (e.g. a mobile companion app per ADR-0016) can be served without rewriting the React tree.
 
 ### 2.4 Secret-handling rules (mandatory)
 
 1. No secret value ever enters React state, React refs, context, redux, React Query, devtools.
-2. `captureSecret` takes the user's input via a native-bridged field (Tauri window-owned input or pywebview overlay) and hands it directly to the Rust/Python side.
+2. `captureSecret` takes the user's input via a Tauri window-owned native-bridged field and hands it directly to the Rust side.
 3. The UI receives only a `SecretHandle` — opaque, non-guessable, scoped to purpose.
 4. Future commands reference the handle, not the secret.
 5. Handles expire at session end or explicit revoke; revocation is an L5 grant-revoke.
@@ -143,7 +144,7 @@ Both must match shape for every command listed in §11. The component tree is **
 ### 2.5 IPC surface shape
 
 Every command:
-- Typed request + response (ts-rs / specta from Rust; mirrored Python docstrings on pywebview side).
+- Typed request + response (ts-rs / specta from Rust).
 - Typed error envelope (per layer; L5 uses `PolicyIpcError` per L5 §5.1).
 - Write-class commands return a `ChangeId` the UI correlates to a follow-up projected event.
 - **No "god" command.** `invoke("do_thing", ...)` is forbidden.
@@ -283,7 +284,7 @@ Reconciliation: `06_onboarding_spec.md` specifies 7 steps. `03_content_lock §1`
 | 3 | **Assistant identity** | Name (optional), persona preset (Warm/Professional/Playful/Custom), optional voice, optional avatar preset; preview inline | `persona.list`, `persona.compile(id)` (dry-run preview), `onboarding.save_step("identity", {...})` | `persona_swap_commit` (on final confirm at end of wizard only) | persona_id, assistant_name |
 | 4 | **Interaction mode** | Text / Text+Voice / Full Avatar; mic, voice output, avatar visibility toggles | `onboarding.save_step("interaction", {...})` | none | interaction flags |
 | 5 | **Hardware tier** | Auto-detected tier badge, one-sentence meaning, storage preview, advanced override collapsed | `core.probe_hardware` (Rust), `onboarding.save_step("tier", tier_id)`, `router.set_tier_override(tier)` (L4, L5-gated) | `core.health tier` | tier_id |
-| 6 | **LLM setup / BYOK** (Pro) or **Guest fallback** (OSS Preview) | Pick provider. Pro: BYOK entry via `captureSecret` → `router.set_byok_credential` (L4, L5-gated). OSS Preview: if no Ollama + no key, Guest mode card with disclosure | `router.list_providers`, `router.set_byok_credential`, `onboarding.save_step("llm", {...})` | `route_decision` (preview turn), `cost_threshold_hit` (only if existing usage) | provider, byok_handle, guest_optin |
+| 6 | **LLM setup / BYOK** | Pick provider (local Ollama or remote BYOK). BYOK entry via `captureSecret` → `router.set_byok_credential` (L4, L5-gated). | `router.list_providers`, `router.set_byok_credential`, `onboarding.save_step("llm", {...})` | `route_decision` (preview turn), `cost_threshold_hit` (only if existing usage) | provider, byok_handle |
 | 7 | **Permissions preset** | 5-preset ladder (Observer / Assistant / Operator / Power User / Custom) with plain-language "will / will always ask / will never"; resource pickers for approved folders + domains; advanced matrix collapsed | `policy.list_capabilities`, `policy.set_preset(preset)` (requires re-auth), `onboarding.save_step("permissions", {...})` | `grant_issued` (preset-issued grants), `policy_decision` | preset_id, approved roots, approved domains |
 | 8 | **Ready** | Summary of choices, first-run checklist (3–5 actions), offer showcase tour | `onboarding.save_step("ready", {})`, `onboarding.mark_complete` | none | completion flag |
 
@@ -315,16 +316,9 @@ Each preset card shows:
 5. Secret value never returned to React; only provider + masked fingerprint render.
 6. `cost_threshold_hit` subscriptions start for that provider.
 
-### 4.5 Guest mode (OSS Preview only)
+### 4.5 Guest mode — RETIRED (Wave 18, 2026-05-01)
 
-- Forced preset: **Observer** (cannot be changed while Guest).
-- No persona (hard-coded anonymous companion persona).
-- No durable memory (session-only).
-- Clearly labeled: "Guest mode — this conversation ends when the window closes."
-- Banner on every turn: "Guest does not remember you. Install to keep this conversation."
-- Rate-limit copy visible: "N/10 hourly turns used."
-- Every turn: privacy disclosure reminder that bytes leave the machine (per `03_content_lock §2`).
-- Guest → Pro upgrade path always one click away.
+> **Tombstone.** Guest mode was scoped to the now-retired OSS Preview edition: forced Observer preset, anonymous persona, no durable memory, rate-limit copy, "install to keep this conversation" banner, Guest → Pro upgrade path. Doctrine §6 retired the OSS Preview, so Guest mode goes with it — Companion ships once, with full first-run wizard, persona picker, and durable memory. There is no anonymous "try-it-without-installing" surface. Historical content lives in git history.
 
 ### 4.6 Privacy & disclosure screens (Screen 2 expansion)
 
@@ -818,7 +812,7 @@ Styling implementation deferred to UI-phase pass.
 
 ### 15.1 IPC transport failure
 
-- Adapter detects transport failure (Tauri IPC disconnect, pywebview bridge drop).
+- Adapter detects transport failure (Tauri IPC disconnect).
 - All pending `invoke` promises reject with a typed `IpcTransportLost` error.
 - UI enters "Reconnecting..." state (BannerStrip informational).
 - Auto-reconnect with exponential backoff (100 ms, 200 ms, 400 ms, capped at 3 s).
@@ -846,7 +840,7 @@ Styling implementation deferred to UI-phase pass.
 ### 15.4 Secret-leak prevention
 
 - Secrets never in React state (§2.4).
-- Devtools capture of secret fields is blocked via native-bridged input overlay (Tauri) or webview-owned input intercept (pywebview).
+- Devtools capture of secret fields is blocked via Tauri's native-bridged input overlay.
 - React error boundaries strip any field named `secret`, `api_key`, `token` from error payloads before sending to logs.
 - Audit never records secret values (only masked fingerprints).
 
@@ -858,7 +852,7 @@ Styling implementation deferred to UI-phase pass.
 >
 > The historical content of this section (the divergence matrix and the build-flag mechanism) is preserved in git history at `f7b929d^` and `git log -- planning/plans/L7_trust_ux_onboarding_system_design.md` if the rationale ever needs reconstruction. It is removed from the active design contract because it is doctrine-violating and reading it as current spec would mislead any agent or contributor.
 >
-> Cross-references that previously pointed at "OSS Preview" features in this document (e.g. §3.6 "Pending-approvals drawer" footnotes, §4.5 "Guest mode (OSS Preview only)") are residue of the same retired model. Treat them as historical until §4.5 + the §3.6 footnotes get a follow-up surgical sweep — owed but lower priority than the §16 tombstone above. See banner at the top of this file for the full residue list.
+> Cross-references that previously pointed at "OSS Preview" features (e.g. §4.5 "Guest mode" — also tombstoned in this same Wave 18 sweep, §2.3 "two-implementations" — collapsed to a single Tauri row) have been swept. The §20 open-questions list and §22 sections-accomplished checklist remain unswept by design — they are historical change-log style sections, not active spec.
 
 ---
 
