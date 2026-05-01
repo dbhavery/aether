@@ -693,6 +693,7 @@ impl DefaultPolicyEngine {
             seq: self.next_seq(),
             reason: None,
             effective_mode: None,
+            approval_scope: None,
         }));
     }
 
@@ -744,6 +745,7 @@ impl DefaultPolicyEngine {
             change_id: change_id.clone(),
             seq: self.next_seq(),
             preset_version_issued_under: preset_version,
+            approval_scope: None,
         }));
         grant_id
     }
