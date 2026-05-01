@@ -113,7 +113,7 @@ pub struct AppState {
     pub embedding_provider: RwLock<Arc<dyn EmbeddingProvider>>,
     pub active: RwLock<ActiveEngine>,
     ts: AtomicU64,
-    pending: Mutex<HashMap<String, PendingTurn>>,
+    pending: Mutex<HashMap<String, PendingApproval>>,
     #[allow(dead_code)] // Read via `memory_backend()` accessor and in tests.
     memory_backend: MemoryBackend,
     /// Current autonomy preset overlay. Applied after the persona
@@ -441,6 +441,77 @@ pub struct PendingTurn {
     /// `finalize_turn` path doesn't need a borrow into `pending.request`.
     /// Memory records and the user-visible transcript use this string.
     pub original_utterance: String,
+}
+
+/// An executor invocation (`browser_*` / `files_*`) that is waiting on a
+/// UI approval after the L5 gate returned `Decision::Ask`. The variant
+/// payload carries everything needed to replay the call from
+/// `resolve_approval` once the user clicks Approve. Wave 11 introduced
+/// this enum so the gate's `Ask` decision can route through the same
+/// approval modal the chat surface (`submit_turn` → `resolve_approval`)
+/// already wires, instead of short-circuiting with a string error.
+#[derive(Debug, Clone)]
+pub enum PendingExecutorCall {
+    BrowserOpen {
+        url: String,
+    },
+    BrowserNavigate {
+        session: aether_l5_browser::SessionId,
+        url: String,
+    },
+    BrowserReadPage {
+        session: aether_l5_browser::SessionId,
+    },
+    BrowserExtract {
+        session: aether_l5_browser::SessionId,
+        selector: String,
+    },
+    BrowserFillForm {
+        session: aether_l5_browser::SessionId,
+        fields: Vec<aether_l5_browser::FormField>,
+    },
+    BrowserSubmit {
+        session: aether_l5_browser::SessionId,
+        selector: String,
+    },
+    FilesRead {
+        path: String,
+    },
+    FilesCreate {
+        path: String,
+        contents: Vec<u8>,
+    },
+    FilesEdit {
+        path: String,
+        contents: Vec<u8>,
+    },
+    FilesRename {
+        src: String,
+        dst: String,
+    },
+    FilesDelete {
+        path: String,
+    },
+    FilesGrep {
+        root: String,
+        pattern: String,
+    },
+}
+
+/// Approval pending in the shared registry. A single `HashMap<TicketId,
+/// PendingApproval>` holds both flavours so `resolve_approval` can
+/// dispatch on the variant without scanning multiple maps.
+pub enum PendingApproval {
+    /// Original chat-surface flavour — replay `handle_turn` post-approval.
+    Turn(PendingTurn),
+    /// Wave 11 — replay an L5-gated executor invocation post-approval.
+    /// `payload` carries the `ApprovalPayload` shape the UI's modal
+    /// already consumes so `resolve_approval` can mirror the chat-surface
+    /// experience without inventing a second wire shape.
+    Executor {
+        call: PendingExecutorCall,
+        approval: crate::commands::ApprovalPayload,
+    },
 }
 
 impl AppState {
@@ -1486,12 +1557,21 @@ impl AppState {
         self.ts.fetch_add(1, Ordering::Relaxed)
     }
 
-    pub fn record_pending(&self, ticket_id: String, pending: PendingTurn) {
+    /// Register a pending approval keyed on `ticket_id`. Wave 11 widened
+    /// the value type from `PendingTurn` to `PendingApproval` so the same
+    /// registry holds both chat-surface (`PendingTurn`) and executor
+    /// (`PendingExecutorCall`) flavours; existing call sites that record
+    /// a `PendingTurn` should wrap it in
+    /// `PendingApproval::Turn(...)` at the call site.
+    pub fn record_pending(&self, ticket_id: String, pending: PendingApproval) {
         let mut g = self.pending.lock().expect("pending lock");
         g.insert(ticket_id, pending);
     }
 
-    pub fn take_pending(&self, ticket_id: &str) -> Option<PendingTurn> {
+    /// Remove and return the pending approval for `ticket_id`. The caller
+    /// dispatches on the variant — `Turn` replays `handle_turn`, `Executor`
+    /// replays the originally-attempted command.
+    pub fn take_pending(&self, ticket_id: &str) -> Option<PendingApproval> {
         let mut g = self.pending.lock().expect("pending lock");
         g.remove(ticket_id)
     }
@@ -1864,11 +1944,11 @@ mod tests {
         };
         state.record_pending(
             ticket.ticket_id.0.clone(),
-            PendingTurn {
+            PendingApproval::Turn(PendingTurn {
                 request: req.clone(),
                 ask_result: ask_result.clone(),
                 original_utterance: req.original_utterance.clone(),
-            },
+            }),
         );
 
         // Step 2 — user approves. Respond via L7 helper so we build the
@@ -1884,9 +1964,13 @@ mod tests {
         }
 
         // Step 3 — pending retrieval should consume the entry.
-        let pending = state
+        let pending = match state
             .take_pending(&ticket.ticket_id.0)
-            .expect("pending ticket");
+            .expect("pending ticket")
+        {
+            PendingApproval::Turn(t) => t,
+            PendingApproval::Executor { .. } => panic!("expected Turn, got Executor"),
+        };
         assert!(state.take_pending(&ticket.ticket_id.0).is_none());
 
         // Step 4 — replay. Should now Allow and carry a RouteOutcome.
@@ -1934,11 +2018,11 @@ mod tests {
         let utter = req.original_utterance.clone();
         state.record_pending(
             ticket.ticket_id.0.clone(),
-            PendingTurn {
+            PendingApproval::Turn(PendingTurn {
                 request: req,
                 ask_result: ask,
                 original_utterance: utter,
-            },
+            }),
         );
 
         // Reject via the same helper flow commands.rs uses.
