@@ -108,7 +108,8 @@ Tauri bundle, signing, installer flows. Defer until everything else is locked.
 ## Tier 4 — Hygiene / governance (cheap wins, do anytime)
 
 ### T4.1 — CI guard for arch-doc rot
-Already-flagged risk. Cheap to build. Mirror existing `tools/lint-vision-doc/`, `tools/lint-voice-doc/`, `tools/lint-presence-doc/` patterns.
+**Status:** DONE — 7 doc rot guards live and green per `scripts/current_status.py`: `tools/lint-presence-doc/`, `tools/lint-vision-doc/`, `tools/lint-voice-doc/`, `tools/lint-quality-doc/` (4b0a5ce), `tools/lint-memory-doc/`, `tools/lint-policy-doc/`, `tools/lint-media-permissions-doc/`. Plus `tools/lint-redteam-coverage/` for T2.2 scenario coverage. Stale-prompt patched 2026-04-30.
+**Scope (historical):** Mirror existing `tools/lint-vision-doc/`, `tools/lint-voice-doc/`, `tools/lint-presence-doc/` patterns for the remaining critical arch docs.
 
 ### T4.2 — Companion rename Tier 1 — text-only pass
 Per Task #9 in the active plan. `Aether` product references → `Companion` in `planning/`, `docs/`, `README`, code comments. Preserve internal identifiers.
@@ -119,7 +120,8 @@ Per Task #10. Audit + finish what the 2026-04-28 5-commit rename missed.
 **Self-test gate (doctrine §8):** agent runs the built app as a user; confirms no `Aether` appears anywhere user-visible.
 
 ### T4.4 — Doctrine refresh propagation audit
-Confirm doctrine §5 / §6 / §7 / §8 (added 2026-05-18) are reflected consistently in `02_product_family.md`, `03_vision_and_thesis.md`, roadmaps, and inbox docs.
+**Status:** DONE — propagation completed per HANDOFF_2026-04-30 §7: doctrine §5/§6/§7/§8 reflected consistently across `02_product_family.md`, `03_vision_and_thesis.md`, all roadmaps, all numbered specs (04, 05, 06, 07, 11, 12, 14, 16), all inbox docs. Plus `01_product_doctrine.md` "Aether Pro" heading flipped to "Companion." A residual banner-only sweep for the 6 `L*_system_design.md` files landed 2026-04-30 as part of T4.7. Stale-prompt patched 2026-04-30.
+**Scope (historical):** Confirm doctrine §5 / §6 / §7 / §8 (added 2026-05-18) are reflected consistently in `02_product_family.md`, `03_vision_and_thesis.md`, roadmaps, and inbox docs.
 
 ### T4.5 — `aether_oss_preview` roadmap retirement
 Per Task #8. Tombstone or rewrite per `01_product_doctrine.md` §6.
