@@ -8,10 +8,17 @@
 //!
 //! # Architecture
 //!
-//! - Holds an immutable [`ScopeAllowlist`]; every input path is
-//!   canonicalized BEFORE the allowlist check, so a symlink whose
-//!   target falls outside the allowlist is rejected even if the symlink
-//!   itself sits inside an approved root.
+//! - Holds a [`ScopeAllowlist`] behind an `Arc<RwLock<...>>` so callers
+//!   (the L5 policy layer) can swap the live scope wholesale at runtime
+//!   without rebuilding the executor. The threat model is unchanged:
+//!   every input path is canonicalized BEFORE the allowlist check, so
+//!   a symlink whose target falls outside the allowlist is rejected
+//!   even if the symlink itself sits inside an approved root. Only the
+//!   wholesale-swap path is exposed (no per-entry add/remove) — this
+//!   keeps the auditable surface to two methods,
+//!   [`StdFsExecutor::set_allowlist`] and
+//!   [`StdFsExecutor::update_allowlist_from_paths`], both of which
+//!   atomically replace the live scope.
 //! - `create` / `edit` are atomic: write to a sibling tempfile in the
 //!   destination's parent directory, then `tokio::fs::rename` to the
 //!   final path. `create` rejects pre-existing destinations; `edit`
@@ -51,6 +58,7 @@
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, RwLock};
 
 use async_trait::async_trait;
 use tokio::fs;
@@ -63,12 +71,31 @@ use crate::types::{FilesExecError, GrepHit, ScopeAllowlist};
 ///
 /// Construct via [`StdFsExecutor::new`] with the
 /// [`ScopeAllowlist`](crate::types::ScopeAllowlist) the caller has
-/// already negotiated through L5 policy. The allowlist is held by
-/// value; clone it before constructing if the caller needs to keep a
-/// copy.
-#[derive(Debug, Clone)]
+/// already negotiated through L5 policy.
+///
+/// Internally the allowlist is held in an `Arc<RwLock<ScopeAllowlist>>`
+/// so the executor's scope can be widened or narrowed at runtime
+/// (e.g. when the user grants or revokes a fresh scope through L5
+/// policy) without rebuilding the executor and without disrupting
+/// in-flight operations. Cloning the executor is cheap — clones share
+/// the same lock and therefore the same live scope state. See
+/// [`set_allowlist`](Self::set_allowlist) and
+/// [`update_allowlist_from_paths`](Self::update_allowlist_from_paths).
+#[derive(Debug)]
 pub struct StdFsExecutor {
-    scope: ScopeAllowlist,
+    scope: Arc<RwLock<ScopeAllowlist>>,
+}
+
+impl Clone for StdFsExecutor {
+    /// Clones share the same allowlist state via `Arc`. Mutating the
+    /// scope on any clone (via [`set_allowlist`](Self::set_allowlist) or
+    /// [`update_allowlist_from_paths`](Self::update_allowlist_from_paths))
+    /// is observed by every other clone immediately.
+    fn clone(&self) -> Self {
+        Self {
+            scope: Arc::clone(&self.scope),
+        }
+    }
 }
 
 impl StdFsExecutor {
@@ -80,7 +107,51 @@ impl StdFsExecutor {
     /// canonicalizes its input path and then path-prefix-matches it
     /// against the (already-canonical) roots.
     pub fn new(scope: ScopeAllowlist) -> Self {
-        Self { scope }
+        Self {
+            scope: Arc::new(RwLock::new(scope)),
+        }
+    }
+
+    /// Atomically replace the active allowlist.
+    ///
+    /// All in-flight operations that have already cloned the previous
+    /// allowlist (inside `canonicalize_and_authorize` /
+    /// `canonicalize_parent_and_authorize`) finish under the previous
+    /// scope; subsequent calls observe the new scope. The roots are
+    /// stored verbatim — canonicalize them first if symlink-safe
+    /// semantics are required (see
+    /// [`update_allowlist_from_paths`](Self::update_allowlist_from_paths)
+    /// for a helper that does this).
+    pub fn set_allowlist(&self, scope: ScopeAllowlist) {
+        // Poisoned locks are treated as an unrecoverable invariant
+        // violation in this stub; unwrap matches the convention used
+        // elsewhere in this crate's tests.
+        let mut guard = self.scope.write().expect("scope lock poisoned");
+        *guard = scope;
+    }
+
+    /// Build a new allowlist by canonicalizing each supplied path
+    /// (synchronously, via [`std::fs::canonicalize`] — matching what
+    /// L5 policy does at grant time) and atomically swap it in.
+    ///
+    /// Each path must already exist; a path that fails canonicalization
+    /// returns [`FilesExecError::Io`] and the existing allowlist is
+    /// left untouched. Empty input is allowed and clears the scope
+    /// (every subsequent call will reject paths with
+    /// [`FilesExecError::NotInScope`]).
+    pub fn update_allowlist_from_paths<I>(&self, roots: I) -> Result<(), FilesExecError>
+    where
+        I: IntoIterator<Item = PathBuf>,
+    {
+        let mut canonical = Vec::new();
+        for root in roots {
+            let resolved = std::fs::canonicalize(&root).map_err(|e| {
+                FilesExecError::Io(format!("canonicalize {}: {}", root.display(), e))
+            })?;
+            canonical.push(resolved);
+        }
+        self.set_allowlist(ScopeAllowlist::new(canonical));
+        Ok(())
     }
 }
 
@@ -103,12 +174,21 @@ fn require_runtime() -> Result<(), FilesExecError> {
     Ok(())
 }
 
-/// Canonicalize `path` and authorize the canonical form against
-/// `scope`. Returns the canonical path on success.
+/// Snapshot the current allowlist by cloning it under a short read
+/// guard. The guard is released before this function returns, which is
+/// required because callers go on to `.await` and `RwLockReadGuard`
+/// from `std::sync` is not safe to hold across await points.
+fn snapshot_scope(scope: &Arc<RwLock<ScopeAllowlist>>) -> ScopeAllowlist {
+    scope.read().expect("scope lock poisoned").clone()
+}
+
+/// Canonicalize `path` and authorize the canonical form against the
+/// current contents of `scope`. Returns the canonical path on success.
 async fn canonicalize_and_authorize(
-    scope: &ScopeAllowlist,
+    scope: &Arc<RwLock<ScopeAllowlist>>,
     path: &Path,
 ) -> Result<PathBuf, FilesExecError> {
+    let snapshot = snapshot_scope(scope);
     let canonical = fs::canonicalize(path).await.map_err(|e| {
         if e.kind() == std::io::ErrorKind::NotFound {
             FilesExecError::NotFound(path.display().to_string())
@@ -116,7 +196,7 @@ async fn canonicalize_and_authorize(
             FilesExecError::Io(format!("canonicalize {}: {}", path.display(), e))
         }
     })?;
-    if !scope.is_within_scope(&canonical) {
+    if !snapshot.is_within_scope(&canonical) {
         return Err(FilesExecError::NotInScope(canonical.display().to_string()));
     }
     Ok(canonical)
@@ -131,9 +211,10 @@ async fn canonicalize_and_authorize(
 /// check, which is the property the locked T1.3 §5.2 sub-decision
 /// requires.
 async fn canonicalize_parent_and_authorize(
-    scope: &ScopeAllowlist,
+    scope: &Arc<RwLock<ScopeAllowlist>>,
     path: &Path,
 ) -> Result<PathBuf, FilesExecError> {
+    let snapshot = snapshot_scope(scope);
     let parent = path
         .parent()
         .ok_or_else(|| FilesExecError::Io(format!("path has no parent: {}", path.display())))?;
@@ -150,7 +231,7 @@ async fn canonicalize_parent_and_authorize(
     })?;
     let mut canonical = canonical_parent;
     canonical.push(file_name);
-    if !scope.is_within_scope(&canonical) {
+    if !snapshot.is_within_scope(&canonical) {
         return Err(FilesExecError::NotInScope(canonical.display().to_string()));
     }
     Ok(canonical)
@@ -564,6 +645,158 @@ mod tests {
         let traversal: PathBuf = inner.join("..").join("escape.txt");
         let err = exec.read(&traversal).await.unwrap_err();
         assert!(matches!(err, FilesExecError::NotInScope(_)), "got {err:?}");
+    }
+
+    // ---------------------------------------------------------------
+    // Wave 13a — runtime allowlist mutation
+    // ---------------------------------------------------------------
+
+    /// Widen the executor's scope at runtime. With an empty scope, a
+    /// read of an in-tempdir file fails as `NotInScope`; after
+    /// `set_allowlist` adds the canonical tempdir, the same read
+    /// succeeds.
+    #[tokio::test]
+    async fn set_allowlist_widens_scope_at_runtime() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("hello.txt");
+        std::fs::write(&path, b"hi").unwrap();
+
+        let exec = StdFsExecutor::default();
+        let err = exec.read(&path).await.unwrap_err();
+        assert!(matches!(err, FilesExecError::NotInScope(_)), "got {err:?}");
+
+        let canonical = std::fs::canonicalize(dir.path()).unwrap();
+        exec.set_allowlist(ScopeAllowlist::new([canonical]));
+
+        let bytes = exec.read(&path).await.unwrap();
+        assert_eq!(bytes, b"hi");
+    }
+
+    /// Narrow the executor's scope at runtime. A read that succeeds
+    /// under the original scope must fail with `NotInScope` after the
+    /// scope is cleared.
+    #[tokio::test]
+    async fn set_allowlist_narrows_scope_at_runtime() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("h.txt");
+        std::fs::write(&path, b"x").unwrap();
+        let exec = exec_for(&dir);
+
+        // Sanity: read succeeds under the seeded scope.
+        assert_eq!(exec.read(&path).await.unwrap(), b"x");
+
+        exec.set_allowlist(ScopeAllowlist::default());
+        let err = exec.read(&path).await.unwrap_err();
+        assert!(matches!(err, FilesExecError::NotInScope(_)), "got {err:?}");
+    }
+
+    /// `update_allowlist_from_paths` must run the inputs through
+    /// `std::fs::canonicalize` so a path containing `..` is stored in
+    /// its canonical form.
+    #[tokio::test]
+    async fn update_allowlist_from_paths_canonicalizes() {
+        let dir = TempDir::new().unwrap();
+        let inner = dir.path().join("inner");
+        std::fs::create_dir(&inner).unwrap();
+
+        // Lexical path with a `..` segment that resolves back to dir.
+        let traversal: PathBuf = inner.join("..");
+        let expected = std::fs::canonicalize(dir.path()).unwrap();
+
+        let exec = StdFsExecutor::default();
+        exec.update_allowlist_from_paths([traversal]).unwrap();
+
+        // Read the live allowlist to verify the canonical form landed.
+        let scope = exec.scope.read().expect("scope lock poisoned").clone();
+        assert_eq!(scope.roots.len(), 1);
+        assert_eq!(scope.roots[0], expected);
+    }
+
+    /// A nonexistent path fails canonicalize and surfaces as
+    /// `FilesExecError::Io`. The pre-existing allowlist must be left
+    /// untouched.
+    #[tokio::test]
+    async fn update_allowlist_from_paths_rejects_nonexistent() {
+        let dir = TempDir::new().unwrap();
+        let exec = exec_for(&dir);
+        let original = exec.scope.read().unwrap().clone();
+
+        let bogus = dir.path().join("does-not-exist-ever");
+        let err = exec.update_allowlist_from_paths([bogus]).unwrap_err();
+        assert!(matches!(err, FilesExecError::Io(_)), "got {err:?}");
+
+        let after = exec.scope.read().unwrap().clone();
+        assert_eq!(original, after, "failed update must not mutate scope");
+    }
+
+    /// Cloning the executor shares allowlist state via `Arc`. Mutating
+    /// scope on one clone must be observed by all the others.
+    #[tokio::test]
+    async fn clone_shares_allowlist_state() {
+        let exec = StdFsExecutor::default();
+        let twin = exec.clone();
+
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("shared.txt");
+        std::fs::write(&path, b"shared").unwrap();
+        let canonical = std::fs::canonicalize(dir.path()).unwrap();
+
+        // Mutate via the clone.
+        twin.set_allowlist(ScopeAllowlist::new([canonical]));
+
+        // The original sees the new scope.
+        let bytes = exec.read(&path).await.unwrap();
+        assert_eq!(bytes, b"shared");
+    }
+
+    /// Concurrency smoke: N readers race a writer that swaps
+    /// equivalent allowlists. Reads must all succeed and no thread may
+    /// deadlock or panic. Bounded iterations keep the test
+    /// deterministic.
+    #[tokio::test]
+    async fn concurrent_reads_and_set_allowlist_dont_deadlock() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("c.txt");
+        std::fs::write(&path, b"concurrent").unwrap();
+        let canonical_a = std::fs::canonicalize(dir.path()).unwrap();
+        // `canonical_b` is identical to `canonical_a` — both authorize
+        // the same file. We swap between two equivalent allowlists so
+        // every read is guaranteed to remain in-scope regardless of
+        // which scope was live at canonicalize time.
+        let canonical_b = canonical_a.clone();
+
+        let exec = StdFsExecutor::new(ScopeAllowlist::new([canonical_a.clone()]));
+
+        let writer_exec = exec.clone();
+        let writer = tokio::spawn(async move {
+            for i in 0..50usize {
+                let scope = if i % 2 == 0 {
+                    ScopeAllowlist::new([canonical_a.clone()])
+                } else {
+                    ScopeAllowlist::new([canonical_b.clone()])
+                };
+                writer_exec.set_allowlist(scope);
+                tokio::task::yield_now().await;
+            }
+        });
+
+        let mut readers = Vec::new();
+        for _ in 0..4 {
+            let exec = exec.clone();
+            let path = path.clone();
+            readers.push(tokio::spawn(async move {
+                for _ in 0..50usize {
+                    let bytes = exec.read(&path).await.expect("read should succeed");
+                    assert_eq!(bytes, b"concurrent");
+                    tokio::task::yield_now().await;
+                }
+            }));
+        }
+
+        writer.await.expect("writer task panicked");
+        for r in readers {
+            r.await.expect("reader task panicked");
+        }
     }
 
     /// On a thread without a Tokio runtime, every method must
