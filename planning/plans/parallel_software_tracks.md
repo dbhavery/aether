@@ -70,9 +70,9 @@
 **Self-test gate (doctrine §8):** agent uses the picker as a user — selects each preset, confirms persisted state, confirms downstream behavior changes (e.g., approval modal appears for Ask actions in Observer, suppressed in Operator). Used-as-user verification owed; banner here flags it.
 
 ### T2.4 — Persona picker UI (Tier 2D)
-**Status:** Wizard exists; switcher UI for post-onboarding persona swap pending.
-**Scope:** Settings surface for persona switch. Coordinates with ADR-0012 install/uninstall flow.
-**Self-test gate (doctrine §8):** agent uses the picker as a user — switch personas, confirm voice + name + identity update across UI, confirm memory continuity per ADR-0001.
+**Status:** DONE — shipped 2026-04-30 as `apps/desktop/src/components/PersonaSection.tsx` with `PersonaSection.test.tsx` (7 vitest cases) mounted at the top of `SettingsDrawer.tsx` above Media. Three commits: `776f9e0` (component + installPersona/personaManifestUrl api wrappers), `614fdf5` (SettingsDrawer mount), `05cdf88` (vitest coverage). Coordinates with ADR-0012 install-on-demand flow. Stale-prompt drift catch — patched 2026-04-30.
+**Scope (historical):** Settings surface for persona switch. Coordinates with ADR-0012 install/uninstall flow.
+**Self-test gate (doctrine §8):** agent uses the picker as a user — switch personas, confirm voice + name + identity update across UI, confirm memory continuity per ADR-0001. Doctrine §8 used-as-user verification owed for cross-persona voice/name/identity propagation; banner here flags it.
 
 ### T2.5 — Memory tab / MemoryDrawer consolidation (HANDOFF_2026-05-18 Risk D/E)
 **Status:** DONE — closed at Run 5 (2026-04-23). Per `apps/desktop/src/App.tsx:427`: "the legacy `MemoryDrawer` was retired now that Memory V2 is closed. The header Memory button opens the Trust drawer on the Memory tab — one canonical surface for 'what does Companion remember about me'." HANDOFF_2026-05-18 Risk D/E was stale-prompt drift.
