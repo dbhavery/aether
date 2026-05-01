@@ -13,6 +13,7 @@ mod memory_config;
 mod memory_router;
 mod memory_service;
 mod mic_permissions;
+mod policy_sink;
 mod presence_config;
 mod provider;
 mod retrieval;

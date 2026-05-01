@@ -187,6 +187,16 @@ pub struct AppState {
     /// a single-line change in `build()` once the `std::fs` /
     /// `tokio::fs` driver lands in a later slice.
     pub files_executor: Arc<dyn aether_l5_files::FilesExecutor>,
+    /// Wave 13b — concrete handle on the same `StdFsExecutor` that
+    /// `files_executor` wraps as a trait object. Cloning the inner
+    /// `Arc<StdFsExecutor>` yields a second outer `Arc` whose internal
+    /// `Arc<RwLock<ScopeAllowlist>>` is *shared* with `files_executor`
+    /// (Wave 13a contract). The handle exists so the boot path and the
+    /// L5 event sink can call `set_allowlist` /
+    /// `update_allowlist_from_paths` on the concrete type without
+    /// extending the public `FilesExecutor` trait surface that
+    /// `files_commands.rs` consumes.
+    pub files_executor_handle: Arc<aether_l5_files::std_fs_stub::StdFsExecutor>,
     /// Bounded, UX-only history of attention transitions for the
     /// Trust drawer's History tab. Does NOT go through the L5 audit
     /// store — presence is observational per design §4. Cleared on
@@ -656,12 +666,26 @@ impl AppState {
                 away_after_s: cfg.away_after_s,
             },
         ));
-        let active = build_active(&pick_default(&catalog), memory.clone(), None)?;
+        // Wave 13b — concrete StdFsExecutor handle. Both `files_executor`
+        // and `files_executor_handle` wrap clones of the SAME inner Arc,
+        // so the internal Arc<RwLock<ScopeAllowlist>> is shared. The
+        // handle exists so the boot-time seed step and the L5 event sink
+        // can call `set_allowlist`/`update_allowlist_from_paths` on the
+        // concrete type without extending the FilesExecutor trait.
+        let files_executor_handle: Arc<aether_l5_files::std_fs_stub::StdFsExecutor> =
+            Arc::new(aether_l5_files::std_fs_stub::StdFsExecutor::default());
+        let active = build_active(
+            &pick_default(&catalog),
+            memory.clone(),
+            None,
+            files_executor_handle.clone(),
+        )?;
 
         let embedding_store: Arc<dyn EmbeddingStore> =
             Arc::new(FlatFileEmbeddingStore::in_memory());
         let embedding_provider: Arc<dyn EmbeddingProvider> =
             Arc::new(OllamaEmbeddingProvider::from_env());
+
         Ok(Self {
             catalog: RwLock::new(catalog),
             presence,
@@ -687,18 +711,17 @@ impl AppState {
             browser_executor: Arc::new(
                 aether_l5_browser::playwright_stub::PlaywrightExecutor::new(),
             ),
-            // L5-files graduated to a real `tokio::fs` backend (commit
-            // e28a293) and now requires a `ScopeAllowlist` at construction.
-            // Wave 11 prep: pass `Default::default()` (empty allowlist) so
-            // the shell still boots — every `files_*` invocation falls
-            // through to `FilesExecError::NotInScope`, which is the same
-            // observable behaviour the previous `StdFsExecutor::new()`
-            // stub produced (it returned `BackendDisabled`). The wiring
-            // contract in `files_commands.rs` is exercised against either
-            // failure-string in tests, so the floor is preserved. A later
-            // slice can plumb a real allowlist sourced from the user's
-            // approved-scope ledger.
-            files_executor: Arc::new(aether_l5_files::std_fs_stub::StdFsExecutor::default()),
+            // Wave 13b — both fields wrap clones of the SAME
+            // Arc<StdFsExecutor>. Wave 13a's hand-rolled `Clone` shares
+            // the internal `Arc<RwLock<ScopeAllowlist>>`, so a mutation
+            // via the handle is observed through the trait surface
+            // immediately. The trait-object form preserves the existing
+            // `files_commands.rs` consumption contract; the concrete
+            // form lets the boot seed and the L5 event sink call
+            // `set_allowlist` / `update_allowlist_from_paths` without
+            // extending the `FilesExecutor` trait.
+            files_executor: files_executor_handle.clone(),
+            files_executor_handle,
             presence_history: Mutex::new(VecDeque::with_capacity(PRESENCE_HISTORY_CAPACITY)),
             memory_config: RwLock::new(MemoryConfig::defaults()),
             memory_config_path: None,
@@ -1547,7 +1570,12 @@ impl AppState {
                 .cloned()
                 .ok_or_else(|| "active persona missing from catalog".to_string())?
         };
-        let new_active = build_active(&profile, self.memory.clone(), preset)?;
+        let new_active = build_active(
+            &profile,
+            self.memory.clone(),
+            preset,
+            self.files_executor_handle.clone(),
+        )?;
         let mut w = self.active.write().expect("active write lock");
         *w = new_active;
         Ok(())
@@ -1635,7 +1663,12 @@ impl AppState {
                 .clone()
         };
         let preset = self.current_preset();
-        let new_active = build_active(&profile, self.memory.clone(), preset)?;
+        let new_active = build_active(
+            &profile,
+            self.memory.clone(),
+            preset,
+            self.files_executor_handle.clone(),
+        )?;
         self.clear_session()?;
         let mut w = self.active.write().expect("active write lock");
         *w = new_active;
@@ -1682,11 +1715,71 @@ fn tone_label(t: aether_l6_persona::Tone) -> String {
     .to_string()
 }
 
+/// Wave 13b — best-effort seed of the executor's allowlist from the
+/// active File-capability grants in `ledger`. Called once per
+/// `build_active` invocation (boot + every engine rebuild). Each path
+/// is canonicalized individually; a failure (volume unmounted, dir
+/// deleted) drops that one path from the new allowlist instead of
+/// aborting. An empty resulting allowlist is correct — every
+/// `files_*` invocation falls through to `FilesExecError::NotInScope`,
+/// which matches the pre-Wave-13b behaviour the call sites already
+/// tolerate.
+fn seed_executor_allowlist_from_ledger(
+    ledger: &dyn aether_l5_policy::GrantLedger,
+    executor: &aether_l5_files::std_fs_stub::StdFsExecutor,
+) {
+    use aether_l5_files::ScopeAllowlist;
+    use aether_l5_policy::{Capability, GrantFilter, ResourceScope};
+
+    let active = ledger.snapshot(&GrantFilter {
+        active_only: true,
+        ..Default::default()
+    });
+    let mut canonical: Vec<PathBuf> = Vec::new();
+    for grant in active.iter() {
+        let is_files_cap = matches!(
+            grant.capability,
+            Capability::FilesRead
+                | Capability::FilesCreate
+                | Capability::FilesEdit
+                | Capability::FilesRenameMove
+                | Capability::FilesDelete
+                | Capability::FilesBulkOp
+        );
+        if !is_files_cap {
+            continue;
+        }
+        let raw = match &grant.resource_pattern {
+            ResourceScope::Path(s) => PathBuf::from(s),
+            _ => continue,
+        };
+        match std::fs::canonicalize(&raw) {
+            Ok(c) => canonical.push(c),
+            Err(e) => {
+                tracing::warn!(
+                    "build_active: dropping un-canonicalizable grant path {}: {}",
+                    raw.display(),
+                    e
+                );
+            }
+        }
+    }
+    executor.set_allowlist(ScopeAllowlist::new(canonical));
+}
+
 /// Build every swappable engine piece for the given profile.
+///
+/// Wave 13b — `files_executor_handle` is the live `StdFsExecutor` whose
+/// allowlist will be kept in sync with the engine's grant ledger via
+/// [`ExecutorAllowlistSink`]. Each engine rebuild (boot, persona swap,
+/// preset change) gets a fresh ledger + audit; the executor handle is
+/// re-used, and the new sink seeds it from the (empty) fresh ledger so
+/// stale grants from the prior persona do not leak across.
 fn build_active(
     profile: &PersonaProfile,
     memory: Arc<dyn SessionMemoryStore>,
     preset: Option<AutonomyPreset>,
+    files_executor_handle: Arc<aether_l5_files::std_fs_stub::StdFsExecutor>,
 ) -> Result<ActiveEngine, String> {
     let persona_display_name = profile.name.clone();
     let persona_tagline = profile.description.clone();
@@ -1703,11 +1796,29 @@ fn build_active(
         cfg = cfg.with_preset_overlay(p);
     }
     let audit: Arc<dyn AuditStore> = Arc::new(InMemoryAuditStore::new());
+    // Wave 13b — concrete ledger handle is shared between the engine
+    // and the `ExecutorAllowlistSink` so the sink can re-snapshot active
+    // grants on every issue/revoke event.
+    let ledger: Arc<dyn aether_l5_policy::GrantLedger> = Arc::new(InMemoryGrantLedger::new());
+    // Inner sink stays the existing `InMemorySink::new()` — preserved
+    // for any future test/diag consumer that reads from it.
+    let inner_sink: Arc<dyn aether_l5_policy::L5EventSink> = Arc::new(InMemorySink::new());
+    let allowlist_sink: Arc<dyn aether_l5_policy::L5EventSink> =
+        Arc::new(crate::policy_sink::ExecutorAllowlistSink::new(
+            inner_sink,
+            ledger.clone(),
+            files_executor_handle.clone(),
+        ));
+    // Boot-time / rebuild-time seed: snapshot the (empty on first build,
+    // possibly populated after a future persistence load) ledger and
+    // mirror its active File-capability grants into the executor's
+    // allowlist BEFORE the engine begins handing out `Allow`s.
+    seed_executor_allowlist_from_ledger(&*ledger, &files_executor_handle);
     let policy: Arc<dyn PolicyEngine> = Arc::new(DefaultPolicyEngine::new(
         cfg,
-        Arc::new(InMemoryGrantLedger::new()),
+        ledger,
         audit.clone(),
-        Arc::new(InMemorySink::new()),
+        allowlist_sink,
     ));
 
     let (router, provider_mode, provider_label) = build_router_stack(&compiled, memory);
@@ -2808,5 +2919,108 @@ humor: "playful"
 
         let state = AppState::new_with_db_path(&bogus).expect("fallback AppState");
         assert!(matches!(state.memory_backend(), MemoryBackend::InMemory));
+    }
+
+    // -----------------------------------------------------------------
+    // Wave 13b — boot seed + grant-event allowlist plumbing.
+    // -----------------------------------------------------------------
+
+    /// Boot wires `files_executor` and `files_executor_handle` to the
+    /// SAME backing executor (Arc-shared scope state per Wave 13a).
+    /// Mutating the allowlist via the handle must be observable through
+    /// the trait-object surface.
+    #[tokio::test]
+    async fn files_executor_and_handle_share_scope_state() {
+        use aether_l5_files::{FilesExecutor, ScopeAllowlist};
+
+        let state = AppState::new().expect("AppState::new");
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("hi.txt");
+        std::fs::write(&path, b"hi").unwrap();
+
+        // Boot allowlist is empty (the ledger is empty on first build)
+        // — the trait-object read rejects.
+        let err = state.files_executor.read(&path).await.unwrap_err();
+        assert!(
+            matches!(err, aether_l5_files::FilesExecError::NotInScope(_)),
+            "got {err:?}"
+        );
+
+        // Mutate the allowlist via the concrete handle.
+        let canonical = std::fs::canonicalize(dir.path()).unwrap();
+        state
+            .files_executor_handle
+            .set_allowlist(ScopeAllowlist::new([canonical]));
+
+        // The trait-object surface sees the new scope immediately.
+        let bytes = state.files_executor.read(&path).await.unwrap();
+        assert_eq!(bytes, b"hi");
+    }
+
+    /// `seed_executor_allowlist_from_ledger` must mirror an active
+    /// `FilesRead` grant's path into the executor's allowlist and
+    /// ignore non-File grants. Tests the boot helper directly without
+    /// rebuilding `AppState`.
+    #[tokio::test]
+    async fn seed_helper_mirrors_active_files_grants() {
+        use aether_l5_files::{FilesExecutor, ScopeAllowlist};
+        use aether_l5_policy::{
+            ApprovalMode, ApprovalScope, Grant, GrantDuration, GrantId, GrantLedger,
+            InMemoryGrantLedger, MonotonicTimestamp, PersonaId, ResourceScope,
+        };
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let canonical = std::fs::canonicalize(dir.path()).unwrap();
+        let file = dir.path().join("h.txt");
+        std::fs::write(&file, b"x").unwrap();
+
+        let executor = aether_l5_files::std_fs_stub::StdFsExecutor::default();
+        // Pre-condition: empty ledger seeds an empty allowlist (no-op).
+        let empty_ledger = InMemoryGrantLedger::new();
+        seed_executor_allowlist_from_ledger(&empty_ledger, &executor);
+        let err = executor.read(&file).await.unwrap_err();
+        assert!(
+            matches!(err, aether_l5_files::FilesExecError::NotInScope(_)),
+            "got {err:?}"
+        );
+
+        // Populate the ledger with one File grant + one non-File grant.
+        let ledger = InMemoryGrantLedger::new();
+        ledger
+            .issue(Grant {
+                grant_id: GrantId("file-g".to_string()),
+                capability: aether_l5_policy::Capability::FilesRead,
+                resource_pattern: ResourceScope::Path(canonical.display().to_string()),
+                persona_id: PersonaId("test".to_string()),
+                approval_mode: ApprovalMode::Ask,
+                duration: GrantDuration::Session,
+                issued_at: MonotonicTimestamp(0),
+                expires_at: None,
+                preset_version_issued_under: 0,
+                approval_scope: Some(ApprovalScope::PerAction),
+            })
+            .expect("issue file grant");
+        ledger
+            .issue(Grant {
+                grant_id: GrantId("url-g".to_string()),
+                capability: aether_l5_policy::Capability::BrowserOpen,
+                resource_pattern: ResourceScope::Url("https://example.com".to_string()),
+                persona_id: PersonaId("test".to_string()),
+                approval_mode: ApprovalMode::Ask,
+                duration: GrantDuration::Session,
+                issued_at: MonotonicTimestamp(0),
+                expires_at: None,
+                preset_version_issued_under: 0,
+                approval_scope: Some(ApprovalScope::PerAction),
+            })
+            .expect("issue url grant");
+
+        // Reset to empty (sanity), then seed.
+        executor.set_allowlist(ScopeAllowlist::default());
+        seed_executor_allowlist_from_ledger(&ledger, &executor);
+
+        // The File grant widened the scope; the URL grant did not.
+        let bytes = executor.read(&file).await.unwrap();
+        assert_eq!(bytes, b"x");
     }
 }
