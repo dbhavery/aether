@@ -34,6 +34,8 @@ non_goals:
 
 # L2 — Companion Memory Kernel — System Design
 
+> **2026-04-30 banner.** §17 of this doc references "OSS Preview" as a release-channel for gathering user-testing signal on auto-saved memory retention defaults. Doctrine §6 (`../01_product_doctrine.md`, locked 2026-05-18) retired the OSS-Preview-as-wedge thesis: Companion ships once, when complete; signal-gathering happens against the single product. Body content unchanged; full surgical sweep is owed but out of scope for the current low-priority cleanup pass (T4.7).
+
 > The plan (file:///C:/Users/dbhav/Projects/aether-planning/plans/L2_memory_kernel.md) says *what* L2 owns. This document says *how* L2 is built. Downstream layers (L1, L4, L6, L7) should stub against the contracts frozen here (§3, §5, §8, §9, §11, §15).
 >
 > Canonical planning root: file:///C:/Users/dbhav/Projects/aether-planning/

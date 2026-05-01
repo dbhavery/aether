@@ -23,6 +23,8 @@ non_goals:
 
 # L7 — Trust UX & Onboarding (system design)
 
+> **2026-04-30 banner.** This doc has the heaviest doctrine-§6 residue of the L1..L7 system_design set: a full §16 "OSS Preview vs Pro divergence" section, plus references throughout to "Guest mode (OSS Preview only)", "pywebview adapter parity (OSS Preview)", and "Pro" build-flag splits. Doctrine §6 (`../01_product_doctrine.md`, locked 2026-05-18) retired the OSS-Preview-as-wedge thesis: Companion ships once, when complete; pywebview is retired (Tauri is the single shell per the ADR-0008-superseding desktop framework doctrine). §16 in particular should be read as historical scoping work, not active divergence. Body content unchanged; a full surgical sweep is meaningful here and owed — the current pass is banner-only per the low-priority T4.7 scope.
+
 > Scope: the user-facing shell. Onboarding wizard, trust center, permission approval UX, cost visibility, persona picker surface, degraded-mode banners, tutorial/help, action-history replay. Shell-agnostic React components talking to Rust (Tauri) or Python (pywebview) through a single adapter.
 >
 > Guiding contract: **L7 never decides, it renders.** Every capability-affecting action travels L5 → event → L7 UI → user choice → command back to L5. This pattern is repeated for router tier changes, memory edits, persona swaps, BYOK changes. Read every section with that asymmetry in mind.

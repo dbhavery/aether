@@ -23,6 +23,8 @@ depended_on_by:
 
 # L6 — Persona / Compiler System Design
 
+> **2026-04-30 banner.** This doc references "OSS Preview and Pro public manifests" for the build-time private-asset-leak lint and "OSS Preview scope" for the P0 hot-reload tradeoff. Doctrine §6 (`../01_product_doctrine.md`, locked 2026-05-18) retired the OSS-Preview-as-wedge thesis: Companion ships once, when complete; there is one public manifest. The lint contract still applies (Isabelle assets must not appear in the public distributable per `tools/lint-private-asset-leak/`). Body content unchanged; full surgical sweep is owed but out of scope for the current low-priority cleanup pass (T4.7).
+
 Implementation-grade design for the L6 **Persona Compiler** — the subsystem that turns persona packs, onboarding choices, user settings and (for Don) the Isabelle privileged overlay into typed, versioned, deterministic runtime artifacts consumed by L1/L2/L3/L4/L5/L7.
 
 This document freezes the cross-layer contracts, the schema, the hot-reload state machine, the failure modes, and the IPC surface so every other layer can stub against L6 before L6 ships.

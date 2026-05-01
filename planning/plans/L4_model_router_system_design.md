@@ -33,6 +33,8 @@ non_goals:
 
 # L4 — Model Router — System Design
 
+> **2026-04-30 banner.** This doc references "OSS Preview Guest" as a free-tier provider option and "Pro Phase 4+" for plugin-signing rollout. Doctrine §6 (`../01_product_doctrine.md`, locked 2026-05-18) retired the OSS-Preview-as-wedge thesis: Companion ships once, when complete. The "Guest mode" tier remains a valid runtime affordance inside the single product (no BYOK key required); phase nomenclature is preserved as a release-planning lens. Body content unchanged; full surgical sweep is owed but out of scope for the current low-priority cleanup pass (T4.7).
+
 > The plan (file:///C:/Users/dbhav/Projects/aether-planning/plans/L4_model_router.md) says *what* L4 owns. This document says *how* L4 is built. Downstream layers (L1, L5, L7) should stub against the contracts frozen here (§5, §7, §11, §13, §16).
 >
 > Canonical planning root: file:///C:/Users/dbhav/Projects/aether-planning/

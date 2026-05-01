@@ -31,6 +31,8 @@ non_goals:
 
 # L5 — Policy / Authorization Engine — System Design
 
+> **2026-04-30 banner.** This doc references "Pro Phase 2" for `policy_preview(plan)` rollout (multi-step plan-chain previews) and "OSS Preview" framing in two trust-pitch open-question discussions (P0 audit-chain integrity tradeoffs). Doctrine §6 (`../01_product_doctrine.md`, locked 2026-05-18) retired the OSS-Preview-as-wedge thesis: Companion ships once, when complete. Phase nomenclature is preserved as a release-planning lens onto L5's roadmap. The trust-pitch concerns remain valid for the single product. Body content unchanged; full surgical sweep is owed but out of scope for the current low-priority cleanup pass (T4.7).
+
 > This document is the engineering blueprint. The plan (`plans/L5_policy_engine.md`) says *what* L5 owns. This document says *how* L5 is built. Downstream layers (L1, L2, L4, L7) should stub against the contracts frozen here (§4, §5, §12).
 >
 > Canonical planning root: file:///C:/Users/dbhav/Projects/aether-planning/

@@ -1,5 +1,7 @@
 # L3 — Presence Engine System Design
 
+> **2026-04-30 banner.** This doc references "OSS Preview headshot" as a rendering-surface tier and "Pro Phase 2/3+" for full-body scheduling slots. Doctrine §6 (`../01_product_doctrine.md`, locked 2026-05-18) retired the OSS-Preview-as-wedge thesis: Companion ships once, when complete. The "lite headshot rendering surface" remains a valid tier label inside the single product (per `14_performance_tiers_vram.md` Lite/Balanced/Full); phase nomenclature is preserved as a release-planning lens onto L3's renderer roadmap, not as a product split. ADR-0013 (motion-library + lip-sync overlay) is the current renderer doctrine. Body content unchanged; full surgical sweep is owed but out of scope for the current low-priority cleanup pass (T4.7).
+
 **Status:** draft (system-design, implementation-grade)
 **Last updated:** 2026-04-18
 **Layer type:** must-own (doctrine §1.1 "presence controller").
