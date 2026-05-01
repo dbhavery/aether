@@ -32,20 +32,26 @@
 **Notes:** Mechanical work. Closes Risk G from HANDOFF_2026-05-18.
 
 ### T1.3 — Browser + file workflow tools
-**Status:** Substantially DONE — shipped across 4 waves on 2026-04-30:
+**Status:** DONE — files command flow end-to-end live as of 2026-05-01. Shipped across 10 waves spanning 2026-04-30 → 2026-05-01:
 - Wave 4: `packages/l5-browser/` skeleton (`1b8f3d4`) + `packages/l5-files/` skeleton (`f0f8e70`).
 - Waves 7-8: l5-browser first impl slice (`ca38a5a..1b22781` + `1b22781`); l5-files first impl slice (`3293844..f4fce68`); l5-browser Tauri command surface (`f8c22d4..54776ef`).
 - Wave 9: real Playwright Node-subprocess driver (`2c056af..c2d9c4b`); l5-files Tauri command surface (`3ffe041..b1b0447`).
 - Wave 10A: l5-files real tokio::fs backend graduation (`91479a5..a09c03d`) — atomic write-temp-rename, canonicalize-before-allowlist, runtime-absent self-degrade.
 - Wave 10B: T1.3 §2.3 ApprovalScope (`7969efb..3e1e1cc`) — `ApprovalScope` enum + storage migration 0006 + consume-while-valid rule + 86 l5-policy tests.
 - Wave 11: L5-gated approval routing for browser/files (`85437f4..bacc232`) — `Decision::Ask` routes through pending-approval registry, executor fires post-approval; 319 desktop tests.
+- Wave 12: executor reject path `respond_approval(Reject)` for audit-row completeness (`2d353d4..7326789`) — second-Reject fails proving consume; 320 desktop tests.
+- Wave 14: L7 approval-modal radio surface (`eda3668..8bea4e3`) — 4-option `ApprovalScope` radio + separate Decline; `UserChoiceWire` widening on both Rust and TS; 327 desktop / 279 vitest.
+- Wave 13a: l5-files mutable allowlist (`4a2640c..15c8b35`, merge `341b53e`) — `Arc<RwLock<ScopeAllowlist>>`, `set_allowlist`, `update_allowlist_from_paths`; 28 → 34 tests.
+- Wave 13b: apps/desktop allowlist plumbing (`4054e93..7afe05f`, merge `ebf074c`) — `AppState` holds concrete `Arc<StdFsExecutor>`, boots from active grants, `ExecutorAllowlistSink` rebuilds on `GrantIssued`/`GrantRevoked`; persona-swap clears stale grants. 327 → 333 desktop tests.
+- Wave 15: affordance gating (`ade50cb`) — `ApprovalPayload` gains `task_id_present` + `side_effecting`; modal hides `allow_task` when no task lineage and `defer_draft` for read-only capabilities. 333 → 335 desktop / 279 → 285 vitest.
+- Wave 16: DeferToDraft Turn-path affordance (`cc9b5bf`) — `TranscriptMessage.variant?: "draft_only"`, amber bubble + "Draft only" badge in `Transcript.tsx`. 285 → 288 vitest.
 
-**Carryover (post-T1.3 follow-ups):**
-- L7 approval-modal radio surface per T1.3 §2.3 design §5 — 4-option scope picker (`Allow once` / `Allow for this task` / `Allow for this session` / `Draft only`). Wire shape locked; UI shipped today is binary approve/reject. Owed to a future T2.4-flavoured slice.
-- StdFsExecutor::default() fallback (empty allowlist) used as Wave 11 build-unblocker — files commands fall through to NotInScope today. Plumb a real allowlist sourced from approved-scope ledger in a follow-up.
-- Executor reject path `respond_approval(Reject)` for audit-row completeness — Wave 12 in flight 2026-04-30.
+**Carryover (post-T1.3 follow-ups, ranked):**
+- Wave 19 — Doctrine §8 used-as-user Playwright verification on the Wave 14/15 modal. Owed before the modal ships to Don's daily-driver build. Heavier than the inline-fixable waves; recommended as a separate session because it needs `pnpm tauri dev` + browser orchestration.
+- Wave 13c — task lineage threading. Wave 15 hardcodes `task_id_present: false` because every `TurnRequest` carries `task_id: None`. Flip to `request.task_id.is_some()` once a future wave plumbs task lineage. Search for `task_id: None,` in `apps/desktop/src-tauri/src/{commands,browser_commands,files_commands}.rs`.
+- Wave 17 — OncePerSession outbound sync filter. Out of scope until the sync layer ships post-mobile.
 
-**Self-test gate (frontend portion):** any UI for approval flows must be exercised end-to-end as a user — click through approval modal, deny path, audit log review. Modal radio surface is the next step; current Wave 11 routing is backend-only.
+**Self-test gate (frontend portion):** Wave 14/15 modal + Wave 16 draft-only bubble are covered at vitest+RTL level (16 modal cases, 3 transcript cases). Real Playwright-driven verification (Wave 19) is owed before shipping to Don's daily-driver build.
 
 ### T1.4 — L3 Presence runtime renderer scaffold
 **Status:** DONE — shipped 2026-04-29 in commit `2035822` ("feat(l3-presence): runtime renderer trait + opaque handle types (ADR-0013 scaffold)"). `packages/l3-presence/src/runtime.rs` ships the `Renderer` trait, `LogStubRenderer` (no-op log-only impl), `MotionClipLibraryHandle` + `MotionClipId` + `AudioStreamHandle` opaque input-contract types, `RendererEvent` + `RENDERER_EVENT_LOG_CAP`, `BoxedRendererController`, and `RenderingPresenceController`. All exported from `lib.rs`. Stale-prompt drift catch — repo beat prompt (Decision #32). Patched 2026-04-30 during the autonomous run continuation.
