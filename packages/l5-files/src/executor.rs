@@ -24,9 +24,10 @@
 //! # Backends
 //!
 //! - [`std_fs_stub::StdFsExecutor`](crate::std_fs_stub::StdFsExecutor)
-//!   — the default backend stub. Every method returns
-//!   [`FilesExecError::BackendDisabled`] today; the real
-//!   `std::fs` / `tokio::fs` wiring lands in a later slice.
+//!   — the default backend. Gated behind the `std-fs` feature; real
+//!   `tokio::fs` implementation. Self-degrades to
+//!   [`FilesExecError::BackendDisabled`] when called from a thread
+//!   with no Tokio runtime (synchronous test harnesses).
 
 use std::path::Path;
 

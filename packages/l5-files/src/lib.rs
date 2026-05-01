@@ -1,9 +1,9 @@
 //! L5 file-workflow capability surface.
 //!
-//! **Status (T1.3 first impl slice):** Trait + types are now real, plus
-//! a capability map and a default `std::fs` backend stub. Every stub
-//! method returns [`FilesExecError::BackendDisabled`]; the real
-//! `std::fs` / `tokio::fs` wiring lands in a later slice.
+//! **Status (Wave 10A, 2026-04-30):** Trait + types are real, plus a
+//! capability map and a real `tokio::fs`-backed default backend behind
+//! the `std-fs` feature. Default builds still ship the trait + types
+//! + capability map only — no async runtime dep.
 //!
 //! # Surface
 //!
@@ -16,8 +16,12 @@
 //!   point where future Tauri commands check L5 policy BEFORE invoking
 //!   the executor.
 //! - [`std_fs_stub::StdFsExecutor`] — default backend. Gated behind the
-//!   `std-fs` feature; every method returns
-//!   [`FilesExecError::BackendDisabled`] today.
+//!   `std-fs` feature; real `tokio::fs` implementation with
+//!   canonicalize-then-authorize, atomic write-to-tempfile + rename
+//!   for `create`/`edit`, files-only `delete`, and a non-recursive
+//!   substring `grep`. Self-degrades to
+//!   [`FilesExecError::BackendDisabled`] when called from a thread
+//!   with no Tokio runtime.
 //!
 //! # Layer rules
 //!

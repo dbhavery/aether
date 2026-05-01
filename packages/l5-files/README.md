@@ -1,6 +1,6 @@
 # aether-l5-files — L5 file-workflow capability surface
 
-> **Status (T1.3 first impl slice):** Trait + types defined; default backend is a stub that returns `BackendDisabled`. Real `std::fs` / `tokio::fs` wiring is a later slice.
+> **Status (Wave 10A, 2026-04-30):** Trait + types defined; default backend (`StdFsExecutor`) is a real `tokio::fs`-backed implementation under the `std-fs` feature. Mirrors the playwright graduation that landed in `aether-l5-browser` the day prior.
 
 This crate is the L5-gated file-workflow surface for Companion. It is not a *new* policy layer; it plugs additively into `aether_l5_policy::Capability` (variants `FilesRead`, `FilesCreate`, `FilesEdit`, `FilesRenameMove`, `FilesDelete`, `FilesBulkOp` already exist in L5).
 
@@ -9,12 +9,12 @@ This crate is the L5-gated file-workflow surface for Companion. It is not a *new
 - `FilesExecutor` (`src/executor.rs`) — the object-safe async trait every backend implements. Methods: `read`, `create`, `edit`, `rename`, `delete`, `grep`.
 - Value types (`src/types.rs`) — `GrepHit`, `ScopeAllowlist`, `FilesExecError`.
 - `capability_for_method` (`src/capability_map.rs`) — maps method names to `aether_l5_policy::Capability` variants. The integration point where future Tauri commands check L5 policy **before** invoking the executor.
-- `StdFsExecutor` (`src/std_fs_stub.rs`, `std-fs` feature) — default backend stub. Every method returns `FilesExecError::BackendDisabled`.
+- `StdFsExecutor` (`src/std_fs_stub.rs`, `std-fs` feature) — default backend. Real `tokio::fs` implementation: canonicalize-then-authorize, atomic write-to-sibling-tempfile + rename for `create`/`edit`, files-only `delete`, non-recursive substring `grep`. Self-degrades to `BackendDisabled` when called from a thread with no Tokio runtime (synchronous test harnesses).
 
 ## Features
 
 - `default = []` — ships the trait + types + capability map only.
-- `std-fs` — additionally compiles the `StdFsExecutor` stub. The real `std::fs` / `tokio::fs` driver lands in a later slice.
+- `std-fs` — additionally compiles the real `StdFsExecutor` and pulls `tokio` (features `fs`, `io-util`, `rt`).
 
 ## Wiring contract
 
@@ -51,12 +51,13 @@ Real backends MUST canonicalize paths before calling `is_within_scope` so a syml
 
 ## Backend
 
-`std::fs` (synchronous on a blocking pool) or `tokio::fs` (native async) — final choice deferred to the wiring slice. The current `StdFsExecutor` is structurally complete but every method returns `BackendDisabled`; the real wiring, atomic write-to-temp + rename, and the streaming `grep` scanner land in a later slice.
+`tokio::fs` (native async). Atomic write semantics use a write-to-sibling-tempfile + `tokio::fs::rename` pattern; the tempfile name is `<final>.aether-tmp.<pid>.<nanos>` so concurrent writers in the same parent dir do not collide and best-effort cleanup deletes the tempfile on either tempfile-write or rename failure. `grep` is a streaming line scanner (`tokio::fs::File` + `BufReader::lines()`) doing substring match — regex is deferred until a regex crate enters the workspace deps.
 
 ## What this crate does NOT do
 
-- Real file I/O. The `std::fs` / `tokio::fs` wiring, atomic-write semantics, and the streaming grep scanner land in a later slice.
-- Tauri commands. The wiring from Tauri command handlers through L5 policy and into `FilesExecutor` is the next single-layer follow-up session under `apps/desktop/`.
+- Recursive directory walks. `grep` only inspects files DIRECTLY under its `root` argument. A recursive variant would need an explicit max-depth cap and a per-entry allowlist re-check on symlink crossings; both expand the threat surface beyond this slice.
+- Directory deletion. `delete` is files-only; calling it on a directory returns a typed error.
+- Tauri commands. The Tauri surface (`files_*` commands) was wired in a separate single-layer session under `apps/desktop/` (`3ffe041..b1b0447`).
 - New approval modes. `ApprovalScope` ("Ask once per session / task") and "Draft only" land in `aether-l5-policy` directly per T1.3 §2.3.
 - File search indexing. `grep` is a live-scan capability; persistent indexing is a separate later slice.
 
