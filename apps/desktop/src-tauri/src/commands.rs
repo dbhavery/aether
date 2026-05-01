@@ -7,14 +7,15 @@ use aether_l1_interaction::{BlockReason, TurnRequest, TurnResult, TurnState};
 use aether_l2_memory::{MemoryRole, TurnMemoryRecord};
 use aether_l3_presence::{PresenceController, PresenceState};
 use aether_l5_policy::{
-    AuditFilter, AutonomyPreset, Capability, Decision, DecisionKind, MonotonicTimestamp, PersonaId,
-    ResourceScope, RetrievalProvenance, RetrievedMemoryRef, SessionId,
+    ApprovalResponse, AuditFilter, AutonomyPreset, Capability, Decision, DecisionKind,
+    MonotonicTimestamp, PersonaId, ResourceScope, RetrievalProvenance, RetrievedMemoryRef,
+    SessionId, UserChoice,
 };
 use aether_l7_trust::{
     approval_prompt_from_ticket, build_approval_response, human_capability, human_scope,
     ApprovalResolution,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
 
 use aether_l4_router::{
@@ -477,6 +478,110 @@ pub fn submit_turn(
     Ok(payload)
 }
 
+/// TS-friendly wire mirror of L5's [`UserChoice`] (the five-option
+/// surface the L7 modal exposes per
+/// `planning/plans/T1.3_approval_scope_design.md` §5.3).
+///
+/// Today's binary `approve: bool` collapses every approve into
+/// `UserChoice::Allow` and every reject into `UserChoice::Deny`. The
+/// radio surface widens that — the modal can now elect
+/// `Allow` / `AllowSession` / `AllowTask` / `DeferToDraft` / `Deny`
+/// directly, and L5 records the chosen scope on the audit row.
+///
+/// Wire shape is a tagged enum so the TS mirror is a discriminated
+/// union (`{ kind: "allow" } | { kind: "allow_session" } | ...`), not
+/// an opaque string. This keeps the new variants type-checked end to
+/// end without inventing a free-text contract.
+///
+/// `AllowScope` is intentionally NOT mirrored. The modal does not let
+/// the user narrow `ResourceScope` in v1; if the engine needs that
+/// level of granularity it can be added as a sixth variant carrying
+/// the resource — additive on the wire (old clients ignore it because
+/// serde rejects unknown tags, and the renderer never emits it). For
+/// v1 the modal's "allow once" maps to `UserChoice::Allow` cleanly.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum UserChoiceWire {
+    /// One-shot allow. Maps to [`UserChoice::Allow`]. Default radio
+    /// selection in the modal.
+    Allow,
+    /// Allow for the lifetime of the current session. Maps to
+    /// [`UserChoice::AllowSession`]. Persists across turns until
+    /// session end / app restart per design §4.2.
+    AllowSession,
+    /// Allow for the lifetime of the current task / turn-window. Maps
+    /// to [`UserChoice::AllowTask`].
+    AllowTask,
+    /// Prepare the action artifact but do NOT dispatch the executor —
+    /// the user reviews and re-issues to actually run. Maps to
+    /// [`UserChoice::DeferToDraft`] (per Decision 2 → produces a
+    /// `Decision::DraftOnly { source: UserChoice }` server-side).
+    DeferToDraft,
+    /// Reject. Maps to [`UserChoice::Deny`]. The radio's "Decline"
+    /// escape — kept outside the Approve-radio cluster in the UI but
+    /// shares the wire surface so the dispatch is uniform.
+    Deny,
+}
+
+impl UserChoiceWire {
+    /// Project the wire choice onto the L5 [`UserChoice`] enum that
+    /// `PolicyEngine::respond_approval` consumes. 1:1 per design
+    /// §5.3.
+    pub fn to_user_choice(&self) -> UserChoice {
+        match self {
+            UserChoiceWire::Allow => UserChoice::Allow,
+            UserChoiceWire::AllowSession => UserChoice::AllowSession,
+            UserChoiceWire::AllowTask => UserChoice::AllowTask,
+            UserChoiceWire::DeferToDraft => UserChoice::DeferToDraft,
+            UserChoiceWire::Deny => UserChoice::Deny,
+        }
+    }
+
+    /// `true` when the choice is any flavour of "allow" (one-shot,
+    /// session, task, or defer-to-draft). The Turn-path uses this to
+    /// decide whether to replay the engine's `handle_turn` after
+    /// `respond_approval`. The Executor-path uses it to decide whether
+    /// to issue the one-shot grant + invoke the executor.
+    ///
+    /// `DeferToDraft` is treated as approve-with-no-execution: the
+    /// engine writes a `Decision::DraftOnly` row, but the executor
+    /// MUST NOT fire. The reply ends up `approved=false` on the
+    /// executor branch and a denied-shaped TurnResult on the Turn
+    /// branch — see the call sites for the dispatch.
+    pub fn is_approve(&self) -> bool {
+        !matches!(self, UserChoiceWire::Deny)
+    }
+
+    /// `true` when the choice should NOT cause the executor to run
+    /// even though the user "approved." Currently only
+    /// `DeferToDraft` — the user wants the artifact prepared but
+    /// retains hand-on-trigger.
+    pub fn defers_execution(&self) -> bool {
+        matches!(self, UserChoiceWire::DeferToDraft)
+    }
+}
+
+/// Build an [`ApprovalResponse`] carrying the user's chosen
+/// [`UserChoice`] verbatim — bypasses
+/// `aether_l7_trust::build_approval_response` (which is
+/// `ApprovalResolution`-shaped and collapses the four approve
+/// variants into `UserChoice::Allow`). Apps/desktop owns this wider
+/// projection so `packages/l7-trust` stays untouched in this slice.
+fn build_approval_response_for_choice(
+    ticket: &aether_l5_policy::ApprovalTicket,
+    choice: UserChoice,
+    responded_at: MonotonicTimestamp,
+) -> ApprovalResponse {
+    ApprovalResponse {
+        ticket_id: ticket.ticket_id.clone(),
+        user_choice: choice,
+        responded_at,
+        scope_override: None,
+        duration_override: None,
+        reauth_token: None,
+    }
+}
+
 /// Outcome variant returned by `resolve_approval` so the same Tauri
 /// command can serve both the chat-surface (`PendingApproval::Turn`)
 /// path and the Wave 11 executor path (`PendingApproval::Executor`).
@@ -521,7 +626,7 @@ pub enum ResolveApprovalReply {
 #[tauri::command]
 pub async fn resolve_approval(
     ticket_id: String,
-    approve: bool,
+    user_choice: UserChoiceWire,
     app: AppHandle,
     state: State<'_, std::sync::Arc<AppState>>,
 ) -> Result<ResolveApprovalReply, String> {
@@ -531,7 +636,7 @@ pub async fn resolve_approval(
 
     match pending {
         PendingApproval::Turn(turn) => {
-            let outcome = resolve_turn_approval(&app, state.as_ref(), turn, approve)?;
+            let outcome = resolve_turn_approval(&app, state.as_ref(), turn, &user_choice)?;
             Ok(ResolveApprovalReply::Turn { outcome })
         }
         PendingApproval::Executor {
@@ -539,7 +644,15 @@ pub async fn resolve_approval(
             approval,
             ticket,
         } => {
-            resolve_executor_approval(&app, state.as_ref(), call, approval, ticket, approve).await
+            resolve_executor_approval(
+                &app,
+                state.as_ref(),
+                call,
+                approval,
+                ticket,
+                &user_choice,
+            )
+            .await
         }
     }
 }
@@ -547,23 +660,33 @@ pub async fn resolve_approval(
 /// Replay a `PendingApproval::Turn` post-approval. Extracted from the
 /// monolithic `resolve_approval` so the Wave 11 dispatch can call into
 /// it without changing behaviour for the chat surface.
+///
+/// Wave 14: takes the four-option [`UserChoiceWire`] instead of a
+/// binary `approve` so the engine receives the actual scope the user
+/// picked (Allow / AllowSession / AllowTask / DeferToDraft / Deny). The
+/// `respond_approval` call now plumbs the chosen `UserChoice` directly
+/// — bypassing `aether_l7_trust::build_approval_response` which only
+/// understands the binary `ApprovalResolution`. `DeferToDraft` is
+/// treated as approve-without-execute: the engine writes the
+/// `Decision::DraftOnly { source: UserChoice }` row but the Turn-path
+/// reconstructs a draft-only TurnResult instead of replaying the
+/// router (matches the engine's intent — the user wants the artifact,
+/// not the side effect).
 fn resolve_turn_approval(
     app: &AppHandle,
     state: &AppState,
     pending: PendingTurn,
-    approve: bool,
+    choice: &UserChoiceWire,
 ) -> Result<TurnOutcomePayload, String> {
     let ticket = match &pending.ask_result.policy_decision {
         Decision::Ask { ticket, .. } => ticket.clone(),
         _ => return Err("pending turn was not an Ask".into()),
     };
-    let resolution = if approve {
-        ApprovalResolution::Approve
-    } else {
-        ApprovalResolution::Reject
-    };
-    let response =
-        build_approval_response(&ticket, resolution, MonotonicTimestamp(state.next_ts()));
+    let response = build_approval_response_for_choice(
+        &ticket,
+        choice.to_user_choice(),
+        MonotonicTimestamp(state.next_ts()),
+    );
     {
         let a = state.active.read().expect("active read lock");
         a.policy
@@ -579,13 +702,19 @@ fn resolve_turn_approval(
         None,
     );
 
-    let final_result: TurnResult = if approve {
+    let final_result: TurnResult = if choice.is_approve() && !choice.defers_execution() {
         let a = state.active.read().expect("active read lock");
         a.engine
             .handle_turn(pending.request.clone())
             .map_err(|e| format!("post-approval engine: {e}"))?
     } else {
-        // Reconstruct a denied view of the original turn.
+        // Reject OR defer-to-draft: do NOT replay the router. For
+        // Reject, surface a PolicyDenied turn (today's behaviour).
+        // For DeferToDraft we still surface the denied shape on the
+        // wire — the v1 chat surface does not yet render a "draft
+        // ready" affordance; the audit row stamped by the engine
+        // above is the persistent record. A follow-up wave can
+        // promote a dedicated `draft_only` TurnResult shape.
         let audit = match &pending.ask_result.policy_decision {
             Decision::Ask { audit_id, .. } => audit_id.clone(),
             _ => unreachable!(),
@@ -635,20 +764,19 @@ async fn resolve_executor_approval(
     call: PendingExecutorCall,
     _approval: ApprovalPayload,
     ticket: aether_l5_policy::ApprovalTicket,
-    approve: bool,
+    choice: &UserChoiceWire,
 ) -> Result<ResolveApprovalReply, String> {
     let method = method_tag(&call);
 
-    if !approve {
-        // User declined. Wave 12: call respond_approval(Reject) against
-        // the live ticket cached on the pending row at gate time so
-        // L5's audit row records the rejection. Mirrors the Turn-path
-        // Reject precedent in resolve_turn_approval — same
-        // ApprovalResolution::Reject shape, same `active.read()` lock
-        // discipline.
-        let response = build_approval_response(
+    // Wave 14: Reject AND DeferToDraft both terminate the executor
+    // path without invoking the executor. They differ only in the
+    // `UserChoice` posted to L5 (Deny vs DeferToDraft), so the audit
+    // row records the right intent — `Decision::DraftOnly { source:
+    // UserChoice }` for the latter per Decision 2.
+    if !choice.is_approve() || choice.defers_execution() {
+        let response = build_approval_response_for_choice(
             &ticket,
-            ApprovalResolution::Reject,
+            choice.to_user_choice(),
             MonotonicTimestamp(state.next_ts()),
         );
         {
@@ -677,7 +805,15 @@ async fn resolve_executor_approval(
     // Allow. We re-issue the gate here (inside the inner) rather than
     // bypassing it, preserving the §5 "policy is the single writer for
     // side effects" invariant from CLAUDE.md.
-    issue_one_shot_grant_for_pending(state, &call)?;
+    //
+    // Wave 14: pass the chosen `UserChoice` through so the issued grant
+    // carries the right `ApprovalScope` (PerAction for Allow,
+    // OncePerSession for AllowSession, OncePerTask for AllowTask). The
+    // engine's `respond_approval` projects the scope onto the grant
+    // row per `ApprovalScope::from_user_choice`. DeferToDraft is
+    // already filtered out above (defers_execution branch), so the
+    // approve path only sees Allow / AllowSession / AllowTask here.
+    issue_one_shot_grant_for_pending(state, &call, choice)?;
 
     transition_presence(
         app,
@@ -716,12 +852,15 @@ async fn resolve_executor_approval(
 /// Issue a fresh L5 approval grant for a `PendingExecutorCall` that the
 /// user just approved in the UI. We rebuild the original `ActionRequest`
 /// so the engine can re-Ask, capture the live ticket, and immediately
-/// post `ApprovalResponse::Approve` so the engine writes a `PerAction`
-/// grant. The next `evaluate` (driven from the executor inner) then
-/// resolves to `Allow` via §4.2 consume-while-valid.
+/// post the user's `UserChoice` so the engine writes a grant whose
+/// `ApprovalScope` matches what the user picked (PerAction for Allow,
+/// OncePerSession for AllowSession, OncePerTask for AllowTask). The
+/// next `evaluate` (driven from the executor inner) then resolves to
+/// `Allow` via §4.2 consume-while-valid.
 fn issue_one_shot_grant_for_pending(
     state: &AppState,
     call: &PendingExecutorCall,
+    choice: &UserChoiceWire,
 ) -> Result<(), String> {
     use aether_l5_policy::policy_engine::ActionRequest;
     use aether_l5_policy::{
@@ -768,9 +907,9 @@ fn issue_one_shot_grant_for_pending(
         }
     };
 
-    let response = build_approval_response(
+    let response = build_approval_response_for_choice(
         &ticket,
-        ApprovalResolution::Approve,
+        choice.to_user_choice(),
         MonotonicTimestamp(state.next_ts()),
     );
     let a = state.active.read().expect("active read lock");
@@ -4357,7 +4496,8 @@ mod tests {
         // runs internally. (`AppHandle` is only used for emit + a
         // presence transition; both are UX-only and exercised
         // separately at the wrapper level.)
-        issue_one_shot_grant_for_pending(&state, &call).expect("grant issuance");
+        issue_one_shot_grant_for_pending(&state, &call, &UserChoiceWire::Allow)
+            .expect("grant issuance");
         let result = block_on(replay_executor_call(&state, call));
 
         // Replay must have invoked the executor exactly once. The mock
