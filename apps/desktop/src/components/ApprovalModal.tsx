@@ -1,18 +1,65 @@
-import type { ApprovalPayload } from "../lib/types";
+import { useState } from "react";
+
+import {
+  APPROVAL_RADIO_OPTIONS,
+  type ApprovalPayload,
+  type UserChoice,
+} from "../lib/types";
 
 interface Props {
   payload: ApprovalPayload;
   working: boolean;
-  onApprove: () => void;
-  onReject: () => void;
+  /**
+   * Wave 14 (T1.3 §5.3) — single resolve callback that takes the
+   * full `UserChoice` instead of separate Approve / Reject hooks.
+   * The modal renders the four-option radio + a separate Decline
+   * button; both paths funnel into this one callback.
+   */
+  onResolve: (choice: UserChoice) => void;
 }
 
+type RadioId = (typeof APPROVAL_RADIO_OPTIONS)[number]["id"];
+const DEFAULT_RADIO_ID: RadioId = "allow_once";
+
 /**
- * Clear, specific approval UI. Per planning/12_permissions_autonomy §"The
- * five permission layers", the prompt tells the user what, why, what scope,
- * and what happens if they say no. Session-only grant for v0.
+ * Clear, specific approval UI. Per planning/12_permissions_autonomy
+ * §"The five permission layers", the prompt tells the user what,
+ * why, what scope, and what happens if they say no.
+ *
+ * Wave 14 (T1.3 §5.3) — the user picks the temporal scope of their
+ * approval via a radio group with four fixed-order options:
+ *
+ *   1. allow_once   → `UserChoice::Allow`            (default)
+ *   2. allow_task   → `UserChoice::AllowTask`
+ *   3. allow_session → `UserChoice::AllowSession`
+ *   4. defer_draft  → `UserChoice::DeferToDraft`
+ *
+ * Plus a separate Decline button outside the radio group → emits
+ * `UserChoice::Deny`. Decline is the safety-default escape and is
+ * NOT a scope choice, so it does not live inside the radio cluster.
+ *
+ * V1 affordance state: every radio option is rendered unconditionally.
+ * Design §5.1 specifies `allow_task` should be available only when
+ * the request carries a task lineage, and `defer_draft` only when
+ * the capability has side effects. Gating both on the payload
+ * requires adding `task_id_present: bool` and capability metadata
+ * to `ApprovalPayload` — deferred to a follow-up wave; this slice
+ * locks the wire surface so the engine receives the right
+ * `UserChoice` regardless of UI gating.
  */
-export function ApprovalModal({ payload, working, onApprove, onReject }: Props) {
+export function ApprovalModal({ payload, working, onResolve }: Props) {
+  const [selected, setSelected] = useState<RadioId>(DEFAULT_RADIO_ID);
+
+  const onApproveSubmit = () => {
+    const opt = APPROVAL_RADIO_OPTIONS.find((o) => o.id === selected);
+    if (!opt) return;
+    onResolve(opt.choice);
+  };
+
+  const onDecline = () => {
+    onResolve({ kind: "deny" });
+  };
+
   return (
     <div
       role="dialog"
@@ -57,10 +104,56 @@ export function ApprovalModal({ payload, working, onApprove, onReject }: Props) 
           — nothing else will happen.
         </p>
 
+        <fieldset
+          className="mt-5"
+          aria-labelledby="approval-radio-legend"
+          disabled={working}
+        >
+          <legend
+            id="approval-radio-legend"
+            className="mb-2 text-[11px] uppercase tracking-[0.16em] text-aether-dim"
+          >
+            How long should this approval last?
+          </legend>
+          <div
+            role="radiogroup"
+            aria-labelledby="approval-radio-legend"
+            className="flex flex-col gap-1.5"
+          >
+            {APPROVAL_RADIO_OPTIONS.map((opt) => {
+              const inputId = `approval-radio-${opt.id}`;
+              const isSelected = selected === opt.id;
+              return (
+                <label
+                  key={opt.id}
+                  htmlFor={inputId}
+                  className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-[12.5px] transition-colors ${
+                    isSelected
+                      ? "border-aether-ok bg-aether-ok/10 text-aether-text"
+                      : "border-aether-border bg-transparent text-aether-muted hover:border-aether-borderHi hover:text-aether-text"
+                  }`}
+                >
+                  <input
+                    id={inputId}
+                    type="radio"
+                    name="approval-scope"
+                    value={opt.id}
+                    checked={isSelected}
+                    onChange={() => setSelected(opt.id)}
+                    disabled={working}
+                    className="h-3.5 w-3.5 accent-aether-ok"
+                  />
+                  <span>{opt.label}</span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+
         <div className="mt-6 flex items-center justify-end gap-2">
           <button
             type="button"
-            onClick={onReject}
+            onClick={onDecline}
             disabled={working}
             className="rounded-md border border-aether-border bg-transparent px-4 py-2 text-[12.5px] text-aether-muted transition-colors hover:border-aether-borderHi hover:text-aether-text disabled:opacity-40"
           >
@@ -68,11 +161,11 @@ export function ApprovalModal({ payload, working, onApprove, onReject }: Props) 
           </button>
           <button
             type="button"
-            onClick={onApprove}
+            onClick={onApproveSubmit}
             disabled={working}
             className="rounded-md border border-aether-ok bg-aether-ok/15 px-4 py-2 text-[12.5px] text-aether-text transition-colors hover:bg-aether-ok/25 disabled:opacity-40"
           >
-            {working ? "Working…" : "Approve once"}
+            {working ? "Working…" : "Approve"}
           </button>
         </div>
       </div>

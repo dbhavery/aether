@@ -53,6 +53,58 @@ export interface ApprovalPayload {
   risk_hint: string;
 }
 
+/**
+ * Wave 14 (T1.3 §5.3) — TS mirror of the Rust `UserChoiceWire` tagged
+ * enum. The five variants the L7 approval modal surfaces map 1:1 onto
+ * L5's `UserChoice` (`Allow` / `AllowSession` / `AllowTask` /
+ * `DeferToDraft` / `Deny`). Wire form is `{ kind: "<snake_case>" }`
+ * matching `#[serde(tag = "kind", rename_all = "snake_case")]` on the
+ * Rust side.
+ *
+ * Display order in the modal radio (per design §5.1):
+ *   1. allow_once   → `Allow`
+ *   2. allow_task   → `AllowTask`
+ *   3. allow_session → `AllowSession`
+ *   4. defer_draft  → `DeferToDraft`
+ *
+ * Plus a separate "Decline" button outside the radio group that emits
+ * `Deny` — the safety-default escape, not a scope choice.
+ */
+export type UserChoice =
+  | { kind: "allow" }
+  | { kind: "allow_session" }
+  | { kind: "allow_task" }
+  | { kind: "defer_to_draft" }
+  | { kind: "deny" };
+
+/** Stable wire ids for the four radio options, in fixed display
+ * order per design §5.1. The "deny" button is intentionally NOT in
+ * this list — it lives outside the radio group. */
+export const APPROVAL_RADIO_OPTIONS: ReadonlyArray<{
+  id: "allow_once" | "allow_task" | "allow_session" | "defer_draft";
+  label: string;
+  /** The `UserChoice` value emitted when this radio option is
+   * submitted via the Approve button. */
+  choice: UserChoice;
+}> = [
+  { id: "allow_once", label: "Allow once", choice: { kind: "allow" } },
+  {
+    id: "allow_task",
+    label: "Allow for this task",
+    choice: { kind: "allow_task" },
+  },
+  {
+    id: "allow_session",
+    label: "Allow for this session",
+    choice: { kind: "allow_session" },
+  },
+  {
+    id: "defer_draft",
+    label: "Draft only — let me run it",
+    choice: { kind: "defer_to_draft" },
+  },
+];
+
 export type TurnOutcomeKind =
   | "completed"
   | "awaiting_approval"

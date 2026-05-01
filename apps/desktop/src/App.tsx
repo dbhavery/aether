@@ -19,6 +19,7 @@ import type {
   PresencePayload,
   TranscriptMessage,
   TurnOutcome,
+  UserChoice,
 } from "./lib/types";
 
 import { ApprovalModal } from "./components/ApprovalModal";
@@ -218,13 +219,13 @@ export function App() {
   );
 
   const handleResolve = useCallback(
-    async (approve: boolean) => {
+    async (userChoice: UserChoice) => {
       if (!pendingApproval) return;
       setBusy(true);
       try {
         const outcome = await resolveApprovalForTurn(
           pendingApproval.ticket_id,
-          approve,
+          userChoice,
         );
         setPendingApproval(null);
         appendOutcome(outcome);
@@ -469,8 +470,7 @@ export function App() {
         <ApprovalModal
           payload={pendingApproval}
           working={busy}
-          onApprove={() => handleResolve(true)}
-          onReject={() => handleResolve(false)}
+          onResolve={handleResolve}
         />
       )}
       <ToastContainer />
