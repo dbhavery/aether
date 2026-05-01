@@ -143,6 +143,8 @@ fn audit_rows_survive_restart_and_filter_by_time_window() {
         schema_version: aether_l5_policy::AUDIT_SCHEMA_VERSION_V2,
         original_utterance: None,
         retrieval_provenance: None,
+        approval_scope: None,
+        auto_approved_under_grant: None,
     };
     let late = AuditRecordEvent {
         audit_id: AuditId("a-late".into()),
@@ -203,6 +205,8 @@ fn sqlite_audit_store_cannot_delete_rows() {
         schema_version: aether_l5_policy::AUDIT_SCHEMA_VERSION_V2,
         original_utterance: None,
         retrieval_provenance: None,
+        approval_scope: None,
+        auto_approved_under_grant: None,
     };
 
     let b = DurableBackends::open(&path).unwrap();

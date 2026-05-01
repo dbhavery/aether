@@ -676,6 +676,8 @@ impl DefaultPolicyEngine {
             schema_version: crate::audit::AUDIT_SCHEMA_VERSION_V2,
             original_utterance,
             retrieval_provenance,
+            approval_scope: None,
+            auto_approved_under_grant: None,
         };
         self.audit
             .append(&row)

@@ -39,6 +39,8 @@ fn make_row(id: &str, t: u64) -> AuditRecordEvent {
         schema_version: aether_l5_policy::AUDIT_SCHEMA_VERSION_V2,
         original_utterance: None,
         retrieval_provenance: None,
+        approval_scope: None,
+        auto_approved_under_grant: None,
     }
 }
 
