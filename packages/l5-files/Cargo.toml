@@ -21,14 +21,29 @@ serde_json = { workspace = true }
 # when a third crate adopts it.
 async-trait = "0.1"
 
+# tokio is only pulled in when the `std-fs` feature is enabled. Default
+# builds remain dependency-light — the trait surface compiles without
+# any async runtime. Workspace tokio enables `rt-multi-thread`, `macros`,
+# `sync`, `time`; the std::fs backend additionally needs `fs` (async
+# read/write/rename/remove_file), `io-util` (`AsyncBufReadExt::lines`
+# for streaming grep), and `rt` (`Handle::try_current` for the
+# runtime-absent self-degrade path).
+tokio = { workspace = true, optional = true, features = ["fs", "io-util", "rt"] }
+
 aether-l5-policy = { path = "../l5-policy" }
+
+[dev-dependencies]
+# `tempfile` is only used by the `--features std-fs` integration tests
+# under `std_fs_stub::tests`. Workspace already pins this version.
+tempfile = { workspace = true }
 
 [features]
 # Default build ships the trait + types + capability map only. The
 # `std::fs`-backed executor is gated behind the `std-fs` feature so
 # default builds do not pull `tokio::fs` (or any blocking-pool infra).
-# The real `std::fs` / `tokio::fs` impl lands in a later slice; the
-# current `std_fs_stub` module is structurally complete but every
-# method returns `FilesExecError::BackendDisabled`.
+# Default builds keep the `std_fs_stub` module gated out entirely;
+# the runtime-absent self-degrade path inside the real backend covers
+# synchronous test harnesses that build with `--features std-fs`
+# but do not provide a Tokio runtime.
 default = []
-std-fs = []
+std-fs = ["dep:tokio"]
