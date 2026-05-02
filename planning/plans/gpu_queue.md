@@ -10,16 +10,16 @@
 
 ## Current job
 
-**Status:** none — prompt-engineering probe COMPLETED 2026-05-02 00:18 PT. See completed runs.
+**Status:** running — Aurora curation-grade Phase 0 batch (1:2, 4×1×4=16 images).
 
 | Field | Value |
 | --- | --- |
-| Persona | — |
-| Pipeline step (per ADR-0014) | — |
-| Started | — |
-| Expected duration | — |
-| Output target | — |
-| Notes | — |
+| Persona | aurora |
+| Pipeline step (per ADR-0014) | Step 1 — reference images, recipe-locked Phase 0 curation batch |
+| Started | 2026-05-02 ~01:00 PT |
+| Expected duration | ~80 min wall clock (warm cache + 16 × ~5 min inference at 1024×2048) |
+| Output target | personas/aurora/_pipeline/step1_references/2026-05-02-curation-1to2/ |
+| Notes | PERSONA_REFGEN_LIVE=1 + PERSONA_REFGEN_OFFLOAD=sequential. 4 DEFAULT_FRAMINGS × 1 lighting × 4 seeds. Recipe locked from probe (1:2 = 1024×2048). Produces real curation set for Don's wake-up review. |
 
 ---
 
