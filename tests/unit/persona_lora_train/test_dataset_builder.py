@@ -258,6 +258,54 @@ def test_selftest_score_threshold(tmp_path):
     assert report.sources[0].photoreal_score == 8
 
 
+def test_relax_selftest_verdict_keeps_flagged_high_score(tmp_path):
+    """`relax_selftest_verdict=True` lets a flagged candidate pass through
+    if its photoreal_score is high enough. Use case: 1:2 aspect-ratio
+    candidates that fail strict Doctrine §8 framing but are best-available
+    for LoRA training."""
+    _make_batch(
+        tmp_path,
+        batch_id="b1",
+        candidates=[("p_high_flagged", "full-body, neutral")],
+        curation={("p_high_flagged", 0): "keep"},
+        # Flag verdict from selftest, but high photoreal score
+        selftest={("p_high_flagged", 0): (9, "no", "yes", "flag")},
+    )
+    out = tmp_path / "dataset"
+    report = dataset_builder.build_dataset(
+        "aurora",
+        out,
+        repo_root=tmp_path,
+        include_anchor_set=False,
+        relax_selftest_verdict=True,
+        min_photoreal_score=6,
+    )
+    assert report.num_images == 1
+    assert report.sources[0].photoreal_score == 9
+
+
+def test_relax_selftest_still_drops_low_photoreal(tmp_path):
+    """`relax_selftest_verdict` only relaxes the verdict gate, not the
+    photoreal_score gate. Low-photoreal candidates still drop."""
+    _make_batch(
+        tmp_path,
+        batch_id="b1",
+        candidates=[("p_low_flagged", "full-body, neutral")],
+        curation={("p_low_flagged", 0): "keep"},
+        selftest={("p_low_flagged", 0): (4, "no", "yes", "flag")},
+    )
+    out = tmp_path / "dataset"
+    report = dataset_builder.build_dataset(
+        "aurora",
+        out,
+        repo_root=tmp_path,
+        include_anchor_set=False,
+        relax_selftest_verdict=True,
+        min_photoreal_score=6,
+    )
+    assert report.num_images == 0
+
+
 def test_selftest_flag_verdict_drops_candidate(tmp_path):
     """A `flag` verdict drops the candidate even at high photoreal score."""
     _make_batch(

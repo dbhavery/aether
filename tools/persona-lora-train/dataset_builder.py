@@ -225,6 +225,7 @@ def build_dataset(
     instance_token: str | None = None,
     min_photoreal_score: int = 6,
     require_keep_verdict: bool = True,
+    relax_selftest_verdict: bool = False,
 ) -> DatasetReport:
     """Build a flat LoRA training dataset for `persona_slug`.
 
@@ -324,7 +325,14 @@ def build_dataset(
                 row = selftest.get(key)
                 photoreal_score: int | None = None
                 if row is not None:
-                    if row.verdict != "pass":
+                    # Strict mode (default): selftest 'flag' verdict drops
+                    # the candidate. Relaxed mode: only photoreal_score is
+                    # gated; framing/identity flags are tolerated. Used
+                    # when the LoRA training set legitimately wants
+                    # best-available even if Doctrine §8 strict framing
+                    # failed (e.g. 1:2 aspect-ratio candidates with ~80%
+                    # body coverage).
+                    if not relax_selftest_verdict and row.verdict != "pass":
                         continue
                     if row.photoreal_score < min_photoreal_score:
                         continue

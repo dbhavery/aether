@@ -163,6 +163,7 @@ def build_plan(
     include_anchor_set: bool = True,
     instance_token: str | None = None,
     min_photoreal_score: int = 6,
+    relax_selftest_verdict: bool = False,
 ) -> TrainingPlan:
     """Assemble a complete training plan for `persona_slug`.
 
@@ -193,6 +194,7 @@ def build_plan(
         include_anchor_set=include_anchor_set,
         instance_token=instance_token,
         min_photoreal_score=min_photoreal_score,
+        relax_selftest_verdict=relax_selftest_verdict,
     )
 
     plan = TrainingPlan(

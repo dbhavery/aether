@@ -100,6 +100,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--learning-rate", type=float, default=None)
     parser.add_argument("--min-photoreal-score", type=int, default=6)
     parser.add_argument(
+        "--relax-selftest-verdict",
+        action="store_true",
+        help=(
+            "include candidates with selftest verdict 'flag' as long as "
+            "their photoreal_score >= min-photoreal-score. Use when the "
+            "training set wants best-available even if Doctrine 8 strict "
+            "framing failed (e.g. 1:2-aspect candidates with ~80%% body)."
+        ),
+    )
+    parser.add_argument(
         "--execute",
         action="store_true",
         help="actually run accelerate launch; otherwise print + exit",
@@ -123,6 +133,7 @@ def main(argv: list[str] | None = None) -> int:
         include_anchor_set=not args.no_anchor_set,
         instance_token=args.instance_token,
         min_photoreal_score=args.min_photoreal_score,
+        relax_selftest_verdict=args.relax_selftest_verdict,
     )
 
     print(f"[plan] persona={plan.persona_slug} token={plan.instance_token}")
