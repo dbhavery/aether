@@ -10,16 +10,16 @@
 
 ## Current job
 
-**Status:** none — queue is initial state. Awaits Aurora pipeline kickoff.
+**Status:** running — Aurora Phase 0 baseline (bare-metal pivot, ADR-0014 Step 1 ground-truth).
 
 | Field | Value |
 | --- | --- |
-| Persona | — |
-| Pipeline step (per ADR-0014) | — |
-| Started | — |
-| Expected duration | — |
-| Output target | — |
-| Notes | — |
+| Persona | aurora |
+| Pipeline step (per ADR-0014) | Step 1 — reference images, Phase 0 (no identity locking, unaided FLUX baseline) |
+| Started | 2026-05-01 ~22:50 PT |
+| Expected duration | 5-15 min (sequential CPU offload — 3090 Ti has ~9 GB free; conservative) |
+| Output target | personas/aurora/_pipeline/step1_references/2026-05-02-phase0/ |
+| Notes | PERSONA_REFGEN_LIVE=1 + PERSONA_REFGEN_OFFLOAD=sequential. Axes trimmed to 1×1×1 → one image only per HANDOFF_2026-05-01_NIGHT_BARE_METAL_PIVOT.md step 4. |
 
 ---
 
