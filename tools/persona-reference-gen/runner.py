@@ -41,8 +41,18 @@ from backend_fal import (  # noqa: E402  — sys.path mutation above is intentio
     upload_reference_image,
 )
 from backend_fal import (
-    generate as backend_generate,
+    generate as fal_generate,
 )
+import backend_local_flux  # noqa: E402  — see sys.path mutation above
+
+# Backend dispatch table — `--backend` keys map to the typed generator
+# callable. fal stays the default for backwards compatibility; local-flux
+# is the bare-metal Phase 0 path.
+_BACKENDS = {
+    "fal": fal_generate,
+    "local-flux": backend_local_flux.generate,
+}
+_DEFAULT_BACKEND = "fal"
 from output_schema import (  # noqa: E402
     SCHEMA_VERSION,
     BatchManifest,
@@ -64,6 +74,20 @@ from selftest import (
 )
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _manifest_backend_label(backend: str) -> str:
+    """Discriminator string written into the manifest's `backend` field.
+
+    Distinguishes (a) which adapter was used and (b) live-vs-stub. Stub mode
+    is shared across adapters so the label is just `stub`; live mode names
+    the adapter so downstream tools can branch on cost/latency expectations.
+    """
+    if not is_live_mode():
+        return "stub"
+    if backend == "local-flux":
+        return "local-flux"
+    return "fal.ai"
 
 
 def _utc_now() -> str:
@@ -107,6 +131,7 @@ def run_batch(
     use_pulid: bool = False,
     reference_image_path: Path | None = None,
     run_selftest: bool = False,
+    backend: str = _DEFAULT_BACKEND,
 ) -> BatchManifest:
     """Run one batch end-to-end. Writes images + manifest.json. Returns the
     manifest for the caller (CLI prints a summary).
@@ -156,6 +181,13 @@ def run_batch(
             # but still verifies the runner threads it correctly.
             reference_image_url = f"stub://anchor/{persona_slug}"
 
+    try:
+        backend_generate = _BACKENDS[backend]
+    except KeyError as exc:
+        raise ValueError(
+            f"unknown backend {backend!r}; valid: {sorted(_BACKENDS)}"
+        ) from exc
+
     candidates: list[Candidate] = []
     for spec in prompts:
         for idx in range(num_images_per_prompt):
@@ -187,7 +219,7 @@ def run_batch(
         batch_id=batch_id,
         persona_slug=persona_slug,
         created_at=_utc_now(),
-        backend=("fal.ai" if is_live_mode() else "stub"),
+        backend=_manifest_backend_label(backend),
         backend_model_id=model,
         aspect_ratio=aspect_ratio,
         num_images_per_prompt=num_images_per_prompt,
@@ -247,7 +279,18 @@ def _main(argv: list[str] | None = None) -> int:
         required=True,
         help="batch id, e.g. 2026-05-18a — used as output dir name",
     )
-    parser.add_argument("--model", default=DEFAULT_MODEL)
+    parser.add_argument(
+        "--backend",
+        choices=sorted(_BACKENDS),
+        default=_DEFAULT_BACKEND,
+        help=(
+            "image generation backend. `fal` calls fal.ai (default, "
+            "deprecated path). `local-flux` runs FLUX.1-dev on the local GPU "
+            "per Phase 0 of the bare-metal pivot."
+        ),
+    )
+    parser.add_argument("--model", default=None,
+                        help="override default model id for the chosen backend.")
     parser.add_argument("--aspect-ratio", default=DEFAULT_ASPECT)
     parser.add_argument(
         "--num-images-per-prompt",
@@ -290,19 +333,32 @@ def _main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    # Resolve per-backend default model when --model is not given.
+    if args.model is None:
+        if args.backend == "local-flux":
+            model = backend_local_flux.DEFAULT_MODEL
+        else:
+            model = DEFAULT_MODEL
+    else:
+        model = args.model
+
     manifest = run_batch(
         persona_slug=args.persona,
         batch_id=args.batch,
-        model=args.model,
+        model=model,
         aspect_ratio=args.aspect_ratio,
         num_images_per_prompt=args.num_images_per_prompt,
         notes=args.notes,
         use_pulid=args.use_pulid,
         reference_image_path=Path(args.reference_image) if args.reference_image else None,
         run_selftest=args.selftest,
+        backend=args.backend,
     )
     out_dir = _output_dir(args.persona, args.batch)
-    mode = "LIVE fal.ai" if is_live_mode() else "STUB (set PERSONA_REFGEN_LIVE=1 for live)"
+    if is_live_mode():
+        mode = f"LIVE {args.backend}"
+    else:
+        mode = "STUB (set PERSONA_REFGEN_LIVE=1 for live)"
     selftest_mode = (
         "LIVE openai" if (args.selftest and selftest_is_live_mode())
         else ("STUB" if args.selftest else "off")
