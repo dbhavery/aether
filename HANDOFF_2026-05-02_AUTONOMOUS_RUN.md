@@ -8,21 +8,69 @@
 
 ## What landed (commits, oldest first on top of `c25acc0` baseline)
 
-| Commit | Subject |
-|---|---|
-| `64fdde9` | `fix(persona-reference-gen): auto-resolve local-flux model + Phase 0 driver` |
-| `8a90d14` | `feat(persona-reference-gen): Phase 2 — local Qwen2-VL selftest backend` |
-| `a481f51` | `docs(planning): claim GPU queue slot for Aurora Phase 0 baseline` |
-| `a27972e` | `docs(persona-reference-gen): update README for bare-metal pivot Phase 0/2` |
-| `dcf528f` | `feat(persona-lora-train): scaffold Phase 3 prep — LoRA training dataset builder` |
-| `c405081` | `feat(persona-reference-gen): Phase 0 selftest evaluator` |
-| `c2f115d` | `feat(persona-lora-train): training plan + accelerate command builder` |
-| `401b4fa` | `feat(persona-lora-train): launcher CLI for persona LoRA training` |
-| `8508efe` | `feat(persona-reference-gen)+docs: curate honors selftest flags + Phase 0 GPU queue update` |
+Run `git log --oneline c25acc0..HEAD` for the live list. Snapshot at
+the time of this handoff update (cumulative through ~00:30 PT
+2026-05-02): **17+ commits** spanning:
 
-Net: Phase 0 (local FLUX) + Phase 2 (local Qwen2-VL selftest) +
-Phase 3 prep (dataset_builder + training_config + launch) all
-shipped, plus the runner bug fix that made Phase 0 actually executable.
+- **Phase 0** (local FLUX backend + adaptive offload + driver +
+  evaluator + framing probe + aggressive prompt-engineering probe)
+- **Phase 2** (local Qwen2-VL selftest backend + image-resize fix +
+  strict prompt + 2B calibration finding)
+- **Phase 3 prep** (dataset_builder + training_config +
+  launcher + provenance metadata)
+- **Tooling** (cross-persona pipeline status + auto-curate)
+- **Docs** (Phase 1 vs skip research, Qwen2-VL calibration research,
+  persona pipeline runbook, GPU queue + handoff updates)
+
+Test counts: persona_reference_gen 17 → 67 (+50), persona_lora_train
+0 → 20 (+20). Total 87 tests passing. `bash tools/check-pre-commit.sh`
+clean throughout.
+
+## Strategic finding: FLUX framing bias is unbreakable
+
+This is the load-bearing finding of the run.
+
+Across **9 generated images** spanning 3 probe styles:
+
+- **Phase 0 baseline:** 1 image, framing fail
+- **Default-framings probe:** 4 images, 3 framing fails (the lone
+  pass asked for 3/4 body and got 3/4 body)
+- **Aggressive prompt-engineering probe:** 4 images, 4 framing fails
+
+**Cumulative: 8/9 framing fails (89%).** FLUX.1-dev cannot produce
+full-body output at our 1024×1536 / 2:3 aspect ratio configuration,
+regardless of prompt engineering — distance language, lens
+language, cinematic shot language, composition fractions all fail
+identically.
+
+**Pose convergence is also pinned by seed.** All 9 images produced
+near-identical crossed-arms / slight-smile / quarter-turned poses.
+Seed `DEFAULT_SEEDS[0]=101` locks the high-level composition; the
+prompt only varies surface details.
+
+### What this means for Phase 3
+
+The available Phase 3 training data is:
+- 4 v0 anchor images (head-shoulders portraits)
+- 9 Phase 0 generations (3/4 body crossed-arms, identity-attenuated)
+- 0 full-body generations
+
+A LoRA trained on this set would learn *"full-body Aurora prompt →
+3/4 body Aurora output"* — wrong lesson but no worse than FLUX
+already does. Three options for fixing:
+
+1. **Accept 3/4 body as v1 ceiling.** Don's avatar lives in a
+   phone-sized window — head-shoulders-torso is sufficient for the
+   product.
+2. **Augment the training set.** Hand-edit 3-5 anchor images in
+   Krita/GIMP to extend body region, then train. ~30 min of Don's
+   time.
+3. **Test extreme aspect ratios.** 1024×2048 (1:2) or 768×2048
+   (~3:8) physically force more vertical pixel area. Untested.
+   ~5-10 min GPU per image.
+
+EVALUATION.md in the prompt-eng-probe batch dir has the full
+analysis.
 
 ---
 

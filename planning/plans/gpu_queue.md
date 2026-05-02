@@ -10,16 +10,16 @@
 
 ## Current job
 
-**Status:** running — Aurora prompt-engineering probe (4 aggressive framings).
+**Status:** none — prompt-engineering probe COMPLETED 2026-05-02 00:18 PT. See completed runs.
 
 | Field | Value |
 | --- | --- |
-| Persona | aurora |
-| Pipeline step (per ADR-0014) | Step 1 — reference images, Phase 0 prompt-engineering probe (Plan B) |
-| Started | 2026-05-01 ~23:55 PT |
-| Expected duration | 14-18 min (warm pipeline cache → 13s load + 4 × ~3 min inference) |
-| Output target | personas/aurora/_pipeline/step1_references/2026-05-02-prompt-eng-probe/ |
-| Notes | PERSONA_REFGEN_LIVE=1 + PERSONA_REFGEN_OFFLOAD=sequential. AGGRESSIVE_FRAMINGS — distance, lens, cinematic, composition variants. Tests whether escalated prompt language escapes FLUX prior bias. |
+| Persona | — |
+| Pipeline step (per ADR-0014) | — |
+| Started | — |
+| Expected duration | — |
+| Output target | — |
+| Notes | — |
 
 ---
 
@@ -64,6 +64,7 @@ Persona order for Phase 2 (initial — Don may reorder):
 | aurora | Step 1 — Phase 0 baseline (unaided FLUX.1-dev, no identity locking) | 2026-05-01 22:50 PT | 2026-05-01 23:11 PT | 34698986410996a6 | 1 image @ 1024×1536, sequential CPU offload, ~21 min total (15:18 load + 4:12 inference). Doctrine §8 verdict: **flag** — photoreal 8/10 strong, framing **no** (3/4 body crop despite full-body prompt — FLUX prior bias), identity **maybe** (attenuated from anchor). See file:///C:/Users/dbhav/Projects/aether/personas/aurora/_pipeline/step1_references/2026-05-02-phase0/EVALUATION.md. |
 | aurora | Step 1 — Phase 0 framing probe (all 4 DEFAULT_FRAMINGS) | 2026-05-01 23:18 PT | 2026-05-01 23:31 PT | 4 prompt_ids | 4 images @ 1024×1536, warm cache, ~13 min total. Verdict: **3/4 framing-fail** — all "full-body" prompts produced 3/4 body crops; only the explicit "3/4 body knees up" prompt matched. Pose convergence (crossed-arms in all 4) revealed seed-collision behavior. See file:///C:/Users/dbhav/Projects/aether/personas/aurora/_pipeline/step1_references/2026-05-02-framing-probe/EVALUATION.md. |
 | aurora | Phase 2 calibration — Qwen2-VL-2B-Instruct selftest | 2026-05-01 23:45 PT | 2026-05-01 23:53 PT | (no new images) | Qwen2-VL-2B-Instruct ran live against framing-probe outputs. Disagreed with manual eval on 3/4 candidates, returned framing=yes for visibly-cropped images. **2B is unsuitable for Doctrine §8.** See file:///C:/Users/dbhav/Projects/aether/planning/research/2026-05-02_qwen2vl_calibration.md. Default backend stays openai. |
+| aurora | Step 1 — Phase 0 prompt-engineering probe (4 aggressive framings) | 2026-05-01 23:55 PT | 2026-05-02 00:18 PT | 4 prompt_ids | 4 images @ 1024×1536, ~14 min wall clock. **4/4 framing-fail.** Distance, lens, cinematic, composition language all failed to escape FLUX prior. Pose convergence (crossed-arms in all 4) confirms seed-collision behavior. Cumulative across all probes: **8/9 framing fails (89%)**. See file:///C:/Users/dbhav/Projects/aether/personas/aurora/_pipeline/step1_references/2026-05-02-prompt-eng-probe/EVALUATION.md. |
 
 ---
 
