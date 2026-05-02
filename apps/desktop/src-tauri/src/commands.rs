@@ -5026,4 +5026,122 @@ mod tests {
             files.calls()
         );
     }
+
+    /// Wave 19 — Doctrine §8 used-as-user equivalent at the Rust layer.
+    ///
+    /// Existing `resolve_executor_approval_approve_invokes_executor_exactly_once`
+    /// proves the executor is called exactly once on Approve, but it
+    /// uses a tracking mock that returns `BackendDisabled` regardless of
+    /// allowlist state. That hides the load-bearing Wave 13b property:
+    /// the L5 grant emitted by `respond_approval` MUST flow through
+    /// [`crate::policy_sink::ExecutorAllowlistSink`] into the live
+    /// `StdFsExecutor`'s allowlist, so the replay's actual `read()`
+    /// crosses the path-allowlist gate.
+    ///
+    /// This test wires no mock — it boots `AppState::new()` with the
+    /// real `StdFsExecutor`, real `DefaultPolicyEngine`, and real
+    /// `ExecutorAllowlistSink`, drives a `files_read` against a
+    /// tempfile, exercises the Approve substeps that
+    /// `resolve_executor_approval` runs (`issue_one_shot_grant_for_pending`
+    /// → `replay_executor_call`), and asserts the replay returns the
+    /// real file bytes — proving the sink fired and the allowlist now
+    /// permits the path that was `NotInScope` before the grant.
+    #[tokio::test]
+    async fn wave19_real_executor_replay_after_approve_returns_real_bytes() {
+        use tempfile::TempDir;
+
+        let dir = TempDir::new().expect("tempdir");
+        let path = dir.path().join("aether-wave19.txt");
+        let contents = b"wave19-end-to-end\n";
+        std::fs::write(&path, contents).expect("seed tempfile");
+        let path_str = path.to_string_lossy().into_owned();
+
+        let state = AppState::new().expect("AppState::new in-memory");
+
+        // Sanity: with the boot-time allowlist empty, a direct executor
+        // read against the tempfile must reject as `NotInScope`. This
+        // is the precondition that proves the gate-then-grant flow is
+        // actually doing work — if this assert flipped, the test
+        // wouldn't be measuring the sink's contribution. (The
+        // `require_runtime` short-circuit in `std_fs_stub` is satisfied
+        // because we're inside a `#[tokio::test]` runtime.)
+        let pre_err = state.files_executor.read(&path).await.unwrap_err();
+        assert!(
+            matches!(pre_err, aether_l5_files::FilesExecError::NotInScope(_)),
+            "boot-time allowlist must reject before a grant lands; got {pre_err:?}",
+        );
+
+        // Drive `files_edit_inner` — under the aurora baseline this
+        // capability is the one proven to Ask (see
+        // `ask_routes_to_pending_executor_not_pending_turn`). Editing is
+        // gated; the resulting `Allow` grant covers a `Capability::FilesEdit`
+        // with `ResourceScope::Path(path)`, which `is_files_capability`
+        // matches, so the sink will rebuild the allowlist with the
+        // canonical tempfile path — and a direct *read* against that
+        // path then succeeds because the executor's path-allowlist is
+        // capability-agnostic at the executor layer.
+        let ticket = match crate::files_commands::files_edit_inner(
+            &state,
+            None,
+            path_str.clone(),
+            contents.to_vec(),
+        )
+        .await
+        {
+            Err(msg) if msg.starts_with("awaiting_approval:") => {
+                msg.strip_prefix("awaiting_approval:").unwrap().to_string()
+            }
+            other => panic!(
+                "expected gate to Ask for files_edit against a fresh tempfile; got {other:?}"
+            ),
+        };
+
+        let pending = state
+            .take_pending(&ticket)
+            .expect("Ask must register a pending entry");
+        let call = match pending {
+            PendingApproval::Executor { call, .. } => call,
+            PendingApproval::Turn(_) => panic!("files_edit registers Executor, not Turn"),
+        };
+        assert!(matches!(call, PendingExecutorCall::FilesEdit { .. }));
+
+        // Approve substeps that `resolve_executor_approval` runs (it
+        // additionally emits + presence-transitions, both of which need
+        // an `AppHandle` and are not relevant to this property).
+        // `issue_one_shot_grant_for_pending` calls
+        // `policy.respond_approval(Allow)`, which fires
+        // `L5Event::GrantIssued` into the real sink, which rebuilds the
+        // executor allowlist from the (now-non-empty) ledger.
+        issue_one_shot_grant_for_pending(&state, &call, &UserChoiceWire::Allow)
+            .expect("Wave 13b: issuing the Allow grant must succeed");
+
+        // Replay the FilesEdit through `replay_executor_call`. The
+        // just-updated allowlist now permits the canonical tempfile, so
+        // the real `StdFsExecutor::edit` succeeds — proving the sink
+        // propagated the grant end-to-end. `replay_executor_call`
+        // formats `FilesEdit` success as the literal `"ok"`.
+        let replay = replay_executor_call(&state, call)
+            .await
+            .expect("Wave 13b replay must succeed once the allowlist contains the tempfile");
+        assert_eq!(
+            replay, "ok",
+            "FilesEdit replay must surface the post-Wave-13b success shape",
+        );
+
+        // Belt-and-braces: a direct executor read against the same path
+        // must now return the literal seed bytes (the gate is upstream
+        // of the executor; once the allowlist contains the path the
+        // executor returns the file contents verbatim). This pins the
+        // sink-to-allowlist contract beyond the replay's formatted
+        // wire shape.
+        let post_bytes = state
+            .files_executor
+            .read(&path)
+            .await
+            .expect("post-grant direct read must succeed against the same allowlist");
+        assert_eq!(
+            post_bytes, contents,
+            "direct executor read must return the seeded tempfile contents",
+        );
+    }
 }
