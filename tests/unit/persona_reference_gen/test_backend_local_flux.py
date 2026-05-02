@@ -140,6 +140,35 @@ def test_runner_dispatches_to_local_flux_in_stub(tmp_path, monkeypatch):
     assert manifest.candidates[0].backend == "stub"
 
 
+def test_runner_auto_resolves_local_flux_model_when_default(tmp_path, monkeypatch):
+    """When backend=local-flux is chosen and `model` is left at the
+    function-default, `run_batch` must swap to the local-flux model id —
+    otherwise FluxPipeline tries to load fal's repo id and fails."""
+    monkeypatch.delenv("PERSONA_REFGEN_LIVE", raising=False)
+    fake_root = _isolate_repo_root(tmp_path, monkeypatch)
+
+    small = MatrixAxes(
+        framings=("full-body shot, head to feet visible, standing, neutral pose",),
+        lightings=("soft natural daylight from a north-facing window",),
+        seeds=(101,),
+    )
+    # Note: NOT passing `model=` — this is the path the bug-fix targets.
+    manifest = runner.run_batch(
+        persona_slug="aurora",
+        batch_id="auto-model-resolve",
+        axes=small,
+        backend="local-flux",
+        notes="auto-model-resolve regression",
+    )
+    out_dir = (
+        fake_root / "personas" / "aurora" / "_pipeline"
+        / "step1_references" / "auto-model-resolve"
+    )
+    assert (out_dir / "manifest.json").exists()
+    # The recorded model id must be the local-flux repo, NOT the fal fallback.
+    assert manifest.backend_model_id == backend_local_flux.DEFAULT_MODEL
+
+
 def test_runner_rejects_unknown_backend(tmp_path, monkeypatch):
     monkeypatch.delenv("PERSONA_REFGEN_LIVE", raising=False)
     _isolate_repo_root(tmp_path, monkeypatch)

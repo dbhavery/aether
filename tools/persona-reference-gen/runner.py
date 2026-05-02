@@ -154,6 +154,14 @@ def run_batch(
     anchor = lookup_anchor(persona_slug)
     prompts = expand_matrix(persona_slug, anchor, axes)
 
+    # Resolve per-backend default model when the caller didn't override.
+    # `DEFAULT_MODEL` (the fal default) is the function-signature default —
+    # if the local-flux backend was selected with that left in place, swap
+    # to the local-flux default repo id. Without this swap, FluxPipeline
+    # tries to load `fal-ai/flux-pro/v1.1-ultra` and fails immediately.
+    if backend == "local-flux" and model == DEFAULT_MODEL:
+        model = backend_local_flux.DEFAULT_MODEL
+
     out_dir = _output_dir(persona_slug, batch_id)
     images_dir = out_dir / "images"
     images_dir.mkdir(parents=True, exist_ok=True)
