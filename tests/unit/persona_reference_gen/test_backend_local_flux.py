@@ -23,7 +23,25 @@ def test_module_imports_cleanly():
     assert hasattr(backend_local_flux, "generate")
     assert hasattr(backend_local_flux, "is_live_mode")
     assert backend_local_flux.LIVE_ENV_VAR == "PERSONA_REFGEN_LIVE"
+    assert backend_local_flux.OFFLOAD_ENV_VAR == "PERSONA_REFGEN_OFFLOAD"
     assert backend_local_flux.DEFAULT_MODEL == "black-forest-labs/FLUX.1-dev"
+
+
+def test_pick_offload_strategy_env_override(monkeypatch):
+    monkeypatch.setenv("PERSONA_REFGEN_OFFLOAD", "sequential")
+    assert backend_local_flux._pick_offload_strategy() == "sequential"
+    monkeypatch.setenv("PERSONA_REFGEN_OFFLOAD", "model")
+    assert backend_local_flux._pick_offload_strategy() == "model"
+    monkeypatch.setenv("PERSONA_REFGEN_OFFLOAD", "none")
+    assert backend_local_flux._pick_offload_strategy() == "none"
+
+
+def test_pick_offload_strategy_unknown_value_falls_through(monkeypatch):
+    """Unknown env value should be ignored (probe path), not crash."""
+    monkeypatch.setenv("PERSONA_REFGEN_OFFLOAD", "garbage")
+    # We don't assert which branch wins (depends on local CUDA state) — only
+    # that it returns one of the valid strategy strings.
+    assert backend_local_flux._pick_offload_strategy() in {"model", "sequential"}
 
 
 def test_aspect_to_dims_known_ratios():

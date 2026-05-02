@@ -45,6 +45,18 @@ DEFAULT_ASPECT = "9:16"
 _DEFAULT_STEPS = 28
 _DEFAULT_GUIDANCE = 3.5
 
+OFFLOAD_ENV_VAR = "PERSONA_REFGEN_OFFLOAD"
+"""Override the offload strategy when GPU headroom is tight:
+
+  - `model`      → `pipe.enable_model_cpu_offload()`     (~12 GB peak GPU)
+  - `sequential` → `pipe.enable_sequential_cpu_offload()` (~3-4 GB peak GPU, slower)
+  - `none`       → fully resident on GPU                  (~24 GB peak GPU)
+
+If unset, the loader probes free VRAM via `torch.cuda.mem_get_info()` and
+picks `model` when ≥14 GB free, `sequential` otherwise. The default keeps
+inference fast on a clean 3090 Ti and reliable when something else is
+already using VRAM."""
+
 # Live-mode pipeline cache. Loading FLUX takes 30–60s + 24GB so we keep it
 # resident across calls within a single batch run. The runner instantiates
 # the backend once per process, so this dict is effectively process-local.
@@ -87,6 +99,33 @@ def aspect_to_dims(aspect_ratio: str) -> tuple[int, int]:
     return table.get(aspect_ratio, (1024, 1536))
 
 
+def _pick_offload_strategy() -> str:
+    """Choose `model` vs `sequential` vs `none` offload based on env + free VRAM.
+
+    Order:
+      1. Honour `PERSONA_REFGEN_OFFLOAD` if set to a known value.
+      2. Probe `torch.cuda.mem_get_info()` and pick `model` when ≥14 GB
+         free, `sequential` otherwise. 14 GB is the empirical threshold
+         for FLUX.1-dev fp16 transformer peak under model-offload.
+      3. Default to `model` if no CUDA device is available (test paths).
+    """
+    override = os.environ.get(OFFLOAD_ENV_VAR, "").strip().lower()
+    if override in {"model", "sequential", "none"}:
+        return override
+
+    try:
+        import torch  # noqa: PLC0415
+
+        if not torch.cuda.is_available():
+            return "model"
+        free_bytes, _total = torch.cuda.mem_get_info()
+        free_gb = free_bytes / (1024**3)
+    except Exception:  # noqa: BLE001 — probe failures fall back conservatively
+        return "sequential"
+
+    return "model" if free_gb >= 14 else "sequential"
+
+
 def _load_pipeline(model: str):
     """Return a cached `FluxPipeline` for `model`, loading on first call.
 
@@ -94,6 +133,11 @@ def _load_pipeline(model: str):
     they ever want to exercise the live code path with a fake. Kept import
     of `torch` + `diffusers` lazy — the fal-only runner path must not pay
     a 5-second import tax.
+
+    Offload strategy is chosen by `_pick_offload_strategy()` to keep the
+    live path resilient when something else is already holding GPU memory
+    (a common state on Don's workstation). On OOM during pipeline setup
+    we transparently fall back to the next-tighter strategy.
     """
     if model in _PIPELINE_CACHE:
         return _PIPELINE_CACHE[model]
@@ -102,7 +146,22 @@ def _load_pipeline(model: str):
     from diffusers import FluxPipeline  # noqa: PLC0415
 
     pipe = FluxPipeline.from_pretrained(model, torch_dtype=torch.float16)
-    pipe.enable_model_cpu_offload()
+
+    strategy = _pick_offload_strategy()
+    try:
+        if strategy == "none":
+            pipe.to("cuda")
+        elif strategy == "sequential":
+            pipe.enable_sequential_cpu_offload()
+        else:
+            pipe.enable_model_cpu_offload()
+    except torch.cuda.OutOfMemoryError:
+        # Fall back to the strictest strategy — sequential offload runs
+        # FLUX in <8 GB peak GPU. Slower but the only path when headroom
+        # is gone.
+        torch.cuda.empty_cache()
+        pipe.enable_sequential_cpu_offload()
+
     _PIPELINE_CACHE[model] = pipe
     return pipe
 
@@ -198,6 +257,7 @@ __all__ = [
     "DEFAULT_ASPECT",
     "DEFAULT_MODEL",
     "LIVE_ENV_VAR",
+    "OFFLOAD_ENV_VAR",
     "FalResult",
     "aspect_to_dims",
     "generate",
