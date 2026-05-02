@@ -48,29 +48,64 @@ near-identical crossed-arms / slight-smile / quarter-turned poses.
 Seed `DEFAULT_SEEDS[0]=101` locks the high-level composition; the
 prompt only varies surface details.
 
-### What this means for Phase 3
+### MAJOR WIN: 1:2 aspect ratio escapes the bias
 
-The available Phase 3 training data is:
-- 4 v0 anchor images (head-shoulders portraits)
-- 9 Phase 0 generations (3/4 body crossed-arms, identity-attenuated)
-- 0 full-body generations
+The aspect-ratio probe (1024×2048 vs the prior 1024×1536) compounded
+**three improvements** in two test images:
 
-A LoRA trained on this set would learn *"full-body Aurora prompt →
-3/4 body Aurora output"* — wrong lesson but no worse than FLUX
-already does. Three options for fixing:
+1. **~80% body area visible.** Hips + jeans clear in both seeds.
+   Doubling vertical pixel area gave FLUX more room to compose
+   the body content.
+2. **Pose convergence broken.** Seed 101 produced casual-arms-down,
+   seed 202 produced hands-in-pockets. Genuine variation across
+   seeds — the crossed-arms convergence at 2:3 is broken at 1:2.
+3. **Identity strongly matches anchor.** Copper hair stays copper,
+   eyes shift toward green, freckles slightly visible. Best Phase 0
+   identity match yet.
 
-1. **Accept 3/4 body as v1 ceiling.** Don's avatar lives in a
-   phone-sized window — head-shoulders-torso is sufficient for the
-   product.
-2. **Augment the training set.** Hand-edit 3-5 anchor images in
-   Krita/GIMP to extend body region, then train. ~30 min of Don's
-   time.
-3. **Test extreme aspect ratios.** 1024×2048 (1:2) or 768×2048
-   (~3:8) physically force more vertical pixel area. Untested.
-   ~5-10 min GPU per image.
+Strict Doctrine §8 still flags these (no feet visible — about 80%
+body, not 100%) but they're the best Phase 0 generation to date.
+file:///C:/Users/dbhav/Projects/aether/personas/aurora/_pipeline/step1_references/2026-05-02-aspect-1to2/EVALUATION.md
+has the full analysis.
 
-EVALUATION.md in the prompt-eng-probe batch dir has the full
-analysis.
+**Recipe for new Phase 0+ batches:** `--aspect-ratio 1:2`. Combined
+with 4-seed variation, this produces a usable training corpus for
+Phase 3 LoRA. Currently testing 1:3 (768×2304) to see if even-more-
+vertical produces feet-visible full-body.
+
+### Body-extension fallback also shipped
+
+`tools/persona-reference-gen/body_extension.py` extends a 3/4 body
+image downward via FLUX inpainting on the regular FLUX.1-dev
+checkpoint. Takes a 1024×1536 portrait → 1024×2048 with the bottom
+512px filled with body continuation (jeans, feet, etc.) via
+`FluxInpaintPipeline`. Used to bootstrap full-body training data
+when prompts can't escape the bias. Stub-mode tested; live mode
+queued for after the aspect-ratio experiments finish.
+
+### Updated Phase 3 strategy
+
+The available training data picture has improved:
+
+- **4 v0 anchor images** (head-shoulders portraits, identity ground
+  truth)
+- **9 Phase 0 generations at 2:3** (3/4 body, attenuated identity —
+  use sparingly or skip)
+- **2 Phase 0 generations at 1:2** (much-improved body area + identity —
+  expect 10-20+ once a multi-seed batch lands)
+- **Body-extension augmentation** (any 3/4 body keeper can become
+  a synthetic full-body)
+
+Recommended Phase 3 path:
+1. Run a 4×1×4 = 16 image batch at 1:2 + Don curates ~6-10 keepers.
+2. Run `body_extension` on each keeper → 6-10 synthetic full-body.
+3. Train Aurora LoRA on (4 anchors + 10-15 1:2 keepers + 6-10
+   body-extended) ≈ 25-30 training images.
+
+The original handoff's "Phase 1 = local PuLID" recommendation is
+firmly retired by this finding. PuLID was supposed to lock identity
+but didn't escape framing. 1:2 aspect + LoRA training does both
+at lower complexity and zero retail dependency.
 
 ---
 
