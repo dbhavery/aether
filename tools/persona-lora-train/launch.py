@@ -131,6 +131,37 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--no-cache-latents",
+        action="store_true",
+        help="disable VAE latent caching (slower but lower VRAM peak)",
+    )
+    parser.add_argument(
+        "--no-allow-tf32",
+        action="store_true",
+        help="disable TF32 matmuls (small slowdown, no quality cost on Ampere)",
+    )
+    parser.add_argument(
+        "--no-8bit-adam",
+        action="store_true",
+        help="use full-precision AdamW instead of bitsandbytes 8-bit",
+    )
+    parser.add_argument(
+        "--no-gradient-checkpointing",
+        action="store_true",
+        help=(
+            "disable gradient checkpointing — only safe at lower resolutions "
+            "(512) where VRAM headroom permits"
+        ),
+    )
+    parser.add_argument(
+        "--base-model",
+        default=None,
+        help=(
+            "override base model id (default black-forest-labs/FLUX.1-dev). "
+            "Use black-forest-labs/FLUX.1-schnell for the smaller/faster variant."
+        ),
+    )
+    parser.add_argument(
         "--execute",
         action="store_true",
         help="actually run accelerate launch; otherwise print + exit",
@@ -146,6 +177,16 @@ def main(argv: list[str] | None = None) -> int:
         hyperparam_overrides["learning_rate"] = args.learning_rate
     if args.resolution is not None:
         hyperparam_overrides["resolution"] = args.resolution
+    if args.no_cache_latents:
+        hyperparam_overrides["cache_latents"] = False
+    if args.no_allow_tf32:
+        hyperparam_overrides["allow_tf32"] = False
+    if args.no_8bit_adam:
+        hyperparam_overrides["use_8bit_adam"] = False
+    if args.no_gradient_checkpointing:
+        hyperparam_overrides["gradient_checkpointing"] = False
+    if args.base_model is not None:
+        hyperparam_overrides["base_model"] = args.base_model
     if args.smoke_test:
         # Smoke-test overrides: short run with one checkpoint.
         # Explicit overrides above still take precedence.

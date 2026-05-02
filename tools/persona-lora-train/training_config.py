@@ -43,7 +43,14 @@ _DIFFUSERS_SCRIPT_CANDIDATES = (
 @dataclass
 class TrainingHyperparams:
     """LoRA training hyperparams. Defaults tuned for Aurora-class
-    identity LoRAs on a 3090 Ti."""
+    identity LoRAs on a 3090 Ti.
+
+    Throughput notes (lessons §10): 1024 res + grad checkpointing + bf16
+    on a 3090 Ti is ~50s/step (1500 steps = 21h, too slow for unattended
+    overnight). 512 res + cache_latents + allow_tf32 + 8bit-adam reduces
+    by 4-6x to a feasible 4-6h run. Defaults below ship the faster path;
+    --resolution / --gradient_checkpointing toggles via the launcher.
+    """
 
     rank: int = 16
     """LoRA rank. 16 is the sweet spot for single-subject identity
@@ -52,7 +59,7 @@ class TrainingHyperparams:
 
     max_train_steps: int = 1500
     """Total training steps. 1000-2000 is the empirical range for
-    24-image training sets at rank 16. ~6-8 hours on a 3090 Ti."""
+    24-image training sets at rank 16. ~4-6 hours on a 3090 Ti at 512 res."""
 
     learning_rate: float = 1e-4
     """LoRA training LR — 1e-4 with cosine schedule is standard."""
@@ -71,14 +78,29 @@ class TrainingHyperparams:
     mixed_precision: str = "bf16"
     """bf16 is the FLUX default; fp16 works but is slower on Ampere."""
 
-    resolution: int = 1024
-    """Training resolution. Matches inference target (1024×1536 for
-    9:16). Rectangular bucketing is handled by the diffusers script
-    when --random_flip is on."""
+    resolution: int = 512
+    """Training resolution. 512 is 4x faster than 1024 on a 3090 Ti.
+    Identity LoRAs are resolution-agnostic — learned identity transfers
+    to any inference resolution. Use 1024 only when you've confirmed
+    overnight feasibility (smoke test first)."""
 
     gradient_checkpointing: bool = True
-    """Required at 24 GB to fit FLUX-LoRA. Trades ~30% slower training
-    for ~40% lower peak VRAM."""
+    """Required at 24 GB to fit FLUX-LoRA at 1024. Optional at 512 if
+    VRAM allows. Trades ~30% slower training for ~40% lower peak VRAM."""
+
+    cache_latents: bool = True
+    """Pre-encode VAE outputs once, skip re-encoding every step. Big
+    throughput win for small training sets (the VAE forward pass is
+    ~30% of step time on FLUX). Costs ~2 GB extra VRAM per ~30 images."""
+
+    allow_tf32: bool = True
+    """TF32 matmuls on Ampere — ~10-15% throughput boost at no quality
+    cost. Safe default for any 3090/A100/H100 training."""
+
+    use_8bit_adam: bool = True
+    """8-bit AdamW from bitsandbytes — saves ~2-3 GB optimizer state at
+    near-zero quality cost. bitsandbytes already required by the FLUX
+    runtime path; no new dep."""
 
     seed: int = 42
 
@@ -138,6 +160,12 @@ class TrainingPlan:
         ]
         if h.gradient_checkpointing:
             argv.append("--gradient_checkpointing")
+        if h.cache_latents:
+            argv.append("--cache_latents")
+        if h.allow_tf32:
+            argv.append("--allow_tf32")
+        if h.use_8bit_adam:
+            argv.append("--use_8bit_adam")
         return argv
 
     def shell_command(self) -> str:

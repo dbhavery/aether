@@ -81,9 +81,14 @@ def test_accelerate_command_shape(tmp_path):
     assert f"--instance_data_dir={plan.dataset_dir}/images" in flat
     assert f"--output_dir={plan.output_dir}" in flat
     assert "--rank=16" in flat
-    assert "--resolution=1024" in flat
+    # Default resolution flipped to 512 in the throughput-tuned config
+    # (lessons §10). 1024 is opt-in via --resolution override.
+    assert "--resolution=512" in flat
     assert "--mixed_precision=bf16" in flat
     assert "--gradient_checkpointing" in argv  # boolean flag, no value
+    assert "--cache_latents" in argv
+    assert "--allow_tf32" in argv
+    assert "--use_8bit_adam" in argv
     assert "--max_train_steps=1500" in flat
     assert "aurora_nash" in flat
 
@@ -105,6 +110,26 @@ def test_custom_hyperparams_propagate(tmp_path):
     assert "--max_train_steps=2500" in flat
     assert "--learning_rate=5e-05" in flat
     assert "--gradient_checkpointing" not in plan.accelerate_command()
+
+
+def test_throughput_flags_can_be_disabled(tmp_path):
+    """When the operator wants the original conservative config (no
+    cache_latents / no TF32 / no 8-bit Adam), all three opt-out via
+    boolean hyperparam flags."""
+    _make_anchors(tmp_path)
+    workdir = tmp_path / "workdir"
+    hp = training_config.TrainingHyperparams(
+        cache_latents=False,
+        allow_tf32=False,
+        use_8bit_adam=False,
+    )
+    plan = training_config.build_plan(
+        "aurora", workdir, repo_root=tmp_path, hyperparams=hp,
+    )
+    argv = plan.accelerate_command()
+    assert "--cache_latents" not in argv
+    assert "--allow_tf32" not in argv
+    assert "--use_8bit_adam" not in argv
 
 
 def test_shell_command_round_trips(tmp_path):
