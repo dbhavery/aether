@@ -45,9 +45,14 @@ def test_pick_offload_strategy_unknown_value_falls_through(monkeypatch):
 
 
 def test_aspect_to_dims_known_ratios():
+    # "9:16" maps to (1024, 1536) for backward compat with pre-existing
+    # batches; technically that's 2:3, but reproducibility > labelling.
     assert backend_local_flux.aspect_to_dims("9:16") == (1024, 1536)
+    assert backend_local_flux.aspect_to_dims("9:16-strict") == (864, 1536)
     assert backend_local_flux.aspect_to_dims("16:9") == (1536, 1024)
     assert backend_local_flux.aspect_to_dims("1:1") == (1024, 1024)
+    # Extreme vertical for framing-bias escape probes.
+    assert backend_local_flux.aspect_to_dims("1:2") == (1024, 2048)
     # Unknown ratios fall through to the 9:16 default rather than raising —
     # keeps the runner backend-agnostic for arbitrary aspect strings.
     assert backend_local_flux.aspect_to_dims("garbage") == (1024, 1536)

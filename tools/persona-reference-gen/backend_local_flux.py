@@ -87,14 +87,26 @@ def aspect_to_dims(aspect_ratio: str) -> tuple[int, int]:
     back to the 9:16 default rather than raising, so the runner can pass
     through fal-style strings without translation.
     """
+    # Note: "9:16" maps to (1024, 1536) for backward compatibility with
+    # batches generated before this table was extended. (1024, 1536) is
+    # actually 2:3, but the original `prompt_matrix.DEFAULT_ASPECT="9:16"`
+    # used it as the canonical vertical default, so existing batch
+    # manifests carry "9:16" + 1024x1536 bytes. Reproducibility wins
+    # over labelling correctness here. Use "9:16-strict" if you want
+    # the actually-9:16 dims.
     table = {
         "9:16": (1024, 1536),
+        "9:16-strict": (864, 1536),
         "16:9": (1536, 1024),
         "1:1": (1024, 1024),
         "3:4": (1024, 1360),
         "4:3": (1360, 1024),
         "2:3": (1024, 1536),
         "3:2": (1536, 1024),
+        "1:2": (1024, 2048),     # extreme vertical — forces more body area
+        "2:1": (2048, 1024),     # extreme horizontal
+        "1:3": (768, 2304),      # ultra-vertical, untested
+        "3:8": (768, 2048),      # 3:8 vertical, untested
     }
     return table.get(aspect_ratio, (1024, 1536))
 
