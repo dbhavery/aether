@@ -441,6 +441,37 @@ def test_rebuild_overwrites_prior_dataset(tmp_path):
     assert report.num_images == 4
 
 
+def test_body_extended_sibling_picked_up(tmp_path):
+    """A `<prompt>__<idx>_extended.png` next to a kept candidate becomes
+    a separate dataset row with source_kind='body_extended'."""
+    batch_dir = _make_batch(
+        tmp_path,
+        batch_id="b1",
+        candidates=[("p_a", "full-body, hips visible")],
+        curation={("p_a", 0): "keep"},
+    )
+    # Plant the body-extended sibling next to the original.
+    orig = batch_dir / "images" / "p_a__0.png"
+    ext = batch_dir / "images" / "p_a__0_extended.png"
+    _write_png(ext, byte=99)
+
+    out = tmp_path / "dataset"
+    report = dataset_builder.build_dataset(
+        "aurora",
+        out,
+        repo_root=tmp_path,
+        include_anchor_set=False,
+    )
+    # Original + extended = 2 rows from one curated candidate.
+    assert report.num_images == 2
+    kinds = sorted(s.source_kind for s in report.sources)
+    assert kinds == ["batch_candidate", "body_extended"]
+    extended = next(s for s in report.sources if s.source_kind == "body_extended")
+    assert "full body" in extended.caption
+    assert orig.exists()  # original still present in the batch dir
+    assert ext.exists()
+
+
 def test_per_persona_token_lookup(tmp_path):
     """Unknown personas fall back to the slug as the instance token."""
     out = tmp_path / "dataset"

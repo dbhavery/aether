@@ -375,6 +375,40 @@ def build_dataset(
                 )
                 next_idx += 1
 
+                # Body-extension sibling: for `images/<prompt>__<idx>.png`,
+                # check for `images/<prompt>__<idx>_extended.png` and
+                # include it as a separate source if present. Lets
+                # body_extension augmentation flow into the LoRA training
+                # set without requiring a separate manifest entry.
+                ext_path = src.with_name(src.stem + "_extended" + src.suffix)
+                if ext_path.exists():
+                    ext_dst_name = f"{next_idx:02d}.png"
+                    ext_dst = output_dir / ext_dst_name
+                    shutil.copy2(ext_path, ext_dst)
+                    # Extension's caption asserts full-body framing —
+                    # that's the whole point of body_extension.
+                    ext_caption = _compose_caption(
+                        instance_token=instance_token,
+                        framing="full body, head to feet visible, standing",
+                        lighting=lighting,
+                    )
+                    (output_dir / f"{next_idx:02d}.txt").write_text(
+                        ext_caption, encoding="utf-8"
+                    )
+                    sources.append(
+                        DatasetSource(
+                            output_index=next_idx,
+                            image_path=ext_dst_name,
+                            caption=ext_caption,
+                            source_kind="body_extended",
+                            batch_id=batch_id,
+                            prompt_id=candidate.prompt_id,
+                            candidate_index=candidate.candidate_index,
+                            sha256=_hash_file(ext_path),
+                        )
+                    )
+                    next_idx += 1
+
     report = DatasetReport(
         persona_slug=persona_slug,
         instance_token=instance_token,
