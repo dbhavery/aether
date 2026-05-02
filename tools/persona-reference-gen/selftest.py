@@ -41,6 +41,31 @@ from output_schema import SelfTestRow  # type: ignore[import-not-found]
 DEFAULT_VISION_MODEL = "gpt-4o-mini"
 LIVE_ENV_VAR = "PERSONA_REFGEN_SELFTEST_LIVE"
 
+VLM_BACKEND_ENV_VAR = "PERSONA_REFGEN_SELFTEST_BACKEND"
+"""Override which live VLM backend handles scoring:
+
+  - `openai`    → gpt-4o-mini via the OpenAI API (deprecated retail path)
+  - `qwen2vl`   → local Qwen2-VL-7B-Instruct on the 3090 Ti (Phase 2 of the
+                  bare-metal pivot — no retail dep)
+
+Default is `openai` for backwards compatibility; switching to `qwen2vl`
+is the sanctioned bare-metal path. When `qwen2vl` is selected, the
+OPENAI_API_KEY check is skipped and `selftest_qwen2vl` is dispatched
+instead. See HANDOFF_2026-05-01_NIGHT_BARE_METAL_PIVOT.md Phase 2."""
+
+_VALID_BACKENDS = {"openai", "qwen2vl"}
+_DEFAULT_BACKEND = "openai"
+
+
+def _resolved_backend(explicit: str | None) -> str:
+    """Resolve the live-VLM backend: explicit arg > env var > default."""
+    if explicit and explicit in _VALID_BACKENDS:
+        return explicit
+    env = os.environ.get(VLM_BACKEND_ENV_VAR, "").strip().lower()
+    if env in _VALID_BACKENDS:
+        return env
+    return _DEFAULT_BACKEND
+
 
 # Photoreal threshold below which a candidate is auto-flagged. 6/10 is
 # the empirical break point where AI defects become obvious to the
@@ -203,24 +228,47 @@ def score_candidate(
     candidate_index: int,
     prompt_text: str,
     persona_slug: str,
-    model: str = DEFAULT_VISION_MODEL,
+    model: str | None = None,
+    vlm_backend: str | None = None,
 ) -> SelfTestRow:
     """Score one candidate and return a `SelfTestRow`.
 
     Live or stub depending on `PERSONA_REFGEN_SELFTEST_LIVE`. The stub
-    path is deterministic and free; the live path requires
-    `OPENAI_API_KEY` and burns the per-image cost (~$0.0003 at low
-    resolution).
+    path is deterministic and free; the live path dispatches to either
+    OpenAI gpt-4o-mini (default, retail) or local Qwen2-VL (the Phase 2
+    bare-metal path).
+
+    `vlm_backend` precedence: explicit arg → `PERSONA_REFGEN_SELFTEST_BACKEND`
+    env var → `openai`. `model` is resolved per-backend when None
+    (`gpt-4o-mini` for openai, `Qwen/Qwen2-VL-7B-Instruct` for qwen2vl).
     """
     if is_live_mode():
-        photoreal, framing, identity, notes = _live_score(
-            candidate_path,
-            anchor_path,
-            prompt_text=prompt_text,
-            persona_slug=persona_slug,
-            model=model,
-        )
-        backend = f"openai/{model}"
+        chosen_backend = _resolved_backend(vlm_backend)
+        if chosen_backend == "qwen2vl":
+            from selftest_qwen2vl import (  # type: ignore[import-not-found]
+                DEFAULT_MODEL as QWEN_DEFAULT_MODEL,
+            )
+            from selftest_qwen2vl import score as qwen_score  # type: ignore[import-not-found]
+
+            qwen_model = model or QWEN_DEFAULT_MODEL
+            photoreal, framing, identity, notes = qwen_score(
+                candidate_path,
+                anchor_path,
+                prompt_text=prompt_text,
+                persona_slug=persona_slug,
+                model=qwen_model,
+            )
+            backend = f"qwen2vl/{qwen_model}"
+        else:
+            openai_model = model or DEFAULT_VISION_MODEL
+            photoreal, framing, identity, notes = _live_score(
+                candidate_path,
+                anchor_path,
+                prompt_text=prompt_text,
+                persona_slug=persona_slug,
+                model=openai_model,
+            )
+            backend = f"openai/{openai_model}"
     else:
         # Seed basis: the candidate's own bytes hash isn't necessary
         # for v0 stub; just keep it parallel-shaped so a future
