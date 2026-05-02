@@ -24,7 +24,60 @@ def test_module_imports_cleanly():
     assert hasattr(backend_local_flux, "is_live_mode")
     assert backend_local_flux.LIVE_ENV_VAR == "PERSONA_REFGEN_LIVE"
     assert backend_local_flux.OFFLOAD_ENV_VAR == "PERSONA_REFGEN_OFFLOAD"
+    assert backend_local_flux.LORA_ENV_VAR == "PERSONA_REFGEN_LORA"
     assert backend_local_flux.DEFAULT_MODEL == "black-forest-labs/FLUX.1-dev"
+
+
+def test_resolve_lora_path_none_when_blank():
+    assert backend_local_flux._resolve_lora_path(None) is None
+    assert backend_local_flux._resolve_lora_path("") is None
+
+
+def test_resolve_lora_path_returns_safetensors_file_directly(tmp_path):
+    f = tmp_path / "aurora_lora.safetensors"
+    f.write_bytes(b"\x00" * 16)
+    resolved = backend_local_flux._resolve_lora_path(str(f))
+    assert resolved == str(f)
+
+
+def test_resolve_lora_path_finds_canonical_dreambooth_layout(tmp_path):
+    """diffusers DreamBooth-LoRA writes adapter to
+    `<output_dir>/pytorch_lora_weights.safetensors`. Resolver returns the
+    dir path so `pipe.load_lora_weights(<dir>)` works."""
+    out_dir = tmp_path / "lora_run_aurora"
+    out_dir.mkdir()
+    (out_dir / "pytorch_lora_weights.safetensors").write_bytes(b"\x00" * 16)
+    resolved = backend_local_flux._resolve_lora_path(str(out_dir))
+    assert resolved == str(out_dir)
+
+
+def test_resolve_lora_path_picks_single_safetensors_in_dir(tmp_path):
+    out_dir = tmp_path / "lora_run_alt"
+    out_dir.mkdir()
+    only = out_dir / "alternate_name.safetensors"
+    only.write_bytes(b"\x00" * 16)
+    resolved = backend_local_flux._resolve_lora_path(str(out_dir))
+    assert resolved == str(only)
+
+
+def test_resolve_lora_path_returns_dir_when_ambiguous(tmp_path):
+    """When a dir holds neither the canonical filename nor exactly one
+    .safetensors, return the dir path so diffusers' walker can decide."""
+    out_dir = tmp_path / "lora_run_ambiguous"
+    out_dir.mkdir()
+    (out_dir / "a.safetensors").write_bytes(b"\x00")
+    (out_dir / "b.safetensors").write_bytes(b"\x00")
+    resolved = backend_local_flux._resolve_lora_path(str(out_dir))
+    assert resolved == str(out_dir)
+
+
+def test_resolve_lora_path_unknown_returns_none(tmp_path):
+    """Path that's neither a .safetensors file nor a directory → None,
+    signalling caller can fall back to base-model inference."""
+    assert backend_local_flux._resolve_lora_path(str(tmp_path / "ghost")) is None
+    txt = tmp_path / "wrong.txt"
+    txt.write_text("x")
+    assert backend_local_flux._resolve_lora_path(str(txt)) is None
 
 
 def test_pick_offload_strategy_env_override(monkeypatch):

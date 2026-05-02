@@ -60,7 +60,16 @@ already using VRAM."""
 # Live-mode pipeline cache. Loading FLUX takes 30–60s + 24GB so we keep it
 # resident across calls within a single batch run. The runner instantiates
 # the backend once per process, so this dict is effectively process-local.
-_PIPELINE_CACHE: dict[str, object] = {}
+# Cache key is `(model, lora_path)` so swapping LoRAs reloads the pipeline
+# rather than corrupting a cached pipeline with stale adapter weights.
+_PIPELINE_CACHE: dict[tuple[str, str | None], object] = {}
+
+LORA_ENV_VAR = "PERSONA_REFGEN_LORA"
+"""Optional path to a trained LoRA adapter directory (with
+`pytorch_lora_weights.safetensors`) or single .safetensors file. When
+set, `_load_pipeline()` calls `pipe.load_lora_weights(path)` after
+offload setup. Used to verify trained Aurora-class identity LoRAs at
+inference."""
 
 
 @dataclass
@@ -138,7 +147,42 @@ def _pick_offload_strategy() -> str:
     return "model" if free_gb >= 14 else "sequential"
 
 
-def _load_pipeline(model: str):
+def _resolve_lora_path(lora_path: str | None) -> str | None:
+    """Normalise a user-supplied LoRA reference.
+
+    Accepts either a directory holding `pytorch_lora_weights.safetensors`
+    (the diffusers training-script output layout), a directory holding a
+    single `.safetensors` file, or a path directly to a `.safetensors`
+    file. Returns the path that `pipe.load_lora_weights()` will accept,
+    or `None` if `lora_path` is falsy.
+
+    Returns `None` if the resolution fails — caller may fall back to
+    base-model inference rather than crash. The CLI surface should warn
+    the operator when this happens.
+    """
+    if not lora_path:
+        return None
+    candidate = Path(lora_path)
+    if candidate.is_file() and candidate.suffix == ".safetensors":
+        return str(candidate)
+    if candidate.is_dir():
+        # Diffusers DreamBooth-LoRA writes adapter as
+        # pytorch_lora_weights.safetensors at the output dir top level.
+        canonical = candidate / "pytorch_lora_weights.safetensors"
+        if canonical.exists():
+            return str(candidate)
+        # Otherwise look for any single .safetensors file.
+        safetensors = sorted(candidate.glob("*.safetensors"))
+        if len(safetensors) == 1:
+            return str(safetensors[0])
+        # Diffusers `load_lora_weights(<dir>)` walks the dir itself, so
+        # return the dir path even if we can't pinpoint the file. The
+        # downstream call may still succeed.
+        return str(candidate)
+    return None
+
+
+def _load_pipeline(model: str, lora_path: str | None = None):
     """Return a cached `FluxPipeline` for `model`, loading on first call.
 
     Pulled out into a helper so tests can monkeypatch this single seam if
@@ -150,9 +194,16 @@ def _load_pipeline(model: str):
     live path resilient when something else is already holding GPU memory
     (a common state on Don's workstation). On OOM during pipeline setup
     we transparently fall back to the next-tighter strategy.
+
+    When `lora_path` is supplied and resolvable, calls
+    `pipe.load_lora_weights(resolved)` after offload setup. Cache key
+    includes `lora_path` so swapping adapters between calls reloads the
+    pipeline rather than serving stale weights.
     """
-    if model in _PIPELINE_CACHE:
-        return _PIPELINE_CACHE[model]
+    resolved_lora = _resolve_lora_path(lora_path)
+    cache_key = (model, resolved_lora)
+    if cache_key in _PIPELINE_CACHE:
+        return _PIPELINE_CACHE[cache_key]
 
     import torch  # noqa: PLC0415 — lazy by design
     from diffusers import FluxPipeline  # noqa: PLC0415
@@ -174,7 +225,13 @@ def _load_pipeline(model: str):
         torch.cuda.empty_cache()
         pipe.enable_sequential_cpu_offload()
 
-    _PIPELINE_CACHE[model] = pipe
+    if resolved_lora is not None:
+        # Diffusers' load_lora_weights handles the rank+target-modules
+        # detection from the safetensors metadata. No need to specify
+        # weight_name when the file follows the canonical layout.
+        pipe.load_lora_weights(resolved_lora)
+
+    _PIPELINE_CACHE[cache_key] = pipe
     return pipe
 
 
@@ -187,6 +244,7 @@ def generate(
     model: str = DEFAULT_MODEL,
     aspect_ratio: str = DEFAULT_ASPECT,
     reference_image_url: str | None = None,
+    lora_path: str | None = None,
 ) -> FalResult:
     """Generate one image. Live-FLUX or stub depending on env gate.
 
@@ -194,17 +252,24 @@ def generate(
     in live mode — FLUX.1-dev does not expose a negative-prompt branch in
     the stock `FluxPipeline` schema. `reference_image_url` is similarly
     accepted-and-ignored (Phase 1 wires identity conditioning).
+
+    `lora_path` (or the `PERSONA_REFGEN_LORA` env var) loads a trained
+    LoRA adapter on top of the base FLUX-dev pipeline before inference.
+    Used to verify trained identity LoRAs against the same prompt the
+    base run used.
     """
     _ = negative_prompt
     _ = reference_image_url
     if not is_live_mode():
         return _generate_stub(seed=seed, out_path=out_path, model=model)
+    effective_lora = lora_path or os.environ.get(LORA_ENV_VAR) or None
     return _generate_live(
         prompt_text=prompt_text,
         seed=seed,
         out_path=out_path,
         model=model,
         aspect_ratio=aspect_ratio,
+        lora_path=effective_lora,
     )
 
 
@@ -230,12 +295,13 @@ def _generate_live(
     out_path: Path,
     model: str,
     aspect_ratio: str,
+    lora_path: str | None = None,
 ) -> FalResult:
     """Live FLUX inference. Loads pipeline lazily, runs once, writes PNG."""
     import gc  # noqa: PLC0415 — lazy with the rest of the heavy imports
     import torch  # noqa: PLC0415
 
-    pipe = _load_pipeline(model)
+    pipe = _load_pipeline(model, lora_path=lora_path)
     width, height = aspect_to_dims(aspect_ratio)
 
     generator = torch.Generator(device="cuda").manual_seed(seed)
@@ -257,9 +323,13 @@ def _generate_live(
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
+    backend_id = f"local-flux/{model}"
+    if lora_path:
+        backend_id = f"{backend_id}+lora:{Path(lora_path).name}"
+
     return FalResult(
         image_path=out_path,
-        backend=f"local-flux/{model}",
+        backend=backend_id,
         backend_request_id=f"local-{seed}",
         backend_source_url=None,
     )
@@ -269,6 +339,7 @@ __all__ = [
     "DEFAULT_ASPECT",
     "DEFAULT_MODEL",
     "LIVE_ENV_VAR",
+    "LORA_ENV_VAR",
     "OFFLOAD_ENV_VAR",
     "FalResult",
     "aspect_to_dims",
