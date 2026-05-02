@@ -10,16 +10,16 @@
 
 ## Current job
 
-**Status:** none — autonomous run paused at ~04:00 PT pending Don's wake-up.
+**Status:** in-flight — Aurora body-extension batch (P2-P7) launched 2026-05-02 ~07:07 PT.
 
 | Field | Value |
 | --- | --- |
-| Persona | — |
-| Pipeline step (per ADR-0014) | — |
-| Started | — |
-| Expected duration | — |
-| Output target | — |
-| Notes | — |
+| Persona | aurora |
+| Pipeline step (per ADR-0014) | Step 1 — body-extension augmentation of curated 1:2 candidates |
+| Started | 2026-05-02 ~07:07 PT |
+| Expected duration | ~80 min (15 min cold load + 6 × ~10 min sequential-offload inference) |
+| Output target | `personas/aurora/_pipeline/step1_references/2026-05-02-curation-1to2/images/<prompt>__0_extended.png` × 6 |
+| Notes | Driver: `tools/persona-reference-gen/batch_body_extend.py`. Sequential offload (~14 GB resident from Don's other processes). P1 (`34698986410996a6`) was already body-extended in the autonomous run + copied into curation-1to2 by hash equality. After this batch, training corpus = 4 anchors + 16 base + 7 body-extended ≈ 27 images. Followed by smoke (50 steps) → full LoRA train (1500 steps at 512 res, throughput-tuned) → verify_lora --compare. |
 
 ---
 
