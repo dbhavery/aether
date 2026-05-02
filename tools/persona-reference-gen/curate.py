@@ -8,15 +8,18 @@ Per ADR-0015 §"Architecture": "the module produces a candidate batch; Don
 approves/rejects/re-prompts." This is the minimum viable curation surface;
 a GUI is a follow-up.
 
-Doctrine §8 (visual self-test) is **not yet wired** — when implemented, the
-curator should pre-attach a multimodal-vision verdict alongside each
-candidate so Don sees the agent's self-test before being asked. Tracked in
-README §"What's stubbed".
+Doctrine §8 integration: when a `selftest.jsonl` sibling file is present,
+candidates flagged by the multimodal-vision pass are hidden from the
+default curation walk — Don's time isn't spent on candidates the agent
+already identified as defective. Override with `--include-flagged`.
+Self-test scores + notes are surfaced inline so Don sees the agent's
+verdict before being asked for his own.
 
 Usage:
     python tools/persona-reference-gen/curate.py --persona aurora --batch 2026-05-18a
     # Optional: --auto-keep to mark every candidate keep (smoke / non-interactive).
     # Optional: --report-only to print the current curation state without prompting.
+    # Optional: --include-flagged to surface Doctrine §8-flagged candidates.
 """
 
 from __future__ import annotations
@@ -34,6 +37,7 @@ from output_schema import (  # noqa: E402
     BatchManifest,
     CurationEntry,
     CurationVerdict,
+    SelfTestRow,
     read_manifest,
 )
 
@@ -69,15 +73,43 @@ def _append_verdict(path: Path, entry: CurationEntry) -> None:
         f.write(entry.to_jsonl() + "\n")
 
 
+def _load_selftest(path: Path) -> dict[tuple[str, int], SelfTestRow]:
+    """Latest-wins per (prompt_id, candidate_index). Empty dict if absent."""
+    if not path.exists():
+        return {}
+    out: dict[tuple[str, int], SelfTestRow] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        row = SelfTestRow.from_jsonl(line)
+        out[(row.prompt_id, row.candidate_index)] = row
+    return out
+
+
 def _prompt_user(
     candidate_index: int,
     prompt_id: str,
     image_rel_path: str,
+    selftest_row: SelfTestRow | None = None,
 ) -> tuple[CurationVerdict, str]:
-    """Interactive prompt. Returns (verdict, note)."""
+    """Interactive prompt. Returns (verdict, note).
+
+    When `selftest_row` is provided, surface the agent's Doctrine §8
+    verdict + notes inline so Don sees the agent's read before judging.
+    """
     print()
     print(f"  candidate: prompt_id={prompt_id} idx={candidate_index}")
     print(f"  image:     {image_rel_path}")
+    if selftest_row is not None:
+        print(
+            f"  selftest:  verdict={selftest_row.verdict} "
+            f"photoreal={selftest_row.photoreal_score} "
+            f"framing={selftest_row.framing_match} "
+            f"identity={selftest_row.identity_match}"
+        )
+        if selftest_row.notes:
+            print(f"  notes:     {selftest_row.notes}")
     while True:
         raw = input("  verdict [k=keep / r=reject / p=reprompt / s=skip] > ").strip().lower()
         if raw in {"k", "keep"}:
@@ -126,6 +158,14 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="print curation summary; do not prompt",
     )
+    parser.add_argument(
+        "--include-flagged",
+        action="store_true",
+        help=(
+            "surface candidates flagged by the Doctrine §8 self-test "
+            "(default: skip them)"
+        ),
+    )
     args = parser.parse_args(argv)
 
     out_dir = _batch_dir(args.persona, args.batch)
@@ -136,11 +176,18 @@ def main(argv: list[str] | None = None) -> int:
     manifest = read_manifest(manifest_path)
     curation_path = out_dir / "curation.jsonl"
     curation = _load_existing_curation(curation_path)
+    selftest_path = out_dir / "selftest.jsonl"
+    selftest = _load_selftest(selftest_path)
 
     print(
         f"[{manifest.persona_slug}] batch {manifest.batch_id}: "
         f"{len(manifest.candidates)} candidates"
     )
+    if selftest:
+        flagged = sum(1 for r in selftest.values() if r.verdict == "flag")
+        if flagged:
+            visibility = "surfaced" if args.include_flagged else "hidden"
+            print(f"  selftest: {flagged} flagged ({visibility})")
 
     if args.report_only:
         _summarize(manifest, curation)
@@ -150,11 +197,20 @@ def main(argv: list[str] | None = None) -> int:
         existing = curation.get((c.prompt_id, c.candidate_index))
         if existing and existing.verdict != "pending":
             continue
+        st_row = selftest.get((c.prompt_id, c.candidate_index))
+        if (
+            st_row is not None
+            and st_row.verdict == "flag"
+            and not args.include_flagged
+        ):
+            continue
         if args.auto_keep:
             verdict: CurationVerdict = "keep"
             note = "auto-keep"
         else:
-            verdict, note = _prompt_user(c.candidate_index, c.prompt_id, c.image_path)
+            verdict, note = _prompt_user(
+                c.candidate_index, c.prompt_id, c.image_path, selftest_row=st_row
+            )
         if verdict == "pending":
             continue  # treat skip as no verdict written
         entry = CurationEntry(

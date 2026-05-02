@@ -10,16 +10,16 @@
 
 ## Current job
 
-**Status:** running — Aurora Phase 0 baseline (bare-metal pivot, ADR-0014 Step 1 ground-truth).
+**Status:** none — Aurora Phase 0 baseline COMPLETED 2026-05-01 23:11 PT. See completed runs.
 
 | Field | Value |
 | --- | --- |
-| Persona | aurora |
-| Pipeline step (per ADR-0014) | Step 1 — reference images, Phase 0 (no identity locking, unaided FLUX baseline) |
-| Started | 2026-05-01 ~22:50 PT |
-| Expected duration | 5-15 min (sequential CPU offload — 3090 Ti has ~9 GB free; conservative) |
-| Output target | personas/aurora/_pipeline/step1_references/2026-05-02-phase0/ |
-| Notes | PERSONA_REFGEN_LIVE=1 + PERSONA_REFGEN_OFFLOAD=sequential. Axes trimmed to 1×1×1 → one image only per HANDOFF_2026-05-01_NIGHT_BARE_METAL_PIVOT.md step 4. |
+| Persona | — |
+| Pipeline step (per ADR-0014) | — |
+| Started | — |
+| Expected duration | — |
+| Output target | — |
+| Notes | — |
 
 ---
 
@@ -61,7 +61,7 @@ Persona order for Phase 2 (initial — Don may reorder):
 
 | Persona | Step | Started | Completed | SHA | Notes |
 | --- | --- | --- | --- | --- | --- |
-| _(none yet — pipeline pending kickoff)_ | | | | | |
+| aurora | Step 1 — Phase 0 baseline (unaided FLUX.1-dev, no identity locking) | 2026-05-01 22:50 PT | 2026-05-01 23:11 PT | 34698986410996a6 | 1 image @ 1024×1536, sequential CPU offload, ~21 min total (15:18 load + 4:12 inference). Doctrine §8 verdict: **flag** — photoreal 8/10 strong, framing **no** (3/4 body crop despite full-body prompt — FLUX prior bias), identity **maybe** (attenuated from anchor). See file:///C:/Users/dbhav/Projects/aether/personas/aurora/_pipeline/step1_references/2026-05-02-phase0/EVALUATION.md. |
 
 ---
 
