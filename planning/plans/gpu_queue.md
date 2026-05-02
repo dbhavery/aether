@@ -10,16 +10,16 @@
 
 ## Current job
 
-**Status:** none — Aurora Phase 0 baseline COMPLETED 2026-05-01 23:11 PT. See completed runs.
+**Status:** running — Aurora Phase 0 framing probe (4 images, all default framings).
 
 | Field | Value |
 | --- | --- |
-| Persona | — |
-| Pipeline step (per ADR-0014) | — |
-| Started | — |
-| Expected duration | — |
-| Output target | — |
-| Notes | — |
+| Persona | aurora |
+| Pipeline step (per ADR-0014) | Step 1 — reference images, Phase 0 framing probe |
+| Started | 2026-05-01 ~23:18 PT |
+| Expected duration | 35-45 min (15:18 pipeline load + 4 × ~4 min inference at 1024×1536) |
+| Output target | personas/aurora/_pipeline/step1_references/2026-05-02-framing-probe/ |
+| Notes | PERSONA_REFGEN_LIVE=1 + PERSONA_REFGEN_OFFLOAD=sequential. 4×1×1 axes (all DEFAULT_FRAMINGS, DEFAULT_LIGHTINGS[0], DEFAULT_SEEDS[0]). Tests whether framing bias is uniform across framings or just the first. |
 
 ---
 
