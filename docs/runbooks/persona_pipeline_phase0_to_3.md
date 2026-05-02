@@ -185,7 +185,36 @@ prints direct-to-stderr after each image so log files capture progress
 Build the dataset + plan + run training. All under
 `tools/persona-lora-train/`.
 
-### Plan-only (recommended first step)
+### Preview the corpus before launching
+
+```bash
+python tools/persona-lora-train/dataset_summary.py --persona aurora
+```
+
+Prints num_images + source-kind breakdown + per-batch listing without
+permanently building anything. Use to confirm the corpus is what you
+expect (especially after a fresh body_extension batch lands new
+sibling images).
+
+### Single-command end-to-end (recommended)
+
+```bash
+python tools/persona-lora-train/phase3_pipeline.py \
+  --persona aurora \
+  --workdir build/lora-train/aurora-v1 \
+  --execute
+```
+
+Sequences: dataset build → 50-step smoke (25-min stall threshold) →
+full 1500-step training (60-min stall threshold) → verify_lora --compare.
+Exits with distinct codes per failure mode (1 smoke, 2 train, 3 dataset,
+4 verify) so the operator can resume from the right step.
+
+The two-step manual path below is preserved for cases where you want
+to inspect the dataset between build and execution (e.g., adding more
+training images mid-flight).
+
+### Plan-only (manual two-step)
 
 ```bash
 python tools/persona-lora-train/launch.py \
@@ -272,16 +301,26 @@ Exit 0 on completion, 1 on stall, 3 on output-dir-disappeared.
 
 ### Move LoRA into place
 
-After training succeeds:
+After training succeeds, use `promote_lora.py` for an atomic copy +
+sha256 verification + metadata sidecar:
 
 ```bash
-mkdir -p personas/aurora/loras
-mv build/lora-train/aurora-v1/output/pytorch_lora_weights.safetensors \
-   personas/aurora/loras/aurora_v1.safetensors
+python tools/persona-lora-train/promote_lora.py \
+  --persona aurora \
+  --workdir build/lora-train/aurora-v1 \
+  --version v1
 ```
 
-The pipeline-status CLI (`tools/persona-reference-gen/pipeline_status.py`)
-will then mark Aurora as having a LoRA on disk.
+Outputs:
+- `personas/aurora/loras/aurora_v1.safetensors` (the adapter)
+- `personas/aurora/loras/aurora_v1.safetensors.meta.json` (sha256 +
+  training hyperparams sidecar)
+
+The promote_lora tool refuses to overwrite an existing file with
+different content (use `--version v2` for a new run, not the same
+version again). The pipeline-status CLI
+(`tools/persona-reference-gen/pipeline_status.py`) will then mark
+Aurora as having a LoRA on disk.
 
 ### Verify the trained LoRA
 
