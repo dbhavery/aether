@@ -183,11 +183,10 @@ def test_anchor_only_when_no_batches(tmp_path):
     assert report.persona_slug == "aurora"
     assert report.instance_token == "aurora_nash"  # noqa: S105 — not a password
 
-    # 4 .png + 4 .txt + metadata.json
-    files = sorted(p.name for p in out.iterdir())
-    assert "metadata.json" in files
-    pngs = [f for f in files if f.endswith(".png")]
-    txts = [f for f in files if f.endswith(".txt")]
+    # Layout: <out>/images/<n>.png + <out>/captions/<n>.txt + metadata.json
+    assert (out / "metadata.json").exists()
+    pngs = sorted(p for p in (out / "images").iterdir() if p.suffix == ".png")
+    txts = sorted(p for p in (out / "captions").iterdir() if p.suffix == ".txt")
     assert len(pngs) == 4
     assert len(txts) == 4
 

@@ -119,7 +119,9 @@ class TrainingPlan:
             "launch",
             self.diffusers_script,
             f"--pretrained_model_name_or_path={h.base_model}",
-            f"--instance_data_dir={self.dataset_dir}",
+            # dataset_builder writes images to <dataset_dir>/images/ so
+            # diffusers' DreamBooth doesn't choke on the sibling captions.
+            f"--instance_data_dir={self.dataset_dir}/images",
             f"--output_dir={self.output_dir}",
             f"--instance_prompt={self.instance_token}, photorealistic",
             f"--rank={h.rank}",

@@ -50,7 +50,8 @@ def test_build_plan_produces_dataset_and_config(tmp_path):
     # Dataset dir populated
     dataset_dir = workdir / "dataset"
     assert (dataset_dir / "metadata.json").exists()
-    assert (dataset_dir / "00.png").exists()
+    assert (dataset_dir / "images" / "00.png").exists()
+    assert (dataset_dir / "captions" / "00.txt").exists()
 
     # Output dir created (training run writes here)
     assert (workdir / "output").is_dir()
@@ -75,7 +76,9 @@ def test_accelerate_command_shape(tmp_path):
     flat = " ".join(argv)
     # Required FLUX LoRA training flags appear in the command.
     assert "--pretrained_model_name_or_path=black-forest-labs/FLUX.1-dev" in flat
-    assert f"--instance_data_dir={plan.dataset_dir}" in flat
+    # diffusers DreamBooth wants images-only, so we point at the
+    # `images/` subdir of the dataset_dir.
+    assert f"--instance_data_dir={plan.dataset_dir}/images" in flat
     assert f"--output_dir={plan.output_dir}" in flat
     assert "--rank=16" in flat
     assert "--resolution=1024" in flat

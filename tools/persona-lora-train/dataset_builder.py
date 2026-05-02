@@ -265,6 +265,16 @@ def build_dataset(
         else:
             shutil.rmtree(child)
 
+    # Diffusers' DreamBooth script tries to load every file in
+    # `instance_data_dir` as a PIL image and crashes on non-image files.
+    # Put images and captions in separate sibling subdirs so:
+    #   - <output_dir>/images/<n>.png  → diffusers --instance_data_dir
+    #   - <output_dir>/captions/<n>.txt → kohya/manual training paths
+    images_dir = output_dir / "images"
+    captions_dir = output_dir / "captions"
+    images_dir.mkdir(parents=True, exist_ok=True)
+    captions_dir.mkdir(parents=True, exist_ok=True)
+
     sources: list[DatasetSource] = []
     next_idx = 0
 
@@ -281,14 +291,14 @@ def build_dataset(
             if not src.exists():
                 continue
             dst_name = f"{next_idx:02d}.png"
-            dst = output_dir / dst_name
+            dst = images_dir / dst_name
             shutil.copy2(src, dst)
             caption = _compose_anchor_caption(instance_token, anchor_name)
-            (output_dir / f"{next_idx:02d}.txt").write_text(caption, encoding="utf-8")
+            (captions_dir / f"{next_idx:02d}.txt").write_text(caption, encoding="utf-8")
             sources.append(
                 DatasetSource(
                     output_index=next_idx,
-                    image_path=dst_name,
+                    image_path=f"images/{dst_name}",
                     caption=caption,
                     source_kind="anchor",
                     anchor_filename=anchor_name,
@@ -350,18 +360,18 @@ def build_dataset(
                 lighting = spec.lighting if spec else None
 
                 dst_name = f"{next_idx:02d}.png"
-                dst = output_dir / dst_name
+                dst = images_dir / dst_name
                 shutil.copy2(src, dst)
                 caption = _compose_caption(
                     instance_token=instance_token,
                     framing=framing,
                     lighting=lighting,
                 )
-                (output_dir / f"{next_idx:02d}.txt").write_text(caption, encoding="utf-8")
+                (captions_dir / f"{next_idx:02d}.txt").write_text(caption, encoding="utf-8")
                 sources.append(
                     DatasetSource(
                         output_index=next_idx,
-                        image_path=dst_name,
+                        image_path=f"images/{dst_name}",
                         caption=caption,
                         source_kind="batch_candidate",
                         batch_id=batch_id,
@@ -383,22 +393,20 @@ def build_dataset(
                 ext_path = src.with_name(src.stem + "_extended" + src.suffix)
                 if ext_path.exists():
                     ext_dst_name = f"{next_idx:02d}.png"
-                    ext_dst = output_dir / ext_dst_name
+                    ext_dst = images_dir / ext_dst_name
                     shutil.copy2(ext_path, ext_dst)
-                    # Extension's caption asserts full-body framing —
-                    # that's the whole point of body_extension.
                     ext_caption = _compose_caption(
                         instance_token=instance_token,
                         framing="full body, head to feet visible, standing",
                         lighting=lighting,
                     )
-                    (output_dir / f"{next_idx:02d}.txt").write_text(
+                    (captions_dir / f"{next_idx:02d}.txt").write_text(
                         ext_caption, encoding="utf-8"
                     )
                     sources.append(
                         DatasetSource(
                             output_index=next_idx,
-                            image_path=ext_dst_name,
+                            image_path=f"images/{ext_dst_name}",
                             caption=ext_caption,
                             source_kind="body_extended",
                             batch_id=batch_id,
