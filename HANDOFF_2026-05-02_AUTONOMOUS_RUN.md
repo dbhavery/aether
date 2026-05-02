@@ -85,27 +85,52 @@ queued for after the aspect-ratio experiments finish.
 
 ### Updated Phase 3 strategy
 
-The available training data picture has improved:
+The available training data picture has improved dramatically. As of
+this update:
 
 - **4 v0 anchor images** (head-shoulders portraits, identity ground
   truth)
-- **9 Phase 0 generations at 2:3** (3/4 body, attenuated identity —
-  use sparingly or skip)
-- **2 Phase 0 generations at 1:2** (much-improved body area + identity —
-  expect 10-20+ once a multi-seed batch lands)
-- **Body-extension augmentation** (any 3/4 body keeper can become
-  a synthetic full-body)
+- **2 Phase 0 generations at 1:2** (~80% body, casual/pockets poses)
+- **2 Phase 0 generations at 1:3** (~90% body, wall-lean/side poses,
+  thighs visible)
+- **1 body-extended image: TRUE FULL BODY** with feet visible
+  (1024×3072, hardwood floor, barefoot — produced via FLUX inpainting
+  on the 1:2 candidate). The extension is coherent — slight visible
+  seam at mid-thigh transition, no obvious AI artifacts.
+
+= **9 candidates available for Phase 3 training right now**, plus the
+mechanism (body_extension) to create more synthetic full-body from
+any 1:2 keeper.
 
 Recommended Phase 3 path:
-1. Run a 4×1×4 = 16 image batch at 1:2 + Don curates ~6-10 keepers.
-2. Run `body_extension` on each keeper → 6-10 synthetic full-body.
+1. Run a 4×1×4 = 16 image batch at 1:2 + Don curates ~6-10 keepers
+   (~80 min wall clock).
+2. Run `body_extension` on each keeper → 6-10 synthetic full-body
+   (~14 min per image).
 3. Train Aurora LoRA on (4 anchors + 10-15 1:2 keepers + 6-10
    body-extended) ≈ 25-30 training images.
 
 The original handoff's "Phase 1 = local PuLID" recommendation is
-firmly retired by this finding. PuLID was supposed to lock identity
-but didn't escape framing. 1:2 aspect + LoRA training does both
-at lower complexity and zero retail dependency.
+firmly retired by these findings. PuLID was supposed to lock identity
+but didn't escape framing. **1:2 aspect + body_extension + LoRA
+training** does both at lower complexity and zero retail dependency.
+
+### Body extension validated live
+
+The full pipeline ran end-to-end:
+
+```
+1024x2048 1:2 candidate (hips visible)
+  ↓ pad bottom 1024px with gray
+  ↓ FluxInpaintPipeline at sequential offload, 28 steps, guidance 30
+  ↓ ~5 min wall clock
+1024x3072 full body image with feet
+```
+
+Result image at file:///C:/Users/dbhav/Projects/aether/personas/aurora/_pipeline/step1_references/2026-05-02-aspect-1to2/images/34698986410996a6__0_extended.png. Identity preserved across the seam. Realistic
+hardwood floor + barefoot feet generated. Slight visible seam at
+mid-thigh — fixable by tuning `--extend-down 512` (smaller padding
+= less inpainting = less seam) at the cost of less feet area.
 
 ---
 
