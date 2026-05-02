@@ -98,6 +98,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--rank", type=int, default=None)
     parser.add_argument("--max-train-steps", type=int, default=None)
     parser.add_argument("--learning-rate", type=float, default=None)
+    parser.add_argument(
+        "--resolution",
+        type=int,
+        default=None,
+        help=(
+            "training resolution. Default 1024 produces best identity "
+            "fidelity but 4x slower than 512. Use 512 for faster overnight "
+            "runs (smoke test showed 1024 is too slow on 3090 Ti for "
+            "unattended training)."
+        ),
+    )
     parser.add_argument("--min-photoreal-score", type=int, default=6)
     parser.add_argument(
         "--relax-selftest-verdict",
@@ -133,6 +144,8 @@ def main(argv: list[str] | None = None) -> int:
         hyperparam_overrides["max_train_steps"] = args.max_train_steps
     if args.learning_rate is not None:
         hyperparam_overrides["learning_rate"] = args.learning_rate
+    if args.resolution is not None:
+        hyperparam_overrides["resolution"] = args.resolution
     if args.smoke_test:
         # Smoke-test overrides: short run with one checkpoint.
         # Explicit overrides above still take precedence.
