@@ -14,12 +14,15 @@
 - **GPU:** RTX 3090 Ti (24 GB) or larger. Sequential CPU offload runs
   FLUX.1-dev in <8 GB peak GPU; model offload tier needs ≥14 GB.
 - **HF cache:** `black-forest-labs/FLUX.1-dev` already pulled at
-  file:///C:/Users/dbhav/.cache/huggingface/hub/.
-- **Python deps:** torch 2.11+ / diffusers 0.37+ / transformers 4.57+
-  / accelerate / bitsandbytes / torchvision / Pillow.
-- **Diffusers training script (for Phase 3):** clone
-  https://github.com/huggingface/diffusers somewhere reachable. The
-  launcher walks a sibling-clone search list:
+  file:///I:/HuggingFaceCache/hub/.
+- **Python deps:** torch 2.11+ / **diffusers HEAD source-installed**
+  (`pip install -e /c/Users/dbhav/Projects/diffusers/`) / transformers
+  4.57+ / accelerate / bitsandbytes / torchvision / ftfy / Pillow.
+  **The pip release of diffusers (0.37.x) is too old for the FLUX
+  LoRA trainer — source install is mandatory.**
+- **Diffusers training script (for Phase 3):** the cloned repo is
+  already at `C:\Users\dbhav\Projects\diffusers`. The launcher walks
+  a sibling-clone search list:
     - `examples/dreambooth/train_dreambooth_lora_flux.py`
     - `../diffusers/examples/dreambooth/train_dreambooth_lora_flux.py`
     - `../../diffusers/examples/dreambooth/train_dreambooth_lora_flux.py`
@@ -143,6 +146,40 @@ python tools/persona-reference-gen/auto_curate.py \
 Maps selftest `pass` → curation `keep` and selftest `flag` →
 curation `reject`. Don's later manual rows take precedence (latest-wins).
 
+## Body extension — full-body augmentation via FLUX-Inpaint
+
+For curation keepers, run body extension to produce true feet-visible
+full-body siblings. `dataset_builder` picks them up automatically as
+`source_kind="body_extended"` rows.
+
+### Single image
+
+```bash
+PERSONA_REFGEN_LIVE=1 PERSONA_REFGEN_OFFLOAD=sequential \
+  python tools/persona-reference-gen/body_extension.py \
+    --input <src.png> \
+    --output <src>_extended.png \
+    --extend-down 1024
+```
+
+`--extend-down 1024` extends a 1024×2048 (1:2) source to 1024×3072 with
+feet visible on hardwood floor. `--extend-down 512` is more conservative
+(less feet area, less seam).
+
+### Batch (sequential GPU loop)
+
+```bash
+PERSONA_REFGEN_LIVE=1 PERSONA_REFGEN_OFFLOAD=sequential \
+  python tools/persona-reference-gen/batch_body_extend.py \
+    --inputs <p1.png> <p2.png> ... \
+    --extend-down 1024 \
+    --skip-existing
+```
+
+~5-7 min per image with sequential offload (warm cache). The driver
+prints direct-to-stderr after each image so log files capture progress
+(no tee buffering).
+
 ## Phase 3 — Identity LoRA training
 
 Build the dataset + plan + run training. All under
@@ -153,7 +190,8 @@ Build the dataset + plan + run training. All under
 ```bash
 python tools/persona-lora-train/launch.py \
   --persona aurora \
-  --workdir build/lora-train/aurora-v1
+  --workdir build/lora-train/aurora-v1 \
+  --relax-selftest-verdict
 ```
 
 Creates `<workdir>/dataset/` with `<n>.png` + `<n>.txt` per training
@@ -161,29 +199,76 @@ image, plus `metadata.json` provenance. Prints the accelerate
 command. Inspect `<workdir>/training_config.json` and the dataset
 images before executing.
 
-### Hyperparam overrides
+`--relax-selftest-verdict` is required when training-set candidates have
+selftest verdict `flag` (e.g. 1:2 candidates with ~80% body coverage).
+
+### Throughput-tuned defaults (2026-05-02 lessons §10)
+
+The launcher now ships these speed flags by default:
+- `--resolution 512` (4x faster than 1024 at no identity-fidelity cost)
+- `--cache_latents` (pre-encode VAE outputs once)
+- `--allow_tf32` (TF32 matmuls on Ampere)
+- `--use_8bit_adam` (saves ~2-3 GB optimizer state)
+
+Combined: ~6x throughput vs the original 1024+conservative config.
+Estimated wall clock: 1500 steps × ~8s/step = ~3.5h on a 3090 Ti.
+
+Opt out individually when needed:
 
 ```bash
 python tools/persona-lora-train/launch.py \
   --persona aurora \
-  --workdir build/lora-train/aurora-v1 \
-  --rank 32 \
-  --max-train-steps 2500 \
-  --learning-rate 5e-5 \
-  --min-photoreal-score 7
+  --workdir build/lora-train/aurora-v2 \
+  --resolution 1024 \
+  --no-cache-latents      # disable VAE latent cache
+  --no-allow-tf32         # disable TF32
+  --no-8bit-adam          # full-precision AdamW
+  --no-gradient-checkpointing  # only safe at 512
 ```
 
-### Execute training
+### Smoke test before full run
 
 ```bash
 python tools/persona-lora-train/launch.py \
   --persona aurora \
-  --workdir build/lora-train/aurora-v1 \
+  --workdir build/lora-train/aurora-v1-smoke \
+  --relax-selftest-verdict \
+  --smoke-test \
   --execute
 ```
 
-Wall clock: ~6-8 hours on a 3090 Ti at 1500 steps with gradient
-checkpointing + bf16. Output adapter at `<workdir>/output/*.safetensors`.
+50 steps + checkpoint at 50. Should complete in 10-20 min on the
+throughput-tuned config. Confirms the pipeline launches cleanly +
+produces a valid checkpoint before committing to the full run.
+
+### Execute full training
+
+```bash
+python tools/persona-lora-train/launch.py \
+  --persona aurora \
+  --workdir build/lora-train/aurora-v1 \
+  --relax-selftest-verdict \
+  --execute
+```
+
+Wall clock target: ~3.5h at 512 res (~21h at 1024 res — too slow for
+unattended overnight without the throughput flags). Output adapter at
+`<workdir>/output/pytorch_lora_weights.safetensors`.
+
+### Monitor training (out-of-band)
+
+In a separate terminal, watch for checkpoint progress without trusting
+the (broken-by-tee+tqdm) log:
+
+```bash
+python tools/persona-lora-train/monitor_training.py \
+  --output-dir build/lora-train/aurora-v1/output \
+  --max-train-steps 1500 \
+  --poll-seconds 60 \
+  --stall-minutes 30
+```
+
+Exit 0 on completion, 1 on stall, 3 on output-dir-disappeared.
 
 ### Move LoRA into place
 
@@ -191,12 +276,28 @@ After training succeeds:
 
 ```bash
 mkdir -p personas/aurora/loras
-mv build/lora-train/aurora-v1/output/aurora_v1.safetensors \
-   personas/aurora/loras/
+mv build/lora-train/aurora-v1/output/pytorch_lora_weights.safetensors \
+   personas/aurora/loras/aurora_v1.safetensors
 ```
 
 The pipeline-status CLI (`tools/persona-reference-gen/pipeline_status.py`)
 will then mark Aurora as having a LoRA on disk.
+
+### Verify the trained LoRA
+
+```bash
+PERSONA_REFGEN_LIVE=1 PERSONA_REFGEN_OFFLOAD=sequential \
+  python tools/persona-reference-gen/verify_lora.py \
+    --persona aurora \
+    --lora personas/aurora/loras/aurora_v1.safetensors \
+    --batch-id verify-aurora-v1 \
+    --aspect-ratio 1:2 \
+    --seed 8888
+```
+
+Generates a fixed 4-prompt grid (neutral, hands-in-pockets, seated,
+outdoor) covering identity + photoreal + pose generalization. Compare
+the 4 outputs against the LoRA-OFF control batch (run with `--lora` omitted).
 
 ## Phase 4+ (future work)
 
