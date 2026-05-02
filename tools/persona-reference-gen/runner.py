@@ -36,13 +36,18 @@ from backend_fal import (  # noqa: E402  — sys.path mutation above is intentio
     DEFAULT_ASPECT,
     DEFAULT_MODEL,
     LIVE_ENV_VAR,
-    generate as backend_generate,
+    MODEL_PULID,
     is_live_mode,
+    upload_reference_image,
+)
+from backend_fal import (
+    generate as backend_generate,
 )
 from output_schema import (  # noqa: E402
     SCHEMA_VERSION,
     BatchManifest,
     Candidate,
+    SelfTestRow,
     write_manifest,
 )
 from prompt_matrix import (  # noqa: E402
@@ -50,7 +55,13 @@ from prompt_matrix import (  # noqa: E402
     expand_matrix,
     lookup_anchor,
 )
-
+from selftest import (  # noqa: E402
+    is_live_mode as selftest_is_live_mode,
+)
+from selftest import (
+    score_candidate,
+    write_selftest_jsonl,
+)
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -74,6 +85,16 @@ def _file_sha256(p: Path) -> str:
     return hashlib.sha256(p.read_bytes()).hexdigest()
 
 
+def _persona_anchor_path(slug: str) -> Path:
+    """Canonical local path to a persona's identity anchor image.
+
+    `personas/<slug>/avatar/anchor.png` is the v0 anchor image produced
+    by `scripts/persona_generator/generate_anchor_set.py`. PuLID
+    consumes this path's URL after upload.
+    """
+    return _REPO_ROOT / "personas" / slug / "avatar" / "anchor.png"
+
+
 def run_batch(
     persona_slug: str,
     batch_id: str,
@@ -83,9 +104,27 @@ def run_batch(
     aspect_ratio: str = DEFAULT_ASPECT,
     num_images_per_prompt: int = 1,
     notes: str = "",
+    use_pulid: bool = False,
+    reference_image_path: Path | None = None,
+    run_selftest: bool = False,
 ) -> BatchManifest:
     """Run one batch end-to-end. Writes images + manifest.json. Returns the
-    manifest for the caller (CLI prints a summary)."""
+    manifest for the caller (CLI prints a summary).
+
+    When `use_pulid` is True the model defaults to `fal-ai/flux-pulid`
+    and the persona's anchor image (`personas/<slug>/avatar/anchor.png`,
+    or `reference_image_path` override) is uploaded once and forwarded
+    to every prompt — locking face/body identity. Doctrine §5
+    full-body-framing is still enforced via the prompt-matrix axis;
+    PuLID's identity lock is composed with the framing prompt, not a
+    replacement for it.
+
+    When `run_selftest` is True, a multimodal-vision pass scores every
+    generated candidate against the anchor on photorealism / framing /
+    identity per Doctrine §8 + ADR-0014, and writes
+    `selftest.jsonl` next to `manifest.json`. The default curation walk
+    can then hide flagged candidates.
+    """
     axes = axes or MatrixAxes.default()
     anchor = lookup_anchor(persona_slug)
     prompts = expand_matrix(persona_slug, anchor, axes)
@@ -93,6 +132,29 @@ def run_batch(
     out_dir = _output_dir(persona_slug, batch_id)
     images_dir = out_dir / "images"
     images_dir.mkdir(parents=True, exist_ok=True)
+
+    # PuLID prep: switch the model default and upload the anchor exactly
+    # once. The URL is reused across every prompt to keep identity stable
+    # and to keep upload spend at O(1) per batch.
+    reference_image_url: str | None = None
+    anchor_path: Path | None = None
+    if use_pulid:
+        if model == DEFAULT_MODEL:
+            # The caller didn't override the model; flip to PuLID.
+            model = MODEL_PULID
+        anchor_path = reference_image_path or _persona_anchor_path(persona_slug)
+        if not anchor_path.exists():
+            raise FileNotFoundError(
+                f"--use-pulid requires an anchor image at {anchor_path} "
+                "(override with --reference-image)."
+            )
+        if is_live_mode():
+            reference_image_url = upload_reference_image(anchor_path)
+        else:
+            # Stub mode: skip the upload so the default `pytest` run stays
+            # free + offline. The stub backend ignores reference_image_url
+            # but still verifies the runner threads it correctly.
+            reference_image_url = f"stub://anchor/{persona_slug}"
 
     candidates: list[Candidate] = []
     for spec in prompts:
@@ -106,6 +168,7 @@ def run_batch(
                 out_path=img_path,
                 model=model,
                 aspect_ratio=aspect_ratio,
+                reference_image_url=reference_image_url,
             )
             candidates.append(
                 Candidate(
@@ -138,6 +201,33 @@ def run_batch(
     )
 
     write_manifest(manifest, out_dir)
+
+    if run_selftest:
+        # Doctrine §8: multimodal-vision pass before Don sees anything.
+        # Anchor source: PuLID uses the explicit anchor; non-PuLID falls
+        # back to the same canonical anchor path (we still need an
+        # identity reference for the identity_match axis).
+        anchor_for_selftest = anchor_path or _persona_anchor_path(persona_slug)
+        if not anchor_for_selftest.exists():
+            raise FileNotFoundError(
+                f"--selftest requires an anchor image at {anchor_for_selftest}."
+            )
+        rows: list[SelfTestRow] = []
+        prompts_by_id = {p.prompt_id: p for p in prompts}
+        for cand in candidates:
+            spec = prompts_by_id[cand.prompt_id]
+            cand_path = out_dir / cand.image_path
+            row = score_candidate(
+                cand_path,
+                anchor_for_selftest,
+                prompt_id=cand.prompt_id,
+                candidate_index=cand.candidate_index,
+                prompt_text=spec.prompt_text,
+                persona_slug=persona_slug,
+            )
+            rows.append(row)
+        write_selftest_jsonl(rows, out_dir)
+
     return manifest
 
 
@@ -170,6 +260,34 @@ def _main(argv: list[str] | None = None) -> int:
         default="",
         help="freeform note recorded in manifest (e.g. 'Aurora kickoff per gpu_queue.md')",
     )
+    parser.add_argument(
+        "--use-pulid",
+        action="store_true",
+        help=(
+            "use fal-ai/flux-pulid with the persona's anchor image as identity "
+            "reference. Locks face/body identity across the batch. Default model "
+            "flips to fal-ai/flux-pulid if --model wasn't explicitly set."
+        ),
+    )
+    parser.add_argument(
+        "--reference-image",
+        default=None,
+        help=(
+            "override the anchor image path (default: "
+            "personas/<slug>/avatar/anchor.png). Only used with --use-pulid "
+            "or --selftest."
+        ),
+    )
+    parser.add_argument(
+        "--selftest",
+        action="store_true",
+        help=(
+            "run the Doctrine §8 multimodal-vision self-test pass on every "
+            "candidate after generation. Writes selftest.jsonl. Live mode "
+            "requires OPENAI_API_KEY + PERSONA_REFGEN_SELFTEST_LIVE=1; stub "
+            "mode marks every candidate as pass."
+        ),
+    )
     args = parser.parse_args(argv)
 
     manifest = run_batch(
@@ -179,15 +297,25 @@ def _main(argv: list[str] | None = None) -> int:
         aspect_ratio=args.aspect_ratio,
         num_images_per_prompt=args.num_images_per_prompt,
         notes=args.notes,
+        use_pulid=args.use_pulid,
+        reference_image_path=Path(args.reference_image) if args.reference_image else None,
+        run_selftest=args.selftest,
     )
     out_dir = _output_dir(args.persona, args.batch)
     mode = "LIVE fal.ai" if is_live_mode() else "STUB (set PERSONA_REFGEN_LIVE=1 for live)"
+    selftest_mode = (
+        "LIVE openai" if (args.selftest and selftest_is_live_mode())
+        else ("STUB" if args.selftest else "off")
+    )
     print(
         f"[{args.persona}] batch {args.batch}: {len(manifest.prompts)} prompts, "
-        f"{len(manifest.candidates)} candidates, mode={mode}"
+        f"{len(manifest.candidates)} candidates, mode={mode}, "
+        f"pulid={'on' if args.use_pulid else 'off'}, selftest={selftest_mode}"
     )
     print(f"  manifest: {out_dir / 'manifest.json'}")
     print(f"  images:   {out_dir / 'images'}")
+    if args.selftest:
+        print(f"  selftest: {out_dir / 'selftest.jsonl'}")
     return 0
 
 

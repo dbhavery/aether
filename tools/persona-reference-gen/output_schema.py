@@ -22,7 +22,6 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
-
 CurationVerdict = Literal["pending", "keep", "reject", "reprompt"]
 """Don's per-candidate verdict. Default `pending` until Don curates."""
 
@@ -127,6 +126,70 @@ class BatchManifest:
 
 SCHEMA_VERSION = 1
 """Bump on any breaking change to BatchManifest / PromptSpec / Candidate."""
+
+
+SelfTestVerdict = Literal["pass", "flag"]
+"""Doctrine §8 self-test outcome. `flag` hides the candidate from the
+default curation walk so Don's time isn't spent on obvious defects.
+ADR-0014 §"Visual self-test gate"."""
+
+
+@dataclass
+class SelfTestRow:
+    """One line in `selftest.jsonl`. Append-only; emitted by the
+    multimodal-vision pass that runs between batch generation and Don's
+    curation walk per Doctrine §8 / ADR-0014.
+
+    The three score axes mirror the acceptance criteria in
+    README.md §"What's stubbed" item 2:
+
+    - `photoreal_score` (0–10): how plausibly photographic the image
+      reads. <6 typically means visible AI artefacts (smooth skin, six
+      fingers, glassy eyes).
+    - `framing_match` (yes/no): whether the candidate actually achieved
+      full-body framing as the prompt asked for. AI generators often
+      crop tighter than the prompt requested; doctrine §5 makes this a
+      hard gate, not a soft preference.
+    - `identity_match` (yes/no/maybe): whether the face/body identity is
+      consistent with the persona's anchor reference. `maybe` is the
+      uncertain bucket — Don sees these but with a flag note.
+
+    `verdict` is the rolled-up gate: `flag` means the candidate is
+    hidden from the default curation walk. `pass` means Don sees it.
+    """
+
+    prompt_id: str
+    candidate_index: int
+    timestamp: str
+    """ISO-8601 UTC timestamp."""
+
+    photoreal_score: int
+    """0–10 score. 0 = clearly synthetic, 10 = indistinguishable from a
+    real photograph."""
+
+    framing_match: Literal["yes", "no"]
+    """Whether the prompt's full-body framing was actually achieved."""
+
+    identity_match: Literal["yes", "no", "maybe"]
+    """Whether the candidate's identity matches the persona's anchor."""
+
+    verdict: SelfTestVerdict
+    """Rolled-up `pass` | `flag`."""
+
+    notes: str = ""
+    """Vision model's freeform reasoning. Surfaced to Don when the
+    candidate is shown, so a `flag` verdict's reasoning is visible."""
+
+    backend: str = ""
+    """Vision backend identifier (e.g. `openai/gpt-4o-mini`). Captured
+    so a future model swap is detectable from the JSONL."""
+
+    def to_jsonl(self) -> str:
+        return json.dumps(asdict(self), sort_keys=False)
+
+    @classmethod
+    def from_jsonl(cls, line: str) -> SelfTestRow:
+        return cls(**json.loads(line))
 
 
 @dataclass

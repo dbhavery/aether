@@ -23,6 +23,11 @@ models/
 !personas/*/voice/*.wav
 personas/*/avatar/clips/
 personas/*/avatar/landmarks.json
+# Reference-image batches (ADR-0014 Step 1 outputs). Manifests can be
+# large; live batches accumulate dozens of MB per persona. Curation
+# verdicts (curation.jsonl) and selftest results (selftest.jsonl) are
+# regenerable, not load-bearing as repo artifacts.
+personas/*/_pipeline/
 
 # Data
 data/

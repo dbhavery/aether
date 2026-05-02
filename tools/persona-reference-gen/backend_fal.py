@@ -24,12 +24,17 @@ import zlib
 from dataclasses import dataclass
 from pathlib import Path
 
-
 DEFAULT_MODEL = "fal-ai/flux-pro/v1.1-ultra"
 DEFAULT_ASPECT = "9:16"  # vertical full-body framing — doctrine §5
 """9:16 (vertical) is the default: doctrine §5 requires full-body, head-to-feet.
 A vertical aspect captures that with less wasted side-bleed than 16:9. Override
 via the runner CLI if a wider environmental context is wanted."""
+
+MODEL_PULID = "fal-ai/flux-pulid"
+"""Identity-conditioned FLUX. Takes a `reference_image_url` (e.g. the
+persona's `personas/<slug>/avatar/anchor.png`) and locks the candidate's
+face identity to it. Locked-recipe path for ADR-0014 Step 1 once the
+hardening pass lands. Pricing: $0.0333 per megapixel."""
 
 LIVE_ENV_VAR = "PERSONA_REFGEN_LIVE"
 
@@ -76,6 +81,23 @@ def _png_chunk(tag: bytes, data: bytes) -> bytes:
     return length + tag + data + crc
 
 
+def upload_reference_image(local_path: Path) -> str:
+    """Upload `local_path` to fal storage and return its public URL.
+
+    Used to feed the persona's anchor image into PuLID once per batch
+    (the URL is reused across every prompt). Live-only — there is no
+    stub for storage uploads since the URL is not consulted in stub
+    mode (`_generate_stub` ignores `reference_image_url`).
+    """
+    try:
+        import fal_client  # type: ignore[import-not-found]
+    except ImportError as exc:  # pragma: no cover — environment-specific
+        raise RuntimeError(
+            "upload_reference_image requires `fal_client` to be installed."
+        ) from exc
+    return fal_client.upload_file(str(local_path))
+
+
 def generate(
     *,
     prompt_text: str,
@@ -84,11 +106,17 @@ def generate(
     out_path: Path,
     model: str = DEFAULT_MODEL,
     aspect_ratio: str = DEFAULT_ASPECT,
+    reference_image_url: str | None = None,
 ) -> FalResult:
     """Generate one image. Live or stub depending on env gate.
 
     The stub path is deterministic and free; the live path requires
     `FAL_KEY` and burns credits. Both return the same FalResult shape.
+
+    `reference_image_url` is forwarded to identity-conditioned models
+    (e.g. PuLID). Ignored by text-only models like
+    `fal-ai/flux-pro/v1.1-ultra`. Stub ignores it but accepts the
+    parameter so callers can stay model-agnostic.
     """
     if not is_live_mode():
         return _generate_stub(
@@ -104,6 +132,7 @@ def generate(
         out_path=out_path,
         model=model,
         aspect_ratio=aspect_ratio,
+        reference_image_url=reference_image_url,
     )
 
 
@@ -132,8 +161,19 @@ def _generate_live(
     out_path: Path,
     model: str,
     aspect_ratio: str,
+    reference_image_url: str | None = None,
 ) -> FalResult:
-    """Live fal.ai call. Imported lazily so stub/test runs never need fal_client."""
+    """Live fal.ai call. Imported lazily so stub/test runs never need fal_client.
+
+    Argument shape diverges by model family:
+
+    - **text-only** (default `fal-ai/flux-pro/v1.1-ultra`): uses
+      `aspect_ratio` + optional `negative_prompt`.
+    - **identity-conditioned** (`fal-ai/flux-pulid`): uses
+      `reference_image_url` for face/body identity lock; PuLID does not
+      take `aspect_ratio` or `negative_prompt` in its v0 schema, so we
+      skip them.
+    """
     try:
         import fal_client  # type: ignore[import-not-found]
     except ImportError as exc:  # pragma: no cover — environment-specific
@@ -142,16 +182,25 @@ def _generate_live(
             "Install per scripts/persona_generator/README.md."
         ) from exc
 
+    is_pulid = model == MODEL_PULID
     arguments: dict[str, object] = {
         "prompt": prompt_text,
-        "aspect_ratio": aspect_ratio,
         "num_images": 1,
         "enable_safety_checker": False,
         "output_format": "png",
         "seed": seed,
     }
-    if negative_prompt:
-        arguments["negative_prompt"] = negative_prompt
+    if is_pulid:
+        if not reference_image_url:
+            raise RuntimeError(
+                f"{MODEL_PULID} requires reference_image_url; pass --use-pulid "
+                "to the runner so it uploads the persona anchor before calling."
+            )
+        arguments["reference_image_url"] = reference_image_url
+    else:
+        arguments["aspect_ratio"] = aspect_ratio
+        if negative_prompt:
+            arguments["negative_prompt"] = negative_prompt
 
     result = fal_client.subscribe(model, arguments=arguments, with_logs=False)
     images = result.get("images") if isinstance(result, dict) else None
