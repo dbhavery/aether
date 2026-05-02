@@ -31,14 +31,37 @@ full-body reference sets that ADR-0014 Step 2 (identity LoRA) consumes.
 ```
 tools/persona-reference-gen/
 ├── __init__.py
-├── __main__.py          # python entry shim
-├── runner.py            # orchestration + CLI
-├── prompt_matrix.py     # framing × lighting × seed expansion (deterministic)
-├── backend_fal.py       # fal.ai adapter (gated by PERSONA_REFGEN_LIVE)
-├── output_schema.py     # BatchManifest / Candidate / CurationEntry
-├── curate.py            # Don-in-loop curation CLI
+├── __main__.py             # python entry shim
+├── runner.py               # orchestration + CLI (--backend {fal,local-flux})
+├── phase0_baseline.py      # one-off 1×1×1 driver — bare-metal Phase 0
+├── prompt_matrix.py        # framing × lighting × seed expansion (deterministic)
+├── backend_fal.py          # fal.ai adapter — DEPRECATED diagnostic scaffold (bare-metal pivot)
+├── backend_local_flux.py   # local FLUX.1-dev adapter on the 3090 Ti — bare-metal Phase 0/1+
+├── selftest.py             # Doctrine §8 dispatcher (openai | qwen2vl | stub)
+├── selftest_qwen2vl.py     # local Qwen2-VL-7B Doctrine §8 backend — bare-metal Phase 2
+├── output_schema.py        # BatchManifest / Candidate / SelfTestRow / CurationEntry
+├── curate.py               # Don-in-loop curation CLI
 └── README.md
 ```
+
+## Bare-metal pivot (2026-05-01 → present)
+
+Per file:///C:/Users/dbhav/Projects/aether/HANDOFF_2026-05-01_NIGHT_BARE_METAL_PIVOT.md
+and file:///C:/Users/dbhav/.claude/projects/C--Users-dbhav-Projects/memory/feedback_bare_metal_local_inference.md
+this tool is migrating off retail APIs onto the local 3090 Ti.
+
+| Phase | Scope | Module | Status |
+| --- | --- | --- | --- |
+| 0 | Local FLUX.1-dev unaided baseline | `backend_local_flux.py` | scaffolded; awaiting first live image |
+| 1 | Local PuLID identity locking | `backend_local_flux.py` (sibling `IdentityConditioner` TBD) | not started |
+| 2 | Local Qwen2-VL Doctrine §8 selftest | `selftest_qwen2vl.py` | scaffolded; awaiting first live evaluation |
+| 3 | Aurora identity LoRA training | `tools/persona-lora-train/` (TBD) | not started |
+| 4 | Iterate Step 1 with LoRA + FLUX | runner | not started |
+| 5+ | Voice clone, video character LoRA, motion clips, lip-sync | separate tools | not started |
+
+`backend_fal.py` and `selftest._live_score` (OpenAI) remain in-repo as
+deprecated diagnostic scaffolds. New work goes through the local
+adapters.
 
 ## Outputs (per ADR-0015 §"Outputs")
 
@@ -69,7 +92,7 @@ The default backend is a deterministic stub that writes 1×1 PNG placeholders
 keyed off seed. This lets the manifest pipeline be exercised end-to-end
 without burning fal.ai credits.
 
-### Generate a batch (live fal.ai)
+### Generate a batch (live fal.ai — DEPRECATED scaffold)
 
 ```bash
 export PERSONA_REFGEN_LIVE=1
@@ -79,6 +102,39 @@ python tools/persona-reference-gen/__main__.py --persona aurora --batch 2026-05-
 
 Live mode uses `fal-ai/flux-pro/v1.1-ultra` at aspect ratio `9:16`
 (vertical, full-body framing). Override with `--model` / `--aspect-ratio`.
+
+This path is deprecated by the bare-metal pivot — kept as a
+diagnostic scaffold but no new work should land here.
+
+### Generate a batch (live local FLUX.1-dev — bare-metal Phase 0/1+)
+
+```bash
+export PERSONA_REFGEN_LIVE=1
+python tools/persona-reference-gen/__main__.py \
+    --persona aurora --batch 2026-05-02a --backend local-flux
+```
+
+Live mode loads `black-forest-labs/FLUX.1-dev` via diffusers, runs
+inference on the local 3090 Ti at 1024×1536 (9:16). The pipeline
+loader picks an offload strategy automatically based on free VRAM:
+
+- ≥14 GB free → `enable_model_cpu_offload` (~12 GB peak, fast)
+- otherwise → `enable_sequential_cpu_offload` (~3-4 GB peak, slower)
+
+Override with `PERSONA_REFGEN_OFFLOAD={model,sequential,none}` when you
+want explicit control. cuda OOM during pipeline setup falls back to
+sequential automatically.
+
+### Phase 0 one-off baseline
+
+```bash
+PERSONA_REFGEN_LIVE=1 python tools/persona-reference-gen/phase0_baseline.py \
+    --persona aurora --batch 2026-05-02-phase0
+```
+
+Generates ONE image only — axes pinned to 1×1×1. Used to establish
+ground truth for unaided FLUX quality on local hardware before adding
+identity-locking layers.
 
 ### Curate the batch (Don-in-loop)
 
@@ -142,25 +198,29 @@ new framing axis without going through validation is a §5 violation.
    (one-line schema bump). Aurora-first; backfill the other 8 only when
    they enter Phase 2 of the gpu_queue.
 
-2. **Doctrine §8 visual self-test.** ADR-0014 §"Visual self-test gate"
-   requires multimodal-vision evaluation of every candidate **before**
-   Don sees it. Not yet wired here. Expected shape: a `selftest.jsonl`
-   sibling to `curation.jsonl` populated by a vision-model pass that
-   scores each candidate on (a) photorealism, (b) full-body framing
-   actually achieved, (c) identity alignment with persona anchor.
-   Failing candidates should be flagged before the curation CLI surfaces
-   them. Tracked as a follow-up.
+2. **Doctrine §8 visual self-test — local backend live evaluation.**
+   The OpenAI gpt-4o-mini path (`selftest._live_score`) and the local
+   Qwen2-VL path (`selftest_qwen2vl.score`) both work; only the openai
+   path has been exercised against real candidates. Once Phase 0
+   delivers a baseline image, the qwen2vl path should be evaluated
+   side-by-side and the dispatcher's default flipped to `qwen2vl`.
 
-3. **RealVisXL Lightning backend.** ADR-0015 names FLUX.1-dev and
-   RealVisXL Lightning as primitives. Only the FLUX path is wired
-   (via fal.ai). RealVisXL is a one-line constant change in
-   `backend_fal.DEFAULT_MODEL` once its fal.ai endpoint id is locked.
+3. **Identity LoRA training (Phase 3 of the pivot).** No tool exists
+   yet under `tools/persona-lora-train/`. Aurora-first via
+   `train_dreambooth_lora_flux.py` or kohya, fed by the curated Phase
+   0/1 reference set.
 
-4. **Local-runtime backend.** ADR-0015 says local FLUX dev runtime is
-   acceptable but not required for v0. Not wired. Add a sibling
-   `backend_local_flux.py` if Don wants to escape API-credit dependence.
+4. **Local PuLID identity-conditioning (Phase 1 of the pivot).** Not
+   yet wired into `backend_local_flux.py`. Requires PuLID-FLUX weights
+   from `guozinan/PuLID` and a custom IdentityConditioner wrapping
+   FluxPipeline's text-conditioning hook.
 
-5. **Curation GUI.** Current CLI is the minimum viable Don-in-loop
+5. **RealVisXL Lightning backend.** ADR-0015 names FLUX.1-dev and
+   RealVisXL Lightning as primitives. Only the FLUX paths are wired.
+   RealVisXL is a one-line `DEFAULT_MODEL` swap in either backend once
+   its endpoint id is locked.
+
+6. **Curation GUI.** Current CLI is the minimum viable Don-in-loop
    surface. Future GUI is explicitly deferred per the scaffold prompt.
 
 ## Style match with existing scripts
