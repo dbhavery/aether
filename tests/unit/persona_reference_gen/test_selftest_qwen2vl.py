@@ -90,6 +90,47 @@ def test_coerce_response_handles_non_json():
     assert "non-JSON" in notes
 
 
+def test_open_and_resize_downscales_large_input(tmp_path):
+    """1024x1536 input must come back at <= 768 long edge to keep the
+    Qwen2-VL vision-token budget under control."""
+    pytest_pillow = _maybe_skip_no_pillow()
+    if pytest_pillow:
+        return
+
+    from PIL import Image
+
+    src = tmp_path / "big.png"
+    Image.new("RGB", (1024, 1536), color="white").save(src)
+
+    out = selftest_qwen2vl._open_and_resize(src)
+    assert max(out.size) == 768
+    # Aspect ratio preserved.
+    assert out.size[0] / out.size[1] == 1024 / 1536
+
+
+def test_open_and_resize_passthrough_when_small(tmp_path):
+    """Inputs already under the target are not upscaled."""
+    pytest_pillow = _maybe_skip_no_pillow()
+    if pytest_pillow:
+        return
+    from PIL import Image
+
+    src = tmp_path / "small.png"
+    Image.new("RGB", (256, 384), color="white").save(src)
+    out = selftest_qwen2vl._open_and_resize(src)
+    assert out.size == (256, 384)
+
+
+def _maybe_skip_no_pillow() -> bool:
+    """Returns True if PIL is unavailable so the caller can early-return.
+    Pillow is a heavyweight dep; we don't want unit tests to hard-fail
+    if a CI box hasn't installed it. PuLID-style image work always has
+    PIL in scope, so this is mostly defensive."""
+    import importlib.util
+
+    return importlib.util.find_spec("PIL") is None
+
+
 def test_selftest_dispatcher_routes_qwen2vl_when_env_set(monkeypatch):
     """When PERSONA_REFGEN_SELFTEST_BACKEND=qwen2vl, score_candidate must
     select the local backend even with no explicit arg.
