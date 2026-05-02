@@ -110,6 +110,16 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--smoke-test",
+        action="store_true",
+        help=(
+            "override hyperparams for a fast verification run: 50 steps, "
+            "checkpointing every 50 (so we get exactly one checkpoint). "
+            "~15-20 min on the 3090 Ti. Use to verify the pipeline works "
+            "before committing to the full 6-8 hour run."
+        ),
+    )
+    parser.add_argument(
         "--execute",
         action="store_true",
         help="actually run accelerate launch; otherwise print + exit",
@@ -123,6 +133,12 @@ def main(argv: list[str] | None = None) -> int:
         hyperparam_overrides["max_train_steps"] = args.max_train_steps
     if args.learning_rate is not None:
         hyperparam_overrides["learning_rate"] = args.learning_rate
+    if args.smoke_test:
+        # Smoke-test overrides: short run with one checkpoint.
+        # Explicit overrides above still take precedence.
+        hyperparam_overrides.setdefault("max_train_steps", 50)
+        hyperparam_overrides.setdefault("checkpointing_steps", 50)
+        hyperparam_overrides.setdefault("lr_warmup_steps", 0)
     hp = TrainingHyperparams(**hyperparam_overrides) if hyperparam_overrides else None
 
     plan = build_plan(
