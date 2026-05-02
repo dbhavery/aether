@@ -43,29 +43,54 @@ QUANT_ENV_VAR = "PERSONA_REFGEN_SELFTEST_QUANT"
 """Override quantization: `none` (fp16) | `int4` (bitsandbytes 4-bit) |
 `int8`. Default auto-picks based on free VRAM."""
 
+# Vision token budget per image. Qwen2-VL splits images into 28x28
+# patches; a 1024x1536 candidate produces ~2300 vision tokens per
+# image, and we pass two per candidate (anchor + candidate). Without
+# resizing, the KV cache blows past 24 GB on the first generate call.
+# 768x768 caps at ~756 vision tokens per image, total context stays
+# well under 2K — fits comfortably in any quant tier.
+_VLM_RESIZE_TARGET = 768
+"""Long-edge target for VLM input images. Resizing happens locally via
+PIL before the processor sees the image, so the constraint is enforced
+even when the processor is configured at defaults."""
+
 # Process-local pipeline cache. Keyed on (model_id, quant_strategy) so
 # swapping models or quant tiers within a run is supported.
 _PIPELINE_CACHE: dict[tuple[str, str], object] = {}
 
 
 _SYSTEM_PROMPT = (
-    "You are an image-quality auditor for an AI image generation pipeline. "
-    "You will be shown two images: an ANCHOR identity reference and a "
-    "CANDIDATE. Score the CANDIDATE on three axes against the ANCHOR's "
-    "identity. Be a tough but fair judge — AI defects (smooth skin, glassy "
-    "eyes, six fingers, distorted hands, magenta gradient backgrounds, "
-    "indigo digital halos, plastic texture) drop the score significantly. "
-    "Reply with strict JSON only, no prose, no markdown fences."
+    "You are a STRICT image-quality auditor for an AI image generation "
+    "pipeline. You will be shown two images: an ANCHOR identity reference "
+    "and a CANDIDATE. Score the CANDIDATE on three axes. Reply with "
+    "strict JSON only, no prose, no markdown fences.\n\n"
+    "CRITICAL framing rule: framing_match=yes ONLY if the CANDIDATE "
+    "shows everything the prompt asked for. If the prompt asks for "
+    "'full-body, head to feet visible' and the candidate is cropped at "
+    "the waist, hips, or thighs (only torso visible), framing_match=no. "
+    "If feet are not visible in a 'head to feet' prompt, framing_match=no. "
+    "AI image generators frequently produce portrait crops even when "
+    "prompted for full-body — catch this strictly.\n\n"
+    "AI defects (smooth airbrushed skin, glassy eyes, six fingers, "
+    "distorted hands, magenta gradient backgrounds, indigo digital halos, "
+    "plastic texture) drop photoreal_score significantly."
 )
 
 _USER_PROMPT_TEMPLATE = (
-    "Persona slug: {persona_slug}. Generation prompt asked for: "
-    "{prompt_text}\n\nScore the CANDIDATE (second image) against the "
-    "ANCHOR (first image). Reply as strict JSON with these exact keys:\n"
-    "  photoreal_score: integer 0..10\n"
-    '  framing_match: "yes" or "no"\n'
-    '  identity_match: "yes" | "no" | "maybe"\n'
-    "  notes: a short string explaining the strongest signal\n"
+    "Persona slug: {persona_slug}. The generation prompt asked for: "
+    "{prompt_text}\n\n"
+    "Score the CANDIDATE (second image) against the ANCHOR (first image) "
+    "AND against what the prompt asked for. Reply as strict JSON with "
+    "these exact keys:\n"
+    "  photoreal_score: integer 0..10 (0=obviously AI, 10=indistinguishable from photograph)\n"
+    '  framing_match: "yes" or "no" (did the candidate actually achieve '
+    "the framing the prompt asked for? if the prompt asked for full-body "
+    'and candidate cropped at waist, answer "no")\n'
+    '  identity_match: "yes" | "no" | "maybe" (does the face/body identity '
+    "match the anchor)\n"
+    "  notes: a short string explaining the strongest signal that drove "
+    "your scores. Mention specifically whether feet are visible if the "
+    "prompt requested full-body framing.\n"
     "JSON only. No prose."
 )
 
@@ -156,6 +181,24 @@ def _load_pipeline(model: str, quant: str):
     return bundle
 
 
+def _open_and_resize(path: Path):
+    """Load `path` as RGB and downscale long-edge to `_VLM_RESIZE_TARGET`.
+
+    Lazy PIL import keeps stub-mode tests free of the dep. Aspect
+    ratio is preserved; we never upscale (small inputs pass through).
+    """
+    from PIL import Image  # noqa: PLC0415
+
+    img = Image.open(path).convert("RGB")
+    long_edge = max(img.size)
+    if long_edge <= _VLM_RESIZE_TARGET:
+        return img
+    scale = _VLM_RESIZE_TARGET / float(long_edge)
+    new_w = max(1, int(img.size[0] * scale))
+    new_h = max(1, int(img.size[1] * scale))
+    return img.resize((new_w, new_h), Image.LANCZOS)
+
+
 def _coerce_response(raw: str) -> tuple[int, str, str, str]:
     """Parse Qwen's JSON response with the same defensive shaping as
     selftest._live_score."""
@@ -196,15 +239,13 @@ def score(
     same shape as `selftest._live_score` so the dispatcher in
     `selftest.score_candidate` can swap implementations transparently.
     """
-    from PIL import Image  # noqa: PLC0415
-
     quant = _pick_quant_strategy()
     bundle = _load_pipeline(model, quant)
     mdl = bundle["model"]
     processor = bundle["processor"]
 
-    anchor_img = Image.open(anchor_path).convert("RGB")
-    candidate_img = Image.open(candidate_path).convert("RGB")
+    anchor_img = _open_and_resize(anchor_path)
+    candidate_img = _open_and_resize(candidate_path)
 
     user_text = _USER_PROMPT_TEMPLATE.format(
         persona_slug=persona_slug,
