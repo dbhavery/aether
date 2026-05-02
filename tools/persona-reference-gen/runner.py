@@ -132,6 +132,7 @@ def run_batch(
     reference_image_path: Path | None = None,
     run_selftest: bool = False,
     backend: str = _DEFAULT_BACKEND,
+    lora_path: str | None = None,
 ) -> BatchManifest:
     """Run one batch end-to-end. Writes images + manifest.json. Returns the
     manifest for the caller (CLI prints a summary).
@@ -197,6 +198,13 @@ def run_batch(
         ) from exc
 
     candidates: list[Candidate] = []
+    # Only `local-flux` accepts a `lora_path` kwarg; the fal backend
+    # ignores LoRA entirely (the upstream fal model doesn't expose a
+    # LoRA hook). Build the kwargs dict once, gated on backend.
+    extra_backend_kwargs: dict = {}
+    if backend == "local-flux" and lora_path is not None:
+        extra_backend_kwargs["lora_path"] = lora_path
+
     for spec in prompts:
         for idx in range(num_images_per_prompt):
             img_name = f"{spec.prompt_id}__{idx}.png"
@@ -209,6 +217,7 @@ def run_batch(
                 model=model,
                 aspect_ratio=aspect_ratio,
                 reference_image_url=reference_image_url,
+                **extra_backend_kwargs,
             )
             candidates.append(
                 Candidate(
@@ -339,6 +348,15 @@ def _main(argv: list[str] | None = None) -> int:
             "mode marks every candidate as pass."
         ),
     )
+    parser.add_argument(
+        "--lora",
+        default=None,
+        help=(
+            "Path to a trained LoRA adapter dir or .safetensors file. "
+            "Only honored with --backend local-flux. Locks identity to "
+            "the trained persona for re-generation of curation batches."
+        ),
+    )
     args = parser.parse_args(argv)
 
     # Resolve per-backend default model when --model is not given.
@@ -361,6 +379,7 @@ def _main(argv: list[str] | None = None) -> int:
         reference_image_path=Path(args.reference_image) if args.reference_image else None,
         run_selftest=args.selftest,
         backend=args.backend,
+        lora_path=args.lora,
     )
     out_dir = _output_dir(args.persona, args.batch)
     if is_live_mode():
