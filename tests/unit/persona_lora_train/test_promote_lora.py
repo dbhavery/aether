@@ -17,7 +17,7 @@ def _make_workdir(tmp_path: Path, *, with_adapter: bool = True) -> Path:
         (output / "pytorch_lora_weights.safetensors").write_bytes(b"hello world" * 10)
     config = {
         "persona_slug": "aurora",
-        "instance_token": "aurora_nash",  # noqa: S105 — token, not password
+        "instance_token": "aurora_nash",
         "num_training_images": 27,
         "hyperparams": {
             "rank": 16,
