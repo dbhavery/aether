@@ -10,16 +10,16 @@
 
 ## Current job
 
-**Status:** in-flight — Aurora body-extension batch (P2-P7) launched 2026-05-02 ~07:07 PT.
+**Status:** none — body-extension batch DONE 2026-05-02 ~08:09 PT (62 min wall clock). Smoke #5 attempted at 512 res + throughput-tuned flags but saturated VRAM and was killed at 70 min without producing a checkpoint. Awaiting Don decision per `planning/research/2026-05-02_lora_smoke_session2.md`.
 
 | Field | Value |
 | --- | --- |
 | Persona | aurora |
-| Pipeline step (per ADR-0014) | Step 1 — body-extension augmentation of curated 1:2 candidates |
-| Started | 2026-05-02 ~07:07 PT |
-| Expected duration | ~80 min (15 min cold load + 6 × ~10 min sequential-offload inference) |
-| Output target | `personas/aurora/_pipeline/step1_references/2026-05-02-curation-1to2/images/<prompt>__0_extended.png` × 6 |
-| Notes | Driver: `tools/persona-reference-gen/batch_body_extend.py`. Sequential offload (~14 GB resident from Don's other processes). P1 (`34698986410996a6`) was already body-extended in the autonomous run + copied into curation-1to2 by hash equality. After this batch, training corpus = 4 anchors + 16 base + 7 body-extended ≈ 27 images. Followed by smoke (50 steps) → full LoRA train (1500 steps at 512 res, throughput-tuned) → verify_lora --compare. |
+| Pipeline step (per ADR-0014) | Step 2 — Identity LoRA training (BLOCKED on hardware/config decision) |
+| Started | n/a |
+| Expected duration | n/a |
+| Output target | n/a |
+| Notes | Body-extension batch produced 6 new full-body siblings + 1 from autonomous run = 7 in curation-1to2 + 1 in aspect-1to2 = 8 body_extended total. Training corpus is 32 images (4 anchors + 20 base + 8 body-extended). Smoke confirmed VRAM saturation — when Don's other processes hold ~10 GB at baseline, FLUX-dev LoRA training pushes to 23.9 GB / 24 GB and PyTorch thrashes allocations. Throughput flags (cache_latents/tf32/8bit-adam) didn't escape. Don picks: A) stop Isabelle during training, B) download FLUX.1-Schnell (~20 GB) + retry, C) cloud rental, D) multi-night training. |
 
 ---
 
@@ -71,6 +71,8 @@ Persona order for Phase 2 (initial — Don may reorder):
 | aurora | Step 1 — Phase 0 curation batch (1:2, 4×1×4=16 images) | 2026-05-02 01:00 PT | 2026-05-02 02:43 PT | 16 prompt_ids | 16 images @ 1024×2048, 4 framings × 4 seeds, ~103 min wall clock. Real curation set for Don. Identity strong + diverse poses (crossed-arms, hands-in-pockets, smile-leaning-on-window, etc.) + ~80% body coverage. See `personas/aurora/_pipeline/step1_references/2026-05-02-curation-1to2/`. |
 | aurora | LoRA training smoke test #1 (FLUX-dev, 1024 res, rank 16) | 2026-05-02 01:54 PT | 2026-05-02 03:25 PT (killed) | none | Pipeline launched cleanly after fixing diffusers HEAD install + dataset images/captions split. Throughput too slow at 1024 res + grad checkpointing — 90+ min wall clock without first checkpoint. Killed. See file:///C:/Users/dbhav/Projects/aether/planning/research/2026-05-02_lora_training_smoke_test.md. |
 | aurora | LoRA training smoke test #2 (FLUX-dev, 512 res, rank 16) | 2026-05-02 03:30 PT | 2026-05-02 04:00 PT (killed) | none | Same throughput problem at 512 — appeared not to escape the bottleneck. Killed. Don needs to pick a different config (smaller base model / cloud / multi-night training) before launching the full 1500 steps. |
+| aurora | body_extension batch P2-P7 (FluxInpaintPipeline, sequential offload) | 2026-05-02 07:07 PT | 2026-05-02 08:09 PT | 6 prompt_ids | 6 new full-body siblings via `batch_body_extend.py` driver. Inputs: P2 7082a50ee6b16b67 + P3 77efd428589ad0f8 + P4 ed245ab7187910af + P5 0bb022b3f50b4723 + P6 e4d7a7572ee951d1 + P7 01e97da6f6b909a3. 62 min wall clock (15 min cold load + 47 min inference). Image 1 ~29 min cold-cache; subsequent ~7 min warm. **Quality:** strong identity preservation, photoreal 9/10 across all 6. Wardrobe variation: P1+P2+P3 bare feet on hardwood, P4 cropped at ankles, P5 sitting legs-forward, P6 light grey sneakers, P7 white sneakers. Training corpus now 32 images. See file:///C:/Users/dbhav/Projects/aether/personas/aurora/_pipeline/step1_references/2026-05-02-curation-1to2/EVALUATION.md. |
+| aurora | LoRA training smoke test #5 (FLUX-dev, 512 res + cache_latents + tf32 + 8bit-adam) | 2026-05-02 08:11 PT | 2026-05-02 09:21 PT (killed) | none | Throughput-tuned config still hit the VRAM saturation problem when Isabelle held ~10 GB at baseline. GPU pushed to 23.9 GB / 24 GB. 70 min wall clock without first checkpoint. Killed. **Don picks A/B/C/D** per file:///C:/Users/dbhav/Projects/aether/planning/research/2026-05-02_lora_smoke_session2.md. |
 
 ---
 
