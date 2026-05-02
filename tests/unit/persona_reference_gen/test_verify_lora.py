@@ -134,3 +134,63 @@ def test_main_cli_stub(tmp_path, monkeypatch, capsys):
     assert "STUB" in captured
     assert "(base model only)" in captured
     assert (tmp_path / "cli-stub" / "manifest.json").exists()
+
+
+def test_run_compare_emits_two_paired_arms(tmp_path, monkeypatch):
+    monkeypatch.delenv("PERSONA_REFGEN_LIVE", raising=False)
+    fake_lora = tmp_path / "fake_lora"
+    fake_lora.mkdir()
+    (fake_lora / "pytorch_lora_weights.safetensors").write_bytes(b"\x00" * 16)
+
+    base, lora = verify_lora.run_compare(
+        persona_slug="aurora",
+        lora_path=str(fake_lora),
+        out_dir=tmp_path / "out",
+        batch_id="compare-1",
+        seed=4242,
+    )
+
+    base_dir = tmp_path / "out" / "compare-1__base"
+    lora_dir = tmp_path / "out" / "compare-1__lora"
+    assert (base_dir / "manifest.json").exists()
+    assert (lora_dir / "manifest.json").exists()
+    assert base.lora_path is None
+    assert lora.lora_path == str(fake_lora)
+    # Same seed across the two arms — the only difference is the LoRA.
+    assert base.candidates[0]["seed"] == 4242
+    assert lora.candidates[0]["seed"] == 4242
+    # Same number of candidates per arm.
+    assert len(base.candidates) == len(lora.candidates)
+
+
+def test_main_compare_requires_lora(tmp_path, capsys, monkeypatch):
+    monkeypatch.delenv("PERSONA_REFGEN_LIVE", raising=False)
+    rc = verify_lora.main([
+        "--persona", "aurora",
+        "--batch-id", "compare-no-lora",
+        "--out-dir", str(tmp_path),
+        "--compare",
+    ])
+    assert rc == 2
+    captured = capsys.readouterr().out
+    assert "requires --lora" in captured
+
+
+def test_main_compare_emits_paired_dirs(tmp_path, monkeypatch, capsys):
+    monkeypatch.delenv("PERSONA_REFGEN_LIVE", raising=False)
+    fake_lora = tmp_path / "lora_dir"
+    fake_lora.mkdir()
+    (fake_lora / "pytorch_lora_weights.safetensors").write_bytes(b"\x00" * 16)
+
+    rc = verify_lora.main([
+        "--persona", "aurora",
+        "--batch-id", "cli-compare",
+        "--out-dir", str(tmp_path),
+        "--lora", str(fake_lora),
+        "--compare",
+    ])
+    assert rc == 0
+    assert (tmp_path / "cli-compare__base" / "manifest.json").exists()
+    assert (tmp_path / "cli-compare__lora" / "manifest.json").exists()
+    captured = capsys.readouterr().out
+    assert "verify-compare" in captured

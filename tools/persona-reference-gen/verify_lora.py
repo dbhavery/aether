@@ -200,6 +200,47 @@ def run_verify(
     )
 
 
+def run_compare(
+    *,
+    persona_slug: str,
+    lora_path: str,
+    out_dir: Path,
+    batch_id: str,
+    aspect_ratio: str = "1:2",
+    seed: int = 8888,
+    instance_token: str | None = None,
+) -> tuple[VerifyResult, VerifyResult]:
+    """A/B verify: run the prompt grid both WITH and WITHOUT the LoRA so
+    Don can compare side-by-side. Same seed + prompt + aspect for an
+    apples-to-apples diff. Outputs land at:
+
+        <out_dir>/<batch_id>__base/    (LoRA-OFF control)
+        <out_dir>/<batch_id>__lora/    (LoRA-ON treatment)
+
+    Total wall clock: ~2x single-verify (no pipeline cache shared between
+    the two — different cache keys due to lora_path).
+    """
+    base = run_verify(
+        persona_slug=persona_slug,
+        lora_path=None,
+        out_dir=out_dir,
+        batch_id=f"{batch_id}__base",
+        aspect_ratio=aspect_ratio,
+        seed=seed,
+        instance_token=instance_token,
+    )
+    lora = run_verify(
+        persona_slug=persona_slug,
+        lora_path=lora_path,
+        out_dir=out_dir,
+        batch_id=f"{batch_id}__lora",
+        aspect_ratio=aspect_ratio,
+        seed=seed,
+        instance_token=instance_token,
+    )
+    return (base, lora)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="verify-lora")
     parser.add_argument("--persona", required=True)
@@ -224,6 +265,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--aspect-ratio", default="1:2")
     parser.add_argument("--seed", type=int, default=8888)
     parser.add_argument("--instance-token", default=None)
+    parser.add_argument(
+        "--compare",
+        action="store_true",
+        help=(
+            "A/B run: emit both base-only and LoRA-applied outputs at "
+            "<batch_id>__base / <batch_id>__lora. Requires --lora."
+        ),
+    )
     args = parser.parse_args(argv)
 
     if args.out_dir is None:
@@ -231,6 +280,26 @@ def main(argv: list[str] | None = None) -> int:
         args.out_dir = (
             repo_root / "personas" / args.persona / "_pipeline" / "step3_lora_verify"
         )
+
+    if args.compare:
+        if not args.lora:
+            print("[verify] --compare requires --lora (need a LoRA to compare against base)")
+            return 2
+        base, lora = run_compare(
+            persona_slug=args.persona,
+            lora_path=args.lora,
+            out_dir=args.out_dir,
+            batch_id=args.batch_id,
+            aspect_ratio=args.aspect_ratio,
+            seed=args.seed,
+            instance_token=args.instance_token,
+        )
+        mode = "LIVE" if backend_local_flux.is_live_mode() else "STUB"
+        print(f"[verify-compare] {mode} persona={base.persona_slug}")
+        print(f"[verify-compare] base_dir={base.out_dir}")
+        print(f"[verify-compare] lora_dir={lora.out_dir}")
+        print(f"[verify-compare] candidates_per_arm={len(base.candidates)}")
+        return 0
 
     result = run_verify(
         persona_slug=args.persona,
