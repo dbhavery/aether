@@ -10,16 +10,16 @@
 
 ## Current job
 
-**Status:** running — Aurora curation-grade Phase 0 batch (1:2, 4×1×4=16 images).
+**Status:** none — autonomous run paused at ~04:00 PT pending Don's wake-up.
 
 | Field | Value |
 | --- | --- |
-| Persona | aurora |
-| Pipeline step (per ADR-0014) | Step 1 — reference images, recipe-locked Phase 0 curation batch |
-| Started | 2026-05-02 ~01:00 PT |
-| Expected duration | ~80 min wall clock (warm cache + 16 × ~5 min inference at 1024×2048) |
-| Output target | personas/aurora/_pipeline/step1_references/2026-05-02-curation-1to2/ |
-| Notes | PERSONA_REFGEN_LIVE=1 + PERSONA_REFGEN_OFFLOAD=sequential. 4 DEFAULT_FRAMINGS × 1 lighting × 4 seeds. Recipe locked from probe (1:2 = 1024×2048). Produces real curation set for Don's wake-up review. |
+| Persona | — |
+| Pipeline step (per ADR-0014) | — |
+| Started | — |
+| Expected duration | — |
+| Output target | — |
+| Notes | — |
 
 ---
 
@@ -68,6 +68,9 @@ Persona order for Phase 2 (initial — Don may reorder):
 | aurora | Step 1 — Phase 0 aspect-ratio probe (1:2 = 1024×2048) | 2026-05-02 00:18 PT | 2026-05-02 00:28 PT | 2 prompt_ids | 2 images @ 1024×2048, 2 seeds, ~10 min wall clock. **MAJOR WIN.** ~80% body area visible (hips+jeans), pose convergence broken (crossed-arms vs hands-in-pockets across seeds), identity strongly matches anchor (copper hair, green eyes). Strict Doctrine §8 verdict: flag (still no feet) but best Phase 0 quality to date. Recipe for future Phase 0+ batches: `--aspect-ratio 1:2`. See file:///C:/Users/dbhav/Projects/aether/personas/aurora/_pipeline/step1_references/2026-05-02-aspect-1to2/EVALUATION.md. |
 | aurora | Step 1 — Phase 0 aspect-ratio probe (1:3 = 768×2304) | 2026-05-02 00:35 PT | 2026-05-02 00:45 PT | 2 prompt_ids | 2 images @ 768×2304, 2 seeds, ~10 min. **Even better.** ~90% body coverage (mid-thighs visible), 2 more pose variations (wall-lean, side-profile), identity stays strong. Still no feet at 1:3. Body-extension inpainting recommended for the final feet-visible piece. See file:///C:/Users/dbhav/Projects/aether/personas/aurora/_pipeline/step1_references/2026-05-02-aspect-1to3/EVALUATION.md. |
 | aurora | body_extension live (FluxInpaintPipeline) | 2026-05-02 00:50 PT | 2026-05-02 00:57 PT | 1 image | 1024×3072 output from 1024×2048 + 1024px gray padding extended via FluxInpaintPipeline (~5 min inference at sequential offload). **Produces TRUE full-body** with feet visible, identity preserved, slight visible seam at mid-thigh transition. Validates the body_extension tool end-to-end. Output: `34698986410996a6__0_extended.png` in the 1:2 batch dir. |
+| aurora | Step 1 — Phase 0 curation batch (1:2, 4×1×4=16 images) | 2026-05-02 01:00 PT | 2026-05-02 02:43 PT | 16 prompt_ids | 16 images @ 1024×2048, 4 framings × 4 seeds, ~103 min wall clock. Real curation set for Don. Identity strong + diverse poses (crossed-arms, hands-in-pockets, smile-leaning-on-window, etc.) + ~80% body coverage. See `personas/aurora/_pipeline/step1_references/2026-05-02-curation-1to2/`. |
+| aurora | LoRA training smoke test #1 (FLUX-dev, 1024 res, rank 16) | 2026-05-02 01:54 PT | 2026-05-02 03:25 PT (killed) | none | Pipeline launched cleanly after fixing diffusers HEAD install + dataset images/captions split. Throughput too slow at 1024 res + grad checkpointing — 90+ min wall clock without first checkpoint. Killed. See file:///C:/Users/dbhav/Projects/aether/planning/research/2026-05-02_lora_training_smoke_test.md. |
+| aurora | LoRA training smoke test #2 (FLUX-dev, 512 res, rank 16) | 2026-05-02 03:30 PT | 2026-05-02 04:00 PT (killed) | none | Same throughput problem at 512 — appeared not to escape the bottleneck. Killed. Don needs to pick a different config (smaller base model / cloud / multi-night training) before launching the full 1500 steps. |
 
 ---
 

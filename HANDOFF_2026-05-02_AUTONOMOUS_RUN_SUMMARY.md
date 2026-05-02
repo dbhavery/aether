@@ -17,14 +17,25 @@ through Phase 3-prep. Specifically:
    (mid-thighs). For TRUE feet-visible full-body, the body-extension
    tool inpaints the bottom 1024px via FLUX-inpaint — validated live,
    produces coherent full-body imagery with feet on hardwood floor.
-3. **A curation batch is running tonight** (16 images at 1:2,
-   ~80 min wall clock, starting ~01:00 PT 2026-05-02). When you wake,
-   you'll have a real curation set to walk through.
+3. **The curation batch shipped.** 16 images at 1:2 (1024×2048) +
+   the 4 anchors + 2 1:2 probe images + 2 1:3 probe images + 1
+   body-extended full-body = **25 candidates available** at the time
+   of this handoff. All at strong identity / pose-diverse / 80%+
+   body coverage. Walk them with `curate.py` when you wake.
 4. **Phase 3 LoRA training is fully scaffolded.** dataset_builder +
    training_config + launch.py + diffusers cloned at
-   `C:\Users\dbhav\Projects\diffusers`. The launcher finds the FLUX
-   training script automatically. One command from "approve
-   curation" to "training launches."
+   `C:\Users\dbhav\Projects\diffusers` + diffusers source-installed.
+   `pip install -e /c/Users/dbhav/Projects/diffusers/` had to run
+   manually (the pip release 0.37.1 is too old for the FLUX LoRA
+   trainer; HEAD is required). One command from "approve curation"
+   to "training launches."
+5. **Training pipeline VERIFIED launches** but throughput at FLUX-dev
+   12B + 1024 res + grad checkpointing on 3090 Ti is **too slow for
+   unattended overnight training** (~50s/step extrapolated, full
+   1500 steps ≈ 21h). Don picks lower resolution (--resolution 512)
+   or smaller base model OR cloud rental. See
+   `planning/research/2026-05-02_lora_training_smoke_test.md` for
+   the full diagnosis.
 
 ## Decisions you should make first
 
