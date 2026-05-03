@@ -1,7 +1,7 @@
 //! Memory V2 six-domain taxonomy.
 //!
 //! The canonical `MemoryDomain` enum — the single source of truth
-//! across Aether for which domain owns a memory row. Previously this
+//! across Companion for which domain owns a memory row. Previously this
 //! enum lived in `apps/desktop/src-tauri/src/memory_config.rs`
 //! alongside `MemoryConfig`; ADR-0001 (2026-04-23) relocated it here
 //! so background jobs (retention sweep, embeddings worker) can speak

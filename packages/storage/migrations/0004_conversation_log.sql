@@ -1,4 +1,4 @@
--- Aether storage — migration 0004 (conversation log)
+-- Companion storage — migration 0004 (conversation log)
 -- Scope: additive. Introduces the durable session-memory table backing
 -- `aether_l2_memory::SqliteSessionMemoryStore` (feature-gated behind the
 -- `sqlite-backend` cargo feature on `aether-l2-memory`).

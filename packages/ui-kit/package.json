@@ -2,7 +2,7 @@
   "name": "@aether/ui-kit",
   "version": "0.0.1",
   "private": true,
-  "description": "Aether shared UI primitives — dark neumorphic monochrome. Wave 1 scaffold: tokens placeholder only, no components yet.",
+  "description": "Companion shared UI primitives — dark neumorphic monochrome. Wave 1 scaffold: tokens placeholder only, no components yet.",
   "license": "MIT",
   "type": "module",
   "main": "./src/index.ts",

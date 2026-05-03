@@ -1,4 +1,4 @@
--- Aether storage — migration 0002 (audit-chain groundwork + L5 payload columns)
+-- Companion storage — migration 0002 (audit-chain groundwork + L5 payload columns)
 -- Scope: additive. No destructive changes to 0001.
 --
 -- Rationale:

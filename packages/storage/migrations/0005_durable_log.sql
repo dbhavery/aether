@@ -1,4 +1,4 @@
--- Aether storage — migration 0005 (durable log)
+-- Companion storage — migration 0005 (durable log)
 -- Scope: additive. Introduces the durable-domain log table backing
 -- Memory V2's Durable lane. Shape-identical to `conversation_log`
 -- (migration 0004) except for the table name — this isolation keeps

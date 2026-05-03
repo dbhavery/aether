@@ -1,6 +1,6 @@
 //! # aether-event-bus
 //!
-//! Typed cross-layer event substrate for Aether. **Wave 1 scaffold — no logic.**
+//! Typed cross-layer event substrate for Companion. **Wave 1 scaffold — no logic.**
 //!
 //! Canonical reference:
 //! - `planning/plans/implementation_prep/event_contracts_master.md`

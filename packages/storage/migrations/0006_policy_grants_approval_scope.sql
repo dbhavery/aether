@@ -1,4 +1,4 @@
--- Aether storage — migration 0006 (policy_grants approval_scope)
+-- Companion storage — migration 0006 (policy_grants approval_scope)
 -- Scope: additive. Per T1.3 design
 -- (planning/plans/T1.3_approval_scope_design.md §3.2), the L5 grant ledger
 -- gains a new `approval_scope` axis describing the temporal extent over

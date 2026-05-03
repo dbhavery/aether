@@ -1,4 +1,4 @@
--- Aether storage — migration 0001 (init)
+-- Companion storage — migration 0001 (init)
 -- Scope: L5 policy engine tables + one forward-looking shell for L2 memory items.
 -- Source: planning/plans/implementation_prep/sqlite_schema_pack.md §3a-3d (policy)
 --         planning/plans/implementation_prep/sqlite_schema_pack.md §3e (memory, stubbed)

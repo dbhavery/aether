@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
-description = "Aether typed cross-layer event substrate (Wave 1 scaffold — no logic)."
+description = "Companion typed cross-layer event substrate (Wave 1 scaffold — no logic)."
 
 [lib]
 path = "src/lib.rs"

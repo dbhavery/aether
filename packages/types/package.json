@@ -2,7 +2,7 @@
   "name": "@aether/types",
   "version": "0.0.1",
   "private": true,
-  "description": "Aether shared TypeScript types — generated from Rust via ts-rs. Wave 1 scaffold contains hand-written placeholders only.",
+  "description": "Companion shared TypeScript types — generated from Rust via ts-rs. Wave 1 scaffold contains hand-written placeholders only.",
   "license": "MIT",
   "type": "module",
   "main": "./src/index.ts",
