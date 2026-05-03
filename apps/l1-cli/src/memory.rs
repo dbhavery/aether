@@ -231,7 +231,7 @@ mod tests {
         let p = MemoryAwareRouter::<ArcRouter>::build_prompt(&w, "again");
         assert!(p.contains("Recent conversation:"));
         assert!(p.contains("- User: ping"));
-        assert!(p.contains("- Aether: pong"));
+        assert!(p.contains("- Companion: pong"));
         assert!(p.ends_with("User: again"));
     }
 
@@ -282,7 +282,7 @@ mod tests {
         assert_eq!(prompts[0], "what's the weather"); // no history yet
         let p2 = &prompts[1];
         assert!(p2.contains("- User: what's the weather"), "got: {p2}");
-        assert!(p2.contains("- Aether: ok"), "got: {p2}");
+        assert!(p2.contains("- Companion: ok"), "got: {p2}");
         assert!(p2.ends_with("User: and tomorrow"), "got: {p2}");
     }
 

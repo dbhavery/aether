@@ -53,7 +53,7 @@ impl MemoryRole {
     pub fn label(self) -> &'static str {
         match self {
             MemoryRole::User => "User",
-            MemoryRole::Assistant => "Aether",
+            MemoryRole::Assistant => "Companion",
             MemoryRole::System => "System",
         }
     }
@@ -737,7 +737,7 @@ mod tests {
         let rendered = render_transcript(&w);
         assert_eq!(
             rendered,
-            "Recent conversation:\n- User: hi\n- Aether: hello\n"
+            "Recent conversation:\n- User: hi\n- Companion: hello\n"
         );
     }
 }
