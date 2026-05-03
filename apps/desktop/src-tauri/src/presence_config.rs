@@ -2,7 +2,7 @@
 //!
 //! Owns `<app_data>/presence.json` — the small, additive, default-
 //! safe config the Settings UI writes and the future presence
-//! controller reads. Same shape contract every other Aether config
+//! controller reads. Same shape contract every other Companion config
 //! file follows (see `mic_permissions.rs`, `vision_registry.rs`).
 //!
 //! ## Design notes (per `docs/PRESENCE-V1-ARCHITECTURE.md` §3)

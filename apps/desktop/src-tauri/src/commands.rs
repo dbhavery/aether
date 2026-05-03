@@ -1240,7 +1240,7 @@ pub struct TrustRetrievalProvenance {
 }
 
 /// Audit row projected for the UI. Subset of `AuditRecordEvent` —
-/// enough for a trust panel showing "what did Aether decide, when,
+/// enough for a trust panel showing "what did Companion decide, when,
 /// about what, and (post-ADR-0009) what did the user say".
 #[derive(Debug, Clone, Serialize)]
 pub struct TrustAuditRow {
@@ -1955,7 +1955,7 @@ fn record_frame_early_exit_telemetry(state: &State<'_, std::sync::Arc<AppState>>
 ///      default prompt) so the model call goes through L5 / L6 like
 ///      any other turn — frame analysis is not a side channel,
 ///   4. tags telemetry with `kind="frame_analyzed"` so the Trust
-///      drawer's History tab can show the user how often Aether
+///      drawer's History tab can show the user how often Companion
 ///      looked at media.
 ///
 /// We deliberately do NOT push the raw frame bytes through the
@@ -2854,7 +2854,7 @@ pub struct PresenceStatusPayload {
 
 /// Snapshot the current user-attention state. Independent of
 /// `presence_current` — that command reports the assistant-posture
-/// axis (what Aether is doing at turn granularity). See
+/// axis (what Companion is doing at turn granularity). See
 /// `docs/PRESENCE-V1-ARCHITECTURE.md` §2 for the three-axis model.
 #[tauri::command]
 pub fn presence_status(state: State<'_, std::sync::Arc<AppState>>) -> PresenceStatusPayload {
@@ -3770,12 +3770,12 @@ mod tests {
     #[test]
     fn extract_provider_error_matches_prefixed_router_message() {
         let wrapped = format!(
-            "router client: {}Aether can't reach the local model daemon.",
+            "router client: {}Companion can't reach the local model daemon.",
             PROVIDER_ERROR_PREFIX
         );
         assert_eq!(
             extract_provider_error(&wrapped).as_deref(),
-            Some("Aether can't reach the local model daemon."),
+            Some("Companion can't reach the local model daemon."),
         );
     }
 

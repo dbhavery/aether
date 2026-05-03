@@ -1,7 +1,7 @@
 //! Microphone permission model for push-to-talk voice capture.
 //!
 //! This module owns a small, **local-only** representation of how much
-//! Aether is allowed to listen. It is the single point of truth that
+//! Companion is allowed to listen. It is the single point of truth that
 //! future voice-capture paths must consult before touching the mic.
 //!
 //! ## Design notes (mirrors [`crate::media_permissions`])

@@ -107,7 +107,8 @@ fn main() {
             // Resolve the app state *after* Tauri has initialised so we can
             // use its path resolver. The durable session memory file lives
             // beside the window-state plugin's data under the OS-native app
-            // data dir (e.g. %APPDATA%/Aether on Windows).
+            // data dir (e.g. %APPDATA%/dev.aether.desktop/ on Windows — the
+            // bundle identifier from tauri.conf.json, codename preserved).
             let app_state = build_app_state(app.handle())?;
             // ADR-0007 D5 (Phase 4D) — wrap in `Arc` so the async backfill
             // worker can hold its own clone independent of the IPC

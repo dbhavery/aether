@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 use crate::hardware::{GpuKind, HardwareSnapshot};
 
 /// The three tier identities defined by ADR-0006 §Decision 1.
-/// Provisional names (Spark / Flame / Forge) chosen to match Aether's
+/// Provisional names (Spark / Flame / Forge) chosen to match Companion's
 /// warmth / fire palette and avoid implying a moral hierarchy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]

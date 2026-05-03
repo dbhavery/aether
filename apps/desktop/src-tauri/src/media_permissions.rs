@@ -1,7 +1,7 @@
 //! Media permission model for camera and screen capture.
 //!
 //! This module owns a small, **local-only** representation of how much
-//! Aether is allowed to look at the user's camera and screen. It is the
+//! Companion is allowed to look at the user's camera and screen. It is the
 //! single point of truth that future capture/inference paths must
 //! consult before touching either device.
 //!

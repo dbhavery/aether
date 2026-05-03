@@ -61,7 +61,7 @@ pub const RECENCY_WEIGHT_ALPHA: f32 = 0.1;
 
 /// Half-life for `recency_decay` in ADR-0010 Option A. 7 days mirrors
 /// the timescale at which "fresh" / "still relevant" content gives
-/// way to "older context" in typical Aether usage. Tunable per tier
+/// way to "older context" in typical Companion usage. Tunable per tier
 /// in a follow-up if calibration shows a different curve helps.
 pub const RECENCY_HALF_LIFE: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 

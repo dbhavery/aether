@@ -6,7 +6,7 @@
 //! the per-domain policies that govern writes, retention, and the
 //! embeddings opt-in.
 //!
-//! ## Contract (same shape every other Aether config uses)
+//! ## Contract (same shape every other Companion config uses)
 //!
 //! - **Additive.** New domains or fields may be added in future
 //!   builds.

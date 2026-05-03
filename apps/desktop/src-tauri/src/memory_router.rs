@@ -236,7 +236,7 @@ pub fn friendly_provider_error(err: &aether_l4_router::L4Error) -> String {
     use aether_l4_router::L4Error;
     let body = match err {
         L4Error::ProviderNotRunning { .. } => String::from(
-            "Aether can't reach the local model daemon. Start it with `ollama serve` and try again.",
+            "Companion can't reach the local model daemon. Start it with `ollama serve` and try again.",
         ),
         L4Error::ProviderTimeout { .. } => String::from(
             "The local model took too long to respond. Try a smaller model, or raise AETHER_OLLAMA_TIMEOUT_MS.",
@@ -245,7 +245,7 @@ pub fn friendly_provider_error(err: &aether_l4_router::L4Error) -> String {
             "Model `{model}` isn't installed. Pull it with `ollama pull {model}` and try again.",
         ),
         L4Error::ProviderBadResponse { detail } => format!(
-            "The model returned something Aether couldn't parse. Retry, and if it persists the model may be degraded. ({detail})",
+            "The model returned something Companion couldn't parse. Retry, and if it persists the model may be degraded. ({detail})",
         ),
         L4Error::ProviderUnknown { detail } => format!(
             "The provider failed with an unrecognised error. ({detail})",
