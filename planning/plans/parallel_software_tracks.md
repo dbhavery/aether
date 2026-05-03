@@ -156,8 +156,14 @@ Tooling at `tools/rename_companion_tier1b.py` + `tools/rename_companion_tier1b_d
 
 ### T4.3 — Companion rename Tier 2 — UI strings, persona YAMLs, glossary
 **Status:** DONE — shipped 2026-04-28 night across 5 atomic commits `2cc40d2..3658242`: `8d480f3` (productName + Tauri window title), `cad2d0e` (persona YAML headers + metadata), `3ab5558` (UI strings), `3658242` (CHARACTERS.md + RENAME COMPLETE marker). Internal codename `aether` preserved per `aether/RENAME_TO_COMPANION.md` (repo / Tauri identifier / database / Cargo workspace). Stale-prompt patched 2026-04-30.
+
+**2026-05-02 live-grep follow-up (commit `cb63e08`)** — the 2026-04-28 sweep missed two user-facing error strings in `apps/desktop/src-tauri/src/memory_router.rs::friendly_provider_error` ("Aether can't reach the local model daemon..." and "The model returned something Aether couldn't parse..."). Both strings are returned to the UI when Ollama is down or replies malformed. Flipped to "Companion" + updated the matching `extract_provider_error_*` test fixture in `commands.rs` (2/2 feature-gated tests green). Same commit also flipped 7 dev-facing docstrings/comments in src-tauri (commands.rs / media_permissions.rs / mic_permissions.rs / memory_config.rs / presence_config.rs / retrieval.rs / tier.rs) and corrected the inaccurate `main.rs:110` `%APPDATA%/Aether on Windows` comment — actual Tauri data dir is `%APPDATA%/dev.aether.desktop/` (codename in identifier, by design).
+
+**Persona YAML license identifier `custom_aether` intentionally preserved** — that's a license-tag identifier not a product reference; would break every YAML license check if flipped.
+
 **Scope (historical):** Audit + finish what the 2026-04-28 5-commit rename missed.
-**Self-test gate (doctrine §8):** agent runs the built app as a user; confirms no `Aether` appears anywhere user-visible. Used-as-user verification is owed against the latest production build; banner here flags it.
+
+**Self-test gate (doctrine §8):** agent runs the built app as a user; confirms no `Aether` appears anywhere user-visible. **Live grep portion satisfied 2026-05-02** (no remaining `"Aether"` literal user-visible strings in apps/desktop). Full Playwright-driven used-as-user run against `pnpm tauri dev` still owed before shipping the modal/error UI to Don's daily-driver build — bundled with Wave 19's modal verification (T1.3 carryover).
 
 ### T4.4 — Doctrine refresh propagation audit
 **Status:** DONE — propagation completed per HANDOFF_2026-04-30 §7: doctrine §5/§6/§7/§8 reflected consistently across `02_product_family.md`, `03_vision_and_thesis.md`, all roadmaps, all numbered specs (04, 05, 06, 07, 11, 12, 14, 16), all inbox docs. Plus `01_product_doctrine.md` "Aether Pro" heading flipped to "Companion." A residual banner-only sweep for the 6 `L*_system_design.md` files landed 2026-04-30 as part of T4.7. Stale-prompt patched 2026-04-30.
