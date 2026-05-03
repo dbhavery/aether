@@ -10,16 +10,16 @@
 
 ## Current job
 
-**Status:** none — body-extension batch DONE 2026-05-02 ~08:09 PT (62 min wall clock). Smoke #5 attempted at 512 res + throughput-tuned flags but saturated VRAM and was killed at 70 min without producing a checkpoint. Awaiting Don decision per `planning/research/2026-05-02_lora_smoke_session2.md`.
+**Status:** none — smoke #6 attempted 2026-05-02 18:04→18:54 PT (50 min wall clock). Don picked Option A (stop Isabelle); Isabelle stopped + 12 non-essential apps killed. Training reached step 1 at **1143 s/step** (~19 min/step → 1500 steps = ~476 h = 20 days). Killed. **Option A proved unviable on this hardware floor.** Awaiting Don's revised pick: B (FLUX-Schnell ~20 GB download), C (cloud ~$10), or D (multi-night with even smaller config).
 
 | Field | Value |
 | --- | --- |
 | Persona | aurora |
-| Pipeline step (per ADR-0014) | Step 2 — Identity LoRA training (BLOCKED on hardware/config decision) |
+| Pipeline step (per ADR-0014) | Step 2 — Identity LoRA training (BLOCKED — Option A failed) |
 | Started | n/a |
 | Expected duration | n/a |
 | Output target | n/a |
-| Notes | Body-extension batch produced 6 new full-body siblings + 1 from autonomous run = 7 in curation-1to2 + 1 in aspect-1to2 = 8 body_extended total. Training corpus is 32 images (4 anchors + 20 base + 8 body-extended). Smoke confirmed VRAM saturation — when Don's other processes hold ~10 GB at baseline, FLUX-dev LoRA training pushes to 23.9 GB / 24 GB and PyTorch thrashes allocations. Throughput flags (cache_latents/tf32/8bit-adam) didn't escape. Don picks: A) stop Isabelle during training, B) download FLUX.1-Schnell (~20 GB) + retry, C) cloud rental, D) multi-night training. |
+| Notes | Body-extension batch produced 6 new full-body siblings + 1 from autonomous run = 7 in curation-1to2 + 1 in aspect-1to2 = 8 body_extended total. Training corpus is 32 images (4 anchors + 20 base + 8 body-extended). Smokes #5 + #6 both confirmed VRAM saturation: FLUX-dev's 12B transformer + LoRA optimizer + activations + Don's compositor baseline (~8-9 GB) leaves zero training headroom on 24 GB cards. Throughput flags (cache_latents/tf32/8bit-adam) help when there's free VRAM — they cannot escape saturation. Don's revised pick: B) download FLUX.1-Schnell (~20 GB), C) cloud rental, D) multi-night with smaller config. |
 
 ---
 
@@ -73,6 +73,7 @@ Persona order for Phase 2 (initial — Don may reorder):
 | aurora | LoRA training smoke test #2 (FLUX-dev, 512 res, rank 16) | 2026-05-02 03:30 PT | 2026-05-02 04:00 PT (killed) | none | Same throughput problem at 512 — appeared not to escape the bottleneck. Killed. Don needs to pick a different config (smaller base model / cloud / multi-night training) before launching the full 1500 steps. |
 | aurora | body_extension batch P2-P7 (FluxInpaintPipeline, sequential offload) | 2026-05-02 07:07 PT | 2026-05-02 08:09 PT | 6 prompt_ids | 6 new full-body siblings via `batch_body_extend.py` driver. Inputs: P2 7082a50ee6b16b67 + P3 77efd428589ad0f8 + P4 ed245ab7187910af + P5 0bb022b3f50b4723 + P6 e4d7a7572ee951d1 + P7 01e97da6f6b909a3. 62 min wall clock (15 min cold load + 47 min inference). Image 1 ~29 min cold-cache; subsequent ~7 min warm. **Quality:** strong identity preservation, photoreal 9/10 across all 6. Wardrobe variation: P1+P2+P3 bare feet on hardwood, P4 cropped at ankles, P5 sitting legs-forward, P6 light grey sneakers, P7 white sneakers. Training corpus now 32 images. See file:///C:/Users/dbhav/Projects/aether/personas/aurora/_pipeline/step1_references/2026-05-02-curation-1to2/EVALUATION.md. |
 | aurora | LoRA training smoke test #5 (FLUX-dev, 512 res + cache_latents + tf32 + 8bit-adam) | 2026-05-02 08:11 PT | 2026-05-02 09:21 PT (killed) | none | Throughput-tuned config still hit the VRAM saturation problem when Isabelle held ~10 GB at baseline. GPU pushed to 23.9 GB / 24 GB. 70 min wall clock without first checkpoint. Killed. **Don picks A/B/C/D** per file:///C:/Users/dbhav/Projects/aether/planning/research/2026-05-02_lora_smoke_session2.md. |
+| aurora | LoRA training smoke test #6 (Don picked A: stop Isabelle + apps; FLUX-dev, 512 res, throughput-tuned) | 2026-05-02 18:04 PT | 2026-05-02 18:54 PT (killed) | none | Don picked Option A. Stopped Isabelle PID 23464; killed 12 non-essential apps (voiceflow, Tobii, steamwebhelper, EpicWebHelper, EpicGamesLauncher, GoPro Webcam, Overwolf×2, LinkedIn, Photos, ChatGPT, asus_framework). VRAM headroom went from 8.7→11 GB free at idle, but during training pushed to 22.7 GB used / 1.6 GB free — still effectively saturated. Pipeline reached step 1 in **1143 s/step** (~19 min/step). 1500 steps × 19 min = 476 h = ~20 days. **Option A unviable on 3090 Ti hardware floor.** Phase3 `setdefault` quirk: smoke phase ran 1500 steps because explicit `--max-train-steps 1500` overrode the smoke=50 default. Killed PID 67644 (training) + 66044 (accelerate). Awaiting Don's revised pick: B (Schnell), C (cloud), D (multi-night). |
 
 ---
 
