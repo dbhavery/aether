@@ -1,7 +1,7 @@
 //! Wave L3.1 — session-scoped presence controller.
 //!
 //! A narrow first slice of L3: a small, deterministic state machine that
-//! reflects what Aether is *being* at turn granularity. Separate concern
+//! reflects what Companion is *being* at turn granularity. Separate concern
 //! from the frame-rate [`BehaviorClass`](crate::BehaviorClass) scheduler in
 //! `engine.rs`, which drives avatar animation. This module exposes the
 //! macro status a CLI or shell can bind to without knowing anything about
@@ -38,7 +38,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::L3Error;
 
-/// Macro presence state reflecting what Aether is doing at turn granularity.
+/// Macro presence state reflecting what Companion is doing at turn granularity.
 ///
 /// Transitions are driven by the integration layer; the controller does not
 /// police them. Any state can follow any other — callers are free to jump

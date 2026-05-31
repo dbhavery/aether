@@ -2,7 +2,7 @@
 //!
 //! Sibling concern to the assistant-posture axis owned by
 //! [`crate::controller::PresenceController`]. Where the posture axis
-//! reflects what Aether *is doing* at turn granularity (Quiet /
+//! reflects what Companion *is doing* at turn granularity (Quiet /
 //! Listening / Thinking / …), this axis reflects what the *user* is
 //! doing at OS-interaction granularity (Active / Idle / Away).
 //!
