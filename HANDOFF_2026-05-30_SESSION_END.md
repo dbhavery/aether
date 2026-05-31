@@ -33,8 +33,9 @@ by a past rebase; trust ancestry, not dates.
 | `712fd68` | docs(e2e): harness README + silence embeddings_readiness mock warning |
 | `f84e495` | test(desktop): turn-outcome e2e — no-silent-fallback |
 | `6126e67` | test(desktop): media + mic permission e2e — Settings trust gates |
+| `8d8f947` | test(desktop): capture-panel e2e — Camera/Screen/Voice permission gating |
 
-`dev == origin/dev`. CI green (e2e blocking, 26 tests across 7 surfaces).
+`dev == origin/dev`. CI green (e2e blocking, 32 tests across 8 surfaces).
 
 ## Subsystem status
 
@@ -45,7 +46,7 @@ by a past rebase; trust ancestry, not dates.
   Memory tab (T2.5) consolidated.
 - Quality-Eval V1 — unchanged.
 - **Desktop e2e harness — NEW.** `apps/desktop/e2e/` (+ `README.md`) +
-  `playwright.config.ts`. 26 used-as-user scenarios, all green, enforced
+  `playwright.config.ts`. 32 used-as-user scenarios, all green, enforced
   by a blocking CI job:
   - approval modal (Wave 19) — 9 scenarios
   - persona picker (T2.4) — 3 scenarios
@@ -54,11 +55,14 @@ by a past rebase; trust ancestry, not dates.
   - onboarding flow (first run) — 2 scenarios
   - chat turn outcome (no-silent-fallback doctrine) — 2 scenarios
   - media + mic permissions (Settings trust gates) — 2 scenarios
+  - capture panels (Camera/Screen/Voice permission gating) — 6 scenarios
 - All three owed Doctrine §8 used-as-user gates are **retired** (approval
   modal, persona picker, autonomy picker), plus memory tab, first-run
-  onboarding, chat error-surface, and media/mic permission gates covered.
-  Seven surfaces verified for Don's daily-driver build; harness documented
-  in `apps/desktop/e2e/README.md`.
+  onboarding, chat error-surface, media/mic permission gates, and the
+  Camera/Screen/Voice capture panels. **Eight UI surfaces** verified for
+  Don's daily-driver build; harness documented in
+  `apps/desktop/e2e/README.md`. (Capture-panel allow→start uses Playwright
+  fake-media launch args — see `playwright.config.ts`.)
 - T4.2 (Aether→Companion docstring residue): l3-presence slice done;
   l4-router + l5-policy residue remains for a follow-up session.
 
@@ -69,8 +73,8 @@ by a past rebase; trust ancestry, not dates.
   `packages/l1-interaction/src/events.rs`)
 - `cargo test --workspace -- --test-threads=1` — PASS (0 failures)
 - `pnpm typecheck` (4 projects) — PASS
-- `cd apps/desktop && pnpm exec playwright test` — 26 passed
-- CI (e2e blocking, 26 tests) — all 6 jobs success
+- `cd apps/desktop && pnpm exec playwright test` — 32 passed
+- CI (e2e blocking, 32 tests) — all 6 jobs success
 
 Toolchain note: `cargo` is not on the bash PATH; it lives at
 `/c/Users/dbhav/.cargo/bin/` (cargo 1.95.0). `export
