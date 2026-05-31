@@ -66,6 +66,10 @@ export interface TauriMockConfig {
    * onboarding flow (PersonaWizard → Disclosure → PresetPicker) renders.
    * Default false (gates pre-acked so tests land on the chat surface). */
   freshUser?: boolean;
+  /** When set, `submit_turn` rejects with this message — exercises the
+   * "no silent fallback" doctrine (errors must surface visibly in the
+   * transcript). Overrides the normal completed/approval return. */
+  submitError?: string;
 }
 
 /** One recorded IPC call, readable from the test via
@@ -336,8 +340,11 @@ export async function installTauriMock(
           ? { kind: "allowed", memory_id: memoryId, audit_id: "aud-edit-ok" }
           : { kind: "not_found" };
       },
-      submit_turn: () =>
-        cfg.approval
+      submit_turn: () => {
+        if (cfg.submitError) {
+          return Promise.reject(new Error(cfg.submitError));
+        }
+        return cfg.approval
           ? {
               turn_id: "turn-1",
               kind: "awaiting_approval",
@@ -345,7 +352,8 @@ export async function installTauriMock(
               approval: cfg.approval,
               error_note: null,
             }
-          : completedTurn("turn-1"),
+          : completedTurn("turn-1");
+      },
       // The chat surface unwraps `kind: "turn"`; carry a completed
       // outcome so the modal closes and an assistant bubble appends.
       resolve_approval: () => ({ kind: "turn", outcome: completedTurn("turn-1") }),
