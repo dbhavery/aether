@@ -26,6 +26,26 @@ export interface MockPersona {
   tone?: string;
 }
 
+/** One memory item in a domain lane. Mirrors `MemoryListItem`. */
+export interface MockMemoryItem {
+  memory_id: string;
+  sequence: number;
+  timestamp_ms: number;
+  role: string;
+  content: string;
+  source: string;
+}
+
+/** A domain's backing store for the Memory tab (T2.5). `risk: "ask"`
+ * domains make forget/edit return `requires_approval` (the inline
+ * confirmation dialog path); `"auto"` domains mutate straight through. */
+export interface MockMemoryDomain {
+  privacy_class?: "standard" | "user_sensitive";
+  risk?: "auto" | "ask" | "deny";
+  items?: MockMemoryItem[];
+  empty_reason?: string | null;
+}
+
 export interface TauriMockConfig {
   /** The approval `submit_turn` raises. Omit to make `submit_turn`
    * return a plain completed turn (no modal). */
@@ -37,6 +57,11 @@ export interface TauriMockConfig {
   /** Initial value `current_autonomy_preset` returns (T2.3). Defaults
    * to null ("not chosen"). */
   initialAutonomy?: "observer" | "assistant" | "operator" | null;
+  /** Per-domain backing store for the Memory tab (T2.5). Domains omitted
+   * here render as honest empty lanes. The store is STATEFUL within a
+   * page: forget removes items and edit rewrites content, so a refresh
+   * reflects the mutation (used-as-user). */
+  memory?: Partial<Record<string, MockMemoryDomain>>;
 }
 
 /** One recorded IPC call, readable from the test via
@@ -135,6 +160,95 @@ export async function installTauriMock(
     };
     const presence = { state: "quiet", detail: null, updated_at_ms: 0 };
 
+    // ----- Stateful memory store (T2.5 Memory tab) ---------------------
+    // Per-domain payloads mirroring MemoryListPayload. Mutated in place by
+    // forget/edit so a refresh reflects the change. Domains absent from
+    // cfg.memory render as honest empty lanes.
+    const memDefaults: Record<string, MockMemoryDomain> = {
+      session: {
+        privacy_class: "standard",
+        risk: "auto",
+        items: [
+          {
+            memory_id: "mem-session-1",
+            sequence: 1,
+            timestamp_ms: 0,
+            role: "user",
+            content: "Remember to water the plants.",
+            source: "turn",
+          },
+          {
+            memory_id: "mem-session-2",
+            sequence: 2,
+            timestamp_ms: 0,
+            role: "assistant",
+            content: "Noted — I'll remind you this evening.",
+            source: "turn",
+          },
+        ],
+      },
+      facts: {
+        privacy_class: "user_sensitive",
+        risk: "ask",
+        items: [
+          {
+            memory_id: "mem-facts-1",
+            sequence: 1,
+            timestamp_ms: 0,
+            role: "user",
+            content: "My name is Don.",
+            source: "fact",
+          },
+        ],
+      },
+    };
+    const memCfg = cfg.memory ?? memDefaults;
+    const EMPTY_REASON = "Storage for this domain arrives with Memory V2 step 5.";
+    // domain -> live payload (cloned items so mutation is isolated per page)
+    const memStore: Record<string, MockMemoryDomain> = {};
+    for (const d of [
+      "session",
+      "durable",
+      "facts",
+      "projects",
+      "preferences",
+      "artifacts",
+    ]) {
+      const src = memCfg[d];
+      memStore[d] = {
+        privacy_class: src?.privacy_class ?? "standard",
+        risk: src?.risk ?? "auto",
+        items: (src?.items ?? []).map((i) => ({ ...i })),
+        empty_reason: src?.empty_reason ?? EMPTY_REASON,
+      };
+    }
+    const memPayload = (domain: string) => {
+      const s = memStore[domain] ?? { items: [] };
+      const items = s.items ?? [];
+      return {
+        domain,
+        privacy_class: s.privacy_class ?? "standard",
+        risk: s.risk ?? "auto",
+        items,
+        empty_reason: items.length === 0 ? (s.empty_reason ?? EMPTY_REASON) : null,
+      };
+    };
+    const memRemoveItem = (domain: string, memoryId: string) => {
+      const s = memStore[domain];
+      if (!s || !s.items) return false;
+      const before = s.items.length;
+      s.items = s.items.filter((i) => i.memory_id !== memoryId);
+      return s.items.length < before;
+    };
+    const memEditItem = (domain: string, memoryId: string, content: string) => {
+      const it = memStore[domain]?.items?.find((i) => i.memory_id === memoryId);
+      if (!it) return false;
+      it.content = content;
+      return true;
+    };
+    const memArgs = (args: unknown) =>
+      (args as { domain?: string; memoryId?: string; newContent?: string }) ?? {};
+
     const completedTurn = (turnId: string) => ({
       turn_id: turnId,
       kind: "completed",
@@ -167,6 +281,50 @@ export async function installTauriMock(
       memory_recent: () => [],
       audit_recent: () => [],
       telemetry_recent: () => [],
+      // ----- Memory tab (T2.5) -----------------------------------------
+      memory_list: (args) => memPayload(memArgs(args).domain ?? "session"),
+      // Forget-all: Ask domains gate (requires_approval); Auto clears.
+      memory_forget: (args) => {
+        const { domain } = memArgs(args);
+        const d = memStore[domain ?? ""];
+        if (d?.risk === "ask") return { kind: "requires_approval" };
+        if (d) d.items = [];
+        return { kind: "allowed", removed_count: 1, audit_id: "aud-forgetall" };
+      },
+      // Forget-item: Ask domains gate; Auto removes immediately.
+      memory_forget_item: (args) => {
+        const { domain, memoryId } = memArgs(args);
+        if (memStore[domain ?? ""]?.risk === "ask")
+          return { kind: "requires_approval" };
+        const ok = memRemoveItem(domain ?? "", memoryId ?? "");
+        return ok
+          ? { kind: "allowed", removed_count: 1, audit_id: "aud-forget" }
+          : { kind: "not_found" };
+      },
+      // Post-approval: always performs the removal (gate already cleared).
+      memory_forget_item_after_approval: (args) => {
+        const { domain, memoryId } = memArgs(args);
+        const ok = memRemoveItem(domain ?? "", memoryId ?? "");
+        return ok
+          ? { kind: "allowed", removed_count: 1, audit_id: "aud-forget-ok" }
+          : { kind: "not_found" };
+      },
+      memory_edit: (args) => {
+        const { domain, memoryId, newContent } = memArgs(args);
+        if (memStore[domain ?? ""]?.risk === "ask")
+          return { kind: "requires_approval" };
+        const ok = memEditItem(domain ?? "", memoryId ?? "", newContent ?? "");
+        return ok
+          ? { kind: "allowed", memory_id: memoryId, audit_id: "aud-edit" }
+          : { kind: "not_found" };
+      },
+      memory_edit_after_approval: (args) => {
+        const { domain, memoryId, newContent } = memArgs(args);
+        const ok = memEditItem(domain ?? "", memoryId ?? "", newContent ?? "");
+        return ok
+          ? { kind: "allowed", memory_id: memoryId, audit_id: "aud-edit-ok" }
+          : { kind: "not_found" };
+      },
       submit_turn: () =>
         cfg.approval
           ? {
