@@ -16,10 +16,27 @@ export interface MockApprovalPayload {
   side_effecting: boolean;
 }
 
+/** A persona the mocked `list_personas` returns and `switch_persona`
+ * can activate. Mirrors `PersonaCatalogEntry`. */
+export interface MockPersona {
+  id: string;
+  name: string;
+  tagline?: string;
+  stance?: string;
+  tone?: string;
+}
+
 export interface TauriMockConfig {
   /** The approval `submit_turn` raises. Omit to make `submit_turn`
    * return a plain completed turn (no modal). */
   approval?: MockApprovalPayload;
+  /** Installed persona catalog. Defaults to a single "aurora". Provide
+   * 2+ to surface the header persona `<select>` (T2.4). The first entry
+   * is the active persona on boot. */
+  personas?: MockPersona[];
+  /** Initial value `current_autonomy_preset` returns (T2.3). Defaults
+   * to null ("not chosen"). */
+  initialAutonomy?: "observer" | "assistant" | "operator" | null;
 }
 
 /** One recorded IPC call, readable from the test via
@@ -57,11 +74,41 @@ export async function installTauriMock(
     //   - PersonaWizard      → aether.persona.last
     //   - Disclosure         → aether.disclosure.acknowledged
     //   - PresetPicker       → aether.onboarding.autonomy-preset(.version)
-    // "aurora" matches the mocked catalog so the boot effect's
-    // switch_persona resolves cleanly.
+    const personas =
+      cfg.personas && cfg.personas.length > 0
+        ? cfg.personas.map((p) => ({
+            id: p.id,
+            name: p.name,
+            tagline: p.tagline ?? `${p.name} test persona.`,
+            stance: p.stance ?? "warm",
+            tone: p.tone ?? "warm",
+          }))
+        : [
+            {
+              id: "aurora",
+              name: "Aurora",
+              tagline: "Companion test harness persona.",
+              stance: "warm",
+              tone: "warm",
+            },
+          ];
+    const activeId = personas[0].id;
+    // Stateful active persona — switch_persona mutates it so a
+    // subsequent companion_banner (the boot effect re-fetches on the
+    // sessionNonce bump a switch triggers) reports the NEW persona, as
+    // the real backend would. Without this the re-fetch clobbers the
+    // switch back to the boot default.
+    let currentId = activeId;
+
+    // Skip all three first-run onboarding gates so the chat surface
+    // (and thus the approval flow) is reachable. Values mirror the
+    // version constants the components check:
+    //   - PersonaWizard      → aether.persona.last (the active persona)
+    //   - Disclosure         → aether.disclosure.acknowledged
+    //   - PresetPicker       → aether.onboarding.autonomy-preset(.version)
     try {
       const ls = window.localStorage;
-      ls.setItem("aether.persona.last", "aurora");
+      ls.setItem("aether.persona.last", activeId);
       ls.setItem("aether.disclosure.acknowledged", "v0-2026-04-19");
       ls.setItem("aether.onboarding.autonomy-preset", "assistant");
       ls.setItem("aether.onboarding.autonomy-preset.version", "v0-2026-04-21");
@@ -72,27 +119,21 @@ export async function installTauriMock(
     const calls: RecordedCall[] = [];
     window.__MOCK_CALLS__ = calls;
 
-    const banner = {
-      persona_id: "aurora",
-      persona_name: "Aurora",
-      persona_version: "1.0.0",
-      preferred_tier: "balanced",
-      provider_mode: "reflex_stub",
-      provider_label: "Reflex (stub)",
-      output_detail: "balanced",
-      tagline: "Companion test harness persona.",
-      system_prompt: "",
+    const bannerFor = (id: string) => {
+      const p = personas.find((x) => x.id === id) ?? personas[0];
+      return {
+        persona_id: p.id,
+        persona_name: p.name,
+        persona_version: "1.0.0",
+        preferred_tier: "balanced",
+        provider_mode: "reflex_stub",
+        provider_label: "Reflex (stub)",
+        output_detail: "balanced",
+        tagline: p.tagline,
+        system_prompt: "",
+      };
     };
     const presence = { state: "quiet", detail: null, updated_at_ms: 0 };
-    const personas = [
-      {
-        id: "aurora",
-        name: "Aurora",
-        tagline: "Companion test harness persona.",
-        stance: "warm",
-        tone: "warm",
-      },
-    ];
 
     const completedTurn = (turnId: string) => ({
       turn_id: turnId,
@@ -110,12 +151,19 @@ export async function installTauriMock(
     });
 
     const handlers: Record<string, (args: unknown) => unknown> = {
-      companion_banner: () => banner,
+      companion_banner: () => bannerFor(currentId),
       list_personas: () => personas,
       presence_current: () => presence,
-      switch_persona: () => banner,
-      set_autonomy_preset: () => banner,
-      current_autonomy_preset: () => null,
+      // Id-aware + stateful: the header/persona-section switch echoes
+      // the chosen persona's banner AND updates the active persona so
+      // later companion_banner reads stay consistent.
+      switch_persona: (args) => {
+        const id = (args as { id?: string } | null)?.id ?? currentId;
+        currentId = id;
+        return bannerFor(currentId);
+      },
+      set_autonomy_preset: () => bannerFor(currentId),
+      current_autonomy_preset: () => cfg.initialAutonomy ?? null,
       memory_recent: () => [],
       audit_recent: () => [],
       telemetry_recent: () => [],
@@ -160,6 +208,23 @@ export async function installTauriMock(
         console.warn(`[tauri-mock] unhandled invoke: ${cmd}`, args);
         return Promise.resolve(null);
       },
+    };
+
+    // The event plugin's `unlisten` path calls
+    // `window.__TAURI_EVENT_PLUGIN_INTERNALS__.unregisterListener`
+    // (verified in @tauri-apps/api@2.10.1 event.js `_unlisten`). It
+    // fires whenever a listener cleans up — e.g. the presence
+    // subscription on a persona switch. Without this shim the cleanup
+    // throws and aborts the in-flight React update (caught: banner
+    // failed to commit on switch). No-op is correct; we emit no events.
+    (
+      window as unknown as {
+        __TAURI_EVENT_PLUGIN_INTERNALS__: {
+          unregisterListener(event: string, eventId: number): void;
+        };
+      }
+    ).__TAURI_EVENT_PLUGIN_INTERNALS__ = {
+      unregisterListener() {},
     };
   }, config);
 }
