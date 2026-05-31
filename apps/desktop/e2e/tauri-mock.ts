@@ -62,6 +62,10 @@ export interface TauriMockConfig {
    * page: forget removes items and edit rewrites content, so a refresh
    * reflects the mutation (used-as-user). */
   memory?: Partial<Record<string, MockMemoryDomain>>;
+  /** When true, skip seeding the three first-run gates so the full
+   * onboarding flow (PersonaWizard → Disclosure → PresetPicker) renders.
+   * Default false (gates pre-acked so tests land on the chat surface). */
+  freshUser?: boolean;
 }
 
 /** One recorded IPC call, readable from the test via
@@ -131,14 +135,17 @@ export async function installTauriMock(
     //   - PersonaWizard      → aether.persona.last (the active persona)
     //   - Disclosure         → aether.disclosure.acknowledged
     //   - PresetPicker       → aether.onboarding.autonomy-preset(.version)
-    try {
-      const ls = window.localStorage;
-      ls.setItem("aether.persona.last", activeId);
-      ls.setItem("aether.disclosure.acknowledged", "v0-2026-04-19");
-      ls.setItem("aether.onboarding.autonomy-preset", "assistant");
-      ls.setItem("aether.onboarding.autonomy-preset.version", "v0-2026-04-21");
-    } catch {
-      // origin not ready — the goto("/") init pass will set it.
+    // Skipped under freshUser so the onboarding flow itself can be driven.
+    if (!cfg.freshUser) {
+      try {
+        const ls = window.localStorage;
+        ls.setItem("aether.persona.last", activeId);
+        ls.setItem("aether.disclosure.acknowledged", "v0-2026-04-19");
+        ls.setItem("aether.onboarding.autonomy-preset", "assistant");
+        ls.setItem("aether.onboarding.autonomy-preset.version", "v0-2026-04-21");
+      } catch {
+        // origin not ready — the goto("/") init pass will set it.
+      }
     }
 
     const calls: RecordedCall[] = [];
