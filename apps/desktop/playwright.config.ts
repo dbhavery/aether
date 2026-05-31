@@ -34,7 +34,23 @@ export default defineConfig({
     trace: "on-first-retry",
     screenshot: "only-on-failure",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    {
+      name: "chromium",
+      use: {
+        ...devices["Desktop Chrome"],
+        // Grant + fake camera/mic so the capture panels' allow→start
+        // paths exercise getUserMedia without a real device or prompt.
+        permissions: ["camera", "microphone"],
+        launchOptions: {
+          args: [
+            "--use-fake-device-for-media-stream",
+            "--use-fake-ui-for-media-stream",
+          ],
+        },
+      },
+    },
+  ],
   webServer: {
     command: "pnpm dev",
     url: "http://localhost:1420",

@@ -67,6 +67,7 @@ on the chat surface.
 | `onboarding-flow.spec.ts` | first-run wizard → disclosure → preset |
 | `turn-outcome.spec.ts` | chat reply + "no silent fallback" error surface |
 | `media-permission.spec.ts` | Settings camera/screen/mic permission gates |
+| `capture-panels.spec.ts` | Camera/Screen/Voice panel permission gating (fake media) |
 
 ## Adding a spec
 
