@@ -31,9 +31,10 @@ by a past rebase; trust ancestry, not dates.
 | `715f3f1` | docs(handoff): refresh — e2e suite 20 tests |
 | `87d5dd7` | test(desktop): onboarding-flow e2e — first-run wizard → disclosure → preset |
 | `712fd68` | docs(e2e): harness README + silence embeddings_readiness mock warning |
-| `<this>` | test(desktop): turn-outcome e2e — no-silent-fallback + handoff refresh |
+| `f84e495` | test(desktop): turn-outcome e2e — no-silent-fallback |
+| `6126e67` | test(desktop): media + mic permission e2e — Settings trust gates |
 
-`dev == origin/dev`. CI green (e2e blocking, 24 tests).
+`dev == origin/dev`. CI green (e2e blocking, 26 tests across 7 surfaces).
 
 ## Subsystem status
 
@@ -44,7 +45,7 @@ by a past rebase; trust ancestry, not dates.
   Memory tab (T2.5) consolidated.
 - Quality-Eval V1 — unchanged.
 - **Desktop e2e harness — NEW.** `apps/desktop/e2e/` (+ `README.md`) +
-  `playwright.config.ts`. 24 used-as-user scenarios, all green, enforced
+  `playwright.config.ts`. 26 used-as-user scenarios, all green, enforced
   by a blocking CI job:
   - approval modal (Wave 19) — 9 scenarios
   - persona picker (T2.4) — 3 scenarios
@@ -52,10 +53,11 @@ by a past rebase; trust ancestry, not dates.
   - memory tab (T2.5) — 4 scenarios
   - onboarding flow (first run) — 2 scenarios
   - chat turn outcome (no-silent-fallback doctrine) — 2 scenarios
+  - media + mic permissions (Settings trust gates) — 2 scenarios
 - All three owed Doctrine §8 used-as-user gates are **retired** (approval
   modal, persona picker, autonomy picker), plus memory tab, first-run
-  onboarding, and the chat error-surface ("no silent fallback") covered.
-  Six surfaces verified for Don's daily-driver build; harness documented
+  onboarding, chat error-surface, and media/mic permission gates covered.
+  Seven surfaces verified for Don's daily-driver build; harness documented
   in `apps/desktop/e2e/README.md`.
 - T4.2 (Aether→Companion docstring residue): l3-presence slice done;
   l4-router + l5-policy residue remains for a follow-up session.
@@ -67,8 +69,8 @@ by a past rebase; trust ancestry, not dates.
   `packages/l1-interaction/src/events.rs`)
 - `cargo test --workspace -- --test-threads=1` — PASS (0 failures)
 - `pnpm typecheck` (4 projects) — PASS
-- `cd apps/desktop && pnpm exec playwright test` — 24 passed
-- CI (e2e blocking, 24 tests) — all 6 jobs success
+- `cd apps/desktop && pnpm exec playwright test` — 26 passed
+- CI (e2e blocking, 26 tests) — all 6 jobs success
 
 Toolchain note: `cargo` is not on the bash PATH; it lives at
 `/c/Users/dbhav/.cargo/bin/` (cargo 1.95.0). `export
