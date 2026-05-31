@@ -70,6 +70,12 @@ docs/superpowers/
 assets/
 .playwright-cli/
 
+# Playwright e2e outputs (Wave 19 used-as-user harness) — regenerable
+apps/desktop/e2e/.report/
+apps/desktop/e2e/.artifacts/
+apps/desktop/test-results/
+apps/desktop/playwright-report/
+
 # === Monorepo workspace artifacts (Wave 1, 2026-04-19) ===
 # Rust / Cargo
 target/
