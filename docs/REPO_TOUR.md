@@ -129,16 +129,19 @@ drift. Wave 1 landed scaffolds; Wave 4.1 flips the critical ones to blocking.
 
 ---
 
-## 4. `apps/` — intentionally empty
+## 4. `apps/` — the shipped applications
 
-The roadmap says apps land after the engines are credible on their own. The
-current scaffolds exist so the workspace manifests resolve.
-
-- `apps/desktop/` — future Tauri shell.
-- `apps/guest/` — future Cloudflare Worker + Groq guest-mode endpoint.
-- `apps/docs-site/` — future docs site.
-
-Do not add meaningful app logic until L1 (or L4) has a first-logic slice.
+- `apps/desktop/` is the real end-user application: the Companion desktop
+  shell (Tauri 2 + React + Vite) that wraps the Rust engine path. It is
+  the surface the UI doctrine rules (notably §8 used-as-user) apply to.
+  - Tests: `pnpm test` (vitest unit + React Testing Library component
+    tests under `src/**/*.test.tsx`) and `pnpm test:e2e` (Playwright
+    used-as-user harness under `e2e/` — drives the real frontend in
+    Chromium with the Tauri IPC mocked; covers the approval modal,
+    persona / autonomy / media / mic permission gates, the memory tab,
+    onboarding, capture panels, and chat outcomes). The e2e suite is a
+    blocking CI job; see `apps/desktop/e2e/README.md`.
+- `apps/l1-cli/` is the L1 interaction-timing CLI demo.
 
 ---
 
