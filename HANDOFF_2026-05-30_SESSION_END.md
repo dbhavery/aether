@@ -25,8 +25,11 @@ by a past rebase; trust ancestry, not dates.
 | `c3338cd` | test(desktop): T2.4 + T2.3 — used-as-user verification of persona + autonomy pickers |
 | `35e22d2` | ci: run desktop e2e (Playwright used-as-user) suite — advisory |
 | `d8a5ca5` | ci: make desktop e2e job blocking — proven green on the runner |
+| `471513a` | docs(handoff): 2026-05-30 session end |
+| `db210cb` | docs(l3-presence): T4.2 — flip product-sense Aether → Companion in doc comments |
+| `244b087` | test(desktop): T2.5 — used-as-user e2e for Trust drawer Memory tab |
 
-Tip: `d8a5ca5`. `dev == origin/dev`.
+Tip: `244b087`. `dev == origin/dev`. CI green (run 26702576249).
 
 ## Subsystem status
 
@@ -37,13 +40,16 @@ Tip: `d8a5ca5`. `dev == origin/dev`.
   Memory tab (T2.5) consolidated.
 - Quality-Eval V1 — unchanged.
 - **Desktop e2e harness — NEW.** `apps/desktop/e2e/` + `playwright.config.ts`.
-  16 used-as-user scenarios, all green, enforced by CI:
+  20 used-as-user scenarios, all green, enforced by a blocking CI job:
   - approval modal (Wave 19) — 9 scenarios
   - persona picker (T2.4) — 3 scenarios
   - autonomy preset picker (T2.3) — 4 scenarios
-- All three owed Doctrine §8 used-as-user gates are **retired**. The
-  approval modal, persona picker, and autonomy picker are verified for
-  Don's daily-driver build.
+  - memory tab (T2.5) — 4 scenarios
+- All three owed Doctrine §8 used-as-user gates are **retired** (approval
+  modal, persona picker, autonomy picker), plus the memory tab hardened.
+  All four UI surfaces verified for Don's daily-driver build.
+- T4.2 (Aether→Companion docstring residue): l3-presence slice done;
+  l4-router + l5-policy residue remains for a follow-up session.
 
 ## Check matrix (verified this session)
 
@@ -52,8 +58,8 @@ Tip: `d8a5ca5`. `dev == origin/dev`.
   `packages/l1-interaction/src/events.rs`)
 - `cargo test --workspace -- --test-threads=1` — PASS (0 failures)
 - `pnpm typecheck` (4 projects) — PASS
-- `cd apps/desktop && pnpm exec playwright test` — 16 passed
-- CI run `26702419364` (e2e blocking) — all 6 jobs success
+- `cd apps/desktop && pnpm exec playwright test` — 20 passed
+- CI run `26702576249` (e2e blocking, 20 tests) — all 6 jobs success
 
 Toolchain note: `cargo` is not on the bash PATH; it lives at
 `/c/Users/dbhav/.cargo/bin/` (cargo 1.95.0). `export
