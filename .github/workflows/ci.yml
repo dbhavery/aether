@@ -103,13 +103,13 @@ jobs:
   # ---------------------------------------------------------------------------
   # Desktop e2e — Doctrine §8 used-as-user verification (Wave 19 + T2.3/T2.4).
   # Drives the Vite-served frontend in Chromium with the Tauri IPC mocked.
-  # Advisory until a real runner pass confirms the browser harness is stable
-  # here; flip `continue-on-error` off once green (mirrors the clippy pattern).
+  # Blocking as of run 26702384148 (2026-05-30), which proved the browser
+  # harness green on the runner. Deterministic (mocked IPC, no network);
+  # playwright.config retries once on CI for boot-timing flake tolerance.
   # ---------------------------------------------------------------------------
   e2e:
     name: Desktop e2e (Playwright used-as-user)
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
