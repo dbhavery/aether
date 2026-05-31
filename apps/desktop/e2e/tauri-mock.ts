@@ -288,6 +288,10 @@ export async function installTauriMock(
       memory_recent: () => [],
       audit_recent: () => [],
       telemetry_recent: () => [],
+      // Retrieval/embeddings indicator (Trust drawer): the harness runs
+      // no embeddings backend, so report "disabled" — a valid, quiet
+      // ReadinessState the UI renders cleanly.
+      embeddings_readiness: () => ({ kind: "disabled" }),
       // ----- Memory tab (T2.5) -----------------------------------------
       memory_list: (args) => memPayload(memArgs(args).domain ?? "session"),
       // Forget-all: Ask domains gate (requires_approval); Auto clears.
