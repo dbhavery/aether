@@ -65,6 +65,8 @@ on the chat surface.
 | `autonomy-preset.spec.ts` | Settings autonomy radiogroup (T2.3) |
 | `memory-tab.spec.ts` | Trust-drawer Memory tab (T2.5) |
 | `onboarding-flow.spec.ts` | first-run wizard → disclosure → preset |
+| `turn-outcome.spec.ts` | chat reply + "no silent fallback" error surface |
+| `media-permission.spec.ts` | Settings camera/screen/mic permission gates |
 
 ## Adding a spec
 

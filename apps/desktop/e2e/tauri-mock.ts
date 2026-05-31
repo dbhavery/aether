@@ -70,6 +70,11 @@ export interface TauriMockConfig {
    * "no silent fallback" doctrine (errors must surface visibly in the
    * transcript). Overrides the normal completed/approval return. */
   submitError?: string;
+  /** Initial camera/screen permission tri-state (Settings → Media).
+   * Defaults to "ask" each. Stateful: set_media_permission mutates. */
+  initialMedia?: { camera?: "allow" | "ask" | "deny"; screen?: "allow" | "ask" | "deny" };
+  /** Initial microphone permission tri-state. Defaults to "ask". */
+  initialMic?: "allow" | "ask" | "deny";
 }
 
 /** One recorded IPC call, readable from the test via
@@ -170,6 +175,13 @@ export async function installTauriMock(
       };
     };
     const presence = { state: "quiet", detail: null, updated_at_ms: 0 };
+
+    // ----- Stateful media/mic permission store (Settings) --------------
+    const media = {
+      camera: cfg.initialMedia?.camera ?? "ask",
+      screen: cfg.initialMedia?.screen ?? "ask",
+    };
+    let mic = cfg.initialMic ?? "ask";
 
     // ----- Stateful memory store (T2.5 Memory tab) ---------------------
     // Per-domain payloads mirroring MemoryListPayload. Mutated in place by
@@ -296,6 +308,22 @@ export async function installTauriMock(
       // no embeddings backend, so report "disabled" — a valid, quiet
       // ReadinessState the UI renders cleanly.
       embeddings_readiness: () => ({ kind: "disabled" }),
+      // ----- Media / mic permission tri-state (Settings) ---------------
+      get_media_permissions: () => ({ ...media }),
+      set_media_permission: (args) => {
+        const { kind, stateValue } =
+          (args as { kind?: "camera" | "screen"; stateValue?: string }) ?? {};
+        if (kind === "camera" || kind === "screen") {
+          media[kind] = (stateValue as typeof media.camera) ?? media[kind];
+        }
+        return { ...media };
+      },
+      get_mic_permission: () => ({ state: mic }),
+      set_mic_permission: (args) => {
+        const { stateValue } = (args as { stateValue?: string }) ?? {};
+        mic = (stateValue as typeof mic) ?? mic;
+        return { state: mic };
+      },
       // ----- Memory tab (T2.5) -----------------------------------------
       memory_list: (args) => memPayload(memArgs(args).domain ?? "session"),
       // Forget-all: Ask domains gate (requires_approval); Auto clears.
