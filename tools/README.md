@@ -8,10 +8,9 @@ Developer and agent tooling. Each subdirectory is a single-purpose tool with its
 |---|---|---|
 | `lint-layer-boundaries/` | Enforce the no-sibling-layer-import rule (Rust `cargo-deny` + TS ESLint rule) | Config skeleton + README |
 | `lint-policy-bypass/` | Reject direct executor calls outside `packages/l5-policy` | Rules-doc skeleton |
-| `lint-private-asset-leak/` | Fail builds if Isabelle-tagged assets enter public distributables | Rules-doc skeleton |
 | `ts-bindings-gen/` | `ts-rs`/`specta` codegen from Rust → `packages/types/` | Placeholder |
 
-Real implementations land in Wave 2+ (boundary + codegen) and Wave 4+ (private-asset leak check, at first public distributable).
+Real implementations land in Wave 2+ (boundary + codegen).
 
 ## Package-creation protocol reference
 

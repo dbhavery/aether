@@ -7,10 +7,10 @@ audio between them via ``sounddevice``, runs it through
 ``src.voice.stt.transcribe``, and publishes ``TRANSCRIPT_READY`` plus
 ``USER_MESSAGE`` so the brain handles voice identically to chat.
 
-Wake-word detection and speaker verification — both present in upstream
-Isabelle — are deliberately absent. Per docs/PRODUCT-PLAN.md §1 decision
-10, v1.0 replaces wake word with push-to-talk; per SYNC-ISABELLE.md §3.3,
-the old modules were removed.
+Wake-word detection and speaker verification — both present in the
+upstream codebase — are deliberately absent. Per docs/PRODUCT-PLAN.md §1
+decision 10, v1.0 replaces wake word with push-to-talk; the old modules
+were removed during the port.
 
 Threading:
 - ``sounddevice`` runs the audio callback on its own thread (PortAudio).

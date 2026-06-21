@@ -7,7 +7,7 @@
 ## 1. Why litellm
 
 - 100+ providers supported via one call signature.
-- Already in upstream Isabelle dependencies.
+- Already in the upstream codebase dependencies.
 - Handles streaming, tool calling, and structured outputs uniformly.
 - Unified error types across providers.
 - Supports request/response caching, rate limiting, and cost tracking.
@@ -80,7 +80,7 @@ Advanced users can override any of these in Sandbox → LLM settings.
 
 ## 4. Complexity routing
 
-Brain decides which tier to call for a given input by a three-stage classifier (same pattern as upstream Isabelle):
+Brain decides which tier to call for a given input by a three-stage classifier (same pattern as the upstream codebase):
 
 1. **Level 1 — Instant match.** Regex for greetings, farewells, thanks → FAST.
 2. **Level 2 — Keyword match.** Regex for "research", "explain", "deep", "analyze", "code" → HEAVY. Regex for "what time", "weather", "news", "search" → MAIN with grounding if provider supports it.
@@ -177,7 +177,7 @@ async for chunk in route_tier(tier="main", messages=[...], stream=True):
 
 ## 10. Tool calling
 
-**Not in v1.0.** The existing Isabelle tool system (PC control, file ops, shell exec) is intentionally not ported. v1.0 is a conversational product, not an agent. Tool use returns in the v2 ground-up rebuild.
+**Not in v1.0.** The existing upstream tool system (PC control, file ops, shell exec) is intentionally not ported. v1.0 is a conversational product, not an agent. Tool use returns in the v2 ground-up rebuild.
 
 One exception: built-in, safe tool calls that the frontend needs — `get_current_time`, `get_persona_context`, `change_persona`. These bypass litellm entirely and run as local Python functions gated by a tiny allow-list. They exist so the LLM can answer "what time is it" without hallucinating.
 

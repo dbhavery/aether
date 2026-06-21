@@ -41,9 +41,8 @@ This is doctrine. Everything downstream is subordinate to it.
 
 - `planning/00_VISION_AND_GUARDRAILS.md` — sits above every other file. If a
   code change conflicts with this file, the code is wrong.
-- `planning/01_product_doctrine.md` — hard rules for the product family
-  (Community Edition, Pro, Isabelle). Use this to understand why the seven
-  layers look the way they do.
+- `planning/01_product_doctrine.md` — hard rules for the product family.
+  Use this to understand why the seven layers look the way they do.
 - `planning/02_*.md` through `planning/18_*.md` — numbered spec corpus
   covering family, vision, UX, architecture, memory, avatar, trust, tiers,
   updates, tech-stack, persona schema, model router.
@@ -122,8 +121,6 @@ drift. Wave 1 landed scaffolds; Wave 4.1 flips the critical ones to blocking.
   the no-cross-layer-import rule.
 - `tools/lint-policy-bypass/` — rejects direct executor calls outside
   `packages/l5-policy`.
-- `tools/lint-private-asset-leak/` — fails builds if Isabelle-tagged content
-  leaks into public distributable manifests.
 - `tools/ts-bindings-gen/` — `ts-rs` / `specta` codegen from Rust structs.
   TS must never be hand-authored where Rust is canonical.
 
@@ -149,7 +146,7 @@ Do not add meaningful app logic until L1 (or L4) has a first-logic slice.
 
 - Not imported by any Rust or TS workspace member.
 - Not covered by Rust or TS workspace checks.
-- Ported capability-by-capability by X2 (Isabelle) and X4 (v1 content port)
+- Ported capability-by-capability from the upstream codebase and v1 content
   during later waves.
 - Retired only after parity is verified.
 

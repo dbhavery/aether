@@ -60,7 +60,7 @@ pub struct AuditRecordEvent {
     pub reason: Option<StaticReasonId>,
     /// Optional evaluator trace for diagnostics.
     pub stage_trace: Vec<StageTrace>,
-    /// Whether this row was produced under a privileged profile (Isabelle).
+    /// Whether this row was produced under a privileged profile.
     pub privileged_profile: bool,
 }
 

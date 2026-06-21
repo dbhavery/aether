@@ -30,7 +30,7 @@ appear without a matching issue are usually asked to slow down. -->
 - [ ] L5 is still the single writer for side-effectful actions. Nothing in
       this PR performs file / network / subprocess work outside the L5
       approved execution path.
-- [ ] No Isabelle-tagged / private assets added to public distributables.
+- [ ] No private/internal assets added to public distributables.
 - [ ] Commit messages follow `<type>(<scope>): short imperative summary`.
 
 ## How to verify

@@ -161,12 +161,12 @@ last_updated: "2026-04-17"
 assets:
   portrait:
     source: "ai_generated"       # ai_generated | licensed | royalty_free | user_supplied
-    generator: "SDXL + Isabelle LoRA v2.0"
+    generator: "SDXL + persona LoRA v2.0"
     prompt: "<prompt used to generate; for our own audit>"
     license: "custom_aether"     # we own; shipped under MIT as part of persona pack
   state_images:
     source: "ai_generated"
-    generator: "SDXL + Isabelle LoRA v2.0 + inpaint"
+    generator: "SDXL + persona LoRA v2.0 + inpaint"
     license: "custom_aether"
   voice_reference:
     source: "royalty_free"

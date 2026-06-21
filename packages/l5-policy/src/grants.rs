@@ -179,7 +179,7 @@ pub struct PersonaCompiledPolicyDefaults {
     pub privacy_posture: PrivacyPosture,
     /// Per-capability default approval mode (layer 3 of precedence).
     pub per_capability_defaults: HashMap<Capability, ApprovalMode>,
-    /// Isabelle privileged-profile flag (source §14.10 — still pending ratification).
+    /// Privileged-profile flag (source §14.10 — still pending ratification).
     pub privileged_profile: bool,
     /// Persona's recommended preset, if any.
     pub recommended_preset: Option<PresetId>,

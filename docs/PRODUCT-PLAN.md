@@ -2,7 +2,7 @@
 
 **Status:** Active planning → execution
 **Branch:** `dev`
-**Starting state:** March-24 showcase snapshot at `master`, MIT-licensed, PySide6 UI, out-of-date relative to upstream Isabelle.
+**Starting state:** March-24 showcase snapshot at `master`, MIT-licensed, PySide6 UI, out-of-date relative to the upstream codebase.
 **Target:** Public product release with onboarding wizard, 10–12 pre-made personas, bring-your-own-key LLM, local-first voice + avatar, portfolio-embedded demo.
 **Not this release:** Full-body photorealistic avatar, GraphRAG memory, agentic workflows, mobile client, vision input, tool execution. Those are for the ground-up rebuild that follows v1.0.
 
@@ -18,13 +18,13 @@
 | 4 | **Legacy PySide6 desktop stays** in the repo as `src/desktop/` — read-only "legacy mode". | Don's locked 2026-04-11 rule: HTML/CSS via pywebview for all new UI. PySide6 pre-dates the rule. Don't delete, don't extend. |
 | 5 | **New product UI:** Next.js 15 + React 19 + TypeScript, loaded by pywebview. | Matches portfolio stack (`dbhavery.ai`), matches locked rule, lets same codebase serve desktop AND the portfolio demo widget. |
 | 6 | **Backend:** Python 3.13 + FastAPI + websockets. No change from current. | Existing modules already use this pattern. |
-| 7 | **Lip-sync engine v1.0:** LivePortrait (TensorRT). | Best quality/VRAM ratio for headshots. Other engines (Ditto, MuseTalk, FlashHead) stay in upstream Isabelle and can be ported later if needed. |
+| 7 | **Lip-sync engine v1.0:** LivePortrait (TensorRT). | Best quality/VRAM ratio for headshots. Other engines (Ditto, MuseTalk, FlashHead) stay in the upstream codebase and can be ported later if needed. |
 | 8 | **Voices:** Chatterbox Turbo + cloned from royalty-free reference samples. ElevenLabs optional BYOK. | Avoids redistribution ambiguity. Users never need a cloud voice key to get voice. |
 | 9 | **Memory:** ChromaDB hybrid search ships in v1.0, per-persona isolated. | It's built, it works, it's a companion differentiator. Strip any Don-specific data. |
 | 10 | **Wake word:** **Removed for v1.0.** Replaced by push-to-talk (spacebar hold). | Porcupine requires per-user key registration — too much onboarding friction. Wake word returns in v1.1 if demand justifies. |
-| 11 | **LLM routing:** Unified through `litellm`. Users pick providers in the wizard. | Single integration point, supports 100+ providers, already in upstream Isabelle deps. |
+| 11 | **LLM routing:** Unified through `litellm`. Users pick providers in the wizard. | Single integration point, supports 100+ providers, already in the upstream codebase deps. |
 | 12 | **Monetization v1.0:** Free download, no billing. Reassess at 30 days post-launch. | Remove all friction until we have signal that people care. |
-| 13 | **Installer:** Inno Setup for Windows first. macOS/Linux later. | Upstream Isabelle already has Inno Setup scaffold under `packaging/`. Majority of Don's audience is Windows. |
+| 13 | **Installer:** Inno Setup for Windows first. macOS/Linux later. | The upstream codebase already has Inno Setup scaffold under `packaging/`. Majority of the audience is Windows. |
 | 14 | **Portfolio demo:** 60-second hero video + inline text-chat widget (Groq free tier). No live voice/avatar demo in v1.0. | Avoids hosting a GPU backend before we know demand exists. Video shows the product at its best; widget proves the shell works. |
 
 ---
@@ -64,7 +64,7 @@
 
 ### P0 — Architecture freeze and repo scaffold
 
-**Output:** this document, ARCHITECTURE-V2.md, PERSONA-SCHEMA.md, ONBOARDING-SPEC.md, LLM-PROVIDERS.md, SYNC-ISABELLE.md, empty `personas/` and `frontend/` directories, initial commit on `dev`.
+**Output:** this document, ARCHITECTURE-V2.md, PERSONA-SCHEMA.md, ONBOARDING-SPEC.md, LLM-PROVIDERS.md, empty `personas/` and `frontend/` directories, initial commit on `dev`.
 
 **Acceptance:**
 - All planning docs committed.
@@ -73,9 +73,9 @@
 
 **Status:** In progress (this session).
 
-### P1 — Backend port from upstream Isabelle
+### P1 — Backend port from the upstream codebase
 
-**Output:** Fresh port of `core/`, `shared/`, `voice/`, `avatar/`, `brain/`, `memory/` from current upstream Isabelle into `src/`. De-personalized. Legacy PySide6 `src/desktop/` renamed to `src/desktop_legacy/` and marked read-only.
+**Output:** Fresh port of `core/`, `shared/`, `voice/`, `avatar/`, `brain/`, `memory/` from the current upstream codebase into `src/`. De-personalized. Legacy PySide6 `src/desktop/` renamed to `src/desktop_legacy/` and marked read-only.
 
 **Acceptance:**
 - Backend starts cleanly with no hardcoded Don-specific paths.

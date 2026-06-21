@@ -10,7 +10,7 @@ The following are considered in-scope for security reports:
 - **Audit log tampering.** Any path that can insert, modify, or delete entries in `policy_audit_log` without the configured hash-chain + HMAC contract once Wave 4.x lands. For Wave 3.5, the append-only SQL triggers are the baseline guarantee.
 - **Capability confusion.** Any case where a call that should require a specific capability is evaluated against the wrong capability, or where grant matching accepts a resource scope outside the grant.
 - **BYOK / credential leakage.** Any path that exposes a user-supplied API key, token, or secret in logs, telemetry, error messages, crash reports, or persisted artifacts.
-- **Persona privilege escalation.** Any path that lets a non-privileged persona run with the rights of a privileged persona (for example, acquiring Isabelle-tagged capability without the configured precondition).
+- **Persona privilege escalation.** Any path that lets a non-privileged persona run with the rights of a privileged persona (for example, acquiring a privileged capability without the configured precondition).
 - **Cross-layer import violation.** Any supply-chain path that bypasses the seven-layer boundary rules enforced in `tools/lint-layer-boundaries/` in a way that creates a real vulnerability — not merely a lint-rule miss.
 
 Out of scope for this preview:

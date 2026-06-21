@@ -47,7 +47,7 @@ Items 6–11 from `L5_interface_pack.md` §10 remain **OPEN**. Each is flagged a
 - HMAC key rotation policy (source §14.2) — keyring shape only; rotation policy deferred.
 - `AuditExport` capability identifier — now present per Decision 3.
 - Plan-preview P1/P2 scope — `preview_plan` returns `PlanPreview { advisory }`; P2 expansion deferred.
-- Isabelle `privileged_profile` mechanics — field present on `PersonaCompiledPolicyDefaults` and `AuditRecordEvent`, flagged as pending ratification.
+- `privileged_profile` mechanics — field present on `PersonaCompiledPolicyDefaults` and `AuditRecordEvent`, flagged as pending ratification.
 - Doctrine layer-count drift — consumer concern, not enforced here.
 
 ## Dependencies (Wave 2)

@@ -13,7 +13,7 @@
 3. **One layer per session.** A session touches at most one `packages/l*-*/` layer. Cross-layer work requires a coordinator pass first.
 4. **No direct cross-layer imports.** Sibling `packages/l*` crates/packages do not import each other. Coordination happens through `packages/event-bus` or through `packages/l5-policy` / `packages/l6-persona` typed outputs. See `planning/planning/monorepo_plan_draft.md` §4.1 and `planning/plans/implementation_prep/event_contracts_master.md`.
 5. **Policy is the single writer for side effects.** All file I/O, network, subprocess, and tool execution goes through `packages/l5-policy`'s approved execution path. No direct executor calls from anywhere else.
-6. **Private assets never enter public distributables.** Isabelle-tagged assets are overlay-only at runtime for Don's profile. Build-time lint enforces.
+6. **Private assets never enter public distributables.** Private/internal assets are overlay-only at runtime and must not ship in public builds. Build-time lint enforces.
 
 ## 2. Read-before-write
 
@@ -44,7 +44,6 @@ These live under `tools/` and are referenced from CI when CI lands:
 
 - `tools/lint-layer-boundaries/` — Rust `cargo-deny` + TS ESLint rule enforcing §1.4.
 - `tools/lint-policy-bypass/` — rejects direct executor calls outside `packages/l5-policy`.
-- `tools/lint-private-asset-leak/` — fails builds if Isabelle-tagged content appears in public distributable manifests.
 - `tools/ts-bindings-gen/` — `ts-rs`/`specta` codegen from Rust structs; TS must never be hand-authored where Rust is canonical.
 
 Wave 1 ships scaffolds + permissive configs; Wave 3+ tightens to blocking.
@@ -67,7 +66,7 @@ The v1.0 Python tree (`src/`, `desktop/`, `frontend/`, etc.) remains in place du
 
 - Not imported by any Rust or TS workspace member.
 - Not covered by Rust/TS workspace checks.
-- Ported capability-by-capability by X2 (Isabelle) and X4 (v1 content) during later waves.
+- Ported capability-by-capability from the upstream codebase and v1 content during later waves.
 - Retired only after parity is verified.
 
 Do not "clean up" legacy paths opportunistically.

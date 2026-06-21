@@ -33,9 +33,7 @@ Shared infrastructure (`event-bus`, `storage`, `telemetry`, `types`, `ui-kit`,
 `media-engine`) sits underneath. Everything routes through L5 for
 side-effectful actions — there is no back door.
 
-**Free Aether — Community Edition** is the open-source preview track. A
-separate Pro flagship and a private build (Isabelle) exist in the doctrine
-but are out of scope for this repository.
+**Free Aether — Community Edition** is the open-source preview track.
 
 ---
 

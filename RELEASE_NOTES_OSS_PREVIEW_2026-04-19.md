@@ -54,7 +54,7 @@ product doctrine in [`planning/01_product_doctrine.md`](planning/01_product_doct
 - Cargo workspace with 11 member crates; pnpm workspace with three TS
   packages.
 - `tools/lint-layer-boundaries/`, `tools/lint-policy-bypass/`,
-  `tools/lint-private-asset-leak/`, `tools/ts-bindings-gen/` —
+  `tools/ts-bindings-gen/` —
   governance scaffolds (rules activated in future waves).
 - `.github/CODEOWNERS` with per-layer ownership lines.
 

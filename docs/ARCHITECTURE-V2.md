@@ -98,7 +98,6 @@ aether/
 │   └── ...                           (10–12 total by P4)
 │
 ├── scripts/
-│   ├── sync_from_isabelle.py         Deterministic port script (see SYNC-ISABELLE.md)
 │   ├── persona_generator/            Tools to generate a new persona pack
 │   └── preprocess_avatar.py          Landmark extraction, crop verification
 │
@@ -116,7 +115,7 @@ aether/
 ├── README.md                         Public-facing (updated in P5)
 ├── pyproject.toml                    Python dependencies
 ├── package.json                      (added in P2 for frontend)
-└── isabelle_config.yaml              Default config (renamed in P1 to aether_config.yaml)
+└── aether_config.yaml               Default config
 ```
 
 ---
@@ -131,7 +130,7 @@ aether/
 | 8767 | Health endpoint | 127.0.0.1 | No |
 | 8770 | Avatar MJPEG stream | 127.0.0.1 | No |
 
-All loopback-only. No LAN exposure in v1.0. The Tailscale pattern from upstream Isabelle is **deferred** — if users want it later, they run Tailscale themselves and we add an explicit "allow LAN" config flag in a future version.
+All loopback-only. No LAN exposure in v1.0. The Tailscale pattern from the upstream codebase is **deferred** — if users want it later, they run Tailscale themselves and we add an explicit "allow LAN" config flag in a future version.
 
 ---
 
@@ -145,18 +144,18 @@ All loopback-only. No LAN exposure in v1.0. The Tailscale pattern from upstream 
 ### 4.2 Shared (`src/shared/`)
 - Config loader reads `aether_config.yaml` + env overrides.
 - `paths.py` — all file paths derived from `AETHER_DATA_DIR` (default `%APPDATA%/aether/`). **No hardcoded paths anywhere else in the codebase.**
-- Types: `EventType` enum, `AetherEvent` dataclass (renamed from IsabelleEvent).
+- Types: `EventType` enum, `AetherEvent` dataclass.
 - Logging: structured loguru.
 
 ### 4.3 Voice (`src/voice/`)
 - **Input:** audio capture (sounddevice), Silero VAD, faster-whisper STT.
 - **Output:** Chatterbox Turbo local TTS, ElevenLabs cloud fallback if configured.
-- **Removed from upstream Isabelle:** Porcupine wake word, ECAPA-TDNN speaker verification, Don-specific reference voice.
+- **Removed from the upstream codebase:** Porcupine wake word, ECAPA-TDNN speaker verification, owner-specific reference voice.
 - **Trigger:** push-to-talk event from frontend (hold spacebar → USER_SPEECH_START → USER_SPEECH_END).
 - **Events:** USER_SPEECH_START, USER_SPEECH_END, TRANSCRIPT_READY, RESPONSE_AUDIO_CHUNK, RESPONSE_AUDIO_END.
 
 ### 4.4 Avatar (`src/avatar/`)
-- LivePortrait engine only (v1.0). Other engines stay in upstream Isabelle, dormant here.
+- LivePortrait engine only (v1.0). Other engines stay in the upstream codebase, dormant here.
 - MJPEG server on :8770.
 - Idle animator with blink, state transitions, micro-movements.
 - Compositor for face paste-back on reference images.
@@ -190,7 +189,7 @@ All loopback-only. No LAN exposure in v1.0. The Tailscale pattern from upstream 
 
 ## 5. Events catalog (additions beyond upstream)
 
-Events unchanged from upstream Isabelle: USER_MESSAGE, TRANSCRIPT_READY, RESPONSE_TEXT_READY, RESPONSE_TEXT_CHUNK, RESPONSE_AUDIO_CHUNK, RESPONSE_START, RESPONSE_END, AVATAR_STATE_CHANGED, MODULE_READY.
+Events unchanged from the upstream codebase: USER_MESSAGE, TRANSCRIPT_READY, RESPONSE_TEXT_READY, RESPONSE_TEXT_CHUNK, RESPONSE_AUDIO_CHUNK, RESPONSE_START, RESPONSE_END, AVATAR_STATE_CHANGED, MODULE_READY.
 
 Events added for v1.0:
 - `USER_SPEECH_START` / `USER_SPEECH_END` — push-to-talk events (replaces wake_word_detected + Silero auto-detect).
@@ -259,7 +258,7 @@ All secrets live in the OS keyring (Windows Credential Manager via the `keyring`
 
 | Layer | Choice | Why |
 |-------|--------|-----|
-| Backend language | Python 3.13 | Matches upstream Isabelle. Rewriting to Rust is a v2 task. |
+| Backend language | Python 3.13 | Matches the upstream codebase. Rewriting to Rust is a v2 task. |
 | HTTP/WS server | FastAPI + websockets + uvicorn | Already in deps, well-supported, typed. |
 | Frontend framework | Next.js 15 (App Router) + React 19 | Matches portfolio stack. Static export works for both pywebview and web. |
 | Styling | Tailwind v4 | Fast iteration, consistent with portfolio. |

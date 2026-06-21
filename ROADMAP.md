@@ -104,8 +104,6 @@ The roadmap reflects how the architecture was staged, not marketing priorities:
 ### 4. Public-release polish
 
 - Expand docs/ with per-layer deep dives beyond `REPO_TOUR.md`.
-- Replace any remaining "Aether Pro" or "Isabelle" references in the public
-  repo with Community Edition equivalents.
 - Retire the legacy Python tree once capability parity is verified per X2/X4
   plans.
 
