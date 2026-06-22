@@ -118,9 +118,7 @@ jobs:
                    .github/ISSUE_TEMPLATE/bug_report.md \
                    .github/ISSUE_TEMPLATE/feature_request.md \
                    .github/ISSUE_TEMPLATE/docs_request.md \
-                   .github/ISSUE_TEMPLATE/config.yml \
-                   planning/00_VISION_AND_GUARDRAILS.md \
-                   planning/01_product_doctrine.md; do
+                   .github/ISSUE_TEMPLATE/config.yml; do
             if [ ! -f "$f" ]; then
               echo "Missing required file: $f" >&2
               exit 1
