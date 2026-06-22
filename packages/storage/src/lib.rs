@@ -2,10 +2,9 @@
 //!
 //! Local persistence substrate. **Wave 1 scaffold — no driver yet.**
 //!
-//! Canonical reference:
-//! - `planning/plans/implementation_prep/sqlite_schema_pack.md`
-//! - `planning/plans/L5_policy_engine_system_design.md` §7 grants, §8 audit
-//! - `planning/plans/L2_memory_kernel_system_design.md` §7
+//! Canonical reference: `ARCHITECTURE.md` and
+//! `docs/adr/ADR-0004-durable-store-shape.md` (the durable store shape, the L5
+//! grants/audit tables, and the L2 memory store).
 //!
 //! ## Layout (per schema pack §2)
 //!

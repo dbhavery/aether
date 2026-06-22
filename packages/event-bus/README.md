@@ -6,9 +6,8 @@ Typed cross-layer event substrate. Every layer (L1–L7, Media, Core) publishes 
 
 ## References
 
-- file:///C:/Users/dbhav/Projects/aether/planning/plans/implementation_prep/event_contracts_master.md
-- file:///C:/Users/dbhav/Projects/aether/planning/plans/L1_interaction_timing_system_design.md
-- file:///C:/Users/dbhav/Projects/aether/planning/plans/X3_tauri_architecture.md
+- `ARCHITECTURE.md` — the cross-layer event surface and layer boundaries.
+- `docs/ARCHITECTURE-V2.md` — current architecture detail.
 
 ## Wave 1 contents
 

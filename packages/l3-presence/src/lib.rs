@@ -5,8 +5,7 @@
 //! L3 owns the presence controller: behavior scheduling, viseme timing,
 //! listening / thinking / speaking posture choices. Borrowed rendering
 //! surface; custom control plane.
-//! Source: `planning/plans/L3_presence_engine_system_design.md`,
-//! `planning/plans/implementation_prep/L3_interface_pack.md`.
+//! Source: `ARCHITECTURE.md`.
 
 #![deny(unsafe_code)]
 #![warn(missing_docs)]

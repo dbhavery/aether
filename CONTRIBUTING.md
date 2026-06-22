@@ -12,14 +12,14 @@ matrices, contract refinements, first-logic slices.
 
 ## 1. Before you start
 
-1. Read `planning/00_VISION_AND_GUARDRAILS.md`. This is doctrine. If your idea
-   conflicts with it, open an issue before writing code.
-2. Read `planning/01_product_doctrine.md` for the hard rules.
-3. Read `planning/plans/00_ORCHESTRATION_MAP.md` to understand how the seven
-   layers relate.
+1. Read [`ARCHITECTURE.md`](ARCHITECTURE.md). This is the load-bearing design.
+   If your idea conflicts with it, open an issue before writing code.
+2. Read [`docs/PRODUCT-PLAN.md`](docs/PRODUCT-PLAN.md) for the hard rules.
+3. Read [`docs/ARCHITECTURE-V2.md`](docs/ARCHITECTURE-V2.md) to understand how
+   the seven layers relate.
 4. Skim the most recent `WAVE*_EXECUTION_REPORT_*.md` to see where the project
    actually is today.
-5. Check [Open Questions](planning/OPEN_QUESTIONS.md) and existing issues
+5. Check the ADR log under [`docs/adr/`](docs/adr/) and existing issues
    before proposing anything substantial.
 
 ---
@@ -28,7 +28,7 @@ matrices, contract refinements, first-logic slices.
 
 ### For first-time contributors
 
-- **Docs fixes.** Typos, broken links, ambiguous passages in planning files.
+- **Docs fixes.** Typos, broken links, ambiguous passages in the docs.
 - **README / CONTRIBUTING / SUPPORT improvements.** Clarity helps everyone.
 - **Test expansions.** Each layer has a `tests/smoke.rs` that could be much
   deeper. `packages/l5-policy/tests/engine_slice.rs` is the richest example.
@@ -43,9 +43,10 @@ matrices, contract refinements, first-logic slices.
   backends behind a feature flag. See Wave 3 report §2 for the locked design.
 - **Wave 4.1** — activate the `[bans]` block in
   `tools/lint-layer-boundaries/deny.toml`.
-- **First-logic slices for L1/L2/L3/L4/L6/L7** — each layer has an interface
-  pack in `planning/plans/implementation_prep/` that defines the target
-  surface. Pick one, open an issue to claim it, produce a wave report.
+- **First-logic slices for L1/L2/L3/L4/L6/L7** — each layer crate under
+  `packages/l*-*/` defines its target surface in its `README.md` and
+  `src/lib.rs` traits/enums. Pick one, open an issue to claim it, produce a
+  wave report.
 - **`ts-rs` bindings generator** under `tools/ts-bindings-gen/` so
   `packages/l5-policy-ts/` becomes generated instead of hand-written.
 
@@ -105,10 +106,10 @@ rethinking.
 ### Docs-first policy for major changes
 
 Anything that changes a **contract** — an event field, an enum variant, a
-trait signature, a planning-doc decision — lands as docs first:
+trait signature, an architecture decision — lands as docs first:
 
-1. Propose in a PR that touches only `planning/` and the relevant
-   `README.md` / interface-pack file.
+1. Propose in a PR that touches only the architecture docs (`ARCHITECTURE.md`,
+   `docs/`, or a new ADR under `docs/adr/`) and the relevant `README.md`.
 2. Get maintainer review on the design.
 3. Then open the implementation PR that materializes the decision in code.
 

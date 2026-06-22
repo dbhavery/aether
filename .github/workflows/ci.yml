@@ -55,7 +55,7 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Layer-boundary lint — Wave 4.1. Rejects forbidden intra-workspace edges
-  # per planning/00_VISION_AND_GUARDRAILS.md §4.1 and CLAUDE.md §1.4.
+  # per ARCHITECTURE.md and CLAUDE.md §1.4.
   # ---------------------------------------------------------------------------
   layer-boundaries:
     name: Layer boundaries (cross-crate dep lint)

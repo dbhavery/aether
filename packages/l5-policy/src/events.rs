@@ -1,7 +1,6 @@
 //! L5 event family emitted on the Rust-internal event bus.
 //!
-//! Source: `planning/plans/implementation_prep/event_contracts_master.md`
-//! and `planning/plans/implementation_prep/L5_interface_pack.md` §4.
+//! Source: `ARCHITECTURE.md`.
 
 use serde::{Deserialize, Serialize};
 

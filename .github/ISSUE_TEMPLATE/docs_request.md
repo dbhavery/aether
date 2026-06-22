@@ -13,8 +13,8 @@ right level of the docs, not just the one sentence you hit. -->
 
 ## Which file / section
 
-<!-- File path + heading or line number. For planning docs, also include the
-numbered section (e.g. "planning/plans/implementation_prep/sqlite_schema_pack.md §3b"). -->
+<!-- File path + heading or line number. Where applicable, also include the
+section (e.g. "ARCHITECTURE.md §Layers" or "docs/adr/ADR-0005-retrieval-wiring.md §Decision"). -->
 
 ## What is wrong or missing
 

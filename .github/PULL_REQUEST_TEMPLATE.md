@@ -11,20 +11,20 @@ appear without a matching issue are usually asked to slow down. -->
 
 ## Kind of change
 
-- [ ] Docs / planning / wave-report only
+- [ ] Docs / ADR / wave-report only
 - [ ] Tests only
 - [ ] Governance / tooling (`tools/lint-*`, CI)
 - [ ] Engine logic — layer: L1 / L2 / L3 / L4 / L5 / L6 / L7
 - [ ] Shared infra (`event-bus`, `storage`, `telemetry`, `types`, `ui-kit`,
       `media-engine`)
-- [ ] Architecture change (requires a prior `DECISION_LOCK_PASS_*.md` entry)
+- [ ] Architecture change (requires a prior ADR under `docs/adr/`)
 
 ## Checklist
 
-- [ ] I read `CONTRIBUTING.md` and the relevant interface pack under
-      `planning/plans/implementation_prep/`.
+- [ ] I read `CONTRIBUTING.md` and the relevant architecture docs
+      (`ARCHITECTURE.md` / `docs/` / the ADR for this area).
 - [ ] Tests added or updated, and I have run them locally.
-- [ ] Docs updated: README / planning / wave report as applicable.
+- [ ] Docs updated: README / ARCHITECTURE / ADR / wave report as applicable.
 - [ ] Seven-layer boundary respected. Sibling `packages/l*-*` crates do not
       import each other in this PR.
 - [ ] L5 is still the single writer for side-effectful actions. Nothing in

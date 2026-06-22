@@ -2,7 +2,7 @@
 """Aether layer-boundary linter.
 
 Enforces the intra-workspace dependency rules declared in
-`planning/00_VISION_AND_GUARDRAILS.md` §4.1 and `CLAUDE.md` §1.4:
+`ARCHITECTURE.md` and `CLAUDE.md` §1.4:
 
   - L5 (policy) is the non-bypassable gate. Sibling engines (L1, L2, L3,
     L4, L6, L7) MAY depend on `aether-l5-policy`. L5 MUST NOT depend on
@@ -228,7 +228,7 @@ def _reason_for(src: str, target: str) -> str:
     if src == "aether-l5-policy" and target in ENGINE_CRATES - {"aether-l5-policy"}:
         return (
             "L5 is the non-bypassable policy gate. It MUST NOT depend on any "
-            "sibling engine crate (planning/00_VISION_AND_GUARDRAILS.md §4.1, "
+            "sibling engine crate (ARCHITECTURE.md, "
             "CLAUDE.md §1.4)."
         )
     if src in ENGINE_CRATES and target in ENGINE_CRATES and target != "aether-l5-policy":
@@ -240,7 +240,7 @@ def _reason_for(src: str, target: str) -> str:
     if src in SHARED_INFRA_CRATES and target in ENGINE_CRATES:
         return (
             "Shared-infra crates must not depend on engine crates — the arrow "
-            "runs the other way (planning/00_VISION_AND_GUARDRAILS.md §4.1)."
+            "runs the other way (ARCHITECTURE.md)."
         )
     if target not in KNOWN_WORKSPACE_CRATES:
         return "Unexpected non-workspace target."

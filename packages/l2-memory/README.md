@@ -6,9 +6,9 @@ L2 owns the companion memory kernel — 6 domains, SQLite-backed items, blob ref
 
 ## References
 
-- `planning/plans/L2_memory_kernel_system_design.md`
-- `planning/plans/implementation_prep/L2_interface_pack.md`
-- `planning/plans/implementation_prep/sqlite_schema_pack.md` §3e
+- `ARCHITECTURE.md` — the L2 memory kernel layer.
+- `docs/adr/ADR-0001-memory-domain-reconciliation.md` — the memory domains.
+- `docs/adr/ADR-0004-durable-store-shape.md` — the SQLite store shape.
 
 ## Wave 4 contents
 

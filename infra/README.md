@@ -2,7 +2,7 @@
 
 Build, bundling, and operational config. Empty in Wave 1.
 
-Planned (see `planning/planning/monorepo_plan_draft.md` §1 and `planning/plans/X3_tauri_architecture.md`):
+Planned (see `ARCHITECTURE.md` and `docs/DISTRIBUTION.md`):
 
 - `tauri/` — Tauri bundling config per target OS.
 - `installer-inno/` — Windows Inno Setup scaffold for OSS Preview.

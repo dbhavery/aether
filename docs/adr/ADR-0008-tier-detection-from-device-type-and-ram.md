@@ -5,7 +5,7 @@
 - **Deciders:** Don (owner). Claude proposes, captures rationale from on-hardware validation data.
 - **Supersedes:** ADR-0006 §Decision 2 (the `max_buffer_size`-based VRAM estimate path) and §Decision 3 (the recommendation rule that consumed it).
 - **Superseded by:** nothing yet. A future ADR may add NVML/IOKit feature-gated probes for real VRAM (held per ADR-0006 §Open items).
-- **Related:** `docs/adr/ADR-0006-hardware-tier-model.md` (the foundational tier model, which this ADR refines), `planning/validation_2026-04-24/VALIDATION_REPORT.md` §4 (the on-hardware data that motivates the change).
+- **Related:** `docs/adr/ADR-0006-hardware-tier-model.md` (the foundational tier model, which this ADR refines). The on-hardware validation data (2026-04-24) motivates the change.
 
 ## Context
 

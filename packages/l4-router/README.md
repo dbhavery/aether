@@ -6,8 +6,10 @@ L4 owns model + tool routing: 7-tier abstraction, tool dispatch, per-request L5 
 
 ## References
 
-- `planning/plans/L4_model_router_system_design.md`
-- `planning/plans/implementation_prep/L4_interface_pack.md`
+- `ARCHITECTURE.md` — the L4 model + tool router layer.
+- `docs/adr/ADR-0003-model-defaults-supersession.md` — model defaults.
+- `docs/adr/ADR-0006-hardware-tier-model.md` — the tier model.
+- `docs/LLM-PROVIDERS.md` — the provider surface.
 
 ## Wave 4 contents
 

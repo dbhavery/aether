@@ -6,7 +6,7 @@
 //! - **Decision 2 (2026-04-18):** `Decision::DraftOnly { source: DraftSource }`
 //!   where `DraftSource ∈ {System, UserChoice}`. There is no `AllowDraft`.
 //!
-//! Source: `planning/DECISION_LOCK_PASS_2026-04-18c.md`.
+//! Source: see `ARCHITECTURE.md`.
 
 use serde::{Deserialize, Serialize};
 

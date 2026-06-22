@@ -1,7 +1,7 @@
 //! Storage-integration hooks.
 //!
 //! L5 owns three SQLite tables in the shared `aether.db` (see
-//! `planning/plans/implementation_prep/sqlite_schema_pack.md` §3):
+//! see `ARCHITECTURE.md` §3):
 //!
 //! - `policy_grants` — active + historical grant rows.
 //! - `audit_log` — append-only, hash-chained, HMAC-integrity rows.

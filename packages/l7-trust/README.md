@@ -6,8 +6,8 @@ L7 owns trust UX + onboarding + shell adapter. This crate is the Rust-side contr
 
 ## References
 
-- `planning/plans/L7_trust_ux_onboarding_system_design.md`
-- `planning/plans/implementation_prep/L7_interface_pack.md`
+- `ARCHITECTURE.md` — the L7 trust + onboarding layer.
+- `docs/ONBOARDING-SPEC.md` — the onboarding flow.
 
 ## Wave 4 contents
 

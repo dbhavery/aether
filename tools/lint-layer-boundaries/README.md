@@ -16,8 +16,8 @@ Custom ESLint rule `@aether/no-cross-layer-import` that rejects imports matching
 
 ## References
 
-- file:///C:/Users/dbhav/Projects/aether/planning/planning/monorepo_plan_draft.md §4.1
-- file:///C:/Users/dbhav/Projects/aether/CLAUDE.md §1.4
+- `ARCHITECTURE.md` — the layer-boundary rule this lint enforces.
+- `CLAUDE.md` §1.4 — the no-cross-layer-import directive.
 
 ## Wave 2 TODO
 

@@ -8,12 +8,9 @@
 //!
 //! ## Source-of-truth docs
 //!
-//! - `planning/plans/L5_policy_engine_system_design.md`
-//! - `planning/plans/implementation_prep/L5_interface_pack.md`
-//! - `planning/plans/implementation_prep/event_contracts_master.md`
-//! - `planning/plans/implementation_prep/sqlite_schema_pack.md` §3
-//! - `planning/DECISION_LOCK_PASS_2026-04-18c.md` (Decisions 1–5)
-//! - `planning/plans/L1_L4_L5_L7_integration_notes.md`
+//! - `ARCHITECTURE.md` — the L5 policy engine, the non-bypassable gate, and
+//!   the five control-plane decisions.
+//! - `docs/adr/` — the locked decisions for storage, retrieval, and tiers.
 //!
 //! ## Invariants this crate encodes (stub surface)
 //!

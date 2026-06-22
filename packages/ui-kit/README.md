@@ -6,8 +6,8 @@ Shared UI primitives. Dark-first, neumorphic monochrome. Consumed by `apps/deskt
 
 ## References
 
-- file:///C:/Users/dbhav/Projects/aether/planning/05_ux_principles.md
-- file:///C:/Users/dbhav/Projects/aether/planning/11_avatar_presence.md
+- `ARCHITECTURE.md` — the UX principles and the L3 presence / L7 trust surfaces this kit serves.
+- `docs/ARCHITECTURE-V2.md` — current architecture detail.
 
 ## Wave 1 contents
 

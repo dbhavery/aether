@@ -6,8 +6,8 @@ L1 owns interaction timing, the turn state machine, and reflex routing.
 
 ## References
 
-- `planning/plans/L1_interaction_timing_system_design.md`
-- `planning/plans/implementation_prep/L1_interface_pack.md`
+- `ARCHITECTURE.md` — the L1 interaction layer and the turn state machine.
+- `docs/ARCHITECTURE-V2.md` — current architecture detail.
 
 ## Wave 4 contents
 

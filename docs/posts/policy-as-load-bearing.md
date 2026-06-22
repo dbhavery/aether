@@ -145,7 +145,7 @@ Three things made me commit to this design:
 
 Aether is MIT-licensed and lives at [github.com/dbhavery/aether](https://github.com/dbhavery/aether). The current tag is `v0.1.0-oss-preview.0`, which ships the seven-layer workspace, the first real logic in L5 (evaluator, grants, audit, the sealed chain), stub shells for the other six engines, and an L1 turn FSM that walks a full turn through L5 and into a router adapter. There's a tiny CLI in `apps/l1-cli/` that demonstrates the whole path.
 
-If you want the serious document, read `ARCHITECTURE.md`. If you want the doctrine, read `planning/00_VISION_AND_GUARDRAILS.md`. If you want to run it:
+If you want the serious document, read `ARCHITECTURE.md`. If you want the locked decisions behind it, read the ADR log under `docs/adr/`. If you want to run it:
 
 ```bash
 git clone https://github.com/dbhavery/aether.git

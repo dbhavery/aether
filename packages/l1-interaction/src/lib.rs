@@ -4,8 +4,7 @@
 //! classifier, no media plumbing.
 //!
 //! L1 owns interaction timing, the turn state machine, and the reflex router.
-//! Source: `planning/plans/L1_interaction_timing_system_design.md`,
-//! `planning/plans/implementation_prep/L1_interface_pack.md`.
+//! Source: `ARCHITECTURE.md`.
 //!
 //! ## Invariants this crate will enforce (later waves)
 //!

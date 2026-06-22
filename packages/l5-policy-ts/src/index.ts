@@ -7,9 +7,8 @@
 //
 // Do NOT hand-extend this package after the generator lands. Regenerate.
 //
-// Primary references:
-//   planning/plans/implementation_prep/L5_interface_pack.md
-//   planning/DECISION_LOCK_PASS_2026-04-18c.md
+// Primary reference:
+//   ARCHITECTURE.md
 
 export * from "./decision.js";
 export * from "./commands.js";

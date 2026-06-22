@@ -3,10 +3,8 @@
 //! Media pipeline abstractions: STT, TTS, VAD, streaming chunk timing, viseme
 //! metadata. **Wave 1 placeholder — traits only, no implementations.**
 //!
-//! Canonical reference:
-//! - `planning/16_tech_stack.md` §Speech stack
-//! - `planning/plans/L3_presence_engine_system_design.md`
-//! - `planning/plans/L1_interaction_timing_system_design.md` (VAD hook)
+//! Canonical reference: `ARCHITECTURE.md` (the speech stack and the L1/L3
+//! layers this media surface serves, including the VAD hook).
 //!
 //! Borrowed models (Parakeet/Whisper, XTTS/Piper, Silero/WebRTC VAD) are isolated
 //! behind these traits; the control plane (chunking, interruption, viseme sync)

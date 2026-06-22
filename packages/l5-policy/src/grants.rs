@@ -84,7 +84,7 @@ pub struct GrantFilter {
 /// the core four methods automatically inherits them, and specialized
 /// backends may override for efficiency.
 ///
-/// See `planning/plans/implementation_prep/sqlite_schema_pack.md` §3
+/// See `ARCHITECTURE.md` §3
 /// (grant_ledger table).
 pub trait GrantLedger: Send + Sync {
     // --- core four (required) ---------------------------------------------

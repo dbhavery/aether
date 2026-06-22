@@ -1,15 +1,12 @@
 //! Capability taxonomy and resource scopes.
 //!
-//! Source of truth:
-//! - `planning/plans/L5_policy_engine_system_design.md` §2.1 & §2.2
-//!   (7 capability groups, 45+ sub-capabilities; defaults table).
-//! - `planning/plans/implementation_prep/L5_interface_pack.md` §6.1
-//!   (Rust enum reference).
-//! - `planning/DECISION_LOCK_PASS_2026-04-18c.md` Decision 3 —
-//!   adds `CostCapAdmin` + `AuditExport` capabilities to the canonical enum.
+//! Source of truth: `ARCHITECTURE.md` (the 7 capability groups, 45+
+//! sub-capabilities and defaults table; the Rust enum reference; and
+//! Decision 3, which adds `CostCapAdmin` + `AuditExport` to the canonical
+//! enum).
 //!
 //! **Never stringly typed.** All consumers pattern-match on these enum
-//! variants. Adding a new capability is a planning PR first (CLAUDE.md §3).
+//! variants. Adding a new capability is a docs PR first (CLAUDE.md §3).
 
 use serde::{Deserialize, Serialize};
 

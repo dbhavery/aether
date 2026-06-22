@@ -1,7 +1,7 @@
 //! Wave 3 engine-slice tests.
 //!
 //! Test-matrix mapping (see
-//! `planning/plans/implementation_prep/test_matrix_master.md` §2.5):
+//! see `ARCHITECTURE.md` §2.5):
 //!
 //! - `L5-T01` — evaluate a capability with no grant → `Ask` ticket emitted.
 //!   Covered by `ask_mode_without_grant_emits_ask_ticket`.

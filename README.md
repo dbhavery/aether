@@ -150,7 +150,7 @@ The legacy **v1.0 Python tree** is intentionally left in place. It is the
 predecessor product; its useful content is being ported forward into the new
 architecture capability-by-capability. Do not import from it into Rust or TS
 workspace members, and do not "clean it up." See
-`planning/LEGACY_ROOT_MAPPING_2026-04-19.md` for the port plan.
+[`docs/PRODUCT-PLAN.md`](docs/PRODUCT-PLAN.md) for the port plan.
 
 ---
 
@@ -158,13 +158,6 @@ workspace members, and do not "clean it up." See
 
 ```
 aether/
-├── planning/              # Canonical doctrine + plans. Read before editing.
-│   ├── 00_VISION_AND_GUARDRAILS.md     # Sits above everything else.
-│   ├── 01_product_doctrine.md
-│   ├── 02..18_*.md                      # Numbered spec corpus.
-│   ├── plans/                           # L1–L7 system designs + interface packs.
-│   └── plans/implementation_prep/       # Event contracts, SQLite schema, test matrix.
-│
 ├── packages/              # Cargo + pnpm workspace members.
 │   ├── event-bus/         # Typed envelopes (Rust).
 │   ├── storage/           # Local persistence substrate (Rust; migrations drafted).
@@ -304,15 +297,16 @@ integration, asymmetric checkpoint signing).
 
 ### Where to start reading
 
-1. `planning/00_VISION_AND_GUARDRAILS.md` — start here. This file is doctrine.
-2. `planning/01_product_doctrine.md` — hard rules for the product family.
-3. `planning/plans/00_ORCHESTRATION_MAP.md` — how the layers fit together.
-4. `planning/plans/implementation_prep/` — interface packs, event contracts,
-   schema, and test matrix. These are the concrete contracts the code
-   materializes.
+1. [`docs/REPO_TOUR.md`](docs/REPO_TOUR.md) — start here. A short guided walk
+   through the directories.
+2. [`ARCHITECTURE.md`](ARCHITECTURE.md) — the seven-layer architecture, the
+   non-bypassable policy gate, and how the layers fit together.
+3. [`docs/ARCHITECTURE-V2.md`](docs/ARCHITECTURE-V2.md) — the current
+   architecture detail.
+4. [`docs/PRODUCT-PLAN.md`](docs/PRODUCT-PLAN.md) — product direction and the
+   port plan for the legacy v1.0 tree.
 5. `WAVE3_EXECUTION_REPORT_2026-04-19.md` and `WAVE4_EXECUTION_REPORT_2026-04-19.md`
    — what was done last, with honest deferrals called out.
-6. `docs/REPO_TOUR.md` — a short guided walk through the directories.
 
 ---
 
@@ -344,9 +338,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the long version. Short version:
 - **Docs, tests, and tooling PRs** are the friendliest entry points.
 - **Engine logic** should be scoped to a single layer and produce a wave
   execution report alongside the code.
-- **Planning doc changes** require extra care: `planning/00_VISION_AND_GUARDRAILS.md`
-  and `planning/01_product_doctrine.md` are doctrine — do not edit without
-  prior discussion.
+- **Architecture changes** require extra care: [`ARCHITECTURE.md`](ARCHITECTURE.md)
+  and the seven-layer doctrine it describes are load-bearing — do not edit
+  without prior discussion.
 - **Never bypass L5** for any side-effectful action. If you need a new
   capability, add it to the L5 contract, not around it.
 
@@ -356,7 +350,7 @@ By participating you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## 8. Guardrails (short form)
 
-Full list: `planning/00_VISION_AND_GUARDRAILS.md`. In summary:
+Full list: [`ARCHITECTURE.md`](ARCHITECTURE.md). In summary:
 
 1. **Seven-layer architecture is non-negotiable.** No collapsing layers into
    each other "for convenience."
@@ -368,8 +362,9 @@ Full list: `planning/00_VISION_AND_GUARDRAILS.md`. In summary:
    companion stack.
 5. **No ad-hoc cross-package dependencies.** Packages depend only along
    approved directions, enforced by `tools/lint-layer-boundaries/`.
-6. **Docs-first for significant changes.** Architecture moves land in
-   `planning/` before they land in code.
+6. **Docs-first for significant changes.** Architecture moves are recorded in
+   [`ARCHITECTURE.md`](ARCHITECTURE.md) and the ADR log under
+   [`docs/adr/`](docs/adr/) before they land in code.
 
 ---
 

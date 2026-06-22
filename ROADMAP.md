@@ -13,7 +13,8 @@
 
 The roadmap reflects how the architecture was staged, not marketing priorities:
 
-1. **Doctrine and plans first.** `planning/` is the source of truth.
+1. **Architecture first.** `ARCHITECTURE.md` and the ADR log under `docs/adr/`
+   are the source of truth.
 2. **Scaffolds before logic.** Every layer lands as stub shell + smoke test
    before any first-logic slice.
 3. **L5 before everything else.** The policy engine is the non-bypassable gate;
@@ -40,8 +41,8 @@ The roadmap reflects how the architecture was staged, not marketing priorities:
   evaluator, 10 integration tests, audit-before-Allow invariant. Report:
   `WAVE3_EXECUTION_REPORT_2026-04-19.md`.
 - **Wave 4 — Engine stub shells.** L1, L2, L3, L4, L6, L7 traits + core enums
-  + smoke tests. `planning/00_VISION_AND_GUARDRAILS.md` elevated to doctrine.
-  Report: `WAVE4_EXECUTION_REPORT_2026-04-19.md`.
+  + smoke tests. The seven-layer architecture in `ARCHITECTURE.md` elevated to
+  doctrine. Report: `WAVE4_EXECUTION_REPORT_2026-04-19.md`.
 - **Wave 3.5 — Storage substrate.** `rusqlite` bundled into
   `packages/storage`, `open_with_migrations()` runs the drafted DDL,
   integration test proves it. L5 persistence still in-memory — this wave

@@ -4,14 +4,14 @@
 # review. Wave 1 baseline — coordinator-owned by default; layer agents take over
 # their packages as they come online.
 #
-# Source: planning/planning/monorepo_plan_draft.md §4.1
+# Source: ARCHITECTURE.md (layer-to-package mapping and ownership)
 
 # Default owner for everything not matched below.
 *                               @dbhavery
 
-# Planning corpus — coordinator-only writes to doctrine.
-/planning/                      @dbhavery
-/planning/01_product_doctrine.md @dbhavery
+# Architecture docs — coordinator-only writes to load-bearing design.
+/ARCHITECTURE.md                @dbhavery
+/docs/adr/                      @dbhavery
 
 # Root manifests and governance.
 /Cargo.toml                     @dbhavery

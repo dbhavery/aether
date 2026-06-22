@@ -17,7 +17,7 @@ assignees: []
 - pnpm / Node: `pnpm --version`, `node --version`
 - Commit SHA: (from `git rev-parse HEAD`)
 - Affected layer or package: (e.g. `packages/l5-policy/`, `packages/storage/`,
-  `planning/`, `tools/lint-layer-boundaries/`, `docs/`)
+  `tools/lint-layer-boundaries/`, `docs/`)
 
 ## Steps to reproduce
 

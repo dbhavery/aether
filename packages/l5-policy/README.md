@@ -30,7 +30,7 @@ packages/l5-policy/
 
 ## Locked decisions reflected in the scaffold
 
-All from `planning/DECISION_LOCK_PASS_2026-04-18c.md` (2026-04-18):
+The five control-plane decisions (locked 2026-04-18), as captured in `ARCHITECTURE.md` and the L5 ADRs under `docs/adr/`:
 
 | # | Lock | Where it shows up |
 |---|---|---|

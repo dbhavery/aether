@@ -6,15 +6,14 @@ SQLite schema, migrations, encryption-at-rest, audit-chain primitives. Consumed 
 
 ## References
 
-- file:///C:/Users/dbhav/Projects/aether/planning/plans/implementation_prep/sqlite_schema_pack.md
-- file:///C:/Users/dbhav/Projects/aether/planning/plans/L5_policy_engine_system_design.md
-- file:///C:/Users/dbhav/Projects/aether/planning/plans/L2_memory_kernel_system_design.md
+- `ARCHITECTURE.md` — the storage substrate and the L2/L5 layers it serves.
+- `docs/adr/ADR-0004-durable-store-shape.md` — the durable store shape.
 
 ## Wave 1 contents
 
 - `StorageLayout` — where the DB files live per X3 §7.
 - `StorageError` — error surface shape.
-- No driver (`rusqlite` / `sqlx` decision deferred — see `planning/OPEN_QUESTIONS.md`).
+- No driver (`rusqlite` / `sqlx` decision deferred — see `docs/adr/ADR-0004-durable-store-shape.md`).
 - No `migrations/` yet.
 
 ## Next wave

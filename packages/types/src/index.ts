@@ -5,7 +5,7 @@
 // hand-edit these types after the generator lands in Wave 2+.
 //
 // Canonical source:
-//   planning/plans/implementation_prep/event_contracts_master.md
+//   ARCHITECTURE.md
 //
 // Hand-written stubs below mirror the Rust shapes in
 // packages/event-bus/src/lib.rs so downstream TS packages can start compiling

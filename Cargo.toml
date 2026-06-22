@@ -17,7 +17,7 @@ members = [
 
 # Wave 1 baseline workspace. Layer crates (l1-timing .. l7-*) and apps/desktop/src-tauri
 # will be added as members when scaffolded in later waves.
-# Source of truth: planning/planning/monorepo_plan_draft.md §2.
+# Source of truth: ARCHITECTURE.md (layer-to-package mapping).
 
 [workspace.package]
 edition = "2021"

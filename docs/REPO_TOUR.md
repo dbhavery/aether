@@ -1,8 +1,9 @@
 # Repo Tour — Free Aether, Community Edition
 
 > Fifteen-minute guided walk through the directories. Read this before you
-> touch code. The planning corpus is authoritative; everything in this tour
-> either points at doctrine or points at code that materializes doctrine.
+> touch code. [`ARCHITECTURE.md`](../ARCHITECTURE.md) is the authoritative
+> description of the system; everything in this tour either points at that
+> architecture or points at the code that materializes it.
 
 ---
 
@@ -10,15 +11,16 @@
 
 ```
 aether/
-├── planning/        <- canonical doctrine + interface packs + plans. READ FIRST.
-├── packages/        <- Cargo + pnpm workspace members (engines + shared infra).
+├── packages/        <- Cargo + pnpm workspace members (engines + shared infra). START HERE.
 ├── apps/            <- scaffold stubs; no runnable app yet.
+├── src/             <- additional source surface alongside the workspace.
 ├── infra/           <- deploy / ops scaffolds.
 ├── tools/           <- governance linters (layer bans, policy bypass, etc.).
 ├── research/        <- research notes and exploration.
-├── docs/            <- human-reading docs (this file, architecture, etc.).
+├── docs/            <- human-reading docs (this file, architecture, ADRs, etc.).
+├── tests/           <- workspace + legacy test surface.
 ├── personas/        <- personality configs (legacy + forward-looking).
-├── src/, desktop/   <- legacy v1.0 Python tree. FROZEN. DO NOT IMPORT INTO RUST/TS.
+├── desktop/         <- legacy v1.0 Python tree. FROZEN. DO NOT IMPORT INTO RUST/TS.
 │   frontend/,
 │   configs/,
 │   scripts/,
@@ -35,36 +37,35 @@ aether/
 
 ---
 
-## 1. `planning/` — start here
+## 1. `docs/` — start here
 
-This is doctrine. Everything downstream is subordinate to it.
+This is the human-reading surface. Read it before you touch code; everything
+downstream is subordinate to the architecture it describes.
 
-- `planning/00_VISION_AND_GUARDRAILS.md` — sits above every other file. If a
-  code change conflicts with this file, the code is wrong.
-- `planning/01_product_doctrine.md` — hard rules for the product family.
-  Use this to understand why the seven layers look the way they do.
-- `planning/02_*.md` through `planning/18_*.md` — numbered spec corpus
-  covering family, vision, UX, architecture, memory, avatar, trust, tiers,
-  updates, tech-stack, persona schema, model router.
-- `planning/plans/00_ORCHESTRATION_MAP.md` — how the seven layers fit
-  together, with direction of dependencies.
-- `planning/plans/L1_*.md` through `planning/plans/L7_*.md` — per-layer
-  system designs + top-level implementation plans.
-- `planning/plans/implementation_prep/` — the concrete contracts the code
-  materializes:
-  - `event_contracts_master.md` — every event that crosses a layer boundary.
-  - `sqlite_schema_pack.md` — SQLite DDL plan, §3a-3d covers L5 tables.
-  - `test_matrix_master.md` — the test coverage target.
-  - `Lx_interface_pack.md` — per-layer trait / enum / IPC surface.
-- `planning/OPEN_QUESTIONS.md` — living list of undecided calls. Check here
-  before proposing architecture changes.
-- `planning/HANDOFF_2026-04-18.md` and
-  `planning/DECISION_LOCK_PASS_2026-04-18c.md` — the current decision state
-  heading into Wave 3.5 and beyond.
+- [`ARCHITECTURE.md`](../ARCHITECTURE.md) (repo root) — the seven-layer
+  architecture, the non-bypassable policy gate, and the direction of
+  dependencies. If a code change conflicts with this file, the code is wrong.
+- [`docs/ARCHITECTURE-V2.md`](ARCHITECTURE-V2.md) — the current architecture
+  detail, expanded from the root overview.
+- [`docs/PRODUCT-PLAN.md`](PRODUCT-PLAN.md) — product direction and the port
+  plan for the legacy v1.0 tree. Use this to understand why the seven layers
+  look the way they do.
+- [`docs/adr/`](adr/) — the Architecture Decision Record log. Each ADR
+  captures one locked decision (model defaults, retrieval wiring, hardware
+  tier model, embeddings onboarding, persona delivery, mobile sync, …). Read
+  the relevant ADR before proposing a change in its area.
+- [`docs/LLM-PROVIDERS.md`](LLM-PROVIDERS.md),
+  [`docs/PERSONA-SCHEMA.md`](PERSONA-SCHEMA.md),
+  [`docs/ONBOARDING-SPEC.md`](ONBOARDING-SPEC.md),
+  [`docs/DISTRIBUTION.md`](DISTRIBUTION.md) — topical specs for the provider
+  surface, persona pack format, onboarding flow, and distribution model.
+- [`docs/posts/`](posts/) — longer-form essays on the design (e.g. policy as
+  a load-bearing layer).
 
 **Rule of thumb:** if you are about to make a non-trivial decision and the
-answer is not in `planning/`, you are probably supposed to open a PR against
-`planning/` first, not against code.
+answer is not already captured in [`ARCHITECTURE.md`](../ARCHITECTURE.md) or
+an ADR under [`docs/adr/`](adr/), record the decision there first — open a
+docs PR before the code PR.
 
 ---
 
@@ -181,11 +182,13 @@ If a report disagrees with a README status block, the report wins for
 ## 7. Suggested reading order for a new contributor
 
 1. `README.md` — section 3 (current status) is the honest picture.
-2. `planning/00_VISION_AND_GUARDRAILS.md` — doctrine.
-3. `planning/01_product_doctrine.md` — hard rules.
-4. `planning/plans/00_ORCHESTRATION_MAP.md` — layer map.
-5. `planning/plans/implementation_prep/event_contracts_master.md` — the
-   shape of cross-layer communication.
+2. [`ARCHITECTURE.md`](../ARCHITECTURE.md) — the seven-layer architecture and
+   the non-bypassable policy gate.
+3. [`docs/PRODUCT-PLAN.md`](PRODUCT-PLAN.md) — product direction and hard rules.
+4. [`docs/ARCHITECTURE-V2.md`](ARCHITECTURE-V2.md) — the layer map and current
+   architecture detail.
+5. [`docs/adr/`](adr/) — the locked decisions that shaped cross-layer
+   communication and the storage/retrieval surfaces.
 6. `packages/l5-policy/src/lib.rs` → `engine.rs` → `tests/engine_slice.rs` —
    the richest code in the repo today.
 7. `WAVE3_EXECUTION_REPORT_2026-04-19.md` — how that code got there, with

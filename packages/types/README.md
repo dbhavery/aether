@@ -6,7 +6,7 @@ Single canonical TypeScript types surface for the Aether monorepo. Everything he
 
 ## References
 
-- file:///C:/Users/dbhav/Projects/aether/planning/plans/implementation_prep/event_contracts_master.md
+- `ARCHITECTURE.md` — the cross-layer event surface these types mirror.
 
 ## Wave 1 contents
 

@@ -6,8 +6,8 @@ L3 owns presence — behavior scheduling, visemes, gaze/blink control. Borrowed 
 
 ## References
 
-- `planning/plans/L3_presence_engine_system_design.md`
-- `planning/plans/implementation_prep/L3_interface_pack.md`
+- `ARCHITECTURE.md` — the L3 presence engine layer.
+- `docs/ARCHITECTURE-V2.md` — current architecture detail.
 
 ## Wave 4 contents
 

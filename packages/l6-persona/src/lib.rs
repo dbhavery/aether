@@ -5,9 +5,7 @@
 //! L6 compiles persona packs into the six typed artifacts consumed by
 //! L1/L3/L4/L5. Deterministic compilation, signature-verified privileged
 //! overlays, hot-reload state machine.
-//! Source: `planning/plans/L6_persona_compiler_system_design.md`,
-//! `planning/plans/implementation_prep/L6_interface_pack.md`,
-//! `planning/17_persona_pack_schema.md`.
+//! Source: `ARCHITECTURE.md` and `docs/PERSONA-SCHEMA.md`.
 
 #![deny(unsafe_code)]
 #![warn(missing_docs)]

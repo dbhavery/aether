@@ -20,8 +20,8 @@ Reusable libraries — shared infra + the 7 must-own layer packages. Wave 1 has 
 | `l5-policy/` | Rust crate (+ `l5-policy-ts/`) | L5 agent |
 | `l6-persona/` | Rust crate (+ `l6-persona-ts/`) | L6 agent |
 
-See `planning/planning/monorepo_plan_draft.md` §2 for the full layer-to-package mapping.
+See `ARCHITECTURE.md` for the full layer-to-package mapping.
 
 ## Adding a new package
 
-Follow the protocol in `CLAUDE.md` §3 — planning PR first, coordinator approval, then scaffold PR.
+Follow the protocol in `CLAUDE.md` §3 — docs PR first, coordinator approval, then scaffold PR.

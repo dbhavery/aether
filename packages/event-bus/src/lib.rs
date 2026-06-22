@@ -2,10 +2,8 @@
 //!
 //! Typed cross-layer event substrate for Aether. **Wave 1 scaffold — no logic.**
 //!
-//! Canonical reference:
-//! - `planning/plans/implementation_prep/event_contracts_master.md`
-//! - `planning/plans/L1_interaction_timing_system_design.md` §5
-//! - `planning/plans/X3_tauri_architecture.md` §3
+//! Canonical reference: `ARCHITECTURE.md` (the cross-layer event surface and
+//! layer boundaries).
 //!
 //! ## Invariants (enforced in later waves)
 //!

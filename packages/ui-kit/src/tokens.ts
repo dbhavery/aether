@@ -1,6 +1,6 @@
 // Design tokens — dark-first neumorphic monochrome.
 // Placeholder values; the real palette is locked in a later wave against
-// planning/05_ux_principles.md §Component system and Don's design research.
+// ARCHITECTURE.md §Component system and Don's design research.
 
 export interface Tokens {
   readonly color: {

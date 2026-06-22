@@ -6,8 +6,8 @@ Telemetry wrapper. Local-only by default; OTLP export is an opt-in capability ga
 
 ## References
 
-- file:///C:/Users/dbhav/Projects/aether/planning/13_trust_security_redteam.md
-- file:///C:/Users/dbhav/Projects/aether/planning/12_permissions_autonomy.md
+- `ARCHITECTURE.md` — telemetry posture and the L5-gated export capability.
+- `SECURITY.md` — the trust and reporting model.
 
 ## Wave 1 contents
 

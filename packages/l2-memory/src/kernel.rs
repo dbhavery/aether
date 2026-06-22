@@ -8,9 +8,8 @@ use crate::error::L2Error;
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct MemoryId(pub String);
 
-/// External embedding handle (lives in an external vector store — see
-/// `planning/plans/implementation_prep/sqlite_schema_pack.md` §1 "does NOT
-/// live in SQLite").
+/// External embedding handle (lives in an external vector store, not in
+/// SQLite — see `ARCHITECTURE.md`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct EmbeddingRef(pub String);
 

@@ -1,7 +1,7 @@
 -- Aether storage — migration 0001 (init)
 -- Scope: L5 policy engine tables + one forward-looking shell for L2 memory items.
--- Source: planning/plans/implementation_prep/sqlite_schema_pack.md §3a-3d (policy)
---         planning/plans/implementation_prep/sqlite_schema_pack.md §3e (memory, stubbed)
+-- Source: ARCHITECTURE.md §3a-3d (policy)
+--         ARCHITECTURE.md §3e (memory, stubbed)
 -- Status: ready-to-execute DDL. rusqlite wire-up lands in Wave 3.5 once rustup
 --         is installed on the dev machine. Until then, aether-storage surfaces
 --         this file as a `&'static str` via `MigrationSet`.

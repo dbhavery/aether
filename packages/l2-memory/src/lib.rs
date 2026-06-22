@@ -4,9 +4,7 @@
 //!
 //! L2 owns the companion memory kernel: the 6 memory domains, memory-item
 //! storage, embedding references, and provenance tags consumed by L5.
-//! Source: `planning/plans/L2_memory_kernel_system_design.md`,
-//! `planning/plans/implementation_prep/L2_interface_pack.md`,
-//! `planning/plans/implementation_prep/sqlite_schema_pack.md` §3e.
+//! Source: `ARCHITECTURE.md`.
 
 #![deny(unsafe_code)]
 #![warn(missing_docs)]

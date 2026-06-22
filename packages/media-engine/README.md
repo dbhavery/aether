@@ -2,13 +2,12 @@
 
 **Status:** Wave 1 placeholder — trait surface sketches only.
 
-STT/TTS/VAD wrappers with Aether's custom chunk-timing and viseme-sync control plane. Borrowed inference models are isolated behind these traits; the control plane is custom (per `planning/16_tech_stack.md` §Borrowable but isolated).
+STT/TTS/VAD wrappers with Aether's custom chunk-timing and viseme-sync control plane. Borrowed inference models are isolated behind these traits; the control plane is custom (borrowable-but-isolated, per `ARCHITECTURE.md`).
 
 ## References
 
-- file:///C:/Users/dbhav/Projects/aether/planning/16_tech_stack.md
-- file:///C:/Users/dbhav/Projects/aether/planning/plans/L3_presence_engine_system_design.md
-- file:///C:/Users/dbhav/Projects/aether/planning/plans/L1_interaction_timing_system_design.md
+- `ARCHITECTURE.md` — the media surface and the L1/L3 layers it serves.
+- `docs/ARCHITECTURE-V2.md` — current architecture detail.
 
 ## Wave 1 contents
 

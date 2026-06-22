@@ -30,25 +30,26 @@ Shared infrastructure (`event-bus`, `storage`, `telemetry`, `types`,
 routes through **L5** — there is no back door. This preview ships that
 spine and the first real logic inside L5.
 
-Full vision and guardrails live in
-[`planning/00_VISION_AND_GUARDRAILS.md`](planning/00_VISION_AND_GUARDRAILS.md);
-product doctrine in [`planning/01_product_doctrine.md`](planning/01_product_doctrine.md).
+Full architecture and guardrails live in
+[`ARCHITECTURE.md`](ARCHITECTURE.md);
+product direction in [`docs/PRODUCT-PLAN.md`](docs/PRODUCT-PLAN.md).
 
 ---
 
 ## 2. What's in this preview
 
-### Doctrine and plans
-- `planning/00_VISION_AND_GUARDRAILS.md` — canonical vision; sits above
-  every other planning file.
-- `planning/01_product_doctrine.md` + seventeen numbered spec files
-  (`02_…18_`) covering family, UX, architecture, memory, avatar, trust,
-  tiers, updates, tech stack, persona schema, and model router.
-- `planning/plans/` — per-layer system designs + interface packs +
-  `event_contracts_master.md` + `sqlite_schema_pack.md` +
-  `test_matrix_master.md`.
-- Five control-plane decisions locked in
-  `DECISION_LOCK_PASS_2026-04-18c.md`.
+### Architecture and decisions
+- `ARCHITECTURE.md` — canonical architecture; the seven-layer design and the
+  non-bypassable policy gate.
+- `docs/ARCHITECTURE-V2.md` and `docs/PRODUCT-PLAN.md` — the current
+  architecture detail and product direction, covering family, UX,
+  architecture, memory, avatar, trust, tiers, updates, tech stack, persona
+  schema, and model router.
+- `docs/adr/` — the Architecture Decision Record log: the locked decisions
+  for model defaults, retrieval wiring, storage shape, hardware tiers,
+  embeddings onboarding, persona delivery, and mobile sync.
+- The five control-plane decisions are captured in the L5 ADRs and
+  `ARCHITECTURE.md`.
 
 ### Repository and workspace (Waves 0 – 2)
 - Cargo workspace with 11 member crates; pnpm workspace with three TS
@@ -185,9 +186,9 @@ cargo test -p aether-storage      # 5 unit + 3 integration (SQLite)
 Read order:
 
 1. [`README.md`](README.md) — section 3 has the honest status snapshot.
-2. [`planning/00_VISION_AND_GUARDRAILS.md`](planning/00_VISION_AND_GUARDRAILS.md) — doctrine.
-3. [`planning/01_product_doctrine.md`](planning/01_product_doctrine.md) — hard rules.
-4. [`planning/plans/00_ORCHESTRATION_MAP.md`](planning/plans/00_ORCHESTRATION_MAP.md) — layer map.
+2. [`ARCHITECTURE.md`](ARCHITECTURE.md) — the seven-layer architecture and the non-bypassable gate.
+3. [`docs/PRODUCT-PLAN.md`](docs/PRODUCT-PLAN.md) — product direction and hard rules.
+4. [`docs/ARCHITECTURE-V2.md`](docs/ARCHITECTURE-V2.md) — layer map and current architecture detail.
 5. [`docs/REPO_TOUR.md`](docs/REPO_TOUR.md) — fifteen-minute guided walk.
 6. `packages/l5-policy/src/lib.rs` → `engine.rs` →
    `tests/engine_slice.rs` — the richest code in the repo.
@@ -213,7 +214,7 @@ Read order:
 
 The most contributor-friendly entry points today:
 
-- Docs fixes and clarifications — anywhere in `planning/`, `docs/`,
+- Docs fixes and clarifications — anywhere in `docs/`
   or the root community docs.
 - Test expansions — especially `packages/l5-policy/tests/engine_slice.rs`
   and the stub-crate smoke tests.

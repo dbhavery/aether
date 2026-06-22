@@ -207,9 +207,9 @@ If you want a runnable assistant today, this is the wrong project. If you want t
 
 Start here, in this order:
 
-1. `planning/00_VISION_AND_GUARDRAILS.md` — doctrine. Sits above everything else.
-2. `planning/01_product_doctrine.md` — hard rules for the product family.
-3. `planning/plans/00_ORCHESTRATION_MAP.md` — how the layers fit.
+1. This document — the seven-layer architecture and the non-bypassable gate. Sits above everything else.
+2. `docs/PRODUCT-PLAN.md` — hard rules for the product family.
+3. `docs/ARCHITECTURE-V2.md` — how the layers fit, expanded from this overview.
 4. `packages/l5-policy/src/lib.rs` → `engine.rs` → `tests/engine_slice.rs` — the richest code in the repo.
 5. `packages/l5-policy/src/audit_seal.rs` — the audit chain + HMAC implementation.
 6. `apps/l1-cli/src/main.rs` — the working end-to-end demo.
@@ -221,7 +221,7 @@ Start here, in this order:
 
 ## Provenance
 
-The planning corpus predates the code by several months. Every architectural decision — the seven layers, the non-bypassable gate, the 19-state turn FSM, the eight re-evaluation triggers, the `Decision` variants — was argued and locked in `planning/DECISION_LOCK_PASS_2026-04-18c.md` before a line of Rust was written. That decision lock is the authoritative reference when the code and the docs disagree.
+The design predates the code by several months. Every architectural decision — the seven layers, the non-bypassable gate, the 19-state turn FSM, the eight re-evaluation triggers, the `Decision` variants — was argued and locked before a line of Rust was written, and the resulting decisions are captured in this document and the ADR log under `docs/adr/`. Those are the authoritative reference when the code and the docs disagree.
 
 If something in the code contradicts this document, trust the code and file an issue. If the code looks buggy, trust the doctrine and file an issue.
 

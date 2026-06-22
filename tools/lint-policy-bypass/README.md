@@ -43,10 +43,9 @@ a `source_layer`-aware diagnostic keyed off the call site's crate.
 
 ## References
 
-- file:///C:/Users/dbhav/Projects/aether/planning/plans/L5_policy_engine_system_design.md
-- file:///C:/Users/dbhav/Projects/aether/planning/12_permissions_autonomy.md
-- file:///C:/Users/dbhav/Projects/aether/packages/l5-policy/src/policy_engine.rs
-- file:///C:/Users/dbhav/Projects/aether/CLAUDE.md §1.5
+- `ARCHITECTURE.md` — the L5 policy engine and the single-writer rule this lint enforces.
+- `packages/l5-policy/src/policy_engine.rs` — the approved execution path.
+- `CLAUDE.md` §1.5 — the policy-is-the-single-writer directive.
 
 ## Wave 2 TODO
 

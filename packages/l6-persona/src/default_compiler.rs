@@ -6,7 +6,7 @@
 //!
 //! The rules in this module are intentionally small and readable. They
 //! are not a replacement for the full persona pack compiler described in
-//! `planning/plans/L6_persona_compiler_system_design.md`; they are the
+//! see `ARCHITECTURE.md`; they are the
 //! thin slice that proves the pipeline works end-to-end for a later
 //! demo wire-up.
 

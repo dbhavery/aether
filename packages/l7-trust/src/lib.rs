@@ -8,8 +8,7 @@
 //! L7 reads L5 events (approval pending, posture changed, audit rows) and
 //! exposes a small typed surface the desktop shell implements.
 //!
-//! Source: `planning/plans/L7_trust_ux_onboarding_system_design.md`,
-//! `planning/plans/implementation_prep/L7_interface_pack.md`.
+//! Source: `ARCHITECTURE.md` and `docs/ONBOARDING-SPEC.md`.
 
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
