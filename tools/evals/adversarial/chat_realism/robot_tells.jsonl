@@ -1,0 +1,1 @@
+{"id": "chat_realism.first_turn.robot_tell_regression", "domain": "chat_realism", "difficulty": "easy", "setup": {"persona": "aurora", "memory": []}, "turns": [{"role": "user", "content": "hi"}], "actual": {"text": "Hello, as an AI assistant I am here to help you with any questions you may have."}, "expectations": [{"kind": "forbids", "patterns": ["as an AI"]}]}
