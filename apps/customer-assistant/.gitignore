@@ -1,0 +1,8 @@
+# Persisted ChromaDB collections — machine-generated, rebuilt by scripts/ingest.py.
+# Mirrors the repo rule that embeddings/vector data never get committed.
+.chroma/
+**/.chroma/
+
+# Python caches
+__pycache__/
+*.pyc
