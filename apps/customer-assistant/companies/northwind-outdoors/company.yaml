@@ -78,7 +78,7 @@ knowledge_base:
 
 llm:
   tier: "fast"            # maps to aether llm.tier_map -> ollama/qwen2.5:7b
-  model: null             # set to override the tier mapping, e.g. "llama3.1:8b"
+  model: "qwen3:8b"       # demo: an Ollama model present on this machine (live out-of-box); set null to use tier mapping
   temperature: 0.3
   max_tokens: 512
   fine_tuned_model: null  # fine-tuning hook — see FINETUNING.md
