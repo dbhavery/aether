@@ -44,7 +44,11 @@ def test_sample_company_loads_and_validates() -> None:
 
 
 def test_effective_model_resolution_priority() -> None:
+    # Priority: fine_tuned_model > explicit model > tier-mapped model.
+    # Start from the tier base case (clear the sample's demo-only explicit model
+    # so this asserts the resolution *logic*, not the demo model choice).
     p = _sample_profile()
+    p.llm.model = None
     # tier "fast" -> qwen2.5:7b (provider stripped)
     assert p.effective_model() == "qwen2.5:7b"
     p.llm.model = "llama3.1:8b"

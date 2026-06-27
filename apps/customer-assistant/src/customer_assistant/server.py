@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import logging
 import os
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -41,7 +43,14 @@ APP_ROOT = Path(__file__).resolve().parents[2]  # apps/customer-assistant
 COMPANIES_ROOT = Path(os.environ.get("COMPANIES_ROOT", APP_ROOT / "companies")).resolve()
 WIDGET_DIR = APP_ROOT / "widget"
 
-app = FastAPI(title="Aether Customer Assistant", version="0.1.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Discover and open every company on startup (replaces on_event)."""
+    _load_all()
+    yield
+
+
+app = FastAPI(title="Aether Customer Assistant", version="0.1.0", lifespan=lifespan)
 
 # The widget is meant to be embedded on arbitrary company sites, so allow any
 # origin for this local demo. A production deployment would allowlist the
@@ -101,11 +110,6 @@ def _load_all() -> None:
             )
         except (CompanyConfigError, FileNotFoundError) as exc:
             logger.error("failed to load company %r: %s", company_id, exc)
-
-
-@app.on_event("startup")
-def _startup() -> None:
-    _load_all()
 
 
 @app.get("/health")
