@@ -1,0 +1,18 @@
+schema_version: 1
+
+reference_wav: "reference.wav"
+sample_wav: "sample.wav"
+
+# Chatterbox knobs — Caelum runs at the flatter end of the range to
+# match his measured, low-drama delivery. Controlled, not theatrical.
+chatterbox:
+  exaggeration: 0.35
+  cfg_weight: 0.5
+  temperature: 0.7
+
+elevenlabs:
+  voice_id: ""
+  model_id: "eleven_flash_v2_5"
+  stability: 0.7
+  similarity_boost: 0.75
+  style: 0.05

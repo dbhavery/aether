@@ -1,0 +1,57 @@
+schema_version: 1
+
+creator: "Don Havery"
+created: "2026-04-17"
+last_updated: "2026-04-17"
+
+assets:
+  portrait:
+    source: "ai_generated"
+    generator: "OpenAI gpt-image-1.5 (via scripts/persona_generator/generate_portrait.py)"
+    prompt: >-
+      Playful-witty persona portrait — androgynous person late 20s, bright
+      expressive light-green eyes, tousled chestnut pixie-ish hair, freckles,
+      mustard mock-neck sweater, bright soft daylight from the left, warm
+      out-of-focus interior background. Photorealistic 85mm editorial
+      headshot, 1024x1024 square.
+    license: "custom_aether"
+
+  state_images:
+    source: "ai_generated"
+    generator: "OpenAI gpt-image-1.5 (via scripts/persona_generator/generate_states.py)"
+    prompt: >-
+      Four expression variants (idle / listening / thinking / speaking) of
+      the Luma base portrait, each generated with a per-state expression
+      modifier layered on the shared base description. See
+      avatar/README.md for the exact prompt per file.
+    license: "custom_aether"
+
+  voice_reference:
+    source: "royalty_free"
+    attribution: "LibriVox Short Poetry Collection 087 — 'Jabberwocky' by Lewis Carroll, read by LibriVox volunteer (reader initials 'tb')"
+    url: "https://ia601609.us.archive.org/10/items/short_poetry_087_1004_librivox/jabberwocky_carroll_tb_64kb.mp3"
+    license: "CC0"
+    description: >-
+      20.0s clean speech excerpt starting 5.0s into the LibriVox source
+      MP3; resampled to 24 kHz mono 16-bit PCM WAV via ffmpeg with light
+      loudness normalisation. LibriVox recordings are public domain
+      worldwide (CC0-equivalent); full catalog attribution preserved
+      above for audit purposes.
+
+  voice_sample:
+    source: "royalty_free"
+    attribution: "LibriVox Short Poetry Collection 087 — 'Jabberwocky' by Lewis Carroll (reader 'tb'), same source as voice_reference"
+    url: "https://ia601609.us.archive.org/10/items/short_poetry_087_1004_librivox/jabberwocky_carroll_tb_64kb.mp3"
+    license: "CC0"
+    description: >-
+      4.0s wizard preview trimmed from the same LibriVox source as
+      voice_reference, starting 7.0s into the original; same resampling
+      pipeline.
+
+notes: |
+  Portrait and state images are AI-generated with no real-person likeness
+  reference. Voice reference + sample are sourced from a public-domain
+  LibriVox recording of Carroll's 'Jabberwocky'; per LibriVox terms the
+  recording is dedicated to the public domain worldwide. Derived cloned
+  output from Chatterbox is owned by Aether under the persona pack's
+  custom_aether license (bundled under the repo's MIT umbrella).

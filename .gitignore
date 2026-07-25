@@ -1,0 +1,91 @@
+# Environment
+.env
+.env.*
+!.env.example
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Models and large files
+models/
+*.wav
+*.mp3
+*.onnx
+*.bin
+*.safetensors
+# Persona pack audio is a REQUIRED ship asset (reference.wav + sample.wav
+# per PERSONA-SCHEMA.md §1). The persona-generator's landmark cache and
+# LivePortrait-rendered clips stay ignored via the separate paths below.
+!personas/*/voice/*.wav
+personas/*/avatar/clips/
+personas/*/avatar/landmarks.json
+
+# Data
+data/
+!android/**/data/
+*.db
+*.sqlite
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Build
+dist/
+build/
+*.egg-info/
+.gradle/
+**/android/.gradle/
+**/android/app/build/
+local.properties
+
+# Memory MCP
+.memory/
+
+# Claude Code
+.claude/
+
+# Superpowers skill tooling state
+.superpowers/
+docs/superpowers/
+
+# Assets (large/binary)
+assets/
+.playwright-cli/
+
+# === Monorepo workspace artifacts (Wave 1, 2026-04-19) ===
+# Rust / Cargo
+target/
+**/target/
+Cargo.lock.bak
+
+# pnpm / Node
+node_modules/
+.pnpm-store/
+.pnpm-debug.log*
+.turbo/
+
+# TypeScript build output
+**/dist/
+**/build/
+*.tsbuildinfo
+
+# Editor / tooling local state
+.vscode/
+!.vscode/extensions.json
+.idea/workspace.xml
+
+# Local env overlays specific to monorepo agents
+.aether-local/

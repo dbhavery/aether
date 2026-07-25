@@ -1,0 +1,49 @@
+[workspace]
+resolver = "2"
+members = [
+    "packages/event-bus",
+    "packages/storage",
+    "packages/media-engine",
+    "packages/telemetry",
+    "packages/l5-policy",
+    "packages/l1-interaction",
+    "packages/l2-memory",
+    "packages/l3-presence",
+    "packages/l4-router",
+    "packages/l6-persona",
+    "packages/l7-trust",
+    "apps/l1-cli",
+]
+
+# Wave 1 baseline workspace. Layer crates (l1-timing .. l7-*) and apps/desktop/src-tauri
+# will be added as members when scaffolded in later waves.
+# Source of truth: ARCHITECTURE.md (layer-to-package mapping).
+
+[workspace.package]
+edition = "2021"
+rust-version = "1.78"
+license = "MIT"
+repository = "https://github.com/dbhavery/aether"
+authors = ["Aether contributors"]
+
+[workspace.dependencies]
+# Pinned shared dependencies for Wave 1 scaffolds. Versions intentionally conservative.
+thiserror = "1.0"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+# Wave 3.5 — storage substrate. `bundled` vendors SQLite so no system lib needed.
+rusqlite = { version = "0.31", features = ["bundled"] }
+tempfile = "3"
+# Wave 4.6 — audit hash-chain + HMAC sealing. Pure-Rust, no_std-friendly,
+# widely reviewed. Kept behind L5's `sqlite-backend` feature so OSS default
+# builds do not pull them in.
+sha2 = "0.10"
+hmac = "0.12"
+rand = "0.8"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1

@@ -1,0 +1,29 @@
+# Example metadata.yaml — reference structure.
+
+schema_version: 1
+
+creator: "Aether"
+created: "2026-04-17"
+last_updated: "2026-04-17"
+
+assets:
+  portrait:
+    source: "placeholder"
+    generator: "n/a"
+    license: "n/a"
+  state_images:
+    source: "placeholder"
+    generator: "n/a"
+    license: "n/a"
+  voice_reference:
+    source: "placeholder"
+    attribution: "n/a"
+    url: "n/a"
+    license: "n/a"
+  voice_sample:
+    source: "placeholder"
+    license: "n/a"
+
+notes: |
+  This is a reference skeleton — not a real persona.
+  Filtered out of the wizard by its _underscore prefix.

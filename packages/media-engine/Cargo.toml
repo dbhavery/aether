@@ -1,0 +1,20 @@
+[package]
+name = "aether-media-engine"
+version = "0.0.1"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Aether media pipeline — STT/TTS/VAD wrappers with custom chunk timing (Wave 1 placeholder)."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+thiserror = { workspace = true }
+serde = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

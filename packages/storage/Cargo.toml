@@ -1,0 +1,22 @@
+[package]
+name = "aether-storage"
+version = "0.0.1"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Aether local storage substrate — SQLite schema, migrations, audit chain primitives (Wave 1 scaffold)."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+thiserror = { workspace = true }
+serde = { workspace = true }
+tracing = { workspace = true }
+# Wave 3.5 — SQLite substrate. `bundled` vendors SQLite; no system lib needed.
+rusqlite = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

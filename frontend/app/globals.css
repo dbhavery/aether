@@ -1,0 +1,146 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  Aether v1.0 — dark-only monochrome design system.
+  -----------------------------------------------------
+  Reference: deep neumorphic aesthetic from dbhavery.dev/.ai portfolio.
+  No gradients-for-gradients'-sake, no indigo/purple AI-slop palette.
+  One restrained accent, structural shadows, calm typography.
+
+  All tokens registered with `@theme inline` so Tailwind v4 picks them up as
+  utility classes (`bg-bg-1`, `text-fg-primary`, `shadow-raised`, etc.) while
+  also remaining usable as raw `var(--foo)` in custom CSS.
+*/
+
+:root {
+  /* Surfaces — layered dark neutrals, not pitch-black. */
+  --bg-0: #0a0a0a;          /* page */
+  --bg-1: #121212;          /* raised surface */
+  --bg-2: #1a1a1a;          /* card */
+  --bg-3: #222222;          /* elevated control */
+  --bg-4: #2a2a2a;          /* hover / focus */
+
+  /* Text — progressive de-emphasis. */
+  --fg-primary: #f2f2f2;
+  --fg-secondary: #b5b5b5;
+  --fg-muted: #7a7a7a;
+  --fg-disabled: #4a4a4a;
+
+  /* Borders — hairlines. */
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.10);
+  --border-strong: rgba(255, 255, 255, 0.18);
+
+  /* Accent — restrained warm amber. One accent only. */
+  --accent: #e3b770;
+  --accent-hover: #eec686;
+  --accent-muted: rgba(227, 183, 112, 0.12);
+  --accent-ring: rgba(227, 183, 112, 0.45);
+
+  /* Semantic. */
+  --ok: #6fb38a;
+  --warn: #d9a85c;
+  --error: #d77a72;
+
+  /* Shadows — subtle neumorphic raised + inset. */
+  --shadow-raised:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.45) inset,
+    0 2px 8px rgba(0, 0, 0, 0.45);
+  --shadow-inset:
+    0 1px 2px rgba(0, 0, 0, 0.55) inset,
+    0 -1px 0 rgba(255, 255, 255, 0.03) inset;
+  --shadow-float:
+    0 12px 40px rgba(0, 0, 0, 0.55),
+    0 1px 0 rgba(255, 255, 255, 0.04) inset;
+  --shadow-focus: 0 0 0 2px var(--bg-0), 0 0 0 4px var(--accent-ring);
+
+  /* Radii. */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+
+  /* Motion. */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 140ms;
+  --dur-med: 260ms;
+  --dur-slow: 420ms;
+
+  /* Layout. */
+  --content-max: 960px;
+  --wizard-max: 880px;
+}
+
+/* Token mapping for Tailwind v3 is in tailwind.config.ts — no @theme block needed. */
+
+/* Base reset — conservative, no library nuke. */
+html, body {
+  background: var(--bg-0);
+  color: var(--fg-primary);
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  min-height: 100vh;
+}
+
+body {
+  overscroll-behavior: none;
+}
+
+/* Reduce motion. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Focus ring — always visible, accessible. */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+  border-radius: var(--radius-sm);
+}
+
+/* Prose defaults. */
+h1, h2, h3, h4 {
+  letter-spacing: -0.02em;
+  font-weight: 500;
+}
+
+/* Subtle scrollbar styling. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--bg-3) transparent;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--bg-3);
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--bg-4);
+  background-clip: padding-box;
+}
+
+/* Text selection. */
+::selection {
+  background: var(--accent-muted);
+  color: var(--fg-primary);
+}
