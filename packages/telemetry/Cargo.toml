@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
-description = "Aether telemetry — local-only OpenTelemetry wrapper (Wave 1 placeholder)."
+description = "Companion telemetry — local-only OpenTelemetry wrapper (Wave 1 placeholder)."
 
 [lib]
 path = "src/lib.rs"

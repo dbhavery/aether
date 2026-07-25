@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "generated": "2026-04-29T12:34:56Z",
+  "manifest_version": "0.0.1-fixture",
+  "signature": "ed25519:s8KRXx/p79H4BvqeOoFk0bOlftGe42MQOfsgqzxW3EMVoYKcrWozUwlmbyrKzhkDLsYbrOcMX8T56pZ80ryZDg==",
+  "personas": [
+    {
+      "slug": "alice",
+      "version": "1.0.0",
+      "display_name": "Alice",
+      "archetype": "warm_supportive",
+      "size_bytes": 1234,
+      "shared_deps": [],
+      "asset_url": "https://example/test/alice-1.0.0.zip",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "slug": "bob",
+      "version": "1.0.0",
+      "display_name": "Bob",
+      "archetype": "analytical_focused",
+      "size_bytes": 5678,
+      "shared_deps": [],
+      "asset_url": "https://example/test/bob-1.0.0.zip",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+  ]
+}

@@ -4,7 +4,7 @@
 //!
 //! Doctrine: no cloud telemetry is ever enabled without explicit user opt-in
 //! through an L5 policy grant. Default sinks are local `tracing` subscribers
-//! only. See `ARCHITECTURE.md`.
+//! only. See `SECURITY.md` and `ARCHITECTURE.md` (the L5 policy gate).
 
 #![deny(unsafe_code)]
 #![warn(missing_docs)]

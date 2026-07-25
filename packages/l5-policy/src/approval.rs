@@ -47,6 +47,72 @@ pub struct ApprovalResponse {
     pub reauth_token: Option<CommandToken>,
 }
 
+/// Temporal extent over which a user-issued approval applies to subsequent
+/// matching actions. Orthogonal to [`crate::grants::ApprovalMode`] (what is
+/// approved) and [`crate::grants::GrantDuration`] (calendar-style TTL).
+///
+/// **Default: [`ApprovalScope::PerAction`].** Every existing call site that
+/// does not set this field deserializes / constructs as `PerAction` and so
+/// behaves exactly as before this enum landed.
+///
+/// Per the approval-scope design in `ARCHITECTURE.md`, the four
+/// variants are:
+///
+/// - [`ApprovalScope::PerAction`] — today's default. Every action prompts;
+///   no reuse across actions.
+/// - [`ApprovalScope::OncePerSession`] — granted for the lifetime of the
+///   current session. Resets on app restart or explicit session end.
+///   Device-local per ADR-0016 (does not sync across devices).
+/// - [`ApprovalScope::OncePerTask`] — granted for the lifetime of the
+///   current task (turn-window, identified by `change_id` lineage / task id).
+/// - [`ApprovalScope::DraftOnly`] — agent prepares the action artifact;
+///   L5 does not dispatch the executor. User reviews and clicks to run —
+///   re-entering the policy engine as a fresh request. The user-chosen
+///   counterpart of [`crate::decision::DraftSource::UserChoice`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ApprovalScope {
+    /// Today's default. Every action prompts; no reuse across actions.
+    PerAction,
+    /// User granted for the lifetime of the current session.
+    OncePerSession,
+    /// User granted for the lifetime of the current task.
+    OncePerTask,
+    /// Agent prepares the artifact; L5 does not dispatch the executor.
+    /// User must re-issue an `ActionRequest` to actually run it.
+    DraftOnly,
+}
+
+impl Default for ApprovalScope {
+    fn default() -> Self {
+        ApprovalScope::PerAction
+    }
+}
+
+impl ApprovalScope {
+    /// Map a [`UserChoice`] to its persisted, audit-visible
+    /// [`ApprovalScope`] per design doc §2.
+    ///
+    /// | `UserChoice` | `ApprovalScope` |
+    /// |---|---|
+    /// | `Allow` / `AllowScope(_)` | `PerAction` |
+    /// | `AllowSession` | `OncePerSession` |
+    /// | `AllowTask` | `OncePerTask` |
+    /// | `Deny` | `PerAction` (no grant issues) |
+    /// | `DeferToDraft` | `DraftOnly` |
+    ///
+    /// `UserChoice` is consumed in-memory; `ApprovalScope` is the
+    /// projection that survives onto the persisted grant + audit row.
+    pub fn from_user_choice(choice: &UserChoice) -> Self {
+        match choice {
+            UserChoice::Allow | UserChoice::AllowScope(_) => Self::PerAction,
+            UserChoice::AllowSession => Self::OncePerSession,
+            UserChoice::AllowTask => Self::OncePerTask,
+            UserChoice::Deny => Self::PerAction,
+            UserChoice::DeferToDraft => Self::DraftOnly,
+        }
+    }
+}
+
 /// What the user picked.
 ///
 /// `DeferToDraft` is the user-choice path that resolves to

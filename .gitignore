@@ -23,6 +23,11 @@ models/
 !personas/*/voice/*.wav
 personas/*/avatar/clips/
 personas/*/avatar/landmarks.json
+# Reference-image batches. Manifests can be
+# large; live batches accumulate dozens of MB per persona. Curation
+# verdicts (curation.jsonl) and selftest results (selftest.jsonl) are
+# regenerable, not load-bearing as repo artifacts.
+personas/*/_pipeline/
 
 # Data
 data/
@@ -65,6 +70,12 @@ docs/superpowers/
 assets/
 .playwright-cli/
 
+# Playwright e2e outputs (Wave 19 used-as-user harness) — regenerable
+apps/desktop/e2e/.report/
+apps/desktop/e2e/.artifacts/
+apps/desktop/test-results/
+apps/desktop/playwright-report/
+
 # === Monorepo workspace artifacts (Wave 1, 2026-04-19) ===
 # Rust / Cargo
 target/
@@ -89,3 +100,7 @@ node_modules/
 
 # Local env overlays specific to monorepo agents
 .aether-local/
+
+# Trainer state dirs are huge (optimizer.pt 500MB+)
+*.pt
+*.pth

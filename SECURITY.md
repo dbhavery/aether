@@ -1,6 +1,6 @@
 # Security Policy
 
-Free Aether — Community Edition is an early-preview, local-first architecture project. Security of the policy gate, the audit log, and the local data boundary is load-bearing to the product vision, so security reports are welcome and taken seriously even at this stage.
+Free Companion — Community Edition is an early-preview, local-first architecture project. Security of the policy gate, the audit log, and the local data boundary is load-bearing to the product vision, so security reports are welcome and taken seriously even at this stage.
 
 ## Scope
 
@@ -55,4 +55,4 @@ The project does not currently run a paid bug bounty. Credit in the advisory is 
 
 ## Safe-harbor
 
-Security research conducted in good faith against this repository — including running the local binary, exercising the policy gate with unusual input, and reporting findings through the channels above — will not result in legal action from the project. This does not grant permission to test against third-party systems or services that Aether integrates with; please respect those services' own policies.
+Security research conducted in good faith against this repository — including running the local binary, exercising the policy gate with unusual input, and reporting findings through the channels above — will not result in legal action from the project. This does not grant permission to test against third-party systems or services that Companion integrates with; please respect those services' own policies.

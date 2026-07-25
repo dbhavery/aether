@@ -4,7 +4,7 @@
 //! classifier, no media plumbing.
 //!
 //! L1 owns interaction timing, the turn state machine, and the reflex router.
-//! Source: `ARCHITECTURE.md`.
+//! Source: `ARCHITECTURE.md` (the L1 interaction layer).
 //!
 //! ## Invariants this crate will enforce (later waves)
 //!
@@ -29,5 +29,6 @@ pub use engine::{
 pub use error::L1Error;
 pub use events::{InteractionEvent, InteractionEventKind};
 pub use turn::{
-    BlockReason, EchoStubRouter, RouteOutcome, TurnEngine, TurnRequest, TurnResult, TurnRouter,
+    BlockReason, EchoStubRouter, RouteOutcome, TokenUsage, TurnEngine, TurnRequest, TurnResult,
+    TurnRouter,
 };

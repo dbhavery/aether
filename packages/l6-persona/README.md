@@ -8,7 +8,6 @@ L6 compiles persona packs into 6 typed artifacts consumed by L1/L3/L4/L5.
 
 - `ARCHITECTURE.md` — the L6 persona compiler layer.
 - `docs/PERSONA-SCHEMA.md` — the persona pack schema.
-- `docs/adr/ADR-0012-persona-delivery-download-on-demand.md` — persona delivery.
 
 ## Wave 4 contents
 

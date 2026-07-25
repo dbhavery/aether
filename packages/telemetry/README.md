@@ -6,8 +6,8 @@ Telemetry wrapper. Local-only by default; OTLP export is an opt-in capability ga
 
 ## References
 
-- `ARCHITECTURE.md` — telemetry posture and the L5-gated export capability.
-- `SECURITY.md` — the trust and reporting model.
+- `SECURITY.md` — trust/security posture (export is opt-in).
+- `ARCHITECTURE.md` — the L5 policy gate and autonomy/risk-class framework.
 
 ## Wave 1 contents
 

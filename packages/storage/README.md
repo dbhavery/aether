@@ -6,8 +6,9 @@ SQLite schema, migrations, encryption-at-rest, audit-chain primitives. Consumed 
 
 ## References
 
-- `ARCHITECTURE.md` — the storage substrate and the L2/L5 layers it serves.
 - `docs/adr/ADR-0004-durable-store-shape.md` — the durable store shape.
+- `docs/adr/ADR-0001-memory-domain-reconciliation.md` — the L2 memory domains this store backs.
+- `ARCHITECTURE.md` — the L5 policy layer this store backs.
 
 ## Wave 1 contents
 

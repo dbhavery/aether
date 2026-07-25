@@ -18,9 +18,12 @@ path = "src/main.rs"
 # depends on both L1 and L4 so the sibling-engine rule can stay intact in
 # the libraries themselves. See tools/lint-layer-boundaries/check.py.
 aether-l1-interaction = { path = "../../packages/l1-interaction" }
+aether-l2-memory      = { path = "../../packages/l2-memory" }
+aether-l3-presence    = { path = "../../packages/l3-presence" }
 aether-l4-router      = { path = "../../packages/l4-router" }
 aether-l5-policy      = { path = "../../packages/l5-policy" }
 aether-l6-persona     = { path = "../../packages/l6-persona" }
+aether-l7-trust       = { path = "../../packages/l7-trust" }
 
 serde_json = { workspace = true }
 
@@ -29,3 +32,8 @@ default = []
 # Run the demo with SQLite-backed L5 instead of the in-memory default.
 #   cargo run -p aether-l1-cli --features sqlite-backend -- --db ./aether.db
 sqlite-backend = ["aether-l5-policy/sqlite-backend"]
+# Enable the local Ollama provider (L4.1). With this on, the CLI still
+# defaults to the reflex stub unless AETHER_OLLAMA_MODEL is set and the
+# local daemon is reachable.
+#   cargo run -p aether-l1-cli --features ollama-provider
+ollama-provider = ["aether-l4-router/ollama-provider"]

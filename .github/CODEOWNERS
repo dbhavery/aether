@@ -4,12 +4,12 @@
 # review. Wave 1 baseline — coordinator-owned by default; layer agents take over
 # their packages as they come online.
 #
-# Source: ARCHITECTURE.md (layer-to-package mapping and ownership)
+# Source: ARCHITECTURE.md §4.1 (layer-to-package mapping and ownership model)
 
 # Default owner for everything not matched below.
 *                               @dbhavery
 
-# Architecture docs — coordinator-only writes to load-bearing design.
+# Architecture and decision records — coordinator-only writes to doctrine.
 /ARCHITECTURE.md                @dbhavery
 /docs/adr/                      @dbhavery
 
@@ -36,6 +36,8 @@
 # non-bypassable authorization gate.
 /packages/l5-policy/            @dbhavery
 /packages/l5-policy-ts/         @dbhavery
+/packages/l5-browser/           @dbhavery
+/packages/l5-files/             @dbhavery
 # Wave 4 (2026-04-19) — engine stubs coordinator-owned until agents assigned.
 /packages/l1-interaction/       @dbhavery
 /packages/l2-memory/            @dbhavery

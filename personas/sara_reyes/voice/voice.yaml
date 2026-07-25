@@ -1,0 +1,24 @@
+schema_version: 1
+
+# Reference file for Chatterbox / Zonos voice cloning. Relative to this yaml.
+reference_wav: "reference.wav"
+
+# Short preview used in the wizard.
+sample_wav: "sample.wav"
+
+# Chatterbox knobs — Sara is quick, expressive, mid-pitch female.
+# Higher exaggeration than Marcus (more animated); cfg moderate;
+# temperature higher than Marcus so playful timing variation comes
+# through.
+chatterbox:
+  exaggeration: 0.55
+  cfg_weight: 0.45
+  temperature: 0.85
+
+# ElevenLabs slot left empty until a coral-equivalent voice is mapped.
+elevenlabs:
+  voice_id: ""
+  model_id: "eleven_flash_v2_5"
+  stability: 0.45
+  similarity_boost: 0.75
+  style: 0.30

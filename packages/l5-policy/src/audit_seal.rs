@@ -32,6 +32,23 @@
 //! - Chain-tip swap (rolling back to an earlier head): detected, because
 //!   the final computed head no longer matches the stored
 //!   `policy_audit_chain_head.head_hash`.
+//! - **ADR-0009 v2 fields** (`schema_version`, `original_utterance`,
+//!   `retrieval_provenance`) on v2 rows: included in the canonical
+//!   payload via [`CanonicalAuditPayloadV2`] and inherit the same
+//!   tamper-evident guarantee. Mutating `original_utterance` post-write
+//!   on a v2 row breaks chain verification.
+//!
+//! ## Schema-version awareness (HIGH-1, ADR-0009 follow-up)
+//!
+//! Pre-ADR-0009 (v1) rows were sealed under the narrow
+//! [`CanonicalAuditPayloadV1`] shape — the three v2 fields did not exist
+//! in the canonical bytes. Post-ADR-0009 writers stamp `schema_version
+//! = 2` and seal under [`CanonicalAuditPayloadV2`]. [`canonical_bytes`]
+//! dispatches on `schema_version` so legacy v1 rows read back from disk
+//! re-hash to the same bytes their original writer produced. Without
+//! this dispatch, the first chain verification after deploying
+//! `f378ea5` against an existing audit DB would report tampering on
+//! every legacy row.
 //!
 //! ## What it does NOT protect (yet)
 //!
@@ -171,12 +188,18 @@ fn decode_hex32(hex: &str) -> Option<[u8; 32]> {
     Some(out)
 }
 
-/// Canonical payload for hashing. Mirrors [`AuditRecordEvent`] but strips
-/// the three self-referential / integrity fields (`prev_hash`,
-/// `record_hmac`, `key_id`) so the hash is deterministic over content the
-/// writer actually chose.
+/// Canonical payload for hashing — pre-ADR-0009 (v1) shape.
+///
+/// Mirrors [`AuditRecordEvent`] but strips the three self-referential /
+/// integrity fields (`prev_hash`, `record_hmac`, `key_id`) so the hash is
+/// deterministic over content the writer actually chose.
+///
+/// **This struct is frozen.** It must serialize to byte-for-byte the same
+/// JSON shape used to seal v1 rows before commit `f378ea5`. New fields go
+/// in [`CanonicalAuditPayloadV2`] only. Adding any field here would break
+/// every legacy chain on disk.
 #[derive(Serialize)]
-struct CanonicalAuditPayload<'a> {
+struct CanonicalAuditPayloadV1<'a> {
     audit_id: &'a crate::audit::AuditId,
     timestamp_monotonic: &'a crate::common::MonotonicTimestamp,
     timestamp_wall: &'a crate::common::WallTimestamp,
@@ -191,7 +214,36 @@ struct CanonicalAuditPayload<'a> {
     privileged_profile: bool,
 }
 
-impl<'a> From<&'a AuditRecordEvent> for CanonicalAuditPayload<'a> {
+/// Canonical payload for hashing — post-ADR-0009 (v2) shape.
+///
+/// Adds the three v2 fields (`schema_version`, `original_utterance`,
+/// `retrieval_provenance`) to the canonical payload so the HMAC seal
+/// actually covers them. Without this an attacker could mutate
+/// `original_utterance` post-write and the chain would still verify.
+///
+/// Field order, names, and types match the historical struct introduced in
+/// `f378ea5` exactly so v2 rows sealed under that commit continue to
+/// verify byte-for-byte.
+#[derive(Serialize)]
+struct CanonicalAuditPayloadV2<'a> {
+    audit_id: &'a crate::audit::AuditId,
+    timestamp_monotonic: &'a crate::common::MonotonicTimestamp,
+    timestamp_wall: &'a crate::common::WallTimestamp,
+    actor: &'a crate::common::ActorRef,
+    capability: &'a crate::capability::Capability,
+    resource: &'a crate::capability::ResourceScope,
+    decision: &'a crate::decision::DecisionKind,
+    change_id: &'a crate::common::ChangeId,
+    seq: u64,
+    reason: &'a Option<crate::decision::StaticReasonId>,
+    stage_trace: &'a Vec<crate::audit::StageTrace>,
+    privileged_profile: bool,
+    schema_version: u32,
+    original_utterance: &'a Option<String>,
+    retrieval_provenance: &'a Option<crate::audit::RetrievalProvenance>,
+}
+
+impl<'a> From<&'a AuditRecordEvent> for CanonicalAuditPayloadV1<'a> {
     fn from(r: &'a AuditRecordEvent) -> Self {
         Self {
             audit_id: &r.audit_id,
@@ -210,12 +262,56 @@ impl<'a> From<&'a AuditRecordEvent> for CanonicalAuditPayload<'a> {
     }
 }
 
-/// Canonical serialization used for hashing. `serde_json` with no pretty
-/// printing is stable enough for this use: we control both the writer and
-/// the verifier, and the struct is frozen by `CanonicalAuditPayload`.
+impl<'a> From<&'a AuditRecordEvent> for CanonicalAuditPayloadV2<'a> {
+    fn from(r: &'a AuditRecordEvent) -> Self {
+        Self {
+            audit_id: &r.audit_id,
+            timestamp_monotonic: &r.timestamp_monotonic,
+            timestamp_wall: &r.timestamp_wall,
+            actor: &r.actor,
+            capability: &r.capability,
+            resource: &r.resource,
+            decision: &r.decision,
+            change_id: &r.change_id,
+            seq: r.seq,
+            reason: &r.reason,
+            stage_trace: &r.stage_trace,
+            privileged_profile: r.privileged_profile,
+            schema_version: r.schema_version,
+            original_utterance: &r.original_utterance,
+            retrieval_provenance: &r.retrieval_provenance,
+        }
+    }
+}
+
+/// Canonical serialization used for hashing.
+///
+/// Dispatches on `row.schema_version`:
+///
+/// - `1` — serializes the narrow [`CanonicalAuditPayloadV1`] shape, which
+///   matches the pre-`f378ea5` byte layout exactly. This preserves chain
+///   integrity for legacy rows on disk: a v1 row read back from
+///   `aether_audit.db` re-hashes to the same bytes the original writer
+///   produced, so its `record_hmac` still verifies.
+/// - `2` (or any future v ≥ 2) — serializes the wide
+///   [`CanonicalAuditPayloadV2`] shape so the HMAC covers
+///   `original_utterance` and `retrieval_provenance`.
+///
+/// Treating any unknown future version (`≥ 3`) as v2 is intentional: a
+/// forward-compatible verifier should still cover at least the v2 fields,
+/// and a v3-aware build will replace this dispatch wholesale.
+///
+/// `serde_json` with no pretty printing is stable enough for this use: we
+/// control both the writer and the verifier, and the canonical structs are
+/// frozen.
 pub fn canonical_bytes(row: &AuditRecordEvent) -> Result<Vec<u8>, serde_json::Error> {
-    let view: CanonicalAuditPayload<'_> = row.into();
-    serde_json::to_vec(&view)
+    if row.schema_version == crate::audit::AUDIT_SCHEMA_VERSION_V1 {
+        let view: CanonicalAuditPayloadV1<'_> = row.into();
+        serde_json::to_vec(&view)
+    } else {
+        let view: CanonicalAuditPayloadV2<'_> = row.into();
+        serde_json::to_vec(&view)
+    }
 }
 
 /// Compute `event_hash = SHA256(prev_hash || canonical_payload)`.

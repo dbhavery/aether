@@ -1,6 +1,6 @@
 # Persona Packs
 
-This directory holds the bundled persona packs that ship with Aether v1.0. Each persona is a self-contained folder defining one character's look, voice, and personality.
+This directory holds the bundled persona packs that ship with Companion v1.0. Each persona is a self-contained folder defining one character's look, voice, and personality.
 
 **Canonical schema:** see [../docs/PERSONA-SCHEMA.md](../docs/PERSONA-SCHEMA.md)
 
@@ -39,9 +39,9 @@ All 12 personas will be populated in **P4 — Persona pack pipeline**. Each requ
 
 ## Adding a new persona
 
-Use `scripts/persona_generator/new_persona.py` (built in P4). See PERSONA-SCHEMA.md § 6 for the full generation pipeline.
-
-Manual hand-authoring is allowed but discouraged — the generator keeps pack structure consistent and handles the boilerplate (landmark extraction, clip preprocessing, audit template).
+Create the persona folder following the canonical structure (see
+PERSONA-SCHEMA.md). Each new pack must match the existing folder
+layout and ship a complete `metadata.yaml` with a license audit.
 
 ---
 

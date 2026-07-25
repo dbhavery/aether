@@ -1,10 +1,10 @@
 //! L5 event family emitted on the Rust-internal event bus.
 //!
-//! Source: `ARCHITECTURE.md`.
+//! Source: `ARCHITECTURE.md` (the cross-layer event surface and the L5 policy layer).
 
 use serde::{Deserialize, Serialize};
 
-use crate::approval::ApprovalTicketId;
+use crate::approval::{ApprovalScope, ApprovalTicketId};
 use crate::audit::{AuditId, AuditRecordEvent};
 use crate::byok::{CostWindow, ProviderId};
 use crate::capability::{Capability, ResourceScope, RiskClass};
@@ -100,6 +100,13 @@ pub struct PolicyDecisionEvent {
     pub reason: Option<StaticReasonId>,
     /// Effective mode used by evaluator (if Allow / Ask).
     pub effective_mode: Option<ApprovalMode>,
+    /// Scope under which this decision was approved. `None` on legacy /
+    /// pre-T1.3 events (deserializes via `serde(default)` to `None`).
+    /// Writers post-T1.3 always set `Some(_)` — `Some(PerAction)` for
+    /// today's behavior, `Some(OncePerSession)` etc. for the new modes.
+    /// See the approval-scope design in `ARCHITECTURE.md`.
+    #[serde(default)]
+    pub approval_scope: Option<ApprovalScope>,
 }
 
 /// `ApprovalPending` emitted for `Decision::Ask`.
@@ -148,6 +155,12 @@ pub struct GrantIssuedEvent {
     pub seq: Seq,
     /// Preset version at issuance.
     pub preset_version_issued_under: u32,
+    /// Scope under which the grant was issued. `None` on legacy /
+    /// pre-T1.3 events (deserializes via `serde(default)` to `None`).
+    /// Writers post-T1.3 always set `Some(_)`. See
+    /// the approval-scope design in `ARCHITECTURE.md`.
+    #[serde(default)]
+    pub approval_scope: Option<ApprovalScope>,
 }
 
 /// Why a grant was revoked.

@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Aether — Roadmap Visual (2026-05-07)</title>
+<style>
+  :root{
+    --bg:#0b0d10;
+    --bg2:#11151a;
+    --panel:#14191f;
+    --panel2:#1a2028;
+    --ink:#e7ecf3;
+    --ink-dim:#9aa6b2;
+    --ink-mute:#5e6b78;
+    --line:#232b34;
+    --line2:#2c3540;
+    --accent:#7aa2ff;       /* now / active */
+    --good:#4ade80;         /* shipped */
+    --warn:#fbbf24;         /* in progress */
+    --defer:#94a3b8;        /* deferred */
+    --danger:#f87171;       /* blocked/forbidden */
+    --pro:#c084fc;          /* Pro track */
+    --oss:#22d3ee;          /* OSS track */
+    --priv:#f472b6;         /* private overlay */
+    --shadow-lo:inset 2px 2px 4px rgba(0,0,0,.55), inset -2px -2px 4px rgba(255,255,255,.02);
+    --shadow-hi:6px 6px 14px rgba(0,0,0,.65), -1px -1px 2px rgba(255,255,255,.03);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:radial-gradient(1200px 800px at 20% -10%, #171d26 0%, var(--bg) 60%) fixed;color:var(--ink);font:14px/1.45 "Inter","IBM Plex Sans",system-ui,sans-serif}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  code,kbd{font:12.5px/1.4 "JetBrains Mono","Fira Code",ui-monospace,monospace;color:#c9d4e0;background:#0e1218;padding:1px 5px;border-radius:4px;border:1px solid var(--line)}
+  .wrap{max-width:1400px;margin:0 auto;padding:28px 32px 80px}
+  header{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:18px;border-bottom:1px solid var(--line);padding-bottom:14px}
+  h1{font-size:26px;letter-spacing:-.01em;margin:0 0 6px}
+  .sub{color:var(--ink-dim);font-size:13px}
+  .now-chip{background:linear-gradient(180deg,#1a2440,#121a2e);border:1px solid #2a3b66;color:#cfdcff;padding:8px 14px;border-radius:10px;box-shadow:var(--shadow-hi);font-weight:600;letter-spacing:.02em}
+  .now-chip small{display:block;color:#8ea1cf;font-weight:400;font-size:11px;margin-top:2px}
+
+  h2{font-size:18px;margin:28px 0 12px;color:#eef2f7;letter-spacing:-.005em}
+  h2 .tag{font-size:11px;color:var(--ink-mute);font-weight:400;margin-left:10px;letter-spacing:.08em;text-transform:uppercase}
+
+  .grid{display:grid;gap:14px}
+  .panel{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow-hi)}
+  .panel h3{margin:0 0 8px;font-size:14px;color:#d7dee7;letter-spacing:.02em}
+  .panel p{margin:4px 0;color:var(--ink-dim);font-size:13px}
+
+  /* Legend */
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--ink-dim)}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle}
+  .dot.good{background:var(--good);box-shadow:0 0 8px rgba(74,222,128,.5)}
+  .dot.warn{background:var(--warn);box-shadow:0 0 8px rgba(251,191,36,.45)}
+  .dot.now{background:var(--accent);box-shadow:0 0 10px rgba(122,162,255,.6)}
+  .dot.defer{background:var(--defer)}
+  .dot.danger{background:var(--danger);box-shadow:0 0 8px rgba(248,113,113,.45)}
+
+  /* Product family */
+  .family{grid-template-columns:repeat(3,1fr)}
+  .fam{padding:16px 16px 14px;border-radius:14px;border:1px solid var(--line);background:linear-gradient(180deg,var(--panel2),var(--panel));box-shadow:var(--shadow-hi);position:relative;overflow:hidden}
+  .fam::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px}
+  .fam.oss::before{background:var(--oss)}
+  .fam.pro::before{background:var(--pro)}
+  .fam.priv::before{background:var(--priv)}
+  .fam h3{margin-top:0;font-size:14px;letter-spacing:.03em}
+  .fam .role{font-size:11px;color:var(--ink-mute);text-transform:uppercase;letter-spacing:.12em}
+  .fam ul{margin:8px 0 0;padding-left:18px;color:var(--ink-dim);font-size:12.5px}
+
+  /* Wave rail */
+  .waves{display:grid;grid-template-columns:repeat(5,1fr);gap:0;margin:8px 0 4px;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:var(--panel)}
+  .wave{padding:14px 14px 12px;border-right:1px solid var(--line);position:relative}
+  .wave:last-child{border-right:0}
+  .wave .w{font-size:11px;color:var(--ink-mute);text-transform:uppercase;letter-spacing:.14em}
+  .wave .t{font-size:13px;font-weight:600;margin-top:4px;color:#dde4ec}
+  .wave .s{font-size:12px;color:var(--ink-dim);margin-top:6px;line-height:1.4}
+  .wave.done{background:linear-gradient(180deg,#12211a,#101714)}
+  .wave.done .t::before{content:"✓ ";color:var(--good)}
+  .wave.active{background:linear-gradient(180deg,#121a2a,#0f1420);box-shadow:inset 0 0 0 1px rgba(122,162,255,.35)}
+  .wave.active::after{content:"NOW";position:absolute;top:8px;right:10px;font-size:9.5px;letter-spacing:.18em;color:var(--accent);background:rgba(122,162,255,.1);padding:2px 6px;border-radius:999px;border:1px solid rgba(122,162,255,.4)}
+  .wave.future{opacity:.78}
+
+  /* Layer grid */
+  .layers{grid-template-columns:repeat(4,1fr)}
+  .layer{padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--panel);position:relative}
+  .layer .lid{font-size:10.5px;color:var(--ink-mute);letter-spacing:.14em;text-transform:uppercase}
+  .layer .lname{font-size:13px;font-weight:600;color:#dde4ec;margin-top:2px}
+  .layer .lstate{font-size:11.5px;color:var(--ink-dim);margin-top:6px;line-height:1.45}
+  .layer.shipped{border-color:rgba(74,222,128,.35);background:linear-gradient(180deg,#0f1815,#0d1412)}
+  .layer.active{border-color:rgba(122,162,255,.45);background:linear-gradient(180deg,#0f1624,#0d121c);box-shadow:0 0 0 1px rgba(122,162,255,.18) inset}
+  .layer.partial{border-color:rgba(251,191,36,.35)}
+  .badge{position:absolute;top:10px;right:10px;font-size:9.5px;letter-spacing:.14em;padding:2px 6px;border-radius:999px;text-transform:uppercase}
+  .b-ok{background:rgba(74,222,128,.1);color:#86efac;border:1px solid rgba(74,222,128,.35)}
+  .b-now{background:rgba(122,162,255,.1);color:#bcd0ff;border:1px solid rgba(122,162,255,.4)}
+  .b-part{background:rgba(251,191,36,.08);color:#fde68a;border:1px solid rgba(251,191,36,.35)}
+  .b-pend{background:rgba(148,163,184,.08);color:#cbd5e1;border:1px solid rgba(148,163,184,.3)}
+
+  /* Timeline */
+  .tl{position:relative;margin-top:6px;padding:14px 14px 18px;border:1px solid var(--line);border-radius:14px;background:linear-gradient(180deg,#0f141a,#0c1014);overflow-x:auto}
+  .tl-rail{position:relative;display:flex;gap:0;min-width:100%;align-items:stretch}
+  .tl-node{flex:1 1 0;min-width:74px;padding:8px 8px 10px;border-right:1px dashed var(--line);position:relative}
+  .tl-node:last-child{border-right:0}
+  .tl-node .d{font-size:10.5px;color:var(--ink-mute);letter-spacing:.08em}
+  .tl-node .h{font-size:11.5px;color:#d7dee7;margin-top:3px;line-height:1.35;min-height:34px}
+  .tl-node .m{font-size:10.5px;color:var(--ink-dim);margin-top:4px}
+  .tl-node.now{background:linear-gradient(180deg,rgba(122,162,255,.1),rgba(122,162,255,.02));border-radius:8px;border-right:1px solid var(--line)}
+  .tl-node.now .d{color:var(--accent);font-weight:600}
+  .tl-node.now::before{content:"";position:absolute;left:50%;top:-6px;transform:translateX(-50%);width:10px;height:10px;background:var(--accent);border-radius:50%;box-shadow:0 0 12px rgba(122,162,255,.8)}
+  .tl-track{position:absolute;top:6px;left:14px;right:14px;height:2px;background:linear-gradient(90deg,var(--good) 0%,var(--good) 92%,var(--accent) 92%,var(--accent) 100%);border-radius:2px}
+
+  /* Next up */
+  .next{grid-template-columns:repeat(3,1fr)}
+  .pri{padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--panel);position:relative}
+  .pri h4{margin:0 0 4px;font-size:13.5px;letter-spacing:.01em;color:#e5ebf2}
+  .pri .k{font-size:10.5px;color:var(--ink-mute);text-transform:uppercase;letter-spacing:.16em;margin-bottom:6px}
+  .pri p{font-size:12px;color:var(--ink-dim);margin:6px 0 0;line-height:1.5}
+  .pri.p1{border-color:rgba(122,162,255,.4)}
+  .pri.p2{border-color:rgba(251,191,36,.3)}
+  .pri.p3{border-color:var(--line2)}
+
+  /* Deferred / guardrails */
+  .two{grid-template-columns:1fr 1fr}
+  ul.tight{margin:6px 0 0;padding-left:18px;color:var(--ink-dim);font-size:12.5px;line-height:1.55}
+  ul.tight li{margin:3px 0}
+  .no li::marker{color:var(--danger)}
+  .def li::marker{color:var(--defer)}
+  .ok li::marker{color:var(--good)}
+
+  /* Health strip */
+  .health{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-top:6px}
+  .hc{padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:#0f141a;text-align:center}
+  .hc .n{font-size:10px;color:var(--ink-mute);letter-spacing:.1em;text-transform:uppercase}
+  .hc .v{font-size:13px;color:var(--good);font-weight:600;margin-top:4px}
+  .hc .v.dim{color:var(--ink-dim);font-weight:500}
+
+  footer{margin-top:36px;padding-top:16px;border-top:1px solid var(--line);color:var(--ink-mute);font-size:11.5px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div>
+    <h1>Aether — Roadmap Visual</h1>
+    <div class="sub">Multimodal companion build · on-track assessment · generated from handoff + planning corpus</div>
+  </div>
+  <div class="now-chip">
+    YOU ARE HERE — 2026-05-07
+    <small>dev @ 01f40e5 · clean · pushed · all checks green</small>
+  </div>
+</header>
+
+<!-- HEALTH STRIP -->
+<section>
+  <div class="health">
+    <div class="hc"><div class="n">Branch</div><div class="v">dev clean</div></div>
+    <div class="hc"><div class="n">Push</div><div class="v">up to date</div></div>
+    <div class="hc"><div class="n">cargo test</div><div class="v">workspace OK</div></div>
+    <div class="hc"><div class="n">l4-router</div><div class="v">57 / 57</div></div>
+    <div class="hc"><div class="n">src-tauri</div><div class="v">93 / 93</div></div>
+    <div class="hc"><div class="n">pnpm test</div><div class="v">86 / 86</div></div>
+    <div class="hc"><div class="n">layer lint</div><div class="v">0 violations</div></div>
+  </div>
+</section>
+
+<!-- PRODUCT FAMILY -->
+<h2>Product family <span class="tag">doctrine · 2 surfaces</span></h2>
+<div class="grid family">
+  <div class="fam oss">
+    <div class="role">OSS Preview</div>
+    <h3>aether-oss</h3>
+    <p style="color:var(--ink-dim);font-size:12.5px;margin:6px 0 0">Public launch slice. Tauri shell, layer scaffolds. Ships first, proves the layered architecture in the open.</p>
+    <ul><li>Wave 1–2 delivered Apr 19 (OSS preview tag)</li><li>Current polish round is inside this surface</li></ul>
+  </div>
+  <div class="fam pro">
+    <div class="role">Aether Pro</div>
+    <h3>flagship companion</h3>
+    <p style="color:var(--ink-dim);font-size:12.5px;margin:6px 0 0">Full-performance multimodal assistant. 8 must-own moat layers, avatar presence, deep memory, policy gates, tiered models.</p>
+    <ul><li>Long arc — built feature-by-feature after OSS preview</li><li>Vision v1 is the first Pro-grade surface shipping inside OSS scaffold</li></ul>
+  </div>
+</div>
+
+<!-- WAVE RAIL -->
+<h2>Wave rail <span class="tag">restructure → foundation → features → release</span></h2>
+<div class="waves">
+  <div class="wave done">
+    <div class="w">Wave 1</div>
+    <div class="t">Monorepo + scaffolds</div>
+    <div class="s">packages/l1–l7 + x-streams laid down. Boundary lints permissive. CLAUDE.md locked.</div>
+  </div>
+  <div class="wave done">
+    <div class="w">Wave 2</div>
+    <div class="t">OSS preview launch</div>
+    <div class="s">Public preview tag 2026-04-19. Event bus contracts, ts-rs codegen, legacy coexistence.</div>
+  </div>
+  <div class="wave done">
+    <div class="w">Wave 3</div>
+    <div class="t">Companion foundation</div>
+    <div class="s">L1–L7 first execution reports. Ollama provider, typed provider errors, persona overlay, presence bridge.</div>
+  </div>
+  <div class="wave active">
+    <div class="w">Wave 4 · 5</div>
+    <div class="t">Multimodal vision v1</div>
+    <div class="s">Two-week sprint 2026-04-23 → 2026-05-06. Camera / Screen / analyze_frame / 2nd provider / trust drawer / telemetry / architecture doc.</div>
+  </div>
+  <div class="wave future">
+    <div class="w">Wave 6+</div>
+    <div class="t">Voice · remote vision · avatar</div>
+    <div class="s">Microphone consent mirror, remote vision privacy posture, L3 presence rendering, L2 durable memory maturation.</div>
+  </div>
+</div>
+
+<!-- LAYER STATUS -->
+<h2>Must-own layers (L1–L7) + cross-cutting streams <span class="tag">shipped state as of 2026-05-07</span></h2>
+<div class="grid layers">
+  <div class="layer shipped"><span class="badge b-ok">shipped</span><div class="lid">L1</div><div class="lname">Interaction timing</div><div class="lstate">Turn-state, reflex classifier, ack phrase pool. Role-tagged messages landed.</div></div>
+  <div class="layer partial"><span class="badge b-part">durable wiring</span><div class="lid">L2</div><div class="lname">Memory kernel</div><div class="lstate">Durable-memory wiring (Apr 23) + retention policy (Apr 24). Image bytes stay transient.</div></div>
+  <div class="layer partial"><span class="badge b-part">bridge in</span><div class="lid">L3</div><div class="lname">Presence engine</div><div class="lstate">Presence-avatar bridge shipped Apr 20. Full viseme / render pipeline deferred to later wave.</div></div>
+  <div class="layer active"><span class="badge b-now">active</span><div class="lid">L4</div><div class="lname">Model router</div><div class="lstate">Ollama + llama.cpp vision providers. In-provider model selection, TTL cache, 57/57 tests. <b>Where current work lives.</b></div></div>
+  <div class="layer shipped"><span class="badge b-ok">shipped</span><div class="lid">L5</div><div class="lname">Policy engine</div><div class="lstate">Media permissions, permissioned analyze_frame, audit trail. Single-writer contract holding.</div></div>
+  <div class="layer shipped"><span class="badge b-ok">shipped</span><div class="lid">L6</div><div class="lname">Persona compiler</div><div class="lstate">Persona overlay wired into L4/L5 (Apr 20).</div></div>
+  <div class="layer shipped"><span class="badge b-ok">shipped</span><div class="lid">L7</div><div class="lname">Trust UX / onboarding</div><div class="lstate">Trust drawer history, middle-truncated model ids, vision badge, transcript model meta.</div></div>
+  <div class="layer shipped"><span class="badge b-ok">shipped</span><div class="lid">X1 · X3</div><div class="lname">Monorepo · Tauri shell</div><div class="lstate">Tauri architecture locked. Cargo workspace clean, lint-layer-boundaries at 0.</div></div>
+</div>
+
+<!-- TIMELINE -->
+<h2>Vision v1 daily track <span class="tag">two-week sprint · 15 commits of polish per handoff</span></h2>
+<div class="tl">
+  <div class="tl-rail">
+    <div class="tl-node"><div class="d">Apr 23</div><div class="h">Durable memory wiring</div><div class="m">L2</div></div>
+    <div class="tl-node"><div class="d">Apr 24</div><div class="h">Retention policy</div><div class="m">L2</div></div>
+    <div class="tl-node"><div class="d">Apr 25</div><div class="h">Media permissions + 1st vision provider</div><div class="m">L5 · L4</div></div>
+    <div class="tl-node"><div class="d">Apr 26</div><div class="h">2nd vision provider (llama.cpp)</div><div class="m">L4</div></div>
+    <div class="tl-node"><div class="d">Apr 27</div><div class="h">Vitest harness</div><div class="m">desktop</div></div>
+    <div class="tl-node"><div class="d">Apr 28</div><div class="h">Polish</div><div class="m">—</div></div>
+    <div class="tl-node"><div class="d">Apr 29</div><div class="h">In-provider model selection</div><div class="m">L4</div></div>
+    <div class="tl-node"><div class="d">Apr 30</div><div class="h">Vision badge RTL tests</div><div class="m">L7</div></div>
+    <div class="tl-node"><div class="d">May 01</div><div class="h">Transcript model meta</div><div class="m">L7</div></div>
+    <div class="tl-node"><div class="d">May 02</div><div class="h">Tier dedup</div><div class="m">L7</div></div>
+    <div class="tl-node"><div class="d">May 03</div><div class="h">analyze_frame empty-body guard</div><div class="m">L5</div></div>
+    <div class="tl-node"><div class="d">May 04</div><div class="h">maybe_apply_vision guard symmetry</div><div class="m">L5</div></div>
+    <div class="tl-node"><div class="d">May 05</div><div class="h">vision_provider.json tolerant read</div><div class="m">L4</div></div>
+    <div class="tl-node"><div class="d">May 06</div><div class="h">Early-exit telemetry · log clarity · arch doc</div><div class="m">L5 · L7 · docs</div></div>
+    <div class="tl-node now"><div class="d">May 07</div><div class="h">Polish round (P1/P2/P3)</div><div class="m">decide · label · tidy</div></div>
+  </div>
+</div>
+
+<!-- NEXT UP -->
+<h2>Next session focus <span class="tag">polish only · no new product surface</span></h2>
+<div class="grid next">
+  <div class="pri p1">
+    <div class="k">Priority 1 · decide</div>
+    <h4>MediaKind::from_wire Err path</h4>
+    <p>Unknown <code>kind</code> currently returns a hard error with no telemetry. Either add <code>frame_invalid_kind</code> entry (consistency with other early-exits) OR document the "frontend bug, surface loudly" rationale. Needs Don call.</p>
+  </div>
+  <div class="pri p2">
+    <div class="k">Priority 2 · optional</div>
+    <h4>"Capture rejected" label</h4>
+    <p>Trust-drawer History currently renders <code>frame_invalid</code> via <code>{kind.replace(/_/g," ")}</code>. If "Capture rejected" reads better, wire it through a kind-label helper.</p>
+  </div>
+  <div class="pri p3">
+    <div class="k">Priority 3 · optional</div>
+    <h4>Tiny polish you spot</h4>
+    <p>Land only if pure and tiny. Otherwise document deferral. Keep diff scoped; no product surface widening.</p>
+  </div>
+</div>
+
+<!-- GUARDRAILS / DEFERRED -->
+<h2>Guardrails &amp; deferred tracks <span class="tag">locked by handoff · don't drift</span></h2>
+<div class="grid two">
+  <div class="panel">
+    <h3><span class="dot danger"></span>Hard constraints (do NOT)</h3>
+    <ul class="tight no">
+      <li>No push without explicit Don authorization</li>
+      <li>No release / distribution / signing work</li>
+      <li>No streaming or continuous capture</li>
+      <li>No mic / voice / STT / TTS work</li>
+      <li>No broad settings redesign</li>
+      <li>Do not unify LlamaCppConfigError + OllamaConfigError across feature boundary</li>
+      <li>Do not extend L5 AuditRecordEvent to carry provider info</li>
+      <li>Do not change image durable-memory posture (image bytes stay transient)</li>
+      <li>Do not widen vision_provider.json beyond additive-default-safe</li>
+      <li>Do not introduce new vision providers</li>
+      <li>Do not add new test deps</li>
+    </ul>
+  </div>
+  <div class="panel">
+    <h3><span class="dot defer"></span>Deferred — waiting for trigger</h3>
+    <ul class="tight def">
+      <li><b>ts-rs codegen for vision provider ids</b> — defer until a 3rd adapter is on the table (P2 2026-05-05 decision)</li>
+      <li><b>Privacy posture × remote vision</b> — defer until a remote vision adapter is being scoped (P3 2026-05-04)</li>
+      <li><b>Microphone consent</b> — separate track; architecture doc §9 records the mirror pattern</li>
+      <li><b>CI check for arch-doc rot</b> — flagged as risk; not yet built</li>
+      <li><b>Rust unit test for record_frame_early_exit_telemetry</b> — needs Tauri scaffolding; revisit if helper grows</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ON-TRACK -->
+<h2>On-track assessment <span class="tag">are we where we should be?</span></h2>
+<div class="grid two">
+  <div class="panel">
+    <h3><span class="dot good"></span>Signals we're on-track</h3>
+    <ul class="tight ok">
+      <li>15 consecutive daily handoffs shipped since Apr 23 — no rot, no skipped check set</li>
+      <li>Full check set green every single day (fmt, clippy-equiv, cargo test workspace, pnpm test, layer lint)</li>
+      <li>Vision v1 architecture now documented — future tracks (remote vision, voice) can design against a stable reference</li>
+      <li>Observability surface closed: every early-exit of analyze_frame now produces a TelemetryEntry; Trust drawer is source of truth</li>
+      <li>Guardrails holding: no direct cross-layer imports, policy remains single writer, private-asset leak lint at 0</li>
+    </ul>
+  </div>
+  <div class="panel">
+    <h3><span class="dot warn"></span>Watch items</h3>
+    <ul class="tight">
+      <li>Telemetry semantics widened — Ask / Deny / validation all produce entries. Buffer is in-memory + clearable, but worth flagging to Don</li>
+      <li>Architecture doc will rot without a CI guard. Flagged risk, no tooling yet</li>
+      <li>L3 presence rendering still partial — avatar presence pipeline is Pro-flagship territory and hasn't started</li>
+      <li>L2 memory kernel still mid-maturation — durable wiring + retention in, but five-layer architecture not fully landed</li>
+      <li>No remote vision / no voice track yet — both gated on decisions not yet taken</li>
+    </ul>
+  </div>
+</div>
+
+<!-- INDEX -->
+<h2>Reference links <span class="tag">clickable — ctrl+LMB</span></h2>
+<div class="panel">
+  <p><b>Today's handoff:</b> file:///C:/Users/dbhav/Projects/aether/HANDOFF_2026-05-07_CONTINUE_COMPANION_BUILD.md</p>
+  <p><b>Architecture of record:</b> file:///C:/Users/dbhav/Projects/aether/docs/VISION-V1-ARCHITECTURE.md</p>
+  <p><b>Repo-level agent rules:</b> file:///C:/Users/dbhav/Projects/aether/CLAUDE.md</p>
+  <p><b>Planning doctrine:</b> file:///C:/Users/dbhav/Projects/aether/docs/PRODUCT-PLAN.md</p>
+  <p><b>Orchestration map:</b> file:///C:/Users/dbhav/Projects/aether/ARCHITECTURE.md</p>
+  <p><b>Pro roadmap:</b> file:///C:/Users/dbhav/Projects/aether/ROADMAP.md</p>
+  <p><b>OSS preview roadmap:</b> file:///C:/Users/dbhav/Projects/aether/ROADMAP.md</p>
+  <p><b>Latest reports:</b><br>
+    file:///C:/Users/dbhav/Projects/aether/CHUNK_A_FRAME_EARLY_EXIT_TELEMETRY_EXECUTION_REPORT_2026-05-06.md<br>
+    file:///C:/Users/dbhav/Projects/aether/CHUNK_B_LOG_CLARITY_EXECUTION_REPORT_2026-05-06.md<br>
+    file:///C:/Users/dbhav/Projects/aether/CHUNK_C_VISION_V1_ARCHITECTURE_DOC_EXECUTION_REPORT_2026-05-06.md
+  </p>
+</div>
+
+<footer>
+  <div class="legend">
+    <span><span class="dot good"></span>shipped</span>
+    <span><span class="dot now"></span>active (now)</span>
+    <span><span class="dot warn"></span>partial</span>
+    <span><span class="dot defer"></span>deferred</span>
+    <span><span class="dot danger"></span>forbidden</span>
+  </div>
+  <div>Aether · Don Havery · compiled 2026-05-07 from handoff + planning corpus</div>
+</footer>
+
+</div>
+</body>
+</html>

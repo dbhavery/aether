@@ -125,7 +125,7 @@ Estimated change set on accept:
 The three open items in the Proposed draft were all resolved in the
 implementation session per the autonomous-authority delegation in
 `HANDOFF_2026-04-25_NEXT_AUTONOMOUS_SESSION.md`. Full rationale lives
-in the 2026-04-25 decisions log (D-001).
+in the implementation session's decisions log (D-001).
 
 1. **Provenance lives on the audit row, not a sidecar table.**
    `RetrievalProvenance` is an optional field on `AuditRecordEvent`.

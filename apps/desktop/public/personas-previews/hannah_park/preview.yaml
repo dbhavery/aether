@@ -1,0 +1,10 @@
+schema_version: 1
+
+# Lightweight preview metadata bundled into the desktop installer.
+# Derived from personas/hannah_park/persona.yaml at release-build time
+# by tools/build-persona-previews/build.py. Do not hand-edit.
+
+slug: "hannah_park"
+display_name: "Hannah Park"
+tagline: "Careful and well-read. The friend with a PhD who actually knows the literature."
+archetype: "depth_researcher"

@@ -1,9 +1,9 @@
-# Repo Tour — Free Aether, Community Edition
+# Repo Tour — Free Companion, Community Edition
 
 > Fifteen-minute guided walk through the directories. Read this before you
-> touch code. [`ARCHITECTURE.md`](../ARCHITECTURE.md) is the authoritative
-> description of the system; everything in this tour either points at that
-> architecture or points at the code that materializes it.
+> touch code. The architecture docs under `docs/` are authoritative; everything
+> in this tour either points at doctrine or points at code that materializes
+> doctrine.
 
 ---
 
@@ -13,14 +13,12 @@
 aether/
 ├── packages/        <- Cargo + pnpm workspace members (engines + shared infra). START HERE.
 ├── apps/            <- scaffold stubs; no runnable app yet.
-├── src/             <- additional source surface alongside the workspace.
 ├── infra/           <- deploy / ops scaffolds.
 ├── tools/           <- governance linters (layer bans, policy bypass, etc.).
 ├── research/        <- research notes and exploration.
-├── docs/            <- human-reading docs (this file, architecture, ADRs, etc.).
-├── tests/           <- workspace + legacy test surface.
+├── docs/            <- canonical doctrine + specs + this tour. The architecture reference.
 ├── personas/        <- personality configs (legacy + forward-looking).
-├── desktop/         <- legacy v1.0 Python tree. FROZEN. DO NOT IMPORT INTO RUST/TS.
+├── src/, desktop/   <- legacy v1.0 Python tree. FROZEN. DO NOT IMPORT INTO RUST/TS.
 │   frontend/,
 │   configs/,
 │   scripts/,
@@ -37,35 +35,32 @@ aether/
 
 ---
 
-## 1. `docs/` — start here
+## 1. `docs/` — the doctrine surface
 
-This is the human-reading surface. Read it before you touch code; everything
-downstream is subordinate to the architecture it describes.
+This is doctrine. Everything downstream is subordinate to it.
 
-- [`ARCHITECTURE.md`](../ARCHITECTURE.md) (repo root) — the seven-layer
-  architecture, the non-bypassable policy gate, and the direction of
-  dependencies. If a code change conflicts with this file, the code is wrong.
-- [`docs/ARCHITECTURE-V2.md`](ARCHITECTURE-V2.md) — the current architecture
-  detail, expanded from the root overview.
-- [`docs/PRODUCT-PLAN.md`](PRODUCT-PLAN.md) — product direction and the port
-  plan for the legacy v1.0 tree. Use this to understand why the seven layers
-  look the way they do.
-- [`docs/adr/`](adr/) — the Architecture Decision Record log. Each ADR
-  captures one locked decision (model defaults, retrieval wiring, hardware
-  tier model, embeddings onboarding, persona delivery, mobile sync, …). Read
-  the relevant ADR before proposing a change in its area.
-- [`docs/LLM-PROVIDERS.md`](LLM-PROVIDERS.md),
-  [`docs/PERSONA-SCHEMA.md`](PERSONA-SCHEMA.md),
-  [`docs/ONBOARDING-SPEC.md`](ONBOARDING-SPEC.md),
-  [`docs/DISTRIBUTION.md`](DISTRIBUTION.md) — topical specs for the provider
-  surface, persona pack format, onboarding flow, and distribution model.
-- [`docs/posts/`](posts/) — longer-form essays on the design (e.g. policy as
-  a load-bearing layer).
+- `ARCHITECTURE.md` (repo root) — the reference document, ~300 lines. The
+  fastest way to understand the seven layers and the non-bypassable gate.
+- `docs/ARCHITECTURE-V2.md` — the canonical architecture and vision. Sits above
+  every other file. If a code change conflicts with this file, the code is
+  wrong. Covers the layer model, event flow, storage, and the direction of
+  dependencies.
+- `docs/PRODUCT-PLAN.md` — hard rules and direction for the product family.
+  Use this to understand why the seven layers look the way they do.
+- `docs/adr/` — the architecture decision records (ADR-0001 onward). Every
+  locked architectural call — the seven layers, the non-bypassable gate, the
+  turn FSM, the re-evaluation triggers — lives here with its rationale. Check
+  here before proposing architecture changes.
+- `docs/PERSONA-SCHEMA.md` — the persona configuration schema.
+- `docs/LLM-PROVIDERS.md` — the model-router provider contract.
+- `docs/ONBOARDING-SPEC.md` and `docs/DISTRIBUTION.md` — the onboarding flow
+  and how the product is packaged and shipped.
+- `docs/posts/` — narrative explainers for the design (e.g. why policy is
+  load-bearing).
 
 **Rule of thumb:** if you are about to make a non-trivial decision and the
-answer is not already captured in [`ARCHITECTURE.md`](../ARCHITECTURE.md) or
-an ADR under [`docs/adr/`](adr/), record the decision there first — open a
-docs PR before the code PR.
+answer is not in `docs/`, you are probably supposed to open a PR against
+`docs/` first, not against code.
 
 ---
 
@@ -127,16 +122,19 @@ drift. Wave 1 landed scaffolds; Wave 4.1 flips the critical ones to blocking.
 
 ---
 
-## 4. `apps/` — intentionally empty
+## 4. `apps/` — the shipped applications
 
-The roadmap says apps land after the engines are credible on their own. The
-current scaffolds exist so the workspace manifests resolve.
-
-- `apps/desktop/` — future Tauri shell.
-- `apps/guest/` — future Cloudflare Worker + Groq guest-mode endpoint.
-- `apps/docs-site/` — future docs site.
-
-Do not add meaningful app logic until L1 (or L4) has a first-logic slice.
+- `apps/desktop/` is the real end-user application: the Companion desktop
+  shell (Tauri 2 + React + Vite) that wraps the Rust engine path. It is
+  the surface the UI doctrine rules (notably §8 used-as-user) apply to.
+  - Tests: `pnpm test` (vitest unit + React Testing Library component
+    tests under `src/**/*.test.tsx`) and `pnpm test:e2e` (Playwright
+    used-as-user harness under `e2e/` — drives the real frontend in
+    Chromium with the Tauri IPC mocked; covers the approval modal,
+    persona / autonomy / media / mic permission gates, the memory tab,
+    onboarding, capture panels, and chat outcomes). The e2e suite is a
+    blocking CI job; see `apps/desktop/e2e/README.md`.
+- `apps/l1-cli/` is the L1 interaction-timing CLI demo.
 
 ---
 
@@ -182,13 +180,11 @@ If a report disagrees with a README status block, the report wins for
 ## 7. Suggested reading order for a new contributor
 
 1. `README.md` — section 3 (current status) is the honest picture.
-2. [`ARCHITECTURE.md`](../ARCHITECTURE.md) — the seven-layer architecture and
-   the non-bypassable policy gate.
-3. [`docs/PRODUCT-PLAN.md`](PRODUCT-PLAN.md) — product direction and hard rules.
-4. [`docs/ARCHITECTURE-V2.md`](ARCHITECTURE-V2.md) — the layer map and current
-   architecture detail.
-5. [`docs/adr/`](adr/) — the locked decisions that shaped cross-layer
-   communication and the storage/retrieval surfaces.
+2. `docs/ARCHITECTURE-V2.md` — doctrine.
+3. `docs/PRODUCT-PLAN.md` — hard rules.
+4. `docs/adr/` — the architecture decision records; the layer map and the
+   shape of cross-layer communication.
+5. `ARCHITECTURE.md` — the ~300-line reference walkthrough.
 6. `packages/l5-policy/src/lib.rs` → `engine.rs` → `tests/engine_slice.rs` —
    the richest code in the repo today.
 7. `WAVE3_EXECUTION_REPORT_2026-04-19.md` — how that code got there, with

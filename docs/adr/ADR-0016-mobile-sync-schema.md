@@ -6,8 +6,9 @@
 - **Supersedes:** nothing.
 - **Superseded by:** nothing yet.
 - **Related:**
-  - `ARCHITECTURE.md` — the event surface this design extends and the primary store it extends additively.
-  - `docs/adr/ADR-0004-durable-store-shape.md` — the durable store this design extends.
+  - This ADR is the lockable subset of the T2.1 mobile-sync design; it is now the full record of that design.
+  - `ARCHITECTURE.md` — the T2.1 parallel-software track and the cross-layer event surface this design extends.
+  - `docs/adr/ADR-0004-durable-store-shape.md` — the primary store this design extends additively.
   - `docs/adr/ADR-0001-memory-domain-reconciliation.md` — memory is user-keyed (load-bearing for §3).
   - `docs/adr/ADR-0012-persona-delivery-download-on-demand.md` — one persona on disk; pack files do not sync.
   - Avatar runtime architecture — motion library + lip-sync are device-local.
@@ -22,7 +23,7 @@ Even if Don ultimately decides mobile never ships, the additive cost of reservin
 
 ## Decision
 
-Adopt the mobile-sync architecture (T2.1). The lockable subset:
+Adopt the sync architecture detailed below — the lockable subset of the T2.1 mobile-sync design:
 
 ### 1. Topology — two-master with desktop as audit canonical
 
@@ -140,13 +141,13 @@ Per Don's follow-up delegation, the 10 OQs surfaced by the T2.1 design draft are
 | OQ-7 | **QR-code + numeric confirmation** device pairing. Desktop displays QR; phone scans + shows confirmation code; user reads code on desktop; both devices commit. Audit row on both. | Strong identity binding without typing 64-char hex. |
 | OQ-8 | **Audit shard pruning after desktop confirms `audit_chain_head` includes mobile's last row + 30-day cooldown.** | Safe by default; never prunes before desktop has fully ingested. |
 | OQ-9 | **Never auto-migrate desktop on a wire-breaking release while a still-supported mobile version exists.** Add `compatible_mobile_version` field to release metadata. | Avoids locking mobile-only users out of their own data. |
-| OQ-10 | **This ADR is the locked surface.** `T2.1_mobile_sync_schema.md` is the rationale doc; updates to *decisions* go through new ADRs. | Standard ADR/rationale split. |
+| OQ-10 | **This ADR is the locked surface** and the full record of the design; updates to *decisions* go through new ADRs. | Standard ADR/rationale split. |
 
-These resolutions move the T2.1 open questions from "deferred" to "accepted defaults"; this ADR is now the rationale source.
+These resolutions move the T2.1 OQ set from "deferred" to "accepted defaults"; this ADR is now the record of both the design and its rationale.
 
 ## References
 
-- `ARCHITECTURE.md` — the event surface and store this design extends.
+- `ARCHITECTURE.md` — the T2.1 parallel-software track and the cross-layer event surface.
+- `docs/adr/ADR-0004-durable-store-shape.md` — the primary store this design extends.
 - `docs/adr/ADR-0001-memory-domain-reconciliation.md`
-- `docs/adr/ADR-0004-durable-store-shape.md`
 - `docs/adr/ADR-0012-persona-delivery-download-on-demand.md`

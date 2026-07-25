@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Default-deny baseline for the main window. Only the Companion-authored commands plus the minimum core event/window controls are exposed; fs, shell, http, dialog, and notification plugins are deliberately absent. Webview-level media access (getUserMedia / getDisplayMedia) is governed by the OS picker and the in-app media_permissions.json gate — no Tauri capability is required to acquire them. See ARCHITECTURE.md and docs/MEDIA-PERMISSIONS.md.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:default",
+    "core:event:default",
+    "core:app:default"
+  ]
+}

@@ -1,4 +1,4 @@
-# Aether v1.0 — Productization Plan
+# Companion v1.0 — Productization Plan
 
 **Status:** Active planning → execution
 **Branch:** `dev`
@@ -105,7 +105,7 @@
 
 ### P4 — Persona pack pipeline
 
-**Output:** 10–12 persona packs under `personas/`, each with portrait, state images, idle clips, voice reference, personality prompt, license metadata. Generation tooling under `scripts/persona_generator/` so future personas can be added deterministically.
+**Output:** 10–12 persona packs under `personas/`, each with portrait, state images, idle clips, voice reference, personality prompt, license metadata.
 
 **Acceptance:**
 - Each persona has all required assets per PERSONA-SCHEMA.md.

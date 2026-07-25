@@ -2,10 +2,10 @@
 
 - **Status:** **Accepted** (Option B, with Option A explicitly Rejected). Originally drafted 2026-04-25 as Proposed; ratified the same day after the empirical bench validation (see §Empirical Validation below). Production wiring deferred to a follow-up ADR-0011 (see §Open items).
 - **Date:** 2026-04-25
-- **Deciders:** Don ratifies. Claude proposes based on the Phase 3A calibration data (2026-04-25).
+- **Deciders:** Don ratifies. Claude proposes based on the Phase 3A retrieval-calibration data (2026-04-25).
 - **Supersedes:** nothing (this would augment, not replace, the rank function).
 - **Superseded by:** nothing yet.
-- **Related:** `docs/adr/ADR-0005-retrieval-wiring.md` (defines the production rank function this ADR proposes evolving), `docs/adr/ADR-0007-embeddings-onboarding.md` D7 §Tuning notes (the embedding-side knobs already in place). The Phase 3A retrieval-calibration data (2026-04-25) is the empirical trigger.
+- **Related:** `docs/adr/ADR-0005-retrieval-wiring.md` (defines the production rank function this ADR proposes evolving), `docs/adr/ADR-0007-embeddings-onboarding.md` D7 §Tuning notes (the embedding-side knobs already in place). The empirical trigger was the Phase 3A retrieval-calibration run (2026-04-25).
 
 ## Context
 
@@ -126,7 +126,7 @@ Don should ratify the *experiment*, not pre-commit to the implementation.
 Whichever option lands in `retrieval.rs` must:
 
 1. Add a unit test in `retrieval.rs` that locks in the new rank ordering on a small synthetic case (mirrors `rank_puts_higher_score_first_and_caps_at_max_items` already in the test module).
-2. Re-run `bench_recall.py` on the canonical 842-passage corpus and record the resulting `recall_at_scale_after_<option>.json` alongside the bench output.
+2. Re-run `bench_recall.py` on the canonical 842-passage corpus and archive the `recall_at_scale_after_<option>.json` result alongside the calibration data.
 3. Update ADR-0007 D7 §Tuning notes with the new measured recall@1/MRR.
 4. Surface a tier-tunable in `Tier` config (`α` and `τ` for Option A; on/off for Option B).
 
@@ -236,8 +236,8 @@ same 842-passage Phase 3A corpus (`synthetic_corpus_embedded.jsonl`,
 - `apps/desktop/src-tauri/src/retrieval.rs` — `combined_rank_score`,
   `recency_decay`, `RECENCY_WEIGHT_ALPHA`, `RECENCY_HALF_LIFE` pub
   primitives + unit tests; production Phase 4 reverted to baseline.
-- Three bench scripts + three JSON result artifacts from the 2026-04-25
-  calibration session.
+- Three bench scripts + three JSON result artifacts from the
+  2026-04-25 calibration run.
 
 ### What did NOT land (deferred to ADR-0011)
 

@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
-description = "Aether media pipeline — STT/TTS/VAD wrappers with custom chunk timing (Wave 1 placeholder)."
+description = "Companion media pipeline — STT/TTS/VAD wrappers with custom chunk timing (Wave 1 placeholder)."
 
 [lib]
 path = "src/lib.rs"

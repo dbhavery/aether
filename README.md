@@ -1,17 +1,22 @@
-# Free Aether — Community Edition (OSS Preview)
+# Companion
 
-> A local-first, desktop-native AI companion architecture. Rust-first engines, a
-> non-bypassable policy gate, explicit trust surfaces. Early preview — the
-> foundations are in place, most engine logic is not yet.
+> A local-first, desktop-native AI companion. Rust-first engines, a
+> non-bypassable policy gate, explicit trust surfaces, photoreal full-body
+> characters. Early build — foundations are in place, photoreal pipeline and
+> runtime renderer are in active development.
 
-**Status:** `dev` branch, pre-0.1 preview. The repository is under active
-architecture. Expect breaking changes.
+**Public name:** Companion. **Internal codename / repo / database / Tauri identifier:** `aether` (preserved).
+
+**Status:** `dev` branch, pre-release. The repository is under active development. **Companion ships once — when complete** (doctrine §6). No interim wedge product. The prior "Free Companion — Community Edition (OSS Preview)" framing was retired 2026-05-18.
+
+**▶ Live showcase:** [dbhavery.dev/aether](https://dbhavery.dev/aether) — the
+architectural tour, the seven layers, the trust model, and the end-product tease.
 
 ---
 
-## 1. What Aether is
+## 1. What Companion is
 
-Aether is not a chatbot UI and not a general-purpose "AI app." It is an
+Companion is not a chatbot UI and not a general-purpose "AI app." It is an
 architecture for a **long-lived companion** that runs locally on a user's
 machine and treats the user relationship — memory, presence, timing, trust —
 as first-class engines, not afterthoughts.
@@ -33,14 +38,14 @@ Shared infrastructure (`event-bus`, `storage`, `telemetry`, `types`, `ui-kit`,
 `media-engine`) sits underneath. Everything routes through L5 for
 side-effectful actions — there is no back door.
 
-**Free Aether — Community Edition** is the open-source preview track.
+**Companion** is one product (doctrine §6).
 
 ---
 
-## 2. Why Aether
+## 2. Why Companion
 
 Most "AI companion" projects collapse into chat UIs on top of an LLM API.
-Aether refuses that shape on purpose:
+Companion refuses that shape on purpose:
 
 - **Companion, not chatbot.** Long-lived relationship, not single-session Q&A.
 - **Local-first.** User data, memory, and persona state live on the user's
@@ -61,7 +66,7 @@ offline, you're in the right place.
 ## 3. Current status — honest snapshot
 
 ```
-FREE AETHER — COMMUNITY EDITION — STATUS 2026-04-19
+FREE COMPANION — COMMUNITY EDITION — STATUS 2026-04-19
 
 FOUNDATION / DOCTRINE
 [##########] 100%  Vision & guardrails locked
@@ -150,7 +155,7 @@ The legacy **v1.0 Python tree** is intentionally left in place. It is the
 predecessor product; its useful content is being ported forward into the new
 architecture capability-by-capability. Do not import from it into Rust or TS
 workspace members, and do not "clean it up." See
-[`docs/PRODUCT-PLAN.md`](docs/PRODUCT-PLAN.md) for the port plan.
+`docs/ARCHITECTURE-V2.md` for the port plan.
 
 ---
 
@@ -297,16 +302,15 @@ integration, asymmetric checkpoint signing).
 
 ### Where to start reading
 
-1. [`docs/REPO_TOUR.md`](docs/REPO_TOUR.md) — start here. A short guided walk
-   through the directories.
-2. [`ARCHITECTURE.md`](ARCHITECTURE.md) — the seven-layer architecture, the
-   non-bypassable policy gate, and how the layers fit together.
-3. [`docs/ARCHITECTURE-V2.md`](docs/ARCHITECTURE-V2.md) — the current
-   architecture detail.
-4. [`docs/PRODUCT-PLAN.md`](docs/PRODUCT-PLAN.md) — product direction and the
-   port plan for the legacy v1.0 tree.
+1. `docs/ARCHITECTURE-V2.md` — start here. The architecture reference.
+2. `docs/PRODUCT-PLAN.md` — hard rules and direction for the product family.
+3. `docs/adr/` — the architecture decision records; how the layers fit together.
+4. `docs/PERSONA-SCHEMA.md` and `docs/LLM-PROVIDERS.md` — the topical specs for
+   the persona surface and the model router. These describe the concrete
+   contracts the code materializes.
 5. `WAVE3_EXECUTION_REPORT_2026-04-19.md` and `WAVE4_EXECUTION_REPORT_2026-04-19.md`
    — what was done last, with honest deferrals called out.
+6. `docs/REPO_TOUR.md` — a short guided walk through the directories.
 
 ---
 
@@ -338,9 +342,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the long version. Short version:
 - **Docs, tests, and tooling PRs** are the friendliest entry points.
 - **Engine logic** should be scoped to a single layer and produce a wave
   execution report alongside the code.
-- **Architecture changes** require extra care: [`ARCHITECTURE.md`](ARCHITECTURE.md)
-  and the seven-layer doctrine it describes are load-bearing — do not edit
-  without prior discussion.
+- **Architecture doc changes** require extra care: `docs/ARCHITECTURE-V2.md`
+  and `docs/PRODUCT-PLAN.md` are doctrine — do not edit without
+  prior discussion.
 - **Never bypass L5** for any side-effectful action. If you need a new
   capability, add it to the L5 contract, not around it.
 
@@ -350,7 +354,7 @@ By participating you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## 8. Guardrails (short form)
 
-Full list: [`ARCHITECTURE.md`](ARCHITECTURE.md). In summary:
+Full list: `docs/ARCHITECTURE-V2.md`. In summary:
 
 1. **Seven-layer architecture is non-negotiable.** No collapsing layers into
    each other "for convenience."
@@ -362,9 +366,8 @@ Full list: [`ARCHITECTURE.md`](ARCHITECTURE.md). In summary:
    companion stack.
 5. **No ad-hoc cross-package dependencies.** Packages depend only along
    approved directions, enforced by `tools/lint-layer-boundaries/`.
-6. **Docs-first for significant changes.** Architecture moves are recorded in
-   [`ARCHITECTURE.md`](ARCHITECTURE.md) and the ADR log under
-   [`docs/adr/`](docs/adr/) before they land in code.
+6. **Docs-first for significant changes.** Architecture moves land in
+   `docs/` before they land in code.
 
 ---
 
@@ -377,4 +380,4 @@ responsibly. Do **not** file public issues for security problems.
 
 ## 10. License
 
-Aether Community Edition is released under the [MIT License](LICENSE).
+Companion is released under the [MIT License](LICENSE).

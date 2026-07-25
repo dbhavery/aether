@@ -1,0 +1,118 @@
+[package]
+name = "aether-desktop-shell"
+version = "0.0.1"
+description = "Companion desktop shell v0 — Tauri backend that wraps the existing engine path."
+edition = "2021"
+rust-version = "1.78"
+license = "MIT"
+repository = "https://github.com/dbhavery/aether"
+authors = ["Companion contributors"]
+publish = false
+
+# Standalone workspace so the heavy Tauri dep graph does not pollute the
+# main workspace's cargo check / test runs. The boundary linter only
+# regulates packages/l*-* crates, so apps/desktop is invisible to it.
+[workspace]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-window-state = "2"
+tauri-plugin-single-instance = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+tracing = "0.1"
+# tokio is already a transitive dep via tauri; declared explicitly here so
+# the presence poll loop (main.rs::run_presence_loop) can use
+# `tokio::time::interval`. Scope limited to the `time` feature — no new
+# runtime, no network stack. Presence V1 step 2.
+tokio = { version = "1", features = ["time"] }
+# ADR-0006 D2 — hardware detection. `wgpu` is used for adapter enumeration
+# (cross-platform Vulkan / Metal / DX12 backend coverage). `sysinfo` is used
+# for RAM / CPU. Disk space is via `std::fs::available_space`. No additional
+# platform-specific deps. Detection is a pure read — no rendering, no model
+# load, runs once at boot and on explicit user re-detect.
+sysinfo = "0.32"
+wgpu = "23"
+# `ureq` is already a transitive dep via aether-l4-router; declared
+# explicitly here so the readiness probe can hit Ollama's /api/tags
+# without pulling the router crate's full provider machinery into the
+# probe path. Light-weight HTTP only — no model loads, no streaming.
+ureq = { version = "2", features = ["json"] }
+
+# Engine crates — the shell is an integration surface, same as apps/l1-cli.
+# CLAUDE.md §1.4 regulates packages/l*-* siblings; apps/* are allowed to
+# compose multiple engine layers.
+aether-l1-interaction = { path = "../../../packages/l1-interaction" }
+aether-l2-memory      = { path = "../../../packages/l2-memory", features = ["sqlite-backend", "embeddings"] }
+aether-l3-presence    = { path = "../../../packages/l3-presence" }
+aether-l4-router      = { path = "../../../packages/l4-router" }
+aether-l5-policy      = { path = "../../../packages/l5-policy" }
+# T1.3 Tauri-wiring slice — pull in the L5 browser-automation surface with
+# the playwright stub backend so the shell can wire `Arc<dyn BrowserExecutor>`
+# through to Tauri commands. Every executor method returns
+# `BrowserExecError::BackendDisabled` until the real Node-subprocess driver
+# lands in a later slice.
+aether-l5-browser     = { path = "../../../packages/l5-browser", features = ["playwright"] }
+# T1.3 file-workflow Tauri-wiring slice — pull in the L5 files capability
+# surface with the std-fs stub backend so the shell can wire
+# `Arc<dyn FilesExecutor>` through to Tauri commands. Every executor
+# method returns `FilesExecError::BackendDisabled` until the real
+# `std::fs` / `tokio::fs` driver lands in a later slice.
+aether-l5-files       = { path = "../../../packages/l5-files", features = ["std-fs"] }
+aether-l6-persona     = { path = "../../../packages/l6-persona" }
+aether-l7-trust       = { path = "../../../packages/l7-trust" }
+# ADR-0012 §6 — base64-decode the bundled Ed25519 release public key
+# at runtime before forwarding to aether_l6_persona::verify_signed_manifest.
+# (This Cargo.toml declares a standalone [workspace] above, so we
+# can't use `workspace = true` to inherit from the repo-root manifest.)
+base64                = "0.22"
+# ADR-0012 Tier-2 install — `install_persona_via_http` stages the
+# downloaded manifest + zip in a self-cleaning tempdir before handing
+# them to the L6 install primitives. Was test-only; promoted to a
+# regular dep when the runtime install path landed.
+tempfile              = "3"
+
+[features]
+# By default Tauri's `custom-protocol` feature is enabled only in release
+# builds (see tauri-build). We leave it alone.
+default = ["sqlite-backend"]
+# Enable the Ollama provider for real local model routing (text + vision).
+ollama-provider = ["aether-l4-router/ollama-provider"]
+# Enable the llama.cpp HTTP vision adapter alongside (or instead of)
+# Ollama vision. Independent of `ollama-provider`.
+vision-llamacpp = ["aether-l4-router/vision-llamacpp"]
+# Enable the whisper.cpp HTTP speech adapter (Voice V1). Feature-gated
+# independently of the vision adapters. Voice V1 step 2 landed the
+# adapter with healthcheck only; step 4 will wire the transcribe call.
+speech-whispercpp = ["aether-l4-router/speech-whispercpp"]
+# Route the session memory store through the on-disk SQLite backend so
+# conversation history survives restarts. Default-on; disabling falls
+# back to the transient in-memory store (useful for CI sandboxes that
+# cannot touch the filesystem).
+sqlite-backend = []
+
+[dev-dependencies]
+# `tauri/test` exposes `mock_app()` + `MockRuntime`. Phase 4D backfill
+# tests need a live `AppHandle` to drive `spawn_backfill` end-to-end
+# (timing, double-start guard, cancel cadence). Enabled only for tests
+# so the bin build never carries the mock runtime.
+tauri = { version = "2", features = ["test"] }
+# ADR-0012 install-orchestration tests build deterministic zips and
+# re-sign the cross-language manifest fixture. These deps land at
+# test-time only.
+ed25519-dalek = "2"
+sha2          = "0.10"
+zip           = { version = "2", default-features = false, features = ["deflate"] }
+# T1.3 — browser_commands tests build a tracking mock that implements
+# `aether_l5_browser::BrowserExecutor`, which uses `#[async_trait]`. The
+# proc-macro is dev-only because no production module in the desktop
+# crate authors its own `async fn` trait.
+async-trait   = "0.1"
+
+[[bin]]
+name = "aether-desktop"
+path = "src/main.rs"

@@ -1,9 +1,9 @@
 # Aurora — warm_supportive archetype.
-# Canonical persona pack for the Aether first-run wizard.
+# Canonical persona pack for the Companion first-run wizard.
 # Schema reference: docs/PERSONA-SCHEMA.md §2.
 
 id: "aurora"
-display_name: "Aurora"
+display_name: "Aurora Nash"
 tagline: "Warm and grounded. A calm presence for focused work."
 schema_version: 1
 

@@ -15,6 +15,19 @@ path = "src/lib.rs"
 thiserror = { workspace = true }
 serde     = { workspace = true }
 serde_json = { workspace = true }
+serde_yaml = "0.9"
 tracing   = { workspace = true }
+# Install primitives (ADR-0012): SHA-256 manifest verification +
+# zip-bundle extraction. Both pure-Rust, no system lib dependencies.
+sha2      = { workspace = true }
+zip       = { version = "2", default-features = false, features = ["deflate"] }
+# ADR-0012 §6 — Ed25519 manifest signature verification at runtime.
+ed25519-dalek = { workspace = true }
+base64    = { workspace = true }
 
 aether-l5-policy = { path = "../l5-policy" }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+# Cross-language verifier integration test consistency check.
+base64    = { workspace = true }

@@ -16,6 +16,7 @@ use crate::compiler::PersonaId;
 
 /// Formality / warmth dial. Ordered from reserved → warm.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Tone {
     /// Reserved, precise, minimal small talk.
     Formal,
@@ -27,6 +28,7 @@ pub enum Tone {
 
 /// How much the persona tends to say. Ordered from short → long.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Verbosity {
     /// Tight one-line answers.
     Terse,
@@ -39,6 +41,7 @@ pub enum Verbosity {
 /// Risk stance. Affects routing preference and behavior intensities —
 /// **not** policy decisions (those remain L5's monopoly).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Stance {
     /// Cautious — prefers local / cheaper tiers, leans on drafts.
     Cautious,
@@ -50,6 +53,7 @@ pub enum Stance {
 
 /// Humor dial. Intentionally narrow; a real pack surface will want more.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Humor {
     /// Dry — rare witticisms, never jokey.
     Dry,

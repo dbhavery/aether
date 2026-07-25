@@ -2,11 +2,11 @@
 
 **Status:** Wave 1 scaffold — hand-written placeholders. **Do not extend by hand after Wave 2.**
 
-Single canonical TypeScript types surface for the Aether monorepo. Everything here will be generated from Rust structs in `packages/event-bus`, `packages/storage`, and the layer crates via `ts-rs` / `specta` through `tools/ts-bindings-gen/`.
+Single canonical TypeScript types surface for the Companion monorepo. Everything here will be generated from Rust structs in `packages/event-bus`, `packages/storage`, and the layer crates via `ts-rs` / `specta` through `tools/ts-bindings-gen/`.
 
 ## References
 
-- `ARCHITECTURE.md` — the cross-layer event surface these types mirror.
+- `ARCHITECTURE.md` — the cross-layer event surface and type contracts.
 
 ## Wave 1 contents
 

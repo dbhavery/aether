@@ -1,0 +1,23 @@
+schema_version: 1
+
+# Reference file for Chatterbox / Zonos voice cloning. Relative to this yaml.
+reference_wav: "reference.wav"
+
+# Short preview used in the wizard.
+sample_wav: "sample.wav"
+
+# Chatterbox knobs — James is unhurried, warm, mid-low male, comfortable
+# with silence. Lower exaggeration than the others; cfg high for steady
+# delivery; temperature low for consistent gravitas.
+chatterbox:
+  exaggeration: 0.25
+  cfg_weight: 0.65
+  temperature: 0.55
+
+# ElevenLabs slot left empty until a sage-equivalent voice is mapped.
+elevenlabs:
+  voice_id: ""
+  model_id: "eleven_flash_v2_5"
+  stability: 0.75
+  similarity_boost: 0.70
+  style: 0.05

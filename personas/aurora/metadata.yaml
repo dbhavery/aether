@@ -2,57 +2,138 @@ schema_version: 1
 
 creator: "Don Havery"
 created: "2026-04-17"
-last_updated: "2026-04-17"
+last_updated: "2026-04-28"
 
 # Provenance for every shipped asset. Every row must carry a source +
 # license the audit tool can verify. See PERSONA-SCHEMA.md §4 and §8.
 assets:
+  anchor:
+    source: "ai_generated"
+    generator: "fal.ai fal-ai/flux-pro/v1.1-ultra"
+    generation_date: "2026-04-28"
+    source_url: "https://v3b.fal.media/files/b/0a982484/Ijui4cvhYR2Y9VvxNu5sT_47f1d510630f4393b4eb0bc98686dd28.jpg"
+    raw_dimensions: [2752, 1536]
+    post_processing: "JPG -> PNG re-encode via PIL (no crop, sizing deferred per Don 2026-04-28)"
+    role: "canonical neutral face reference for the pack"
+    prompt: >-
+      Photorealistic neutral reference portrait of a woman in her
+      early 30s with shoulder length wavy honey auburn hair tucked
+      simply behind both ears, hazel green eyes, light freckles
+      across the bridge of her nose, neutral relaxed expression,
+      mouth softly closed with the very faintest hint of a smile,
+      looking directly at the camera. Even diffuse soft light with
+      no harsh shadows, very subtle warm undertone. Plain neutral
+      pale beige background, no objects in frame, simple wardrobe
+      of a thin neutral cream knit top with a high collar. Real
+      skin texture with visible pores, no makeup, slim athletic
+      build. Shot on 85mm at f/4 for clean focus across the face,
+      sharp on the eyes. Square head and upper shoulders composition,
+      anchor reference photo style: calm, present, not styled.
+      Avoid plastic skin, perfect symmetry, glamour pose, anime,
+      gradient backgrounds, side rim lighting, motion blur.
+    license: "custom_aether"
+
   portrait:
     source: "ai_generated"
-    generator: "OpenAI gpt-image-1.5 (via scripts/persona_generator/generate_portrait.py)"
+    generator: "fal.ai fal-ai/flux-pro/v1.1-ultra"
+    generation_date: "2026-04-28"
+    source_url: "https://v3b.fal.media/files/b/0a982478/vdYJZCtKywYoZoowDNMml_431843d4228644f39874045d006a41e0.jpg"
+    raw_dimensions: [2752, 1536]
+    post_processing: "JPG -> PNG re-encode via PIL (no crop, sizing deferred per Don 2026-04-28)"
+    role: "personality picker shot for the persona-picker UI"
     prompt: >-
-      Warm-supportive persona portrait — woman early 30s, warm hazel-brown
-      eyes, wavy shoulder-length auburn hair, cream knit sweater, soft
-      golden-hour window light from the left, neutral warm-beige background.
-      Photorealistic 85mm editorial headshot, 1024x1024 square.
+      Photorealistic candid portrait of a woman in her early 30s,
+      shoulder-length wavy honey-auburn hair tucked behind one ear,
+      green-hazel eyes, light freckles, easy mid-laugh smile,
+      wearing an oversized oatmeal cardigan over a thin t-shirt.
+      Warm cafe window light, blurred wood and brass background.
+      Natural skin texture with visible pores, no makeup, slim
+      athletic frame, a single thin gold chain. Shot on 85mm at
+      f/1.8. Looks like a friend across the table, not a model.
+      Avoid glamour pose, plastic skin, perfect symmetry, anime,
+      AI-girl tropes.
+    license: "custom_aether"
+    prior_versions:
+      - date: "2026-04-28 (morning, first-pass)"
+        archived_at: "_archived_2026-04-28_first_pass/portrait.png"
+        seed: 1181057909
+        note: "first-pass single-shot pack, 1024x1024 center-cropped PNG. Replaced after face-consistency critique landed (single candid suboptimal as anchor)."
+      - date: "2026-04-17"
+        archived_at: "_archived_2026-04-28_first_pass/_archived_2026-04-17/portrait.png"
+        generator: "OpenAI gpt-image-1.5"
+
+  profile_left:
+    source: "ai_generated"
+    generator: "fal.ai fal-ai/flux-pro/v1.1-ultra"
+    generation_date: "2026-04-28"
+    source_url: "https://v3b.fal.media/files/b/0a982479/FLMG_JdVvAjB4NN4-40p7_0ff595c8fb4f4014a1f6e88695d31763.jpg"
+    raw_dimensions: [2752, 1536]
+    role: "3/4 left angle"
+    license: "custom_aether"
+
+  profile_right:
+    source: "ai_generated"
+    generator: "fal.ai fal-ai/flux-pro/v1.1-ultra"
+    generation_date: "2026-04-28"
+    source_url: "https://v3b.fal.media/files/b/0a982479/PGxnU-S6_oUkm1WesGnwV_386b6b9dd00641bcb4b79233973e4428.jpg"
+    raw_dimensions: [2752, 1536]
+    role: "3/4 right angle"
     license: "custom_aether"
 
   state_images:
-    source: "ai_generated"
-    generator: "OpenAI gpt-image-1.5 (via scripts/persona_generator/generate_states.py)"
-    prompt: >-
-      Four expression variants (idle / listening / thinking / speaking) of
-      the Aurora base portrait, each generated with a per-state expression
-      modifier layered on the shared base description. See
-      avatar/README.md for the exact prompt per file.
+    source: "DEFERRED"
+    note: >-
+      Earlier plan was to pre-generate 4 expression state PNGs (idle,
+      listening, thinking, speaking) per persona. Replaced 2026-04-28
+      after the asset-schema redesign — expression states are
+      deferred. Pre-generated stills are abandoned per the
+      anchor-schema redesign.
     license: "custom_aether"
+    prior_versions:
+      - date: "2026-04-17"
+        archived_at: "_archived_2026-04-28_first_pass/_archived_2026-04-17/states/"
+        generator: "OpenAI gpt-image-1.5"
 
   voice_reference:
-    source: "royalty_free"
-    attribution: "LibriVox Short Poetry Collection 009 — 'Old Fashioned Roses' by James Whitcomb Riley, read by LibriVox volunteer (reader initials 'ep')"
-    url: "https://ia800607.us.archive.org/23/items/short_poetry_009_librivox/old_fashioned_roses_riley_ep_64kb.mp3"
-    license: "CC0"
+    source: "ai_generated"
+    generator: "OpenAI gpt-4o-mini-tts (voice 'nova') with warm-conversational steering"
+    license: "custom_aether"
     description: >-
-      20.0s clean speech excerpt starting 6.0s into the LibriVox source
-      MP3; resampled to 24 kHz mono 16-bit PCM WAV via ffmpeg with light
-      loudness normalisation. LibriVox recordings are public domain
-      worldwide (CC0-equivalent); full catalog attribution preserved
-      above for audit purposes.
+      20.0s synthetic conversational speech generated 2026-04-28. Voice
+      'nova' steered with explicit instructions for warm, mid-pitch,
+      natural-paced female speech with a slight smile, like a friend
+      at a kitchen table. Output saved as 24 kHz mono 16-bit PCM WAV;
+      OpenAI's WAV header was malformed (nFrames field overflow) and
+      was re-encoded via soundfile, then padded to exact 20.0s. See
+      voice/SOURCE.md for the reference text + steering instructions.
+    prior_versions:
+      - date: "2026-04-17"
+        archived_at: "voice/_archived_2026-04-17/reference.wav"
+        source: "royalty_free"
+        attribution: "LibriVox Short Poetry Collection 009 — 'Old Fashioned Roses' by James Whitcomb Riley (reader 'ep')"
+        license: "CC0"
 
   voice_sample:
-    source: "royalty_free"
-    attribution: "LibriVox Short Poetry Collection 009 — 'Old Fashioned Roses' by James Whitcomb Riley (reader 'ep'), same source as voice_reference"
-    url: "https://ia800607.us.archive.org/23/items/short_poetry_009_librivox/old_fashioned_roses_riley_ep_64kb.mp3"
-    license: "CC0"
+    source: "ai_generated"
+    generator: "OpenAI gpt-4o-mini-tts (voice 'nova'), same steering as voice_reference"
+    license: "custom_aether"
     description: >-
-      4.0s wizard preview trimmed from the same LibriVox source as
-      voice_reference, starting 8.0s into the original; same resampling
-      pipeline.
+      4.0s synthetic conversational speech for the wizard preview.
+      Same generation parameters as voice_reference; trimmed to
+      exactly 4.0s after re-encoding.
+    prior_versions:
+      - date: "2026-04-17"
+        archived_at: "voice/_archived_2026-04-17/sample.wav"
+        source: "royalty_free"
+        attribution: "LibriVox Short Poetry Collection 009 (reader 'ep')"
+        license: "CC0"
 
 notes: |
-  Portrait and state images are AI-generated with no real-person likeness
-  reference. Voice reference + sample are sourced from a public-domain
-  LibriVox recording of a Riley poem; per LibriVox terms, recordings are
-  dedicated to the public domain worldwide. Derived cloned output from
-  Chatterbox is owned by Aether under the persona pack's custom_aether
-  license (bundled under the repo's MIT umbrella).
+  Portrait and state images are AI-generated with no real-person
+  likeness reference. Voice reference + sample as of 2026-04-28 are
+  AI-generated via OpenAI gpt-4o-mini-tts with voice 'nova' (synthetic,
+  not modeled on a specific real person). Derived cloned output from
+  Chatterbox / Zonos based on this reference is owned by Companion under
+  the persona pack's custom_aether license (bundled under the repo's
+  MIT umbrella). Prior 2026-04-17 LibriVox CC0 recital is archived for
+  provenance under voice/_archived_2026-04-17/.

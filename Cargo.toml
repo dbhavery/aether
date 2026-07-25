@@ -6,6 +6,8 @@ members = [
     "packages/media-engine",
     "packages/telemetry",
     "packages/l5-policy",
+    "packages/l5-browser",
+    "packages/l5-files",
     "packages/l1-interaction",
     "packages/l2-memory",
     "packages/l3-presence",
@@ -42,6 +44,12 @@ tempfile = "3"
 sha2 = "0.10"
 hmac = "0.12"
 rand = "0.8"
+# ADR-0012 — persona manifest signature verification. ed25519-dalek
+# is the canonical Rust Ed25519 implementation (RustCrypto family,
+# audited, pure-Rust). base64 decodes the wire-format signature
+# string ("ed25519:<base64>") used by infra/persona-manifest.
+ed25519-dalek = "2"
+base64 = "0.22"
 
 [profile.release]
 opt-level = 3

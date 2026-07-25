@@ -6,8 +6,7 @@ Typed cross-layer event substrate. Every layer (L1–L7, Media, Core) publishes 
 
 ## References
 
-- `ARCHITECTURE.md` — the cross-layer event surface and layer boundaries.
-- `docs/ARCHITECTURE-V2.md` — current architecture detail.
+- `ARCHITECTURE.md` — the cross-layer event surface and the L1 interaction layer.
 
 ## Wave 1 contents
 

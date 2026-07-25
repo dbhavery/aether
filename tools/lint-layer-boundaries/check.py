@@ -54,6 +54,8 @@ ENGINE_CRATES: frozenset[str] = frozenset(
         "aether-l3-presence",
         "aether-l4-router",
         "aether-l5-policy",
+        "aether-l5-browser",
+        "aether-l5-files",
         "aether-l6-persona",
         "aether-l7-trust",
     }
@@ -94,6 +96,20 @@ ALLOWED: dict[str, frozenset[str]] = {
     "aether-l5-policy":      frozenset(
         {"aether-event-bus", "aether-storage", "aether-telemetry"}
     ),
+    # T1.3 §2.1 — l5-browser is a sibling capability surface that
+    # extends `l5-policy::Capability` additively. The first impl slice
+    # (BrowserExecutor trait + Playwright-stub backend, 2026-04-30)
+    # adds an `aether-l5-policy` dep so `capability_for_method` can
+    # name `Capability` variants; subprocess / transport infra crates
+    # land in later slices.
+    "aether-l5-browser":     frozenset({"aether-l5-policy"}),
+    # T1.3 §2.2 — l5-files is a sibling capability surface that
+    # extends `l5-policy::Capability` additively. The first impl slice
+    # (FilesExecutor trait + std::fs-stub backend, 2026-04-30) adds an
+    # `aether-l5-policy` dep so `capability_for_method` can name
+    # `Capability` variants; real `std::fs` / `tokio::fs` infra crates
+    # land in later slices.
+    "aether-l5-files":       frozenset({"aether-l5-policy"}),
     "aether-l6-persona":     frozenset({"aether-l5-policy"}),
     "aether-l7-trust":       frozenset({"aether-l5-policy"}),
     # ------ shared infra ------

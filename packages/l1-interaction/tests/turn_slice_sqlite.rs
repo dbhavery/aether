@@ -41,10 +41,12 @@ fn allow_path_persists_grant_to_sqlite() {
         session_id: SessionId(String::from("sess-sql")),
         persona: persona.clone(),
         task_id: None,
-        utterance: String::from("read a file"),
+        original_utterance: String::from("read a file"),
+        model_input_utterance: String::from("read a file"),
         capability: Capability::FilesRead,
         resource: ResourceScope::Path(String::from("/tmp/durable.txt")),
         emitted_at: MonotonicTimestamp(2_000),
+        retrieval_provenance: None,
     };
 
     let result = engine.handle_turn(req).expect("handle_turn ok");

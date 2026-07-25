@@ -61,7 +61,7 @@ Primary: **Fix B4 + B5 so first-contact chat is reliable without frontend tier-m
 
 Secondary: Fix `LlmProvider.GUEST` id mismatch, the CI `requirements.txt` conflict, and add the favicon. These are all ~10 minutes each.
 
-After that: generate the remaining 9 canonical personas via `scripts/persona_generator/` once fal.ai is topped up.
+After that: author the remaining canonical persona packs under `personas/`.
 
 ---
 

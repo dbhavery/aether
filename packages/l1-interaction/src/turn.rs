@@ -26,6 +26,7 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
 
@@ -38,10 +39,30 @@ use aether_l5_policy::{
 use crate::engine::{TurnId, TurnState};
 use crate::error::L1Error;
 
-/// A single-turn request flowing into L1. The input is deliberately narrow:
-/// one utterance, one session, one persona, one target capability + resource.
-/// Broader shape (intent hints, multi-turn context, media tracks) lands in
-/// later waves.
+/// A single-turn request flowing into L1.
+///
+/// ## ADR-0009 — two-channel utterance shape
+///
+/// Per ADR-0009 (`docs/adr/ADR-0009-...md`) the request carries the
+/// user's utterance in **two parallel channels**:
+///
+/// - [`original_utterance`] is what the user actually typed/said. This
+///   is the audit-truth: memory, transcript, and L5 audit rows record
+///   this string. Searching audit by user phrasing operates on this
+///   field.
+/// - [`model_input_utterance`] is what the router/provider receives
+///   after any prompt-builder augmentation (currently the ADR-0005
+///   retrieval block; future presence-state injection, persona overlays,
+///   etc. share the same channel). This is the reproducibility-truth:
+///   "what did the model actually see?" answers from this field.
+///
+/// The two are byte-identical in the no-augmentation case (retrieval
+/// off, zero hits, etc.); when they diverge, the divergence is the
+/// prompt-builder's contribution and must never be charged back to
+/// the user as if they typed it.
+///
+/// Broader shape (intent hints, multi-turn context, media tracks) lands
+/// in later waves.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TurnRequest {
     /// Session correlation.
@@ -50,8 +71,17 @@ pub struct TurnRequest {
     pub persona: PersonaId,
     /// Optional task correlation for task-scoped grants.
     pub task_id: Option<TaskId>,
-    /// Raw user utterance.
-    pub utterance: String,
+    /// What the user typed (or was transcribed as saying). The
+    /// audit-truth string per ADR-0009 §Decision 1; never includes
+    /// retrieval blocks or any other prompt-builder augmentation.
+    pub original_utterance: String,
+    /// What the router/provider receives. Equals `original_utterance`
+    /// when no augmentation fired; otherwise is the augmented form
+    /// (e.g. ADR-0005 `Relevant context (retrieval):\n…\n\n{original}`).
+    /// This is the reproducibility-truth string per ADR-0009 §Decision
+    /// 4; the L1 engine forwards exactly this value to the
+    /// `TurnRouter::dispatch` call.
+    pub model_input_utterance: String,
     /// Capability the turn intends to invoke.
     pub capability: Capability,
     /// Target resource scope.
@@ -59,6 +89,26 @@ pub struct TurnRequest {
     /// Monotonic emit time. Callers that don't care can pass
     /// `MonotonicTimestamp(0)`.
     pub emitted_at: MonotonicTimestamp,
+    /// ADR-0009 §Decision 2: retrieval-block provenance to stamp on
+    /// the audit row. The shell's `submit_turn` builds this from the
+    /// orchestrator hits already in scope; L1 forwards it untouched
+    /// into the L5 audit-extras. `None` for non-conversation turns
+    /// and for callers that don't run retrieval. `serde(default)`
+    /// keeps the wire shape backwards-compatible.
+    #[serde(default)]
+    pub retrieval_provenance: Option<aether_l5_policy::RetrievalProvenance>,
+}
+
+/// Token usage reported by the router, when the underlying provider
+/// surfaces counts. Routers whose backends don't expose usage (the echo
+/// stub, for instance) leave this as `None` on the enclosing
+/// [`RouteOutcome`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TokenUsage {
+    /// Tokens charged to the prompt side of the turn (system + history + user).
+    pub prompt: u32,
+    /// Tokens the model produced on the completion side.
+    pub completion: u32,
 }
 
 /// What the router reported after a successful dispatch. Strings are used here
@@ -73,6 +123,17 @@ pub struct RouteOutcome {
     pub provider: String,
     /// Final text response surfaced to the caller.
     pub response_text: String,
+    /// Wall-clock milliseconds for the router dispatch leg of the turn.
+    /// Measured by [`TurnEngine::handle_turn`] around the router call so
+    /// every router (reflex stub, Ollama, future adapters) gets a
+    /// consistent number without having to self-time. `None` only when
+    /// the outcome is synthesised outside of [`TurnEngine::handle_turn`]
+    /// (e.g. a post-approval denial reconstruction).
+    #[serde(default)]
+    pub latency_ms: Option<u64>,
+    /// Token counts reported by the provider, if any.
+    #[serde(default)]
+    pub tokens: Option<TokenUsage>,
 }
 
 /// Why a turn ended without reaching the router.
@@ -165,6 +226,16 @@ impl TurnEngine {
             provenance_tags: Vec::new(),
             intended_route: None,
             risk_class_hint: None,
+            // ADR-0009: stamp the user's original utterance on the
+            // audit row so audit-by-phrasing search works. Retrieval
+            // provenance is layered on by commit 3 (the shell builds
+            // it from the orchestrator hits in scope at submit_turn).
+            // L1 itself doesn't run retrieval — keeping this field
+            // `None` here lets the shell own the truth.
+            audit_extras: Some(aether_l5_policy::AuditExtras {
+                original_utterance: Some(request.original_utterance.clone()),
+                retrieval_provenance: request.retrieval_provenance.clone(),
+            }),
         };
 
         let decision = self
@@ -175,9 +246,15 @@ impl TurnEngine {
         match &decision {
             Decision::Allow { .. } => {
                 trace.push(TurnState::RouterDispatched);
-                let outcome = self
-                    .router
-                    .dispatch(&turn_id, &request.utterance, &decision)?;
+                let started = Instant::now();
+                let mut outcome =
+                    self.router
+                        .dispatch(&turn_id, &request.model_input_utterance, &decision)?;
+                // Always stamp the engine-measured latency. If a router
+                // populated its own value we deliberately overwrite so the
+                // number is consistently "handle_turn round-trip" across
+                // adapters.
+                outcome.latency_ms = Some(started.elapsed().as_millis() as u64);
                 trace.push(TurnState::Completed);
                 Ok(TurnResult {
                     turn_id,
@@ -268,6 +345,8 @@ impl TurnRouter for EchoStubRouter {
             tier: String::from("reflex"),
             provider: String::from("stub-echo"),
             response_text: format!("echo: {prompt}"),
+            latency_ms: None,
+            tokens: None,
         })
     }
 }

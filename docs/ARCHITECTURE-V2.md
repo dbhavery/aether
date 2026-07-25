@@ -1,4 +1,4 @@
-# Aether v1.0 Architecture
+# Companion v1.0 Architecture
 
 **Applies to:** `dev` branch productization work.
 **Supersedes:** the PySide6-only architecture documented in the root `README.md` (which describes the `master` snapshot).
@@ -171,7 +171,7 @@ All loopback-only. No LAN exposure in v1.0. The Tailscale pattern from the upstr
 
 ### 4.6 Memory (`src/memory/`)
 - ChromaDB at `%APPDATA%/aether/chroma/<persona_id>/` — one collection per persona for isolation.
-- Hybrid search: BM25 + dense vectors (nomic-embed-text via Ollama, or configurable).
+- Hybrid search: BM25 + dense vectors (BGE-M3 via Ollama per ADR-0003, or configurable).
 - Conversation history in SQLite at `%APPDATA%/aether/conversations.db`.
 - Exposes: `search(query, persona_id)`, `store_turn(role, content, persona_id)`, `store_fact(key, value, importance, persona_id)`, `clear_persona(persona_id)`.
 
@@ -271,7 +271,7 @@ All secrets live in the OS keyring (Windows Credential Manager via the `keyring`
 | VAD | Silero | Upstream already uses it. Lightweight. |
 | Avatar | LivePortrait (TensorRT) | Best quality/VRAM for headshots. |
 | Memory | ChromaDB 1.5.2 | Upstream already uses it. Hybrid search built in. |
-| Embeddings | nomic-embed-text via Ollama (default) or user-configurable | Local, free, good quality. |
+| Embeddings | BGE-M3 via Ollama (default per ADR-0003) or user-configurable | Local, free, multi-functional (dense + sparse + multi-vector); ~25-point retrieval-accuracy lift over nomic-embed-text. |
 | Installer (Windows) | Inno Setup | Upstream already has scaffold. |
 | Auto-update | Custom updater checking GitHub Releases | No third-party dep; source-verifiable. |
 

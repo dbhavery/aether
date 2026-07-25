@@ -7,7 +7,7 @@ last_updated: "2026-04-17"
 assets:
   portrait:
     source: "ai_generated"
-    generator: "OpenAI gpt-image-1.5 (via scripts/persona_generator/generate_portrait.py)"
+    generator: "OpenAI gpt-image-1.5"
     prompt: >-
       Playful-witty persona portrait — androgynous person late 20s, bright
       expressive light-green eyes, tousled chestnut pixie-ish hair, freckles,
@@ -18,7 +18,7 @@ assets:
 
   state_images:
     source: "ai_generated"
-    generator: "OpenAI gpt-image-1.5 (via scripts/persona_generator/generate_states.py)"
+    generator: "OpenAI gpt-image-1.5"
     prompt: >-
       Four expression variants (idle / listening / thinking / speaking) of
       the Luma base portrait, each generated with a per-state expression
@@ -53,5 +53,5 @@ notes: |
   reference. Voice reference + sample are sourced from a public-domain
   LibriVox recording of Carroll's 'Jabberwocky'; per LibriVox terms the
   recording is dedicated to the public domain worldwide. Derived cloned
-  output from Chatterbox is owned by Aether under the persona pack's
+  output from Chatterbox is owned by Companion under the persona pack's
   custom_aether license (bundled under the repo's MIT umbrella).

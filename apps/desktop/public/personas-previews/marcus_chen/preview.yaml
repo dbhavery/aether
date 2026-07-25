@@ -1,0 +1,10 @@
+schema_version: 1
+
+# Lightweight preview metadata bundled into the desktop installer.
+# Derived from personas/marcus_chen/persona.yaml at release-build time
+# by tools/build-persona-previews/build.py. Do not hand-edit.
+
+slug: "marcus_chen"
+display_name: "Marcus Chen"
+tagline: "Sharp and deliberate. The senior engineer pair-programming with you."
+archetype: "analytical_focused"

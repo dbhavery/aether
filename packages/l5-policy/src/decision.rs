@@ -6,7 +6,7 @@
 //! - **Decision 2 (2026-04-18):** `Decision::DraftOnly { source: DraftSource }`
 //!   where `DraftSource ∈ {System, UserChoice}`. There is no `AllowDraft`.
 //!
-//! Source: see `ARCHITECTURE.md`.
+//! Source: the locked architectural decisions in `ARCHITECTURE.md`.
 
 use serde::{Deserialize, Serialize};
 

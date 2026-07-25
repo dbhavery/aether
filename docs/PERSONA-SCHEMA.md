@@ -1,6 +1,6 @@
 # Persona Pack Schema
 
-A persona pack is a **self-contained folder** that tells Aether how one character looks, sounds, and behaves. Users can switch personas at runtime; the active persona drives avatar rendering, voice synthesis, and LLM system prompt construction.
+A persona pack is a **self-contained folder** that tells Companion how one character looks, sounds, and behaves. Users can switch personas at runtime; the active persona drives avatar rendering, voice synthesis, and LLM system prompt construction.
 
 ---
 
@@ -198,23 +198,20 @@ The persona loader (`src/personas/loader.py`) MUST reject a pack that:
 
 ---
 
-## 6. Generation pipeline
+## 6. Authoring a new persona
 
-To add a new persona, use `scripts/persona_generator/` (built in P4):
+To add a new persona, scaffold a folder under `personas/<id>/` and fill the
+schema described above:
 
-1. **`new_persona.py aurora --archetype warm_supportive --gender-hint female`**
-   Creates a scaffold folder, writes empty `persona.yaml` with defaults.
-2. **Portrait generation** — runs SDXL + appropriate LoRA; produces 8 candidates; you pick one.
-3. **State image generation** — inpaints expression variants on the chosen portrait.
-4. **Landmark preprocessing** — `scripts/preprocess_avatar.py persona_id` — extracts 68-point landmarks, caches to `avatar/landmarks.json`.
-5. **Idle clip generation** — LivePortrait drives 4 transition clips, saved to `avatar/clips/`.
-6. **Voice reference sourcing** — you pick a CC0 voice sample from `assets/voice_candidates/` and copy to `voice/reference.wav`.
-7. **Voice sample synthesis** — `scripts/synthesize_sample.py persona_id "Hi, I'm Aurora. Nice to meet you."` — Chatterbox outputs the wizard preview to `voice/sample.wav`.
-8. **Personality prompt writing** — you fill `persona.yaml -> personality.system_prompt`. No LLM autowrite — quality control matters.
-9. **QA conversation** — `scripts/persona_qa.py aurora` — runs a 10-turn test conversation against the configured LLM; outputs a transcript for you to review.
-10. **Legal audit** — you fill `metadata.yaml`, confirm every asset's provenance.
-
-The full pipeline takes 2–4 hours per persona with your input at steps 2, 6, 8, and 9.
+1. **`persona.yaml`** — identity, archetype, and `personality.system_prompt`
+   (authored by hand; no LLM autowrite — quality control matters).
+2. **Avatar assets** — a portrait plus state/expression images and idle clips
+   under `avatar/`, with 68-point landmarks cached to `avatar/landmarks.json`.
+3. **Voice** — a CC0 voice reference at `voice/reference.wav` and a short
+   synthesized preview at `voice/sample.wav`.
+4. **QA** — run a short test conversation against the configured LLM and
+   review the transcript.
+5. **Legal audit** — fill `metadata.yaml` and confirm every asset's provenance.
 
 ---
 
@@ -249,7 +246,7 @@ Every shipped persona pack must:
 
 - Have `metadata.yaml` complete, with every asset's source + license documented.
 - Pass the pre-commit audit check (`scripts/audit_persona.py <id>`).
-- Use only CC0, MIT, or Aether-owned assets.
+- Use only CC0, MIT, or Companion-owned assets.
 - Avoid any likeness of a real identifiable person (per Don's locked rule: AI-generated only).
 
 The v1.0 installer includes a single LICENSE-PERSONAS.md document aggregating every persona's attribution and license info. Users can read it anytime from `%APPDATA%/aether/LICENSE-PERSONAS.md`.

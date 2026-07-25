@@ -38,6 +38,7 @@ fn grant_survives_a_process_restart() {
         issued_at: MonotonicTimestamp(1_000_000),
         expires_at: None,
         preset_version_issued_under: 1,
+        approval_scope: None,
     };
 
     // Cold open + issue.
@@ -83,6 +84,7 @@ fn revoke_persists_across_restart() {
         issued_at: MonotonicTimestamp(42),
         expires_at: None,
         preset_version_issued_under: 1,
+        approval_scope: None,
     };
 
     {
@@ -138,6 +140,11 @@ fn audit_rows_survive_restart_and_filter_by_time_window() {
         reason: None,
         stage_trace: Vec::new(),
         privileged_profile: false,
+        schema_version: aether_l5_policy::AUDIT_SCHEMA_VERSION_V2,
+        original_utterance: None,
+        retrieval_provenance: None,
+        approval_scope: None,
+        auto_approved_under_grant: None,
     };
     let late = AuditRecordEvent {
         audit_id: AuditId("a-late".into()),
@@ -195,6 +202,11 @@ fn sqlite_audit_store_cannot_delete_rows() {
         reason: None,
         stage_trace: Vec::new(),
         privileged_profile: false,
+        schema_version: aether_l5_policy::AUDIT_SCHEMA_VERSION_V2,
+        original_utterance: None,
+        retrieval_provenance: None,
+        approval_scope: None,
+        auto_approved_under_grant: None,
     };
 
     let b = DurableBackends::open(&path).unwrap();
@@ -240,6 +252,7 @@ fn engine_accepts_sqlite_backends_and_evaluates() {
         provenance_tags: Vec::new(),
         intended_route: None,
         risk_class_hint: None,
+        audit_extras: None,
     };
 
     // Don't care which exact decision — just that the engine operates.

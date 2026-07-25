@@ -1,0 +1,10 @@
+schema_version: 1
+
+# Lightweight preview metadata bundled into the desktop installer.
+# Derived from personas/james_whitfield/persona.yaml at release-build time
+# by tools/build-persona-previews/build.py. Do not hand-edit.
+
+slug: "james_whitfield"
+display_name: "James Whitfield"
+tagline: "Calm and weathered. The uncle who reads philosophy and fixes his own truck."
+archetype: "grounded_practical"

@@ -2,12 +2,11 @@
 
 **Status:** Wave 1 placeholder — trait surface sketches only.
 
-STT/TTS/VAD wrappers with Aether's custom chunk-timing and viseme-sync control plane. Borrowed inference models are isolated behind these traits; the control plane is custom (borrowable-but-isolated, per `ARCHITECTURE.md`).
+STT/TTS/VAD wrappers with Companion's custom chunk-timing and viseme-sync control plane. Borrowed inference models are isolated behind these traits; the control plane is custom (per `ARCHITECTURE.md` — borrowable but isolated).
 
 ## References
 
-- `ARCHITECTURE.md` — the media surface and the L1/L3 layers it serves.
-- `docs/ARCHITECTURE-V2.md` — current architecture detail.
+- `ARCHITECTURE.md` — the media/speech stack and the L1 interaction and L3 presence layers it feeds.
 
 ## Wave 1 contents
 

@@ -18,26 +18,39 @@
 //! how L1 / L5 / L4 interlock without editing the code.
 
 mod adapter;
+mod approval;
+mod memory;
 mod persona;
+#[cfg(test)]
+mod presence;
 
 use std::io::{self, BufRead, Write};
 use std::sync::Arc;
 
 use aether_l1_interaction::{BlockReason, TurnEngine, TurnRequest, TurnResult, TurnRouter};
+use aether_l2_memory::{InMemorySessionMemoryStore, SessionMemoryStore};
+use aether_l3_presence::{
+    render_presence, InMemoryPresenceController, PresenceController, PresenceState,
+};
 use aether_l5_policy::{
     policy_engine::PolicyEngine, Capability, Decision, DefaultPolicyEngine, EngineConfig,
     InMemoryAuditStore, InMemoryGrantLedger, InMemorySink, MonotonicTimestamp, PersonaId,
     ResourceScope, SessionId,
 };
 use aether_l6_persona::CompiledPersona;
+use aether_l7_trust::CliApprovalSurface;
 
 use adapter::{ModelRouterAdapter, ReflexModelRouter};
+use approval::{handle_ask, is_ask};
+use memory::{assistant_record, user_record, MemoryAwareRouter};
 use persona::{compile_demo_persona, output_detail_from_persona, tier_from_rules, OutputDetail};
 
 const PROVIDER_LABEL: &str = "reflex-stub";
 const SESSION: &str = "demo-session";
 
 fn main() {
+    let debug_memory = std::env::args().any(|a| a == "--debug-memory");
+
     let compiled = match compile_demo_persona() {
         Ok(c) => c,
         Err(e) => {
@@ -47,9 +60,14 @@ fn main() {
     };
     let detail = output_detail_from_persona(&compiled);
 
-    let engine = build_engine(&compiled);
+    let memory_store: Arc<dyn SessionMemoryStore> =
+        Arc::new(InMemorySessionMemoryStore::new_default());
+    let (engine, policy) = build_engine(&compiled, memory_store.clone());
+    let approval_surface = CliApprovalSurface::new();
+    let presence: Arc<dyn PresenceController> = Arc::new(InMemoryPresenceController::new());
 
     print_banner(&compiled, detail);
+    announce_presence(&presence, PresenceState::Quiet, 0, None);
 
     let stdin = io::stdin();
     let mut stdout = io::stdout();
@@ -80,22 +98,106 @@ fn main() {
             break;
         }
 
+        announce_presence(&presence, PresenceState::Listening, ts, None);
+
         let (capability, resource) = parse_command(trimmed);
         let request = TurnRequest {
             session_id: SessionId(SESSION.to_string()),
             persona: persona_id_from(&compiled),
             task_id: None,
-            utterance: trimmed.to_string(),
+            original_utterance: trimmed.to_string(),
+            model_input_utterance: trimmed.to_string(),
             capability,
             resource,
             emitted_at: MonotonicTimestamp(ts),
+            retrieval_provenance: None,
         };
         ts += 1;
 
-        match engine.handle_turn(request) {
-            Ok(result) => print_turn_result(&result, detail),
-            Err(err) => eprintln!("[error] {err}"),
+        announce_presence(&presence, PresenceState::Thinking, ts, None);
+
+        if debug_memory {
+            let w = memory_store.recent(SESSION).unwrap_or_else(|_| {
+                aether_l2_memory::RecentMemoryWindow {
+                    session_id: SESSION.to_string(),
+                    records: Vec::new(),
+                }
+            });
+            if !w.is_empty() {
+                print!("[memory] {}", aether_l2_memory::render_transcript(&w));
+            }
         }
+
+        match engine.handle_turn(request.clone()) {
+            Ok(first) => {
+                let final_result = if is_ask(&first) {
+                    // Record the ticket id as presence detail so the user
+                    // knows *which* approval is open.
+                    let ticket_hint = match &first.policy_decision {
+                        Decision::Ask { ticket, .. } => Some(ticket.ticket_id.0.clone()),
+                        _ => None,
+                    };
+                    announce_presence(&presence, PresenceState::AwaitingApproval, ts, ticket_hint);
+                    // Surface the Ask to the user, resolve, and either
+                    // resume the turn (approve) or emit a denied view
+                    // (reject). The helper lives in the `approval` module.
+                    match handle_ask(
+                        &policy,
+                        &engine,
+                        &approval_surface,
+                        request.clone(),
+                        first,
+                        MonotonicTimestamp(ts),
+                    ) {
+                        Ok(outcome) => {
+                            ts += 1;
+                            if outcome.approved {
+                                println!("[approval] approved — resuming turn.");
+                            } else {
+                                println!("[approval] rejected — turn aborted.");
+                            }
+                            outcome.result
+                        }
+                        Err(e) => {
+                            eprintln!("[approval error] {e}");
+                            announce_presence(&presence, PresenceState::Quiet, ts, None);
+                            continue;
+                        }
+                    }
+                } else {
+                    first
+                };
+
+                announce_presence(&presence, PresenceState::Responding, ts, None);
+
+                // Append both sides of the turn so the next turn's prompt
+                // carries recent continuity.
+                let _ = memory_store.append(user_record(SESSION, &request));
+                let _ = memory_store.append(assistant_record(SESSION, &final_result, ts));
+                ts += 1;
+                print_turn_result(&final_result, detail);
+
+                announce_presence(&presence, PresenceState::Quiet, ts, None);
+            }
+            Err(err) => {
+                eprintln!("[error] {err}");
+                announce_presence(&presence, PresenceState::Quiet, ts, None);
+            }
+        }
+    }
+}
+
+/// Transition presence for the demo session and print a compact log line.
+/// Errors from the controller are swallowed — a debug banner must never
+/// crash the REPL.
+fn announce_presence(
+    presence: &Arc<dyn PresenceController>,
+    state: PresenceState,
+    ts_ms: u64,
+    detail: Option<String>,
+) {
+    if let Ok(snap) = presence.set_state(SESSION, state, ts_ms, detail) {
+        println!("{}", render_presence(&snap));
     }
 }
 
@@ -103,7 +205,10 @@ fn persona_id_from(compiled: &CompiledPersona) -> PersonaId {
     PersonaId(compiled.persona_id.0.clone())
 }
 
-fn build_engine(compiled: &CompiledPersona) -> TurnEngine {
+fn build_engine(
+    compiled: &CompiledPersona,
+    memory_store: Arc<dyn SessionMemoryStore>,
+) -> (TurnEngine, Arc<dyn PolicyEngine>) {
     let persona = persona_id_from(compiled);
     let cfg = EngineConfig::wave3_default(persona);
     let policy: Arc<dyn PolicyEngine> = Arc::new(DefaultPolicyEngine::new(
@@ -113,15 +218,76 @@ fn build_engine(compiled: &CompiledPersona) -> TurnEngine {
         Arc::new(InMemorySink::new()),
     ));
 
-    let model_router = ReflexModelRouter::new();
     // Persona-derived tier: the compiled CompiledRoutingRules.preferred_tier
     // drives the adapter's tier choice. Cautious personas sit at local-*,
     // Bold personas at remote-*.
     let tier = tier_from_rules(&compiled.routing.preferred_tier);
-    let adapter = ModelRouterAdapter::new(model_router, PROVIDER_LABEL, tier);
-    let router: Arc<dyn TurnRouter> = Arc::new(adapter);
+    let router: Arc<dyn TurnRouter> = choose_router(tier, memory_store);
 
-    TurnEngine::new(policy, router)
+    let engine = TurnEngine::new(policy.clone(), router);
+    (engine, policy)
+}
+
+/// Pick and wire the model router. If the `ollama-provider` feature is
+/// compiled in AND the user has opted in via env vars AND the daemon is
+/// reachable, use `OllamaProvider`. Otherwise fall back to the in-process
+/// reflex stub so the demo always runs.
+#[cfg(feature = "ollama-provider")]
+fn choose_router(
+    tier: aether_l4_router::RouterTier,
+    memory_store: Arc<dyn SessionMemoryStore>,
+) -> Arc<dyn TurnRouter> {
+    use aether_l4_router::{OllamaConfig, OllamaProvider};
+
+    if aether_l4_router::OllamaConfig::env_opts_in() {
+        match OllamaConfig::from_env() {
+            Ok(cfg) => {
+                let provider = OllamaProvider::new(cfg.clone());
+                match provider.healthcheck() {
+                    Ok(()) => {
+                        println!(
+                            "[model] Using Ollama model {} via {}",
+                            cfg.model, cfg.base_url
+                        );
+                        let adapter = ModelRouterAdapter::new(provider, "ollama", tier);
+                        let memory_router = MemoryAwareRouter::new(adapter, memory_store, SESSION);
+                        return Arc::new(memory_router);
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "[model] Ollama daemon not reachable ({e}); falling back to reflex stub."
+                        );
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("[model] Invalid Ollama config ({e}); falling back to reflex stub.");
+            }
+        }
+    }
+    build_stub_router(tier, memory_store)
+}
+
+/// Stub-router wiring with no provider feature compiled in.
+#[cfg(not(feature = "ollama-provider"))]
+fn choose_router(
+    tier: aether_l4_router::RouterTier,
+    memory_store: Arc<dyn SessionMemoryStore>,
+) -> Arc<dyn TurnRouter> {
+    build_stub_router(tier, memory_store)
+}
+
+fn build_stub_router(
+    tier: aether_l4_router::RouterTier,
+    memory_store: Arc<dyn SessionMemoryStore>,
+) -> Arc<dyn TurnRouter> {
+    let model_router = ReflexModelRouter::new();
+    let adapter = ModelRouterAdapter::new(model_router, PROVIDER_LABEL, tier);
+    // L2.1 — wrap the L4 adapter so each prompt carries a rendered recent
+    // transcript for this process-wide session. L1 itself remains memory-
+    // agnostic; the wrapper lives in the demo crate.
+    let memory_router = MemoryAwareRouter::new(adapter, memory_store, SESSION);
+    Arc::new(memory_router)
 }
 
 fn parse_command(line: &str) -> (Capability, ResourceScope) {
@@ -306,17 +472,22 @@ mod tests {
             session_id: SessionId(SESSION.to_string()),
             persona: persona_id_from(compiled),
             task_id: None,
-            utterance: text.to_string(),
+            original_utterance: text.to_string(),
+            model_input_utterance: text.to_string(),
             capability: cap,
             resource,
             emitted_at: MonotonicTimestamp(1),
+            retrieval_provenance: None,
         }
     }
 
     #[test]
     fn demo_engine_runs_allow_path_end_to_end() {
         let compiled = compile_demo_persona().unwrap();
-        let engine = build_engine(&compiled);
+        let (engine, _policy) = build_engine(
+            &compiled,
+            Arc::new(InMemorySessionMemoryStore::new_default()),
+        );
         let r = engine
             .handle_turn(req(
                 &compiled,
@@ -336,7 +507,10 @@ mod tests {
     #[test]
     fn demo_engine_blocks_shell_exec() {
         let compiled = compile_demo_persona().unwrap();
-        let engine = build_engine(&compiled);
+        let (engine, _policy) = build_engine(
+            &compiled,
+            Arc::new(InMemorySessionMemoryStore::new_default()),
+        );
         let r = engine
             .handle_turn(req(
                 &compiled,

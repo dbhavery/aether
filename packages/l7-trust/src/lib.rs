@@ -8,14 +8,20 @@
 //! L7 reads L5 events (approval pending, posture changed, audit rows) and
 //! exposes a small typed surface the desktop shell implements.
 //!
-//! Source: `ARCHITECTURE.md` and `docs/ONBOARDING-SPEC.md`.
+//! Source: `ARCHITECTURE.md` (the L7 trust layer) and `docs/ONBOARDING-SPEC.md`.
 
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
 #![allow(dead_code)]
 
+pub mod approval;
 pub mod error;
 pub mod shell;
 
+pub use approval::{
+    approval_prompt_from_ticket, build_approval_response, human_capability, human_scope,
+    render_approval_block, resolution_to_user_choice, ApprovalResolution, ApprovalSurface,
+    CliApprovalSurface, FixedApprovalSurface,
+};
 pub use error::L7Error;
 pub use shell::{ApprovalPrompt, OnboardingScreen, OnboardingState, PostureBanner, ShellAdapter};

@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use crate::approval::ApprovalScope;
 use crate::capability::{Capability, ResourceScope};
 use crate::common::{Duration, MonotonicTimestamp, PersonaId, PresetId, TaskId};
 use crate::posture::PrivacyPosture;
@@ -63,6 +64,12 @@ pub struct Grant {
     pub expires_at: Option<MonotonicTimestamp>,
     /// Preset version under which this grant was issued.
     pub preset_version_issued_under: u32,
+    /// Scope chosen at issuance. `None` on rows written by pre-T1.3 code,
+    /// which the engine treats as semantically equivalent to
+    /// `Some(ApprovalScope::PerAction)` at read time. See
+    /// the approval-scope design in `ARCHITECTURE.md`.
+    #[serde(default)]
+    pub approval_scope: Option<ApprovalScope>,
 }
 
 /// Query filter for `snapshot_grants` / `list_grants`.
@@ -84,7 +91,7 @@ pub struct GrantFilter {
 /// the core four methods automatically inherits them, and specialized
 /// backends may override for efficiency.
 ///
-/// See `ARCHITECTURE.md` §3
+/// See `docs/adr/ADR-0004-durable-store-shape.md`
 /// (grant_ledger table).
 pub trait GrantLedger: Send + Sync {
     // --- core four (required) ---------------------------------------------

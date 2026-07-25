@@ -1,7 +1,6 @@
 //! Wave 3 engine-slice tests.
 //!
-//! Test-matrix mapping (see
-//! see `ARCHITECTURE.md` §2.5):
+//! Test-matrix mapping (see the L5 policy layer in `ARCHITECTURE.md`):
 //!
 //! - `L5-T01` — evaluate a capability with no grant → `Ask` ticket emitted.
 //!   Covered by `ask_mode_without_grant_emits_ask_ticket`.
@@ -60,6 +59,7 @@ fn req(
         provenance_tags: Vec::new(),
         intended_route: None,
         risk_class_hint: None,
+        audit_extras: None,
     }
 }
 
@@ -378,6 +378,7 @@ fn ttl_expiry_drops_grant_before_next_evaluate() {
         issued_at: MonotonicTimestamp(10),
         expires_at: Some(MonotonicTimestamp(50)), // already past
         preset_version_issued_under: 1,
+        approval_scope: None,
     });
     assert_eq!(ledger.active_len(), 1);
 

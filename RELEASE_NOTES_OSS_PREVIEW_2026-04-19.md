@@ -30,26 +30,23 @@ Shared infrastructure (`event-bus`, `storage`, `telemetry`, `types`,
 routes through **L5** — there is no back door. This preview ships that
 spine and the first real logic inside L5.
 
-Full architecture and guardrails live in
-[`ARCHITECTURE.md`](ARCHITECTURE.md);
-product direction in [`docs/PRODUCT-PLAN.md`](docs/PRODUCT-PLAN.md).
+Full vision and guardrails live in
+[`docs/ARCHITECTURE-V2.md`](docs/ARCHITECTURE-V2.md);
+product doctrine in [`docs/PRODUCT-PLAN.md`](docs/PRODUCT-PLAN.md).
 
 ---
 
 ## 2. What's in this preview
 
-### Architecture and decisions
-- `ARCHITECTURE.md` — canonical architecture; the seven-layer design and the
-  non-bypassable policy gate.
-- `docs/ARCHITECTURE-V2.md` and `docs/PRODUCT-PLAN.md` — the current
-  architecture detail and product direction, covering family, UX,
-  architecture, memory, avatar, trust, tiers, updates, tech stack, persona
-  schema, and model router.
-- `docs/adr/` — the Architecture Decision Record log: the locked decisions
-  for model defaults, retrieval wiring, storage shape, hardware tiers,
-  embeddings onboarding, persona delivery, and mobile sync.
-- The five control-plane decisions are captured in the L5 ADRs and
-  `ARCHITECTURE.md`.
+### Doctrine and plans
+- `docs/ARCHITECTURE-V2.md` — canonical vision and architecture; sits above
+  every other doc.
+- `docs/PRODUCT-PLAN.md` — hard rules and direction covering family, UX,
+  architecture, memory, avatar, trust, tiers, and updates.
+- `docs/PERSONA-SCHEMA.md` and `docs/LLM-PROVIDERS.md` — the persona schema
+  and model-router specs the code materializes.
+- `docs/adr/` — the architecture decision records, including the
+  control-plane decisions locked before any Rust was written.
 
 ### Repository and workspace (Waves 0 – 2)
 - Cargo workspace with 11 member crates; pnpm workspace with three TS
@@ -186,9 +183,9 @@ cargo test -p aether-storage      # 5 unit + 3 integration (SQLite)
 Read order:
 
 1. [`README.md`](README.md) — section 3 has the honest status snapshot.
-2. [`ARCHITECTURE.md`](ARCHITECTURE.md) — the seven-layer architecture and the non-bypassable gate.
-3. [`docs/PRODUCT-PLAN.md`](docs/PRODUCT-PLAN.md) — product direction and hard rules.
-4. [`docs/ARCHITECTURE-V2.md`](docs/ARCHITECTURE-V2.md) — layer map and current architecture detail.
+2. [`docs/ARCHITECTURE-V2.md`](docs/ARCHITECTURE-V2.md) — doctrine.
+3. [`docs/PRODUCT-PLAN.md`](docs/PRODUCT-PLAN.md) — hard rules.
+4. [`docs/adr/`](docs/adr/) — the architecture decision records; layer map.
 5. [`docs/REPO_TOUR.md`](docs/REPO_TOUR.md) — fifteen-minute guided walk.
 6. `packages/l5-policy/src/lib.rs` → `engine.rs` →
    `tests/engine_slice.rs` — the richest code in the repo.

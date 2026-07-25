@@ -1,0 +1,42 @@
+[package]
+name = "aether-l5-browser"
+version = "0.0.1"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Aether L5 — browser-automation capability surface (T1.3 §2.1). Trait + types + Playwright-stub backend; real subprocess wiring lands in a later slice."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+# T1.3 — async trait surface for `BrowserExecutor`. `async-trait` is the
+# de-facto crate for object-safe async traits on stable Rust 1.78. Version
+# pinned locally because no other Aether crate currently uses it; promote
+# to workspace deps when a second crate adopts it.
+async-trait = "0.1"
+
+# Subprocess + async IO + tracing are only pulled in when the `playwright`
+# feature is enabled. Default builds remain dependency-light. Workspace
+# tokio already enables `rt-multi-thread`, `macros`, `sync`, `time`; the
+# Node driver needs `process` + `io-util` on top of that, and we want
+# tokio non-optional so the trait surface compiles either way.
+tokio = { workspace = true, optional = true, features = ["process", "io-util"] }
+tracing = { workspace = true, optional = true }
+
+aether-l5-policy = { path = "../l5-policy" }
+
+[features]
+# Default build ships the trait + types + capability map only. The
+# Playwright-backed executor (`playwright_stub` module) graduates from a
+# `BackendDisabled`-returning stub to a real Node-subprocess driver
+# behind the `playwright` feature. The default build still has no
+# subprocess / async-process / tracing dep — the gate keeps the OSS
+# minimal-shell footprint untouched.
+default = []
+playwright = ["dep:tokio", "dep:tracing"]

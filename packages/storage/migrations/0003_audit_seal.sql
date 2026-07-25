@@ -1,4 +1,4 @@
--- Aether storage — migration 0003 (audit-chain hash + HMAC sealing)
+-- Companion storage — migration 0003 (audit-chain hash + HMAC sealing)
 -- Scope: additive. Activates the chain/HMAC pipeline that 0002 prepared.
 --
 -- Rationale:

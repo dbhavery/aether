@@ -7,8 +7,7 @@
 //
 // Do NOT hand-extend this package after the generator lands. Regenerate.
 //
-// Primary reference:
-//   ARCHITECTURE.md
+// Primary reference: ARCHITECTURE.md (the L5 policy layer and its locked decisions).
 
 export * from "./decision.js";
 export * from "./commands.js";

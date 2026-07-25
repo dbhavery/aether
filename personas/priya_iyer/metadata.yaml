@@ -1,0 +1,81 @@
+schema_version: 1
+
+creator: "Don Havery (cast expansion authorized 2026-04-28)"
+created: "2026-04-28"
+last_updated: "2026-04-28"
+
+# Provenance for every shipped asset. See PERSONA-SCHEMA.md §4 and §8.
+assets:
+  anchor:
+    source: "ai_generated"
+    generator: "fal.ai fal-ai/flux-pro/v1.1-ultra"
+    generation_date: "2026-04-28"
+    license: "custom_aether"
+    description: >-
+      Canonical neutral face reference at 2752×1536 raw 16:9 from
+      flux-pro/v1.1-ultra. Even diffuse light, neutral expression, mouth
+      softly closed, simple background. Full prompt + request URL captured
+      in avatar/README.md generation log block. Raw JPG preserved at
+      avatar/anchor_set_raw_2026-04-28/anchor_raw.jpg.
+
+  portrait:
+    source: "ai_generated"
+    generator: "fal.ai fal-ai/flux-pro/v1.1-ultra"
+    generation_date: "2026-04-28"
+    license: "custom_aether"
+    description: >-
+      Personality picker shot — candid, in-character setting. Full prompt
+      + URL in avatar/README.md.
+
+  profile_left:
+    source: "ai_generated"
+    generator: "fal.ai fal-ai/flux-pro/v1.1-ultra"
+    generation_date: "2026-04-28"
+    license: "custom_aether"
+    description: >-
+      3/4 left angle, anchor-style lighting and wardrobe. Side view.
+      Full prompt + URL in avatar/README.md.
+
+  profile_right:
+    source: "ai_generated"
+    generator: "fal.ai fal-ai/flux-pro/v1.1-ultra"
+    generation_date: "2026-04-28"
+    license: "custom_aether"
+    description: >-
+      3/4 right angle, anchor-style lighting and wardrobe. Side view.
+      Full prompt + URL in avatar/README.md.
+
+  state_images:
+    source: "DEFERRED"
+    note: >-
+      Expression states deferred. Pre-generated stills abandoned
+      per the 2026-04-28 anchor-schema redesign.
+    license: "custom_aether"
+
+  voice_reference:
+    source: "ai_generated"
+    generator: "OpenAI gpt-4o-mini-tts (voice 'alloy') with polished-executive steering"
+    generation_date: "2026-04-28"
+    license: "custom_aether"
+    description: >-
+      ~20s synthetic conversational speech generated 2026-04-28 (night).
+      Voice 'alloy' steered for polished, composed mid-pitch female voice
+      with measured pacing and slight Indian English cadence in sentence
+      shape — like a senior operator on a calm Tuesday. See
+      voice/SOURCE.md for full steering text + reference text.
+
+  voice_sample:
+    source: "ai_generated"
+    generator: "OpenAI gpt-4o-mini-tts (voice 'alloy'), same steering as voice_reference"
+    license: "custom_aether"
+    description: >-
+      ~4s synthetic conversational speech for the wizard preview.
+
+notes: |
+  Priya is the sixth persona in the cast (STRATEGIC × SUPPORTIVE
+  quadrant); see file:///C:/Users/dbhav/Projects/aether/personas/CHARACTERS.md
+  for the full roster plan and design rationale.
+
+  Voice pack shipped; anchor set still pending generation. Voice picks
+  were locked in by the cast creator, not Don — single voice + steering
+  per persona, generated end-to-end via the OpenAI TTS API.

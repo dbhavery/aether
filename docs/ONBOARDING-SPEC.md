@@ -49,7 +49,7 @@ Back navigation is allowed at every step except 1 and 8. Forward navigation requ
 
 **Content:**
 - Hero line: "Meet your AI companion."
-- Subline: "Aether runs on your computer. Private. Yours. Choose who you want to talk to."
+- Subline: "Companion runs on your computer. Private. Yours. Choose who you want to talk to."
 - Three value bullets: Private (runs locally), Flexible (pick any LLM), Real (lip-synced voice).
 - Single CTA button: "Get started".
 
@@ -112,8 +112,8 @@ Back navigation is allowed at every step except 1 and 8. Forward navigation requ
 - "Where do I get a key?" link per provider opens the provider's key page.
 
 **Card C — "Guest mode" (try before you commit)**
-- Uses Groq free tier with Aether's public rate-limited key.
-- Shown as "Limited — 10 messages/hour. Good for trying Aether out."
+- Uses Groq free tier with Companion's public rate-limited key.
+- Shown as "Limited — 10 messages/hour. Good for trying Companion out."
 - No user action required beyond selecting.
 
 **Validation:**
@@ -161,7 +161,7 @@ wizard.voice_settings: { ... per-provider ... }
 
 **Content:**
 - Short plain-English summary (3-5 bullets):
-  - Aether runs on your machine. Your conversations do not leave unless you use a cloud LLM/voice you configured.
+  - Companion runs on your machine. Your conversations do not leave unless you use a cloud LLM/voice you configured.
   - We don't collect any data by default.
   - Opt-in: anonymous crash reports (off by default).
   - Opt-in: anonymous usage counters (off by default).

@@ -18,3 +18,26 @@ serde_json = { workspace = true }
 tracing   = { workspace = true }
 
 aether-l5-policy = { path = "../l5-policy" }
+
+# Optional HTTP client for the Ollama provider. `ureq` is pure-Rust,
+# blocking, and needs no TLS deps for localhost-only Ollama. Behind a
+# feature so the default OSS build stays network-free.
+ureq = { version = "2", default-features = false, features = ["json"], optional = true }
+
+[features]
+default = []
+# Enable the local Ollama provider adapter (text + vision). Opt-in at
+# both build and run time — see `packages/l4-router/src/providers/ollama.rs`
+# and `providers/ollama_vision.rs`.
+ollama-provider = ["dep:ureq"]
+# Enable the local llama.cpp HTTP vision adapter (OpenAI-compatible
+# `/v1/chat/completions` with `image_url` content blocks). Independent
+# of `ollama-provider` so users can enable either, both, or neither.
+# See `packages/l4-router/src/providers/llamacpp_vision.rs`.
+vision-llamacpp = ["dep:ureq"]
+# Enable the local whisper.cpp HTTP speech adapter scaffold. Single-
+# utterance only, push-to-talk only, local-first. Voice V1 step 2
+# lands the provider abstraction + healthcheck; the transcription
+# wire call follows in step 4. Independent of the vision adapters.
+# See `packages/l4-router/src/providers/whispercpp_speech.rs`.
+speech-whispercpp = ["dep:ureq"]

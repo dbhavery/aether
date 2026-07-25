@@ -4,8 +4,7 @@
 // packages/event-bus, packages/storage, and every packages/l*-* crate. Do NOT
 // hand-edit these types after the generator lands in Wave 2+.
 //
-// Canonical source:
-//   ARCHITECTURE.md
+// Canonical source: ARCHITECTURE.md (the cross-layer event surface).
 //
 // Hand-written stubs below mirror the Rust shapes in
 // packages/event-bus/src/lib.rs so downstream TS packages can start compiling

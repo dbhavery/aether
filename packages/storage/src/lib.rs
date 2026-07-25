@@ -2,9 +2,9 @@
 //!
 //! Local persistence substrate. **Wave 1 scaffold — no driver yet.**
 //!
-//! Canonical reference: `ARCHITECTURE.md` and
-//! `docs/adr/ADR-0004-durable-store-shape.md` (the durable store shape, the L5
-//! grants/audit tables, and the L2 memory store).
+//! Canonical reference:
+//! - `docs/adr/ADR-0004-durable-store-shape.md` — the durable store shape.
+//! - `ARCHITECTURE.md` — the L5 policy layer (grants + audit) and the L2 memory layer this store backs.
 //!
 //! ## Layout (per schema pack §2)
 //!
@@ -38,7 +38,7 @@ pub use rusqlite;
 
 use std::path::PathBuf;
 
-/// Set of DB handles Aether opens at startup.
+/// Set of DB handles Companion opens at startup.
 #[derive(Debug, Clone)]
 pub struct StorageLayout {
     /// Path to `aether.db`.
@@ -50,7 +50,7 @@ pub struct StorageLayout {
 }
 
 impl StorageLayout {
-    /// Default layout for Aether Pro under `%APPDATA%/Aether/Pro/data/`.
+    /// Default layout for Companion under the active data root (e.g. `%APPDATA%/Companion/data/`).
     pub fn default_pro(data_root: impl Into<PathBuf>) -> Self {
         let root: PathBuf = data_root.into();
         Self {

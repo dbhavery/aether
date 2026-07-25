@@ -8,9 +8,8 @@
 //!
 //! ## Source-of-truth docs
 //!
-//! - `ARCHITECTURE.md` — the L5 policy engine, the non-bypassable gate, and
-//!   the five control-plane decisions.
-//! - `docs/adr/` — the locked decisions for storage, retrieval, and tiers.
+//! - `ARCHITECTURE.md` — the L5 policy layer, its event surface, and the locked architectural decisions.
+//! - `docs/adr/ADR-0004-durable-store-shape.md` — the durable store this layer writes to.
 //!
 //! ## Invariants this crate encodes (stub surface)
 //!
@@ -51,8 +50,11 @@ pub mod sink;
 pub mod sqlite_backends;
 pub mod storage_hooks;
 
-pub use approval::{ApprovalResponse, ApprovalTicket, ApprovalTicketId, UserChoice};
-pub use audit::{AuditFilter, AuditId, AuditRecordEvent};
+pub use approval::{ApprovalResponse, ApprovalScope, ApprovalTicket, ApprovalTicketId, UserChoice};
+pub use audit::{
+    AuditExtras, AuditFilter, AuditId, AuditRecordEvent, RetrievalProvenance, RetrievedMemoryRef,
+    AUDIT_SCHEMA_VERSION_V1, AUDIT_SCHEMA_VERSION_V2, RETRIEVAL_PROVENANCE_HITS_CAP,
+};
 pub use byok::{CostCap, CostEvent, CostThreshold, CostWindow, ProviderId};
 pub use capability::{
     ApiId, AutomationId, Capability, CapabilityFilter, CapabilityInfo, CapabilityPath,
@@ -82,7 +84,7 @@ pub use storage_hooks::{AuditStore, CostCounterStore, GrantStore};
 
 // --- Wave 3 live surfaces ---
 pub use audit_store::InMemoryAuditStore;
-pub use engine::{CapabilityPolicy, DefaultPolicyEngine, EngineConfig};
+pub use engine::{AutonomyPreset, CapabilityPolicy, DefaultPolicyEngine, EngineConfig};
 pub use ledger::InMemoryGrantLedger;
 pub use sink::{InMemorySink, L5EventSink, NullSink};
 

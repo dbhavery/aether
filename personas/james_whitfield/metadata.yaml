@@ -1,0 +1,83 @@
+schema_version: 1
+
+creator: "Don Havery (cast expansion authorized 2026-04-28)"
+created: "2026-04-28"
+last_updated: "2026-04-28"
+
+# Provenance for every shipped asset. See PERSONA-SCHEMA.md §4 and §8.
+assets:
+  anchor:
+    source: "ai_generated"
+    generator: "fal.ai fal-ai/flux-pro/v1.1-ultra"
+    generation_date: "2026-04-28"
+    license: "custom_aether"
+    description: >-
+      Canonical neutral face reference at 2752×1536 raw 16:9 from
+      flux-pro/v1.1-ultra. Even diffuse light, neutral expression, mouth
+      softly closed, simple background. Full prompt + request URL captured
+      in avatar/README.md generation log block. Raw JPG preserved at
+      avatar/anchor_set_raw_2026-04-28/anchor_raw.jpg.
+
+  portrait:
+    source: "ai_generated"
+    generator: "fal.ai fal-ai/flux-pro/v1.1-ultra"
+    generation_date: "2026-04-28"
+    license: "custom_aether"
+    description: >-
+      Personality picker shot — candid, in-character setting. Full prompt
+      + URL in avatar/README.md.
+
+  profile_left:
+    source: "ai_generated"
+    generator: "fal.ai fal-ai/flux-pro/v1.1-ultra"
+    generation_date: "2026-04-28"
+    license: "custom_aether"
+    description: >-
+      3/4 left angle, anchor-style lighting and wardrobe. Side view.
+      Full prompt + URL in avatar/README.md.
+
+  profile_right:
+    source: "ai_generated"
+    generator: "fal.ai fal-ai/flux-pro/v1.1-ultra"
+    generation_date: "2026-04-28"
+    license: "custom_aether"
+    description: >-
+      3/4 right angle, anchor-style lighting and wardrobe. Side view.
+      Full prompt + URL in avatar/README.md.
+
+  state_images:
+    source: "DEFERRED"
+    note: >-
+      Expression states deferred. Pre-generated stills abandoned
+      per the 2026-04-28 anchor-schema redesign.
+    license: "custom_aether"
+
+  voice_reference:
+    source: "ai_generated"
+    generator: "OpenAI gpt-4o-mini-tts (voice 'sage') with grounded-elder steering"
+    generation_date: "2026-04-28"
+    license: "custom_aether"
+    description: >-
+      20.0s synthetic conversational speech generated 2026-04-28 (eve).
+      Voice 'sage' steered for unhurried mid-low male voice with comfort
+      around silence and unforced warmth — like an older friend who has
+      lived a while and reads philosophy. Output saved as 24 kHz mono
+      16-bit PCM WAV. Steering text + reference text recovery pending —
+      see voice/SOURCE.md draft.
+
+  voice_sample:
+    source: "ai_generated"
+    generator: "OpenAI gpt-4o-mini-tts (voice 'sage'), same steering as voice_reference"
+    license: "custom_aether"
+    description: >-
+      4.0s synthetic conversational speech for the wizard preview.
+
+notes: |
+  James is the fourth persona in the cast (PRACTICAL × SUPPORTIVE
+  quadrant); see file:///C:/Users/dbhav/Projects/aether/personas/CHARACTERS.md
+  for the full roster plan and design rationale.
+
+  Voice generation provenance details (exact steering text + reference
+  text) need recovery from the 2026-04-28 session logs and addition to
+  voice/SOURCE.md before this persona ships in a release. Voice WAVs
+  are committed canonically; provenance docs are draft.

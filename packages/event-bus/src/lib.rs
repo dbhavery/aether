@@ -1,9 +1,8 @@
 //! # aether-event-bus
 //!
-//! Typed cross-layer event substrate for Aether. **Wave 1 scaffold — no logic.**
+//! Typed cross-layer event substrate for Companion. **Wave 1 scaffold — no logic.**
 //!
-//! Canonical reference: `ARCHITECTURE.md` (the cross-layer event surface and
-//! layer boundaries).
+//! Canonical reference: `ARCHITECTURE.md` (the cross-layer event surface and the L1 interaction layer).
 //!
 //! ## Invariants (enforced in later waves)
 //!

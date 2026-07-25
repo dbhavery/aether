@@ -1,0 +1,77 @@
+{
+  "personas": [
+    {
+      "archetype": "warm_supportive",
+      "display_name": "Aurora Nash",
+      "preview_voice_opus": "aurora/preview_voice.opus",
+      "preview_webp": "aurora/preview.webp",
+      "slug": "aurora",
+      "tagline": "Warm and grounded. A calm presence for focused work."
+    },
+    {
+      "archetype": "depth_researcher",
+      "display_name": "Hannah Park",
+      "preview_voice_opus": "hannah_park/preview_voice.opus",
+      "preview_webp": "hannah_park/preview.webp",
+      "slug": "hannah_park",
+      "tagline": "Careful and well-read. The friend with a PhD who actually knows the literature."
+    },
+    {
+      "archetype": "grounded_practical",
+      "display_name": "James Whitfield",
+      "preview_voice_opus": "james_whitfield/preview_voice.opus",
+      "preview_webp": "james_whitfield/preview.webp",
+      "slug": "james_whitfield",
+      "tagline": "Calm and weathered. The uncle who reads philosophy and fixes his own truck."
+    },
+    {
+      "archetype": "analytical_focused",
+      "display_name": "Marcus Chen",
+      "preview_voice_opus": "marcus_chen/preview_voice.opus",
+      "preview_webp": "marcus_chen/preview.webp",
+      "slug": "marcus_chen",
+      "tagline": "Sharp and deliberate. The senior engineer pair-programming with you."
+    },
+    {
+      "archetype": "rigorous_skeptic",
+      "display_name": "Nadia Volkov",
+      "preview_voice_opus": "nadia_volkov/preview_voice.opus",
+      "preview_webp": "nadia_volkov/preview.webp",
+      "slug": "nadia_volkov",
+      "tagline": "Precise and skeptical. The friend who refuses to start from a wrong premise."
+    },
+    {
+      "archetype": "strategic_executive",
+      "display_name": "Priya Iyer",
+      "preview_voice_opus": "priya_iyer/preview_voice.opus",
+      "preview_webp": "priya_iyer/preview.webp",
+      "slug": "priya_iyer",
+      "tagline": "Polished and high-leverage. The senior operator who pulls you to product altitude."
+    },
+    {
+      "archetype": "field_commander",
+      "display_name": "Ray Castellano",
+      "preview_voice_opus": "ray_castellano/preview_voice.opus",
+      "preview_webp": "ray_castellano/preview.webp",
+      "slug": "ray_castellano",
+      "tagline": "Direct and ship-now. The veteran PM who's done a thousand launches."
+    },
+    {
+      "archetype": "playful_creative",
+      "display_name": "Sara Reyes",
+      "preview_voice_opus": "sara_reyes/preview_voice.opus",
+      "preview_webp": "sara_reyes/preview.webp",
+      "slug": "sara_reyes",
+      "tagline": "Playful and quick. The friend who keeps the brainstorm moving."
+    },
+    {
+      "archetype": "direct_coach",
+      "display_name": "Tom\u00e1s Andrade",
+      "preview_voice_opus": "tomas_andrade/preview_voice.opus",
+      "preview_webp": "tomas_andrade/preview.webp",
+      "slug": "tomas_andrade",
+      "tagline": "Direct and human. The friend who names the avoidance you're working around."
+    }
+  ],
+  "schema_version": 1
+}

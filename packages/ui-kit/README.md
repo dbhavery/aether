@@ -6,8 +6,7 @@ Shared UI primitives. Dark-first, neumorphic monochrome. Consumed by `apps/deskt
 
 ## References
 
-- `ARCHITECTURE.md` — the UX principles and the L3 presence / L7 trust surfaces this kit serves.
-- `docs/ARCHITECTURE-V2.md` — current architecture detail.
+- `ARCHITECTURE.md` — UX principles and avatar presence.
 
 ## Wave 1 contents
 

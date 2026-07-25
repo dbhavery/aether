@@ -1,7 +1,7 @@
 // @aether/ui-kit — Wave 1 scaffold.
 //
-// Shared design-system primitives for Aether apps/desktop and apps/docs-site.
-// Dark-first, neumorphic monochrome (see ARCHITECTURE.md).
+// Shared design-system primitives for Companion apps/desktop and apps/docs-site.
+// Dark-first, neumorphic monochrome (see ARCHITECTURE.md — UX principles).
 //
 // Wave 1 exports tokens only. Components land in Wave 3+ alongside apps/desktop.
 

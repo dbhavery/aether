@@ -1,6 +1,6 @@
 # Policy as load-bearing structure
 
-*A note on why Aether puts a non-bypassable authorization gate underneath every AI action, and what that costs.*
+*A note on why Companion puts a non-bypassable authorization gate underneath every AI action, and what that costs.*
 
 ---
 
@@ -10,7 +10,7 @@ It was not caught upstream. The three places were all reachable around. One of t
 
 Three approvals. Zero enforcement. The kind of story every mature engineer has.
 
-I've been thinking about that story again while building Aether, because Aether has an unusual architectural commitment: **every action that touches the world first clears a policy gate.** No exceptions. No admin mode. No fast path. There is exactly one place where authorization happens, and nothing in the system can reach around it.
+I've been thinking about that story again while building Companion, because Companion has an unusual architectural commitment: **every action that touches the world first clears a policy gate.** No exceptions. No admin mode. No fast path. There is exactly one place where authorization happens, and nothing in the system can reach around it.
 
 This post is about why that's load-bearing, what it looks like in practice, and what it costs.
 
@@ -41,7 +41,7 @@ The shape you want is different. It has one gate. Everything routes through the 
 
 ## What the gate actually is
 
-In Aether, the gate is a crate called `aether-l5-policy`. It exports exactly one trait that callers depend on:
+In Companion, the gate is a crate called `aether-l5-policy`. It exports exactly one trait that callers depend on:
 
 ```rust
 pub trait PolicyEngine: Send + Sync {
@@ -64,7 +64,7 @@ pub enum Decision {
 }
 ```
 
-Five states cover the space. `Ask` means a human must approve before the call proceeds. `DraftOnly` means produce the draft but do not commit side effects. `NeedsUpgrade` means the capability exists at a higher preset the user hasn't enabled — useful for Aether's tiered approval model, where "read files" and "delete files" live in different postures.
+Five states cover the space. `Ask` means a human must approve before the call proceeds. `DraftOnly` means produce the draft but do not commit side effects. `NeedsUpgrade` means the capability exists at a higher preset the user hasn't enabled — useful for Companion's tiered approval model, where "read files" and "delete files" live in different postures.
 
 Every decision carries an `audit_id`. The row is written synchronously, *before* the decision returns. If the audit write fails, the decision becomes `Deny { reason: AuditWriteFailed }`. A broken audit log cannot silently authorize anything. That's the deny-by-default posture, and it's the part most systems don't commit to.
 
@@ -80,7 +80,7 @@ Inside `evaluate`, an action request walks five stages:
 4. **Mode.** The capability's approval mode — Auto, Ask, Deny, DraftOnly — decides what happens when no grant covers.
 5. **Duration.** Grants get Once, TaskScoped, Session, or Persistent-with-TTL.
 
-Grants are what keep the system usable. Once you say "yes, read files in `/tmp`", Aether won't ask again on the same session. But grants aren't forever. Eight things trigger a re-evaluation:
+Grants are what keep the system usable. Once you say "yes, read files in `/tmp`", Companion won't ask again on the same session. But grants aren't forever. Eight things trigger a re-evaluation:
 
 ```
 CapabilityDiffers     — the request wants a different capability
@@ -95,7 +95,7 @@ TtlExpired            — grant aged out
 
 Those triggers are not a loose guideline. They're enumerated. Each produces a re-evaluation. Each has a test.
 
-The tenth time you ask Aether to read something, it will feel immediate — because the grant covers it. The first time it wants to escalate to a remote model, you will be asked — because the grant didn't cover that.
+The tenth time you ask Companion to read something, it will feel immediate — because the grant covers it. The first time it wants to escalate to a remote model, you will be asked — because the grant didn't cover that.
 
 ---
 
@@ -110,7 +110,7 @@ The interesting attacker opens the SQLite file with another tool. So every row a
 
 A singleton row tracks the current chain tip. `verify_chain` walks the log, recomputes every hash and HMAC, and compares the computed tip to the stored one. Edit a payload, and the hash for that row no longer matches. Delete a row out-of-band, and the next row's `prev_hash` no longer lines up. Roll the chain tip back, and the tip comparison fails.
 
-None of this is new. It's the boring, 1990s-era tamper-evident-log pattern you'd find in any auditor-grade system. The point is not novelty. The point is that it sits underneath everything Aether does, so you cannot rewrite history after the fact without leaving a visible break in the chain.
+None of this is new. It's the boring, 1990s-era tamper-evident-log pattern you'd find in any auditor-grade system. The point is not novelty. The point is that it sits underneath everything Companion does, so you cannot rewrite history after the fact without leaving a visible break in the chain.
 
 The key storage is currently preview-grade. A 32-byte file sits next to the DB, generated on first run from `OsRng`. You can override it with an environment variable. An OS-keyring integration is a later wave, and so is asymmetric checkpoint signatures that a third party could verify. Those are real gaps, and they're named as gaps in the docs.
 
@@ -143,9 +143,9 @@ Three things made me commit to this design:
 
 ## Where the code is
 
-Aether is MIT-licensed and lives at [github.com/dbhavery/aether](https://github.com/dbhavery/aether). The current tag is `v0.1.0-oss-preview.0`, which ships the seven-layer workspace, the first real logic in L5 (evaluator, grants, audit, the sealed chain), stub shells for the other six engines, and an L1 turn FSM that walks a full turn through L5 and into a router adapter. There's a tiny CLI in `apps/l1-cli/` that demonstrates the whole path.
+Companion is MIT-licensed and lives at [github.com/dbhavery/aether](https://github.com/dbhavery/aether). The current tag is `v0.1.0-oss-preview.0`, which ships the seven-layer workspace, the first real logic in L5 (evaluator, grants, audit, the sealed chain), stub shells for the other six engines, and an L1 turn FSM that walks a full turn through L5 and into a router adapter. There's a tiny CLI in `apps/l1-cli/` that demonstrates the whole path.
 
-If you want the serious document, read `ARCHITECTURE.md`. If you want the locked decisions behind it, read the ADR log under `docs/adr/`. If you want to run it:
+If you want the serious document, read `ARCHITECTURE.md`. If you want the doctrine, read `docs/ARCHITECTURE-V2.md`. If you want to run it:
 
 ```bash
 git clone https://github.com/dbhavery/aether.git

@@ -6,7 +6,7 @@
 //!
 //! The rules in this module are intentionally small and readable. They
 //! are not a replacement for the full persona pack compiler described in
-//! see `ARCHITECTURE.md`; they are the
+//! `ARCHITECTURE.md` (the L6 persona layer); they are the
 //! thin slice that proves the pipeline works end-to-end for a later
 //! demo wire-up.
 
@@ -230,15 +230,45 @@ fn compile_voice(p: &PersonaProfile) -> CompiledVoiceConfig {
 fn compile_policy_defaults(p: &PersonaProfile) -> PersonaCompiledPolicyDefaults {
     // L6 *proposes* per-capability approval-mode defaults; L5's preset +
     // user-approval layer always get the final say. This is a hint only.
+    //
+    // Stance drives which capabilities are Auto vs Ask vs Deny so a
+    // Cautious persona really does ask more than a Bold one does, and
+    // the shell's behaviour visibly differs between personas.
+    //
+    // Invariants across all stances:
+    //   - `FilesRead` is always `Auto` (low-risk read-only surface).
+    //   - `ShellExec` is always `Deny` (a persona cannot unilaterally
+    //     promote shell access). Enforced by the
+    //     `policy_defaults_never_auto_approve_shell_exec` regression
+    //     test.
     let mut defaults: HashMap<Capability, ApprovalMode> = HashMap::new();
+
     defaults.insert(Capability::FilesRead, ApprovalMode::Auto);
+
+    // Mutating file surfaces: Bold promotes Create to Auto, everyone
+    // else asks. Edit / Delete stay Ask even for Bold — "bold" shouldn't
+    // mean "reckless".
     defaults.insert(
         Capability::FilesCreate,
         match p.stance {
-            Stance::Cautious => ApprovalMode::Ask,
-            Stance::Balanced | Stance::Bold => ApprovalMode::Ask,
+            Stance::Cautious | Stance::Balanced => ApprovalMode::Ask,
+            Stance::Bold => ApprovalMode::Auto,
         },
     );
+    defaults.insert(Capability::FilesEdit, ApprovalMode::Ask);
+    defaults.insert(Capability::FilesDelete, ApprovalMode::Ask);
+
+    // Browser opens: Cautious blocks outright; Balanced asks; Bold
+    // auto-allows. This is the capability where stance moves the most.
+    defaults.insert(
+        Capability::BrowserOpen,
+        match p.stance {
+            Stance::Cautious => ApprovalMode::Deny,
+            Stance::Balanced => ApprovalMode::Ask,
+            Stance::Bold => ApprovalMode::Auto,
+        },
+    );
+
     defaults.insert(Capability::ShellExec, ApprovalMode::Deny);
 
     let posture = match p.stance {

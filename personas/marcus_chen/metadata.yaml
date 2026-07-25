@@ -1,0 +1,89 @@
+schema_version: 1
+
+creator: "Don Havery (cast expansion authorized 2026-04-28)"
+created: "2026-04-28"
+last_updated: "2026-04-28"
+
+# Provenance for every shipped asset. Every row must carry a source +
+# license the audit tool can verify. See PERSONA-SCHEMA.md §4 and §8.
+assets:
+  anchor:
+    source: "ai_generated"
+    generator: "fal.ai fal-ai/flux-pro/v1.1-ultra"
+    generation_date: "2026-04-28"
+    license: "custom_aether"
+    description: >-
+      Canonical neutral face reference at 2752×1536 raw 16:9 from
+      flux-pro/v1.1-ultra. Even diffuse light, neutral expression, mouth
+      softly closed, simple background, charcoal henley wardrobe. Full
+      prompt + request URL captured in avatar/README.md generation log
+      block. Raw JPG preserved at
+      avatar/anchor_set_raw_2026-04-28/anchor_raw.jpg.
+
+  portrait:
+    source: "ai_generated"
+    generator: "fal.ai fal-ai/flux-pro/v1.1-ultra"
+    generation_date: "2026-04-28"
+    license: "custom_aether"
+    description: >-
+      Personality picker shot — second-pass anchor-schema regeneration.
+      Replaced the first-pass single-portrait pack (preserved at
+      ../_archived_2026-04-28_first_pass/). Full prompt + URL in
+      avatar/README.md generation log.
+
+  profile_left:
+    source: "ai_generated"
+    generator: "fal.ai fal-ai/flux-pro/v1.1-ultra"
+    generation_date: "2026-04-28"
+    license: "custom_aether"
+    description: >-
+      3/4 left angle, anchor-style lighting and wardrobe. Side view.
+      Full prompt + URL in avatar/README.md.
+
+  profile_right:
+    source: "ai_generated"
+    generator: "fal.ai fal-ai/flux-pro/v1.1-ultra"
+    generation_date: "2026-04-28"
+    license: "custom_aether"
+    description: >-
+      3/4 right angle, anchor-style lighting and wardrobe. Side view.
+      Full prompt + URL in avatar/README.md.
+
+  state_images:
+    source: "DEFERRED"
+    note: >-
+      Expression states deferred. Pre-generated stills abandoned
+      per the 2026-04-28 anchor-schema redesign.
+    license: "custom_aether"
+
+  voice_reference:
+    source: "ai_generated"
+    generator: "OpenAI gpt-4o-mini-tts (voice 'ash') with deliberate-pair-programmer steering"
+    license: "custom_aether"
+    description: >-
+      20.0s synthetic conversational speech generated 2026-04-28. Voice
+      'ash' steered for mid-low male voice, deliberate pacing with brief
+      micro-pauses, intelligent without being cold — like a senior
+      engineer thinking out loud during pair-programming. Output saved
+      as 24 kHz mono 16-bit PCM WAV; OpenAI's WAV header was malformed
+      (nFrames field overflow) and was re-encoded via soundfile, then
+      padded to exactly 20.0s. See voice/SOURCE.md for the reference
+      text + steering instructions.
+
+  voice_sample:
+    source: "ai_generated"
+    generator: "OpenAI gpt-4o-mini-tts (voice 'ash'), same steering as voice_reference"
+    license: "custom_aether"
+    description: >-
+      4.0s synthetic conversational speech for the wizard preview.
+      Same generation parameters as voice_reference; trimmed to
+      exactly 4.0s after re-encoding.
+
+notes: |
+  Portrait and voice are both AI-generated; no real-person likeness or
+  voice modeled. Voice 'ash' from OpenAI gpt-4o-mini-tts is synthetic.
+  Derived cloned output from Chatterbox / Zonos based on this reference
+  is owned by Companion under the persona pack's custom_aether license
+  (bundled under the repo's MIT umbrella).
+
+  Marcus is the second persona in the cast; see file:///C:/Users/dbhav/Projects/aether/personas/CHARACTERS.md for the full roster plan and design rationale.
