@@ -81,10 +81,17 @@ def get_settings() -> AetherSettings:
 
 
 class TelemetrySettings(BaseModel):
-    """Opt-in telemetry flags."""
+    """Opt-in telemetry flags.
+
+    All three default to the private choice. ``usage_counters`` is collected by
+    the wizard's Terms step and written by ``src.onboarding.finalizer``; it is
+    read back through :func:`usage_counters_enabled`, which is the only gate
+    the usage and latency emitters consult.
+    """
 
     enabled: bool = False
     crash_reports: bool = False
+    usage_counters: bool = False
 
 
 class AetherMeta(BaseModel):
@@ -357,6 +364,32 @@ def save_config(cfg: AetherConfig) -> None:
 def is_onboarding_complete() -> bool:
     """Return True iff the onboarding wizard has been marked complete."""
     return get_config().onboarding.complete
+
+
+def usage_counters_enabled() -> bool:
+    """Return True only when the user opted in to usage counters.
+
+    This is the single gate for every usage and latency emitter in the app:
+    ``src.brain.cost.track_usage`` (token/cost records) and
+    ``src.core.trace`` (per-stage turn timings). Both persist to the user's
+    data directory, which is data about how they used the app, so neither
+    runs without consent.
+
+    Requires BOTH switches. The wizard sets ``enabled`` to the OR of the two
+    sub-flags, so ``usage_counters: true`` from the wizard always arrives with
+    ``enabled: true``; requiring both means a user who later flips the master
+    switch off in config.yaml is honoured without having to clear each
+    sub-flag.
+
+    Any failure to read config (missing file, validation error, older config
+    with no telemetry block) is treated as "declined" rather than assumed.
+    """
+    try:
+        telemetry = get_config().aether.telemetry
+        return bool(telemetry.enabled) and bool(telemetry.usage_counters)
+    except Exception as exc:
+        logger.debug(f"Telemetry gate: could not read consent ({exc!r}); treating as declined")
+        return False
 
 
 # ---------------------------------------------------------------------------

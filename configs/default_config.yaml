@@ -17,9 +17,14 @@ aether:
   # back to this file. Left blank here so the app generates a unique ID
   # per install rather than reusing a template value.
   user_installation_id: ""
+  # All three switches are opt-in and set by the wizard's Terms step.
+  # usage_counters gates BOTH the token/cost log (data/usage.jsonl) and the
+  # per-stage latency traces (data/traces.jsonl). With it false, neither file
+  # is written and /health reports zeroes.
   telemetry:
     enabled: false
     crash_reports: false
+    usage_counters: false
 
 # Onboarding must complete before the main UI becomes usable. The wizard
 # flips `complete` to true and stamps `completed_at` when done.
