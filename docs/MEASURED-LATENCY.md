@@ -131,3 +131,69 @@ The bench needs `litellm`, which is declared in `requirements.txt`. If it is
 absent from the interpreter, install it into a virtual environment rather than
 globally: litellm pins `openai<3.0.0`, so a global install downgrades the
 OpenAI SDK for every other project on the machine.
+
+---
+
+# 2026-09-20: two fixes, and what they were worth
+
+Same bench, same WAV, same model, three turns in one process, muted playback.
+Raw records: `tools/trace-bench/measurements/2026-09-20-voice-path-after-fixes.jsonl`.
+
+| | 2026-09-19 warm | 2026-09-20 turn 2 | 2026-09-20 turn 3 |
+|---|---|---|---|
+| **first audio** | **84,337 ms** | **34,425 ms** | **20,668 ms** |
+| stt | 168 | 110 | 132 |
+| tier_routing | 0 | 0 | 0 |
+| llm_complete | 42,322 | 27,112 | 16,954 |
+| tts_synth | 41,820 | 36,109 | 17,092 |
+| completion tokens | 2,287 | 84 | 48 |
+| audio produced | 18.08 s | 20.04 s | 11.28 s |
+
+Turn 1 is the cold turn and is not comparable: it carries the Whisper,
+Chatterbox and Ollama model loads. It came in at 88,761 ms.
+
+## Fix 1: Ollama thinking is off by default
+
+`qwen3.5:4b` is a reasoning model. The brain speaks `message.content` and throws
+`message.thinking` away, so every reasoning token was paid for and never heard.
+The 2026-09-19 run spent **2,287 completion tokens to produce 18 seconds of
+speech**, and its first content token arrived at 41,634 ms of a 42,322 ms stage.
+
+`llm_client._apply_ollama_thinking` now sends `think: false` through litellm's
+`extra_body` for the ollama provider. `llm.ollama_think: true` in config restores
+the old behaviour.
+
+Measured directly against Ollama on this box, same prompt, warm model:
+
+    thinking on    28.8 s   830 completion tokens
+    thinking off    2.5 s    28 completion tokens
+
+The shorter answers are also better suited to being spoken aloud, so this is not
+a quality trade.
+
+## Fix 2: a reply is synthesised one sentence at a time
+
+`tts_handler` used to synthesise the whole reply before playing any of it, so
+the listener waited on every sentence to hear the first. It now splits on
+sentence boundaries and publishes each sentence's audio as it is ready.
+`first_audio_ms` is marked on the first chunk of the first sentence.
+
+That the pipelining works is visible in the numbers rather than asserted: on
+turn 2, first audio came out at 34,425 ms while total synthesis ran to
+36,109 ms. `trace.record_stage` accumulates a repeated stage name, so
+`tts_synth` still totals the synthesis for the whole turn.
+
+## What this does NOT claim
+
+- **Turn to turn variance is large.** Turn 2 and turn 3 differ by 14 seconds,
+  mostly because the replies differ in length. Two warm turns are not a
+  distribution. Quote the range, not one number.
+- **`llm_complete` is still slow for the token count.** 27,112 ms for 84 tokens
+  on a 4B model is roughly 300 ms per token, far off what this card should do.
+  Chatterbox is resident on the same GPU during the run, and that has not been
+  isolated. Unexplained, not fixed.
+- **TTS is now the largest single stage.** Synthesis runs at several times real
+  time. Sentence chunking hides some of it behind playback; it does not make
+  synthesis faster.
+- **Nothing here was measured on the desktop app**, only through the bench
+  harness, which drives the production `VoicePipeline` but is not the UI.

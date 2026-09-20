@@ -155,6 +155,45 @@ def _get_timeout(tier: Tier) -> float:
     return _DEFAULT_TIMEOUT[tier]
 
 
+def _apply_ollama_thinking(call_kwargs: dict[str, Any]) -> None:
+    """Turn Ollama's thinking off unless config asks for it.
+
+    Measured on this box 2026-09-20, qwen3.5:4b, same prompt, warm model:
+
+        thinking on    12.6 s to first content token
+        thinking off    2.8 s
+
+    The committed voice trace is worse still: 2,475 completion tokens to produce
+    9.9 seconds of speech, with the first content token arriving at 41,634 ms of
+    a 42,322 ms stage. Roughly 2,300 of those tokens were reasoning nobody ever
+    hears, because the brain speaks ``message.content`` and discards
+    ``message.thinking``. ``clients.py`` already logs a warning for the extreme
+    case where thinking consumes the whole budget and no content comes back.
+
+    The shorter answers are also better for a voice assistant, so this is not a
+    quality trade. Set ``llm.ollama_think: true`` in config to restore it.
+
+    Passed through ``extra_body``, which is litellm's documented escape hatch
+    for provider-specific fields, rather than as a bare kwarg that happens to be
+    forwarded today. An explicit caller-supplied value always wins.
+    """
+    want_thinking = False
+    try:
+        from src.brain.llm_router import _read_llm_config
+
+        want_thinking = bool(_read_llm_config().get("ollama_think", False))
+    except Exception as exc:
+        logger.debug(f"LLMClient: ollama_think lookup failed ({exc!r}), leaving thinking off")
+
+    if want_thinking:
+        return
+    extra_body = dict(call_kwargs.get("extra_body") or {})
+    if "think" in extra_body:
+        return
+    extra_body["think"] = False
+    call_kwargs["extra_body"] = extra_body
+
+
 def _fetch_key(provider: str) -> str | None:
     """Load the API key for ``provider`` from the OS keyring.
 
@@ -319,6 +358,7 @@ async def complete(
     # being explicit keeps us independent of env state.
     if provider == "ollama":
         call_kwargs.setdefault("api_base", os.environ.get("OLLAMA_API_BASE", "http://localhost:11434"))
+        _apply_ollama_thinking(call_kwargs)
 
     logger.debug(f"LLMClient: calling {model} (tier={tier}, stream={stream}, timeout={timeout}s)")
 
