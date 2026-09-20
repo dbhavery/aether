@@ -1,4 +1,4 @@
-"""Item 0 — the telemetry consent gate must actually be readable and honoured.
+"""Item 0: the telemetry consent gate must actually be readable and honoured.
 
 The setup wizard collects ``telemetry.usage_counters`` (frontend StepTerms)
 and ``src.onboarding.finalizer`` writes it into config.yaml, but before this

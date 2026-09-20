@@ -1,4 +1,4 @@
-"""Item 2 — the cost accountant and metrics recorders are reachable from production.
+"""Item 2: the cost accountant and metrics recorders are reachable from production.
 
 `src/brain/cost.py` (376 lines: litellm pricing, JSONL persistence, atomic
 writes, daily budgets) and `src/core/metrics.py` both existed, were both tested,

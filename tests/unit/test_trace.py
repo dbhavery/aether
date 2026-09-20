@@ -1,4 +1,4 @@
-"""Item 1 — the per-stage latency instrument.
+"""Item 1: the per-stage latency instrument.
 
 Before this module, ``time.perf_counter`` appeared zero times in the entire
 repo, so no latency figure Aether had ever published could be regenerated.

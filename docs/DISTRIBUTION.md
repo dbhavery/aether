@@ -175,7 +175,7 @@ The content that went live via morning-intel's LinkedInPoster:
 
 2. `The thesis: cloud assistants are rented, not owned. They change personality every six weeks. They charge per request. Every word goes through someone else's server. Aether is the opposite. Install once. Your machine, your memory, your keys.`
 
-3. `Voice in, spoken answer out, on a single consumer GPU with Ollama. $0/query local. Bring your own key for frontier models — litellm routes 100+ providers through one interface.`
+3. `Voice in, spoken answer out, on a single consumer GPU with Ollama. $0/query local. Bring your own key for frontier models, litellm routes 100+ providers through one interface.`
 
 4. `Persona pack = YAML + a portrait + 20 seconds of voice reference. Dropped into personas/<id>/ and loaded on next boot. No code, no rebuild. Community packs welcome.`
 

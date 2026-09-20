@@ -1,4 +1,4 @@
-"""Item 3 — the brain handler's conversation-history write was broken on every turn.
+"""Item 3: the brain handler's conversation-history write was broken on every turn.
 
 ``src.brain.handler.on_user_message`` called::
 
@@ -28,7 +28,7 @@ from src.brain.llm_client import Chunk
 from src.shared.types import AetherEvent, EventType
 
 # ---------------------------------------------------------------------------
-# Signature contract — the cheapest possible proof, and it needs no event loop
+# Signature contract: the cheapest possible proof, and it needs no event loop
 # ---------------------------------------------------------------------------
 
 
@@ -58,7 +58,7 @@ class TestCallSiteMatchesTheRealSignature:
 
 
 # ---------------------------------------------------------------------------
-# Behavioural test — run the real handler with a signature-faithful store
+# Behavioural test: run the real handler with a signature-faithful store
 # ---------------------------------------------------------------------------
 
 

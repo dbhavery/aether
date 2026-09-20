@@ -212,7 +212,7 @@ class VoicePipeline:
             with trace.stage("stt"):
                 text = await transcribe(audio, _SAMPLE_RATE)
             if not text:
-                logger.info("voice_pipeline: empty transcript — dropping")
+                logger.info("voice_pipeline: empty transcript, dropping")
                 return
 
             trace.set_meta(transcript_chars=len(text))
