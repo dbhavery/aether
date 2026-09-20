@@ -73,8 +73,6 @@ class TestConsentRoundTripsThroughTheRealConfigFile:
     """The defect was a value that survived to disk and then vanished on read."""
 
     def _write_config(self, tmp_path, *, enabled: bool, usage_counters: bool):
-        import src.shared.config as cfg_mod
-
         path = tmp_path / "config.yaml"
         path.write_text(
             "aether:\n"
