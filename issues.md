@@ -5,6 +5,50 @@ rule: report unrelated breakage, do not expand the current task into it.
 
 ---
 
+## 3. Five duplicate worktrees are still in `.claude/worktrees/`, holding uncommitted work
+
+**Found:** 2026-09-19, during the worktree cleanup.
+**Severity:** low, but it needs one decision from Don.
+
+`.claude/worktrees/` held 8 full duplicate checkouts. Three were moved to
+`_deprecated/2026-09-19/`. Five were left where they are because each contains
+uncommitted changes, and moving a checkout that holds work nobody has reviewed
+is not a cleanup:
+
+| directory | branch | uncommitted |
+|---|---|---|
+| `agent-a209cefbe70d0ee83` | (unregistered, no `.git`) | 7 modified files under `planning/plans/` |
+| `agent-a4096556bb2c2b011` | `worktree-agent-a4096556bb2c2b011` | `Cargo.lock`, +44/-1 |
+| `agent-a8ad56458adecae0e` | `worktree-agent-a8ad56458adecae0e` | `Cargo.lock`, +42/-1 |
+| `agent-aa59f354461670409` | `temp-rebase-12` | `Cargo.lock`, +44/-1 |
+| `agent-afd56eb5f7c252eaa` | `worktree-agent-afd56eb5f7c252eaa` | `Cargo.lock`, +44/-1 |
+
+The four `Cargo.lock` diffs look like `cargo build` regenerating a lockfile
+(they add `tokio` and `tracing` to a dependency block) rather than authored
+work, and three of the four are byte-identical to each other. The seven
+`planning/plans/` files in `agent-a209cefbe70d0ee83` differ from its branch tip
+and need a real look before anything moves.
+
+Those five still hold 1,416 `def test_` lines and 1,525 `.py` files, so a
+recursive count from the repo root still over-reports the test suite by roughly
+six times. Run any count against `tests/` or with `.claude/worktrees/` excluded.
+
+**Also needs Don's call:** the two registered worktrees that were moved
+(`agent-a3a3b35474edfbe47`, `agent-aab31793adb46bd32`) are still listed by
+`git worktree list` at their old paths, because moving a directory does not
+update git's admin files and both are `locked`. Nothing is lost: both HEAD
+commits (`c01fab6`, `8f54b81`) are still reachable through their branches, and
+`git fsck` exits clean. To tidy the listing, Don would unlock and prune:
+
+    git worktree unlock .claude/worktrees/agent-a3a3b35474edfbe47
+    git worktree unlock .claude/worktrees/agent-aab31793adb46bd32
+    git worktree prune
+
+Not done here: `git worktree remove` and `prune` were outside what was
+authorized for this pass.
+
+---
+
 ## 2. The withdrawn 449 ms claim survives in a showcase design spec
 
 **Found:** 2026-09-19, while removing the figure from `docs/DISTRIBUTION.md`.
@@ -20,9 +64,10 @@ design spec:
     line 158: *"449ms. Your voice never left this machine."*
     line 202: Stats with counter animations: 537+ tests. 22K+ lines. 14 modules. 28 tools. 449ms latency.
 
-Line 202 also claims **537+ tests**. The real count on 2026-09-19 is 262
-collected by pytest, so that figure needs checking too. Left alone here because
-this task's scope named `docs/DISTRIBUTION.md` only.
+Line 202 also claims **537+ tests**. The real count on 2026-09-19 is 237
+collected by pytest from `tests/`, of which 44 were added that day, so the
+figure before this work was 193. 537 is not reproducible from this repo. Left
+alone here because this task's scope named `docs/DISTRIBUTION.md` only.
 
 ---
 
