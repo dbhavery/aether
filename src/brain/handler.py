@@ -10,9 +10,12 @@ No tool calling, no agent dispatch, no emotion tracking in v1.0 — all deferred
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
 
 from src.brain.fallback import call_with_fallback
 from src.brain.llm_router import Tier, route_complexity_async
@@ -33,7 +36,10 @@ async def _get_recent_history(n: int) -> list[dict[str, str]]:
 
         return await get_recent_turns(n_turns=n)
     except Exception as e:
-        logger.debug(f"brain: recent-history fetch failed (non-fatal): {e}")
+        # Degraded, not fatal: the turn proceeds without prior context. Logged
+        # at WARNING so it is visible at the shipped INFO level rather than
+        # silently producing an assistant with no memory of the conversation.
+        logger.warning(f"brain: recent-history fetch failed, continuing without history: {e!r}")
         return []
 
 
@@ -44,8 +50,32 @@ async def _get_rag_context(query: str) -> list[dict[str, Any]]:
 
         return await search_memory(query, n_results=5)
     except Exception as e:
-        logger.debug(f"brain: memory search failed (non-fatal): {e}")
+        # Same reasoning as _get_recent_history: degraded, and visible at INFO.
+        logger.warning(f"brain: memory search failed, continuing without RAG context: {e!r}")
         return []
+
+
+async def _persist_turn(
+    store_fn: Callable[..., Awaitable[str]],
+    role: str,
+    content: str,
+    timestamp: float,
+) -> None:
+    """Write one conversation turn to memory, loudly on failure.
+
+    The response has already been delivered by the time this runs, so a write
+    failure must not abort the turn. It must not be hidden either: the previous
+    version of this code caught everything and logged at DEBUG while the app
+    ships at INFO, which hid a TypeError on every single turn for the life of
+    the module. ERROR with a traceback is the floor for anything caught here.
+    """
+    try:
+        await store_fn(role=role, content=content, timestamp=timestamp)
+    except Exception:
+        logger.exception(
+            f"brain: failed to persist {role} turn to conversation history "
+            f"(response already delivered; history will be missing this turn)"
+        )
 
 
 def _coerce_mode(raw: Any) -> InteractionMode:
@@ -134,13 +164,18 @@ async def on_user_message(event: AetherEvent) -> None:
         )
     )
 
+    # store_conversation_turn takes a required positional ``timestamp`` (see
+    # src/memory/store.py); it feeds the document ID hash, so it cannot be
+    # defaulted inside the store without changing IDs for existing rows. The
+    # user turn is stamped when the message arrived, the assistant turn when
+    # the reply finished, so history sorts in the order it happened.
     try:
         from src.memory.store import store_conversation_turn
-
-        await store_conversation_turn(role="user", content=text)
-        await store_conversation_turn(role="assistant", content=final_text)
-    except Exception as e:
-        logger.debug(f"brain: conversation-history persist failed (non-fatal): {e}")
+    except ImportError:
+        logger.exception("brain: memory store unavailable, conversation history not persisted")
+    else:
+        await _persist_turn(store_conversation_turn, "user", text, started)
+        await _persist_turn(store_conversation_turn, "assistant", final_text, time.time())
 
 
 def register_brain_handlers() -> None:
