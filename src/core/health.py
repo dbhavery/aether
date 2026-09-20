@@ -147,6 +147,28 @@ def create_health_app() -> FastAPI:
     except Exception as exc:
         logger.warning(f"Health: could not mount personas directory: {exc!r}")
 
+    async def _cost_summary() -> dict:
+        """Today's real token spend, read from the usage log.
+
+        ``src.brain.cost`` has always been able to produce this; nothing ever
+        asked it for it, which is why /health reported nothing about cost at
+        all. An unreadable log reports the error rather than a comforting zero.
+        """
+        from src.brain.cost import get_usage_rollup
+        from src.shared.config import usage_counters_enabled
+
+        if not usage_counters_enabled():
+            return {
+                "usage_counters_enabled": False,
+                "note": "token and cost records are not kept because usage counters were declined",
+            }
+        try:
+            rollup = await get_usage_rollup("day")
+        except Exception as exc:
+            logger.error(f"Health: usage rollup failed: {exc!r}")
+            return {"usage_counters_enabled": True, "error": "rollup_failed"}
+        return {"usage_counters_enabled": True, **rollup}
+
     @app.get("/health")
     async def health() -> dict:
         modules = get_module_statuses()
@@ -155,6 +177,7 @@ def create_health_app() -> FastAPI:
         deps_ok = all(v.get("status") in ("ok", "unavailable") for v in deps.values())
         overall = "ok" if (all_ready and deps_ok) else "degraded"
         from src.core.metrics import get_metrics_summary
+        from src.core.trace import get_latency_summary
 
         try:
             config = get_config()
@@ -175,6 +198,8 @@ def create_health_app() -> FastAPI:
             "modules": modules,
             "dependencies": deps,
             "metrics": get_metrics_summary(),
+            "latency": get_latency_summary(),
+            "cost": await _cost_summary(),
             "onboarding_complete": onboarding_done,
             "persona_active": persona_active,
         }
