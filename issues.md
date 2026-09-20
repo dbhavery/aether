@@ -69,6 +69,30 @@ collected by pytest from `tests/`, of which 44 were added that day, so the
 figure before this work was 193. 537 is not reproducible from this repo. Left
 alone here because this task's scope named `docs/DISTRIBUTION.md` only.
 
+### 2026-09-20: annotated in place, and the severity was overstated
+
+**Severity corrected to low.** `docs/superpowers/` is gitignored (`.gitignore:62`)
+and the spec is untracked, so it is not in the repo and does not reach anyone
+through it. It is a local working document. The risk is real but narrower than
+"outbound copy": a future session reading it could build Act 4 straight from the
+numbers.
+
+All five Act 4 figures were measured and the file now carries a blocking notice
+at the top plus an inline marker at each of the two sites. Nothing in the visual
+direction was touched.
+
+| Spec says | Measured 2026-09-20 | How |
+|---|---|---|
+| `449ms` | **84,337 ms** warm, 78,911 ms cold | `tools/trace-bench/measurements/2026-09-19-voice-path-rtx3090ti.jsonl` |
+| `537+ tests` | **237** | `pytest --collect-only -q` |
+| `22K+ lines` | **16,041** under `src/` | `find src -name '*.py' \| xargs wc -l` |
+| `14 modules` | **13** top level packages under `src/` | directory count |
+| `28 tools` | **not derivable** | `src/tools/` is untracked and empty of source; no tool registry exists anywhere in `src/`. A first grep for `@register_tool` returned 0, which was the grep being wrong, not an answer. |
+
+**The annotation cannot be committed** and that is deliberate. `git add` refuses
+the ignored path, and force adding it would change what this repo tracks, which
+is not a call to make inside a docs fix. The notice lives on disk only.
+
 ---
 
 ## 1. The brain has never had conversation history: `get_recent_turns(n_turns=...)`
