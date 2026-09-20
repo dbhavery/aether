@@ -37,7 +37,12 @@ async def _get_recent_history(n: int) -> list[dict[str, str]]:
     try:
         from src.memory.store import get_recent_turns
 
-        return await get_recent_turns(n_turns=n)
+        # The parameter is `limit`. This read `n_turns=n` from the day it was
+        # written, which raised TypeError on every call, was swallowed by the
+        # except below, and logged as a degraded fetch. The brain has therefore
+        # never had conversation history and CONTEXT_TURNS has never done
+        # anything. tests/test_brain_history.py pins the call to the signature.
+        return await get_recent_turns(limit=n)
     except Exception as e:
         # Degraded, not fatal: the turn proceeds without prior context. Logged
         # at WARNING so it is visible at the shipped INFO level rather than
