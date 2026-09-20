@@ -23,6 +23,7 @@ import base64
 import numpy as np
 from loguru import logger
 
+from src.core import trace
 from src.core.events import event_bus
 from src.shared.types import AetherEvent, EventType
 from src.voice.audio_player import play_audio
@@ -47,6 +48,9 @@ async def _publish_audio_chunks(audio: np.ndarray, sample_rate: int) -> None:
     for start in range(0, total_samples, chunk_samples):
         chunk = audio_int16[start : start + chunk_samples]
         encoded = base64.b64encode(chunk.tobytes()).decode("ascii")
+        # First chunk out is the perceived end of the wait. mark() keeps the
+        # first write, so later chunks do not overwrite it.
+        trace.mark("first_audio_ms")
         await event_bus.publish(
             AetherEvent(
                 type=EventType.RESPONSE_AUDIO_CHUNK,
@@ -84,16 +88,22 @@ async def on_response_text_ready(event: AetherEvent) -> None:
     if is_interim and len(text) > _INTERIM_SKIP_THRESHOLD_CHARS:
         return
 
-    result = await synthesize(text)
+    with trace.stage("tts_synth"):
+        result = await synthesize(text)
     if result is None:
         logger.error(f"TTS: synthesis failed for {text[:50]!r}")
         return
 
     audio, sample_rate = result
-    await asyncio.gather(
-        _publish_audio_chunks(audio, sample_rate),
-        play_audio(audio, sample_rate),
-    )
+    trace.set_meta(tts_audio_seconds=round(float(audio.shape[0]) / float(sample_rate), 3))
+    # playback is awaited here, so the enclosing turn total includes the full
+    # spoken duration. That is why first_audio_ms, not the total, is the
+    # latency figure.
+    with trace.stage("tts_publish_and_play"):
+        await asyncio.gather(
+            _publish_audio_chunks(audio, sample_rate),
+            play_audio(audio, sample_rate),
+        )
 
 
 def register_tts_handlers() -> None:

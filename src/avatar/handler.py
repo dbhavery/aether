@@ -5,6 +5,7 @@ import asyncio
 from loguru import logger
 
 from src.avatar.client import get_avatar_client
+from src.core import trace
 from src.core.events import event_bus
 from src.shared.types import AetherEvent, EventType
 
@@ -46,7 +47,7 @@ async def on_response_ready(event: AetherEvent) -> None:
 
     is_interim = event.data.get("is_interim", False)
     if not is_interim:
-        async with _get_speaking_lock():
+        async with _get_speaking_lock(), trace.stage("avatar_speaking"):
             client = get_avatar_client()
             await client.set_speaking(True)
             # Cancel previous reset timer if any

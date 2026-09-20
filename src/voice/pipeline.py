@@ -29,6 +29,7 @@ from typing import Any
 import numpy as np
 from loguru import logger
 
+from src.core import trace
 from src.core.events import event_bus
 from src.shared.config import get_yaml_config
 from src.shared.types import AetherEvent, EventType
@@ -202,27 +203,40 @@ class VoicePipeline:
         logger.info(f"voice_pipeline: captured {duration:.1f}s — transcribing")
         audio = np.concatenate(chunks)
 
-        text = await transcribe(audio, _SAMPLE_RATE)
-        if not text:
-            logger.info("voice_pipeline: empty transcript — dropping")
-            return
+        # The turn clock starts here: push-to-talk release is the moment the
+        # user is waiting from. Everything downstream (brain, TTS, avatar)
+        # attaches to this trace through the ContextVar, because EventBus
+        # dispatches handlers in tasks that inherit this context.
+        trace_turn = trace.start_turn("voice", captured_seconds=round(duration, 3))
+        try:
+            with trace.stage("stt"):
+                text = await transcribe(audio, _SAMPLE_RATE)
+            if not text:
+                logger.info("voice_pipeline: empty transcript — dropping")
+                return
 
-        await event_bus.publish(
-            AetherEvent(
-                type=EventType.TRANSCRIPT_READY,
-                data={"text": text, "confidence": 1.0},
-                source_module="voice_pipeline",
+            trace.set_meta(transcript_chars=len(text))
+            await event_bus.publish(
+                AetherEvent(
+                    type=EventType.TRANSCRIPT_READY,
+                    data={"text": text, "confidence": 1.0},
+                    source_module="voice_pipeline",
+                )
             )
-        )
-        # Forward to the brain under the same contract chat uses so the LLM
-        # pipeline treats voice and text identically.
-        await event_bus.publish(
-            AetherEvent(
-                type=EventType.USER_MESSAGE,
-                data={"text": text, "mode": "voice"},
-                source_module="voice_pipeline",
+            # Forward to the brain under the same contract chat uses so the LLM
+            # pipeline treats voice and text identically.
+            await event_bus.publish(
+                AetherEvent(
+                    type=EventType.USER_MESSAGE,
+                    data={"text": text, "mode": "voice"},
+                    source_module="voice_pipeline",
+                )
             )
-        )
+        finally:
+            # publish() awaits gather() over its handler tasks, so by the time
+            # USER_MESSAGE returns the LLM, TTS and avatar stages have all
+            # recorded themselves.
+            await trace_turn.finish()
 
     # -- health reporting (optional; only during start/stop) ------------------
 

@@ -31,6 +31,8 @@ from typing import Any, Final, Literal
 
 from loguru import logger
 
+from src.shared.config import usage_counters_enabled
+
 # ---------------------------------------------------------------------------
 # File paths
 # ---------------------------------------------------------------------------
@@ -105,7 +107,15 @@ async def track_usage(
             "output_tokens":  567,
             "cost_usd":       0.0421,
         }
+
+    Writes nothing when the user declined usage counters. The gate lives here,
+    at the one place that touches the file, so a future call site cannot bypass
+    it by forgetting to check.
     """
+    if not usage_counters_enabled():
+        logger.debug("Cost: usage counters declined; not recording this call")
+        return
+
     record = {
         "ts": datetime.now(UTC).isoformat(timespec="seconds"),
         "epoch": time.time(),

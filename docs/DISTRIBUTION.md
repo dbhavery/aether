@@ -48,7 +48,7 @@ The content that went live via morning-intel's LinkedInPoster:
 >
 > This week I shipped Aether — a desktop AI companion that's the opposite. Install it once, pick one of twelve personas, bring your own LLM key or stay fully local with Ollama, and it's yours. Conversations never leave your machine unless you told them to. Persistent memory, voice, and video all work offline. MIT-licensed. Free.
 >
-> If you're building AI into a personal workflow and privacy matters more to you than marginal reasoning quality, local-first with cloud fallback is the pattern worth studying. The stack I landed on: litellm as the provider router (100+ models), faster-whisper for local STT, Chatterbox Turbo for per-persona voice cloning, ChromaDB for hybrid BM25 + dense-vector memory. The latency budget lands under 500 ms on a single consumer GPU; cost per query is $0 local, whatever the provider charges in cloud mode, no middleman markup.
+> If you're building AI into a personal workflow and privacy matters more to you than marginal reasoning quality, local-first with cloud fallback is the pattern worth studying. The stack I landed on: litellm as the provider router (100+ models), faster-whisper for local STT, Chatterbox Turbo for per-persona voice cloning, ChromaDB for hybrid BM25 + dense-vector memory. Cost per query is $0 local, whatever the provider charges in cloud mode, no middleman markup.
 >
 > v1.0.0-pre is a source install (packaged installer is the next milestone). Three fully-rendered personas ship today — Aurora, Caelum, Luma. Nine more slots open for community packs. The schema for authoring your own is a YAML file, a portrait, and a 20-second voice reference. That's the whole API.
 >
@@ -75,7 +75,7 @@ The content that went live via morning-intel's LinkedInPoster:
 > Design choices worth calling out:
 >
 > - **litellm as the only LLM layer.** One abstraction across Ollama, OpenAI, Anthropic, Google, Groq, OpenRouter — 100+ providers. No vendor coupling in the brain module.
-> - **Push-to-talk, not wake-word.** Porcupine/Snowboy added latency, false wakes, and a constantly-on mic. Push-to-talk is 449 ms end-to-end and the microphone is actually off until you want it on.
+> - **Push-to-talk, not wake-word.** Porcupine/Snowboy added latency, false wakes, and a constantly-on mic. Push-to-talk means the microphone is actually off until you want it on.
 > - **Per-persona voice cloning with Chatterbox Turbo.** Each persona pack ships a 20-second reference WAV. The persona's voice in TTS is cloned at runtime, not pre-baked.
 > - **Hybrid memory.** ChromaDB with BM25 + dense-vector fusion. Per-persona collections so different characters don't see each other's memory.
 > - **Secrets in the OS keyring.** Never plaintext on disk. `keyring` → Windows Credential Manager / macOS Keychain / Secret Service on Linux.
@@ -109,7 +109,7 @@ The content that went live via morning-intel's LinkedInPoster:
 > - Memory = ChromaDB with BM25 + dense-vector fusion, per-persona isolation.
 > - Secrets = OS keyring via the `keyring` package. Never plaintext.
 >
-> **Numbers:** 449 ms cold query → spoken answer on consumer GPU with Ollama qwen2.5:7b as FAST tier. $0/query local. Single 8 GB VRAM card runs everything except video mode (video wants 12 GB+).
+> **Numbers:** $0/query local. Single 8 GB VRAM card runs everything except video mode (video wants 12 GB+). No latency figure is quoted here; see docs/MEASURED-LATENCY.md for what the instrument recorded and why the previous number was withdrawn.
 >
 > **Personas:** three fully-rendered packs ship (Aurora, Caelum, Luma — AI-generated portraits + 4 state images + voice reference + hand-authored system prompts). Nine canonical slots open for community packs. Schema is plain YAML; loader scans `personas/` on boot.
 >
@@ -175,7 +175,7 @@ The content that went live via morning-intel's LinkedInPoster:
 
 2. `The thesis: cloud assistants are rented, not owned. They change personality every six weeks. They charge per request. Every word goes through someone else's server. Aether is the opposite. Install once. Your machine, your memory, your keys.`
 
-3. `449 ms cold query → spoken answer on a single consumer GPU with Ollama. $0/query local. Bring your own key for frontier models — litellm routes 100+ providers through one interface.`
+3. `Voice in, spoken answer out, on a single consumer GPU with Ollama. $0/query local. Bring your own key for frontier models — litellm routes 100+ providers through one interface.`
 
 4. `Persona pack = YAML + a portrait + 20 seconds of voice reference. Dropped into personas/<id>/ and loaded on next boot. No code, no rebuild. Community packs welcome.`
 

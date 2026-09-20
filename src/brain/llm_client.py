@@ -53,11 +53,19 @@ class Chunk:
             ``"content_filter"``, ``"tool_calls"``, ``"error"`` on the final chunk.
         usage: Populated only on the final chunk, ``None`` otherwise. Shape:
             ``{"prompt_tokens": int, "completion_tokens": int, "total_tokens": int}``.
+        provider: Provider that served this chunk, set on the terminal chunk.
+            The fallback cascade can land on a different tier than the caller
+            asked for, so cost must be attributed to what actually answered
+            rather than to the requested tier.
+        model: litellm model id that served this chunk, set alongside
+            ``provider`` on the terminal chunk.
     """
 
     content: str
     finish_reason: str | None = None
     usage: dict[str, int] | None = None
+    provider: str | None = None
+    model: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -384,7 +392,13 @@ async def _iter_stream(
             raise _map_litellm_error(exc, provider=provider, model=model) from exc
 
     # Terminal chunk — carries only metadata.
-    yield Chunk(content="", finish_reason=last_finish or "stop", usage=last_usage)
+    yield Chunk(
+        content="",
+        finish_reason=last_finish or "stop",
+        usage=last_usage,
+        provider=provider,
+        model=model,
+    )
 
 
 async def _iter_single(
@@ -403,7 +417,7 @@ async def _iter_single(
     try:
         choices = getattr(response, "choices", None) or []
         if not choices:
-            yield Chunk(content="", finish_reason="error", usage=None)
+            yield Chunk(content="", finish_reason="error", usage=None, provider=provider, model=model)
             return
         choice = choices[0]
         message = getattr(choice, "message", None)
@@ -414,7 +428,7 @@ async def _iter_single(
     except BaseException as exc:
         raise _map_litellm_error(exc, provider=provider, model=model) from exc
 
-    yield Chunk(content=content or "", finish_reason=finish, usage=usage)
+    yield Chunk(content=content or "", finish_reason=finish, usage=usage, provider=provider, model=model)
 
 
 def _normalise_usage(usage_obj: Any) -> dict[str, int]:
