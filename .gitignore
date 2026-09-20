@@ -89,3 +89,18 @@ node_modules/
 
 # Local env overlays specific to monorepo agents
 .aether-local/
+
+# Untracked and unignored until 2026-09-20, so `git add -A` would have staged
+# all of it. Sizes measured that day.
+
+# 48 GB of LoRA and discriminator training state from the April 2026 runs.
+planning/**/training/checkpoints*/
+
+# Generated knowledge graph. The memory layer belongs on drive I, not in the repo.
+graphify-out/
+
+# Superseded material kept on disk rather than deleted (349 MB).
+_deprecated/
+
+# Persona render pipeline working set (101 MB).
+personas/*/_pipeline/
