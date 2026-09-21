@@ -1,7 +1,7 @@
-# Free Aether — Community Edition (OSS Preview)
+# Free Aether: Community Edition (OSS Preview)
 
 > A local-first, desktop-native AI companion architecture. Rust-first engines, a
-> non-bypassable policy gate, explicit trust surfaces. Early preview — the
+> non-bypassable policy gate, explicit trust surfaces. Early preview: the
 > foundations are in place, most engine logic is not yet.
 
 **Status:** `dev` branch, pre-0.1 preview. The repository is under active
@@ -13,7 +13,7 @@ architecture. Expect breaking changes.
 
 Aether is not a chatbot UI and not a general-purpose "AI app." It is an
 architecture for a **long-lived companion** that runs locally on a user's
-machine and treats the user relationship — memory, presence, timing, trust —
+machine and treats the user relationship, memory, presence, timing, trust,
 as first-class engines, not afterthoughts.
 
 The project is organized into **seven layers**, each an independent engine
@@ -31,9 +31,9 @@ with explicit contracts:
 
 Shared infrastructure (`event-bus`, `storage`, `telemetry`, `types`, `ui-kit`,
 `media-engine`) sits underneath. Everything routes through L5 for
-side-effectful actions — there is no back door.
+side-effectful actions: there is no back door.
 
-**Free Aether — Community Edition** is the open-source preview track.
+**Free Aether: Community Edition** is the open-source preview track.
 
 ---
 
@@ -58,10 +58,10 @@ offline, you're in the right place.
 
 ---
 
-## 3. Current status — honest snapshot
+## 3. Current status: honest snapshot
 
 ```
-FREE AETHER — COMMUNITY EDITION — STATUS 2026-04-19
+FREE AETHER - COMMUNITY EDITION - STATUS 2026-04-19
 
 FOUNDATION / DOCTRINE
 [##########] 100%  Vision & guardrails locked
@@ -77,30 +77,30 @@ DESIGN / PREP
 [##########] 100%  Test matrix master
 
 REPO / INFRA
-[##########] 100%  Wave 0 — monorepo assimilation
-[##########] 100%  Wave 1 — workspace + shared crates + governance
-[##########] 100%  Wave 2 — L5 scaffold (types, traits, IPC surface)
+[##########] 100%  Wave 0 - monorepo assimilation
+[##########] 100%  Wave 1 - workspace + shared crates + governance
+[##########] 100%  Wave 2 - L5 scaffold (types, traits, IPC surface)
 
-L5 — POLICY ENGINE
-[##########] 100%  Wave 3 — first real logic slice
+L5 - POLICY ENGINE
+[##########] 100%  Wave 3 - first real logic slice
                    (in-memory ledger + audit + 5-stage evaluator,
                     18 tests across engine_slice + ipc + sink + audit_store,
                     audit-before-Allow invariant)
-[##########] 100%  Wave 3.5 — SQLite storage substrate
+[##########] 100%  Wave 3.5 - SQLite storage substrate
                    (rusqlite bundled, open_with_migrations() runs the
                     drafted DDL, 3 integration tests incl. append-only
                     trigger + warm-open idempotency.)
-[##########] 100%  Wave 4.5 — SqliteGrantLedger + SqliteAuditStore
+[##########] 100%  Wave 4.5 - SqliteGrantLedger + SqliteAuditStore
                    behind `sqlite-backend` cargo feature + migration
                    0002_audit_chain.sql (payload columns, key_id,
                    chain-head singleton). Default build remains
                    in-memory; durable mode is opt-in. 5 integration
                    tests cover grant/audit survival across restart
                    + append-only enforcement.
-[..........]   0%  Future — hash-chain + HMAC row sealing +
+[..........]   0%  Future - hash-chain + HMAC row sealing +
                    BYOK cost-cap
 
-OTHER ENGINES — STUB SHELLS (Wave 4)
+OTHER ENGINES - STUB SHELLS (Wave 4)
 [##########] 100%  L1/L2/L3/L4/L6/L7 traits + core enums + smoke tests
 [..........]   0%  L1–L7 first-logic slices
 
@@ -116,7 +116,7 @@ PRODUCT INTEGRATION
 - `pnpm -r --if-present typecheck` is green across the TS packages.
 - `cargo check --workspace` is **green** on stable Rust (toolchain pinned in
   `rust-toolchain.toml`).
-- `cargo test --workspace` is **green** — every crate's tests pass. Highlights:
+- `cargo test --workspace` is **green**: every crate's tests pass. Highlights:
   - `aether-l5-policy`: 18 tests by default; +5 SQLite integration tests
     with `--features sqlite-backend` (grant survives restart, revoke
     persists, audit rows survive + time-window filter, append-only
@@ -134,7 +134,7 @@ PRODUCT INTEGRATION
 - No LLM, STT, TTS, or avatar pipeline is wired up. The engine stubs declare
   the right traits and enums; none of the I/O is hooked up.
 - **L5 persistence is opt-in.** The default build uses in-memory
-  `InMemoryGrantLedger` + `InMemoryAuditStore` — fast, process-local,
+  `InMemoryGrantLedger` + `InMemoryAuditStore`: fast, process-local,
   lost on exit. Enabling the `sqlite-backend` cargo feature on
   `aether-l5-policy` unlocks `SqliteGrantLedger`, `SqliteAuditStore`,
   and a `DurableBackends::open(path)` convenience builder that wires
@@ -167,7 +167,7 @@ aether/
 │   ├── ui-kit/            # Shared TS UI primitives + tokens.
 │   ├── l5-policy/         # THE policy engine. First logic slice landed.
 │   ├── l5-policy-ts/      # Hand-written TS mirror of stable L5 types.
-│   ├── l1-interaction/    # Engine stubs — traits, enums, smoke tests only.
+│   ├── l1-interaction/    # Engine stubs - traits, enums, smoke tests only.
 │   ├── l2-memory/         # Engine stubs.
 │   ├── l3-presence/       # Engine stubs.
 │   ├── l4-router/         # Engine stubs.
@@ -196,9 +196,9 @@ aether/
 
 ### Prerequisites
 
-- **Rust toolchain** — install via [rustup](https://rustup.rs/). The workspace
+- **Rust toolchain**: install via [rustup](https://rustup.rs/). The workspace
   pins the toolchain in `rust-toolchain.toml`.
-- **Node 20+** and **pnpm 9+** — `corepack enable && corepack prepare pnpm@latest --activate`.
+- **Node 20+** and **pnpm 9+**: `corepack enable && corepack prepare pnpm@latest --activate`.
 - **Git**. That's it for the preview.
 
 ### First run
@@ -219,13 +219,13 @@ cargo test -p aether-l5-policy --features sqlite-backend  # +5 SQLite tests
 cargo test -p aether-storage                              # 8 storage tests
 ```
 
-If any of these fail on a clean clone, please open a Bug report — the wave
+If any of these fail on a clean clone, please open a Bug report: the wave
 reports assume they all pass on stable Rust.
 
 ### Try the L1 demo
 
 A tiny stdin REPL that drives one turn through the real L1 engine, real
-L5 policy gate, and a stub L4 router — just to see the layers interlock.
+L5 policy gate, and a stub L4 router, just to see the layers interlock.
 
 ```bash
 cargo run -p aether-l1-cli
@@ -246,7 +246,7 @@ aether> shell ls
 
 Full command table and architecture notes in
 [`apps/l1-cli/README.md`](apps/l1-cli/README.md). The demo uses a stub
-`ReflexModelRouter` that does no inference — the honest part is the
+`ReflexModelRouter` that does no inference: the honest part is the
 engine path itself (FSM transitions, policy evaluate with audit write,
 `TurnRouter → ModelRouter` adapter).
 
@@ -297,16 +297,16 @@ integration, asymmetric checkpoint signing).
 
 ### Where to start reading
 
-1. [`docs/REPO_TOUR.md`](docs/REPO_TOUR.md) — start here. A short guided walk
+1. [`docs/REPO_TOUR.md`](docs/REPO_TOUR.md): start here. A short guided walk
    through the directories.
-2. [`ARCHITECTURE.md`](ARCHITECTURE.md) — the seven-layer architecture, the
+2. [`ARCHITECTURE.md`](ARCHITECTURE.md): the seven-layer architecture, the
    non-bypassable policy gate, and how the layers fit together.
-3. [`docs/ARCHITECTURE-V2.md`](docs/ARCHITECTURE-V2.md) — the current
+3. [`docs/ARCHITECTURE-V2.md`](docs/ARCHITECTURE-V2.md): the current
    architecture detail.
-4. [`docs/PRODUCT-PLAN.md`](docs/PRODUCT-PLAN.md) — product direction and the
+4. [`docs/PRODUCT-PLAN.md`](docs/PRODUCT-PLAN.md): product direction and the
    port plan for the legacy v1.0 tree.
-5. `WAVE3_EXECUTION_REPORT_2026-04-19.md` and `WAVE4_EXECUTION_REPORT_2026-04-19.md`
-   — what was done last, with honest deferrals called out.
+5. `WAVE3_EXECUTION_REPORT_2026-04-19.md` and `WAVE4_EXECUTION_REPORT_2026-04-19.md`:
+   what was done last, with honest deferrals called out.
 
 ---
 
@@ -315,17 +315,17 @@ integration, asymmetric checkpoint signing).
 See [ROADMAP.md](ROADMAP.md) for the full list. The next three meaningful
 moves, in priority order:
 
-1. **L5 durable persistence** — introduce `SqliteGrantLedger` +
+1. **L5 durable persistence**: introduce `SqliteGrantLedger` +
    `SqliteAuditStore` behind the existing ledger / audit traits, flip
    L5 onto them behind a feature flag first, then as default. Add
    migration `0002_audit_chain.sql` for hash-chain + HMAC. This is the
    real follow-up to Wave 3.5.
-2. **An L1 or L4 first-logic slice** — either unblocks a visible end-to-end
+2. **An L1 or L4 first-logic slice**: either unblocks a visible end-to-end
    demo path: L1 turn FSM, or L4 provider adapter + policy gate.
-3. **Community demo slice** — smallest runnable surface that exercises
+3. **Community demo slice**: smallest runnable surface that exercises
    L5, the storage substrate, and one engine slice.
 
-Wave 4.1 (layer-boundary enforcement) landed 2026-04-19 — see
+Wave 4.1 (layer-boundary enforcement) landed 2026-04-19: see
 [`tools/lint-layer-boundaries/`](tools/lint-layer-boundaries/) and
 `WAVE4_1_EXECUTION_REPORT_2026-04-19.md`.
 
@@ -339,7 +339,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the long version. Short version:
 - **Engine logic** should be scoped to a single layer and produce a wave
   execution report alongside the code.
 - **Architecture changes** require extra care: [`ARCHITECTURE.md`](ARCHITECTURE.md)
-  and the seven-layer doctrine it describes are load-bearing — do not edit
+  and the seven-layer doctrine it describes are load-bearing. Do not edit
   without prior discussion.
 - **Never bypass L5** for any side-effectful action. If you need a new
   capability, add it to the L5 contract, not around it.
