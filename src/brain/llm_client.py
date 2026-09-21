@@ -194,6 +194,46 @@ def _apply_ollama_thinking(call_kwargs: dict[str, Any]) -> None:
     call_kwargs["extra_body"] = extra_body
 
 
+def _apply_ollama_keep_alive(call_kwargs: dict[str, Any]) -> None:
+    """Optionally hold the Ollama model resident between turns.
+
+    Measured on this box 2026-09-20, qwen3:14b at its full 40960 context, three
+    identical back-to-back calls:
+
+        call 1   load 0.04 s   generation  99.1 ms/token
+        call 2   load 0.00 s   generation 103.9 ms/token
+        call 3   load 0.00 s   generation 102.1 ms/token
+
+    So the model generates at about 100 ms per token warm. Any turn that starts
+    after Ollama has evicted the model pays the load instead, measured at 8.1 s
+    to 16.5 s for this model. Spread over a short reply that reads as several
+    hundred extra milliseconds per token, which is why the recorded figure was
+    roughly three times the rate the model actually sustains. The time is real;
+    calling it generation is what was wrong.
+
+    Left unset by default on purpose. This model occupies 19 GB of a 24 GB card,
+    and pinning it would take the GPU away from every other job on this box. Set
+    ``llm.ollama_keep_alive`` (for example ``"15m"``, or ``-1`` to pin) only when
+    nothing else needs the card.
+    """
+    keep_alive: object = None
+    try:
+        from src.brain.llm_router import _read_llm_config
+
+        keep_alive = _read_llm_config().get("ollama_keep_alive")
+    except Exception as exc:
+        logger.debug(f"LLMClient: ollama_keep_alive lookup failed ({exc!r}), leaving it to Ollama")
+        return
+
+    if keep_alive in (None, ""):
+        return
+    extra_body = dict(call_kwargs.get("extra_body") or {})
+    if "keep_alive" in extra_body:
+        return
+    extra_body["keep_alive"] = keep_alive
+    call_kwargs["extra_body"] = extra_body
+
+
 def _fetch_key(provider: str) -> str | None:
     """Load the API key for ``provider`` from the OS keyring.
 
@@ -359,6 +399,7 @@ async def complete(
     if provider == "ollama":
         call_kwargs.setdefault("api_base", os.environ.get("OLLAMA_API_BASE", "http://localhost:11434"))
         _apply_ollama_thinking(call_kwargs)
+        _apply_ollama_keep_alive(call_kwargs)
 
     logger.debug(f"LLMClient: calling {model} (tier={tier}, stream={stream}, timeout={timeout}s)")
 
