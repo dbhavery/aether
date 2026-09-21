@@ -33,7 +33,7 @@ cracks or bends without misuse.
 3. Our gear team reviews most claims within 5 business days.
 
 If we approve the claim, we'll repair the item, replace it, or issue store
-credit — our choice based on what's available. You cover shipping to us; we
+credit - our choice based on what's available. You cover shipping to us; we
 cover shipping the repaired or replacement item back to you.
 
 ## Lifetime definition

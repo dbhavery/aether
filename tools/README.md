@@ -14,4 +14,4 @@ Real implementations land in Wave 2+ (boundary + codegen).
 
 ## Package-creation protocol reference
 
-Adding a new tool follows the same protocol as adding a package — see `CLAUDE.md` §3. Propose in planning first, scaffold after approval.
+Adding a new tool follows the same protocol as adding a package - see `CLAUDE.md` §3. Propose in planning first, scaffold after approval.

@@ -1,4 +1,4 @@
-# Aether — Repo-Level AI Agent Operating Rules
+# Aether - Repo-Level AI Agent Operating Rules
 
 > **Scope:** Applies to every AI agent (Claude Code, coding agents, sub-agents, and worktree spawns) that opens this repo. Narrower than Don's global rules in [file:///C:/Users/dbhav/.claude/CLAUDE.md](file:///C:/Users/dbhav/.claude/CLAUDE.md); stricter where it needs to be.
 >
@@ -19,10 +19,10 @@
 
 Before editing or scaffolding, read in order:
 
-1. `ARCHITECTURE.md` — the seven-layer architecture and the non-bypassable gate.
-2. `docs/ARCHITECTURE-V2.md` — the current architecture detail.
-3. `docs/PRODUCT-PLAN.md` — product direction and hard rules.
-4. The ADR log under `docs/adr/` — the locked decisions relevant to your scope.
+1. `ARCHITECTURE.md` - the seven-layer architecture and the non-bypassable gate.
+2. `docs/ARCHITECTURE-V2.md` - the current architecture detail.
+3. `docs/PRODUCT-PLAN.md` - product direction and hard rules.
+4. The ADR log under `docs/adr/` - the locked decisions relevant to your scope.
 5. The layer crate you are touching: its `README.md` and `src/lib.rs` under `packages/l*-*/`.
 
 Do not trust memory. Re-read.
@@ -42,9 +42,9 @@ Unilateral `packages/*/` creation is a block-the-PR violation.
 
 These live under `tools/` and are referenced from CI when CI lands:
 
-- `tools/lint-layer-boundaries/` — Rust `cargo-deny` + TS ESLint rule enforcing §1.4.
-- `tools/lint-policy-bypass/` — rejects direct executor calls outside `packages/l5-policy`.
-- `tools/ts-bindings-gen/` — `ts-rs`/`specta` codegen from Rust structs; TS must never be hand-authored where Rust is canonical.
+- `tools/lint-layer-boundaries/` - Rust `cargo-deny` + TS ESLint rule enforcing §1.4.
+- `tools/lint-policy-bypass/` - rejects direct executor calls outside `packages/l5-policy`.
+- `tools/ts-bindings-gen/` - `ts-rs`/`specta` codegen from Rust structs; TS must never be hand-authored where Rust is canonical.
 
 Wave 1 ships scaffolds + permissive configs; Wave 3+ tightens to blocking.
 

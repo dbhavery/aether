@@ -18,7 +18,7 @@ assignees: []
 - [ ] Governance / tooling (`tools/lint-*`, `tools/ts-bindings-gen/`, CI)
 - [ ] Documentation / planning doc refinement
 - [ ] Architecture proposal (see section below)
-- [ ] Other — describe:
+- [ ] Other - describe:
 
 ## Motivation
 
@@ -41,7 +41,7 @@ you invest in the full design. -->
       signatures touched)
 - [ ] Additive contract change (new variant / new optional field / new
       method with default)
-- [ ] Breaking contract change — requires `DECISION_LOCK_PASS_*.md` update
+- [ ] Breaking contract change - requires `DECISION_LOCK_PASS_*.md` update
 
 ## Tests and docs
 

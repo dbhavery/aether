@@ -13,7 +13,7 @@ with the variants `Personal / Work / Health / Finance / Creative /
 System` as a Wave 4 planning stub. Separately,
 `apps/desktop/src-tauri/src/memory_config.rs` declared a
 `MemoryDomain` enum with the variants `Session / Durable / Facts /
-Projects / Preferences / Artifacts` — the six-domain taxonomy
+Projects / Preferences / Artifacts` - the six-domain taxonomy
 `docs/MEMORY-V2-ARCHITECTURE.md` §1 freezes as authoritative.
 Two enums with the same name, different variants, in the same
 workspace.
@@ -69,8 +69,8 @@ Concretely:
 
 4. **The `SessionMemoryStore` contract (and any future
    domain-typed durable store) become the only shared boundary
-   between layers.** Background jobs — retention sweep
-   (step 5), embeddings worker (step 6) — speak the L2-hosted
+   between layers.** Background jobs - retention sweep
+   (step 5), embeddings worker (step 6) - speak the L2-hosted
    `MemoryDomain` via store method signatures, not via a separate
    kernel trait.
 
@@ -95,7 +95,7 @@ Concretely:
 
 ## Consequences
 
-### Immediate (Memory V2 step 5 — "Memory Sweep" session)
+### Immediate (Memory V2 step 5 - "Memory Sweep" session)
 
 - New file: `packages/l2-memory/src/domain.rs` exports
   `MemoryDomain` (copy of the shell variants verbatim,
@@ -133,11 +133,11 @@ Concretely:
 
 ## Alternatives considered and rejected
 
-- **Option 1 — Replace L2 kernel enum with the shell enum, keep
+- **Option 1 - Replace L2 kernel enum with the shell enum, keep
   the kernel module.** Rejected: refactors a file with zero
   consumers into a different shape of unused code. Work without
   an immediate beneficiary.
-- **Option 2 — Keep both enums, add a mapping layer.** Rejected:
+- **Option 2 - Keep both enums, add a mapping layer.** Rejected:
   creates a permanent two-vocabulary tax for no forcing function.
   Future domain additions would require touching both enums and
   a mapper; bugs in the mapper would silently desync. The cost

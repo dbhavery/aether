@@ -4,8 +4,8 @@
 - **Date:** 2026-04-23
 - **Deciders:** Don (owner). Session delegated authority to execute Run 3 past the usual stopping point.
 - **Supersedes:** nothing.
-- **Superseded by:** `docs/adr/ADR-0003-model-defaults-supersession.md` — Decision 1 (embedding model default) only. All other decisions in this ADR remain in force.
-- **Related:** `docs/adr/ADR-0001-memory-domain-reconciliation.md`, `docs/MEMORY-V2-ARCHITECTURE.md` §§8 (hard constraint 5 — local-only), 9 (open questions), 10 item 6.
+- **Superseded by:** `docs/adr/ADR-0003-model-defaults-supersession.md` - Decision 1 (embedding model default) only. All other decisions in this ADR remain in force.
+- **Related:** `docs/adr/ADR-0001-memory-domain-reconciliation.md`, `docs/MEMORY-V2-ARCHITECTURE.md` §§8 (hard constraint 5 - local-only), 9 (open questions), 10 item 6.
 
 ## Context
 
@@ -23,7 +23,7 @@ no legacy trait shape to preserve.
 
 Memory V2 step 6 is opt-in (`memory.json::embeddings.enabled`
 defaults to `false`) and local-only (hard constraint §8 item 5),
-so the "wrong" pick is reversible — nothing breaks when a later
+so the "wrong" pick is reversible - nothing breaks when a later
 PR swaps the provider or backend.
 
 ## Decisions
@@ -70,7 +70,7 @@ PR swaps the provider or backend.
 
 Additive variant on the existing `Capability` enum (same pattern
 as `MemoryWrite`, `MemoryRead`, `MemoryForget`, `MemoryEdit`).
-No `AuditRecordEvent` shape change — the capability is the only
+No `AuditRecordEvent` shape change - the capability is the only
 new wire value.
 
 Each embedding write produces exactly one L5 audit row via
@@ -112,7 +112,7 @@ structured/keyed and don't benefit from semantic indexing.
 ### Immediate (Run 3 scope)
 
 - New file: `packages/l2-memory/src/embeddings.rs` (behind
-  `embeddings` feature) — `EmbeddingStore` trait,
+  `embeddings` feature) - `EmbeddingStore` trait,
   `FlatFileEmbeddingStore` impl, `EmbeddingProvider` trait,
   `OllamaEmbeddingProvider` impl.
 - `packages/l2-memory/Cargo.toml` gains a `embeddings` feature.
@@ -158,7 +158,7 @@ structured/keyed and don't benefit from semantic indexing.
 ## Alternatives considered and rejected
 
 - **sqlite-vec extension as the vector backend.** Rejected for
-  step 6 — adds a native-code dependency (not pure-Rust), adds
+  step 6 - adds a native-code dependency (not pure-Rust), adds
   a SQLite extension load path the shell has to manage, and
   the O(N) scan wasn't measured as slow for realistic corpora.
   Revisit if real measurements show the flat-file impl is a
@@ -168,15 +168,15 @@ structured/keyed and don't benefit from semantic indexing.
   are viable replacements behind the trait, none earn their
   weight today.
 - **Hash-based stub provider (no Ollama).** Rejected as a
-  shipped default. Acceptable as a test stub only — real users
+  shipped default. Acceptable as a test stub only - real users
   should see real embeddings, not a degenerate "similarity =
   string equality" placeholder.
-- **Local Python sentence-transformers server.** Rejected —
+- **Local Python sentence-transformers server.** Rejected  - 
   Ollama already solves the "local daemon serving models over
   HTTP" problem for Aether; a parallel Python stack would
   double the dependency surface.
 - **Putting embeddings inside the existing `conversation_log`
-  SQLite table.** Rejected — mixes vector blobs with small
+  SQLite table.** Rejected - mixes vector blobs with small
   row-oriented content, forces a migration, and couples vector
   storage to the session-memory schema. Separate concerns.
 

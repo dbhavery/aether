@@ -12,7 +12,7 @@
 The production rank function in `apps/desktop/src-tauri/src/retrieval.rs::run_retrieval_context` Phase 4 is:
 
 ```rust
-// Phase 4 — rank: score desc, recency desc, truncate to max_items.
+// Phase 4 - rank: score desc, recency desc, truncate to max_items.
 resolved.sort_by(|a, b| match b.score.partial_cmp(&a.score) {
     Some(Ordering::Equal) | None => b.timestamp_ms.cmp(&a.timestamp_ms),
     Some(ord) => ord,
@@ -44,13 +44,13 @@ Inspection of 22 missed-at-1 cases shows the dominant failure mode is **within-t
 QUERY: "Given how obsessed I was with weight reduction and specialized
 gear for my backpacking trip, ..." (referencing a backpacking-gear turn)
 
-EXPECTED: t59_11 — "For a 25°F rating, look into mummy-style quilts..."
+EXPECTED: t59_11 - "For a 25°F rating, look into mummy-style quilts..."
 
 TOP-5: t59_0 (0.692), t59_13 (0.676), t19_10 (0.608), t58_16 (0.592),
        t59_16 (0.589)
 ```
 
-3 of top-5 are from the right thread; the right-thread top-ranked turn is the conversation opener, not the target. This is **not a recency-bias failure**. Recency tiebreak doesn't fire here — none of the scores tie.
+3 of top-5 are from the right thread; the right-thread top-ranked turn is the conversation opener, not the target. This is **not a recency-bias failure**. Recency tiebreak doesn't fire here - none of the scores tie.
 
 A second pattern: the bge-m3 cosine signal sometimes flips entirely to the wrong thread when the query's surface phrasing matches an unrelated topic better than the reference thread (sample miss B in the calibration report).
 
@@ -60,9 +60,9 @@ These patterns matter because they constrain which fixes are actually in scope.
 
 ### 1. Two competing options to evaluate; pick one before changing `retrieval.rs`.
 
-The handoff suggested "recency-weighted combine" reflexively. The Phase 3A miss patterns show the dominant failure isn't recency — it's within-thread specificity. So the ADR proposes **two options**, recommends a focused experiment session before the change lands, and explicitly leaves the decision open.
+The handoff suggested "recency-weighted combine" reflexively. The Phase 3A miss patterns show the dominant failure isn't recency - it's within-thread specificity. So the ADR proposes **two options**, recommends a focused experiment session before the change lands, and explicitly leaves the decision open.
 
-#### Option A — Recency-weighted combine (cheap, modest expected impact)
+#### Option A - Recency-weighted combine (cheap, modest expected impact)
 
 Replace the strict-tiebreak rank with a weighted combine:
 
@@ -83,7 +83,7 @@ Cons:
 - Adds a configuration knob (`α`, `τ`) that becomes a tier-tunable.
 - Doesn't address within-thread specificity, the actual dominant failure mode.
 
-#### Option B — Cross-encoder re-rank pass (heavier, likely substantial impact)
+#### Option B - Cross-encoder re-rank pass (heavier, likely substantial impact)
 
 Keep bge-m3 as the first-pass embedder; add a cross-encoder re-rank on the top-N candidates:
 
@@ -106,7 +106,7 @@ Cons:
 - Requires loading a 568M-parameter model into VRAM (Flame headroom: comfortable; Spark/Ember tier: needs decision per ADR-0006 §6).
 - Bigger surface area: needs an `Reranker` trait, provider plumbing, fallback when reranker unavailable.
 
-#### Option C — Do nothing (deferred; document the decay)
+#### Option C - Do nothing (deferred; document the decay)
 
 Accept the recall@1 = 0.694 floor and document it as a known limitation in `docs/MEMORY-V2-ARCHITECTURE.md`. Surface the rank confidence in retrieval provenance so users can read "best guess from 3 candidates" instead of "the answer." Address with re-ranker or chunking work in a future milestone.
 
@@ -163,9 +163,9 @@ ADR-0005 §Decision 5 sets a 5s bailout for the retrieval pipeline. Adding 50-10
 ## Open items
 
 1. **Does Don want to ratify the *experiment* (run both options in the bench), or pre-commit to one option now?** Recommend the former.
-2. **VRAM budget for Option B's reranker.** ADR-0006 §6 currently allocates ~4 GB for Flame embedders — bge-reranker-v2-m3 is 568M params (~600 MB Q4_K_M). Fits, but takes the Flame embedder pool to ~4.6 GB.
+2. **VRAM budget for Option B's reranker.** ADR-0006 §6 currently allocates ~4 GB for Flame embedders - bge-reranker-v2-m3 is 568M params (~600 MB Q4_K_M). Fits, but takes the Flame embedder pool to ~4.6 GB.
 3. **Should the calibration corpus be re-generated to be more "real"?** The current corpus is gemma4:e4b-generated synthetic. Real Aether usage may have a different surface-phrasing distribution. Future Phase 3A2 could replace with anonymized real conversation transcripts once consent + privacy story is settled.
-4. **Recency-decay shape (Option A only).** Exponential half-life vs linear vs sigmoid. The choice has measurable impact on the lift; the bench experiment should sweep at least 3 shapes. **Resolved 2026-04-25:** moot — Option A is Rejected (see §Empirical Validation).
+4. **Recency-decay shape (Option A only).** Exponential half-life vs linear vs sigmoid. The choice has measurable impact on the lift; the bench experiment should sweep at least 3 shapes. **Resolved 2026-04-25:** moot - Option A is Rejected (see §Empirical Validation).
 
 ## Empirical Validation (2026-04-25)
 
@@ -176,14 +176,14 @@ same 842-passage Phase 3A corpus (`synthetic_corpus_embedded.jsonl`,
 
 ### Bench setup
 
-- **Baseline:** `bench_recall.py` — production cosine + strict
+- **Baseline:** `bench_recall.py` - production cosine + strict
   timestamp-desc tiebreak. Output `recall_at_scale.json`.
-- **Option A:** `bench_recall_option_a.py` — `cosine + α * exp(-Δt/τ)`
+- **Option A:** `bench_recall_option_a.py` - `cosine + α * exp(-Δt/τ)`
   with α = 0.1, τ = 7 days, "now" = max(timestamp_ms) over the
   corpus. Mirrors the production helpers `combined_rank_score` /
   `recency_decay` in `apps/desktop/src-tauri/src/retrieval.rs`
   byte-for-byte. Output `recall_at_scale_option_a.json`.
-- **Option B:** `bench_recall_option_b.py` — bge-m3 cosine top-20,
+- **Option B:** `bench_recall_option_b.py` - bge-m3 cosine top-20,
   then `BAAI/bge-reranker-v2-m3` (sentence-transformers `CrossEncoder`)
   re-scores all 20 (query, candidate) pairs via the persistent
   `tools/hf_embed_helper/embed.py` subprocess (`rerank` op added in
@@ -203,7 +203,7 @@ same 842-passage Phase 3A corpus (`synthetic_corpus_embedded.jsonl`,
 
 ### Decision
 
-- **Option A — Rejected.** The recency-weighted combine actively
+- **Option A - Rejected.** The recency-weighted combine actively
   harmed recall (recall@1 −16.7 pp, MRR −13.4 pp). The Phase 3A
   miss-pattern analysis (§Context) predicted this: the dominant
   failure mode is within-thread top-1 confusion, not recency bias.
@@ -212,11 +212,11 @@ same 842-passage Phase 3A corpus (`synthetic_corpus_embedded.jsonl`,
   systematically not the reference targets, displacing the correct
   semantic match. The `combined_rank_score` and `recency_decay`
   helpers stay in `retrieval.rs` (with their unit tests) as
-  documented dead-end primitives — they may yet earn their keep as
-  a tertiary tiebreak in a future hybrid scheme — but the
+  documented dead-end primitives - they may yet earn their keep as
+  a tertiary tiebreak in a future hybrid scheme - but the
   production rank in Phase 4 is reverted to baseline cosine +
   strict-tiebreak. See `recall_at_scale_option_a.json`.
-- **Option B — Accepted (in principle).** The cross-encoder re-rank
+- **Option B - Accepted (in principle).** The cross-encoder re-rank
   produced a real but modest lift (+2.8 pp recall@1, +2.8 pp
   recall@10, +1.6 pp MRR). The earlier "toward 90%+" hope in §1
   Option B was optimistic; bge-reranker-v2-m3 is not a perfect
@@ -226,14 +226,14 @@ same 842-passage Phase 3A corpus (`synthetic_corpus_embedded.jsonl`,
   Option B is the only direction that improved any metric, and it
   is the right architectural foundation. See
   `recall_at_scale_option_b.json`.
-- **Option C — Rejected.** Option B beats deferral, modestly but
+- **Option C - Rejected.** Option B beats deferral, modestly but
   decisively.
 
 ### What landed in this session
 
-- `tools/hf_embed_helper/embed.py` — new `rerank` op (CrossEncoder
+- `tools/hf_embed_helper/embed.py` - new `rerank` op (CrossEncoder
   via sentence-transformers), wire-shape stable.
-- `apps/desktop/src-tauri/src/retrieval.rs` — `combined_rank_score`,
+- `apps/desktop/src-tauri/src/retrieval.rs` - `combined_rank_score`,
   `recency_decay`, `RECENCY_WEIGHT_ALPHA`, `RECENCY_HALF_LIFE` pub
   primitives + unit tests; production Phase 4 reverted to baseline.
 - Three bench scripts + three JSON result artifacts from the 2026-04-25

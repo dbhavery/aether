@@ -1,4 +1,4 @@
-# Show HN — draft
+# Show HN - draft
 
 **Title:**
 Show HN: Aether – local-first AI companion architecture with a non-bypassable policy gate (Rust)

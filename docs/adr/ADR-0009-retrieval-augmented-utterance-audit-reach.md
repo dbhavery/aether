@@ -1,6 +1,6 @@
 # ADR-0009: Retrieval-augmented utterance reach into L5 audit + L1 transcripts
 
-- **Status:** **Accepted** (ratified 2026-04-25 in the autonomous session that implemented it; per `HANDOFF_2026-04-25_NEXT_AUTONOMOUS_SESSION.md` quality standard #8 — implement and ratify in the same change set).
+- **Status:** **Accepted** (ratified 2026-04-25 in the autonomous session that implemented it; per `HANDOFF_2026-04-25_NEXT_AUTONOMOUS_SESSION.md` quality standard #8 - implement and ratify in the same change set).
 - **Date:** 2026-04-24 (proposed) / 2026-04-25 (accepted + implemented)
 - **Deciders:** Don (owner). Claude proposes, captures the asymmetry from the M2 Run 3 Session A handoff.
 - **Supersedes:** nothing.
@@ -26,9 +26,9 @@ This produces a **two-channel asymmetry**:
 - **Memory + transcript** see the **original** utterance (`text`). Correct: the user typed `text`, not the augmented form, and the audit story "what did the user say" should reflect intent.
 - **L5 audit + L1 turn record** see the **augmented** utterance (`router_utterance` containing the prepended `Relevant context (retrieval): ...` block). Correct in one sense (it's what the model actually saw), wrong in another (it's not what the user said, and it pollutes audit-search semantics with retrieval block content).
 
-A user reviewing the audit log would see their own utterances bracketed with retrieval context they never wrote. Worse, the same utterance composed with different memories produces materially different audit rows — making "what did Don say to Aether?" unanswerable from audit alone.
+A user reviewing the audit log would see their own utterances bracketed with retrieval context they never wrote. Worse, the same utterance composed with different memories produces materially different audit rows - making "what did Don say to Aether?" unanswerable from audit alone.
 
-This ADR proposes the cleanup. **It is explicitly cross-layer** (touches L1 turn engine, L5 audit store, and the shell's submit_turn) and therefore violates CLAUDE.md §1.3 "one layer per session" — implementation requires a focused session of its own, not a smuggled fix into an unrelated commit.
+This ADR proposes the cleanup. **It is explicitly cross-layer** (touches L1 turn engine, L5 audit store, and the shell's submit_turn) and therefore violates CLAUDE.md §1.3 "one layer per session" - implementation requires a focused session of its own, not a smuggled fix into an unrelated commit.
 
 ## Decisions
 
@@ -61,17 +61,17 @@ The shell's `submit_turn` continues to compose `router_utterance = augment_utter
 
 Two implementation paths considered (Decision 5 picks):
 
-**Path A — split TurnRequest fields.** Add `original_utterance: String` and `model_input_utterance: String` to `TurnRequest`. The L1 engine forwards `model_input_utterance` to the provider but writes `original_utterance` to the audit row. Clearest contract; requires `TurnRequest` schema bump.
+**Path A - split TurnRequest fields.** Add `original_utterance: String` and `model_input_utterance: String` to `TurnRequest`. The L1 engine forwards `model_input_utterance` to the provider but writes `original_utterance` to the audit row. Clearest contract; requires `TurnRequest` schema bump.
 
-**Path B — strip the augmentation in L1.** L1 detects the `"Relevant context (retrieval):\n"` prefix and strips it before audit. Brittle (relies on string format), does not survive a future block-format change.
+**Path B - strip the augmentation in L1.** L1 detects the `"Relevant context (retrieval):\n"` prefix and strips it before audit. Brittle (relies on string format), does not survive a future block-format change.
 
 ### 5. Pick Path A.
 
-Path A is the right shape. The cost is one new field on `TurnRequest` and a small audit-row schema change. The benefit is a stable, format-independent contract: any future prompt-augmentation (Memory V2 retrieval block, presence-state injection, persona overlays) just adds another `model_input_*` field — the `original_utterance` remains untouched.
+Path A is the right shape. The cost is one new field on `TurnRequest` and a small audit-row schema change. The benefit is a stable, format-independent contract: any future prompt-augmentation (Memory V2 retrieval block, presence-state injection, persona overlays) just adds another `model_input_*` field - the `original_utterance` remains untouched.
 
 ### 6. Migration of existing audit rows.
 
-Existing rows pre-Path-A have augmented utterances stored as `utterance`. Keep them as-is — historical fidelity matters more than retroactive cleanup, and a migration would require parsing every row by retrieval-block-prefix detection (which Path B-style stripping rejected).
+Existing rows pre-Path-A have augmented utterances stored as `utterance`. Keep them as-is - historical fidelity matters more than retroactive cleanup, and a migration would require parsing every row by retrieval-block-prefix detection (which Path B-style stripping rejected).
 
 Add a `schema_version: u32` field on the audit row; pre-Path-A rows are version 1, post-Path-A rows are version 2. Audit UI surfaces the version when relevant ("This row uses the pre-2026-04-24 schema; the utterance may include retrieval context").
 
@@ -105,7 +105,7 @@ Risk B in the Session A handoff carried this for one milestone already. The L1 a
 
 **Neutral.**
 
-- Existing audit rows stay as-is per Decision 6 — no destructive migration.
+- Existing audit rows stay as-is per Decision 6 - no destructive migration.
 
 ## Implementation note
 
@@ -113,14 +113,14 @@ This ADR is **Proposed**. Implementation is held until Don ratifies AND a cross-
 
 Estimated change set on accept:
 
-1. `packages/l1-interaction/src/turn.rs` — `TurnRequest` field split.
-2. `packages/l5-policy/src/audit.rs` — audit-row schema bump (v1 → v2) + serde migration.
-3. `apps/desktop/src-tauri/src/commands.rs::submit_turn` — pass both `original_utterance` and `router_utterance` into the request.
-4. `apps/desktop/src/components/TrustDrawer.tsx::AuditList` — version-aware rendering.
+1. `packages/l1-interaction/src/turn.rs` - `TurnRequest` field split.
+2. `packages/l5-policy/src/audit.rs` - audit-row schema bump (v1 → v2) + serde migration.
+3. `apps/desktop/src-tauri/src/commands.rs::submit_turn` - pass both `original_utterance` and `router_utterance` into the request.
+4. `apps/desktop/src/components/TrustDrawer.tsx::AuditList` - version-aware rendering.
 5. New tests covering: round-trip serde for both schema versions, audit row contains the original utterance not the augmented form, retrieval_provenance is populated when retrieval fires.
 6. Rot-guard anchors for the new fields in `tools/lint-policy-doc/check.py`.
 
-## Open items — resolved 2026-04-25 during implementation
+## Open items - resolved 2026-04-25 during implementation
 
 The three open items in the Proposed draft were all resolved in the
 implementation session per the autonomous-authority delegation in
@@ -157,24 +157,24 @@ The implementation landed on dev between commits `1f99a48` and the
 ratification commit. Key surfaces (kept in sync by
 `tools/lint-policy-doc/check.py` rot-guard):
 
-- `packages/l1-interaction/src/turn.rs` — `TurnRequest` carries
+- `packages/l1-interaction/src/turn.rs` - `TurnRequest` carries
   `original_utterance`, `model_input_utterance`, and
   `retrieval_provenance: Option<RetrievalProvenance>`. The L1
   engine forwards `model_input_utterance` to `TurnRouter::dispatch`
   and stamps the audit-extras (`AuditExtras { original_utterance,
   retrieval_provenance }`) on `ActionRequest`.
-- `packages/l5-policy/src/audit.rs` — `AuditRecordEvent` v1→v2 with
+- `packages/l5-policy/src/audit.rs` - `AuditRecordEvent` v1→v2 with
   `schema_version`, `original_utterance: Option<String>`,
   `retrieval_provenance: Option<RetrievalProvenance>`.
-- `packages/l5-policy/src/audit_seal.rs` — `CanonicalAuditPayload`
+- `packages/l5-policy/src/audit_seal.rs` - `CanonicalAuditPayload`
   extended to include the three new fields so HMAC sealing covers
   them (else an attacker could mutate `original_utterance`
   post-write and the chain would still verify).
-- `apps/desktop/src-tauri/src/commands.rs::submit_turn` — builds
+- `apps/desktop/src-tauri/src/commands.rs::submit_turn` - builds
   provenance from the orchestrator hits via
   `retrieval_provenance_for(&hits)` and stamps both utterance
   channels on the `TurnRequest`.
-- `apps/desktop/src/components/TrustDrawer.tsx::AuditRow` —
+- `apps/desktop/src/components/TrustDrawer.tsx::AuditRow`  - 
   version-aware rendering. v1 → schema badge + capability/scope.
   v2 → user's text as headline + collapsed retrieval-summary
   disclosure.

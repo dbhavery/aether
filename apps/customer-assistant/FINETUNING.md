@@ -5,7 +5,7 @@ how it plugs into the assistant. The hook is **scaffolded** in this demo: the
 config field exists and is honored at model-resolution time, but no training is
 performed here.
 
-> TL;DR — RAG (retrieval) handles *facts*; fine-tuning handles *behaviour/voice*.
+> TL;DR - RAG (retrieval) handles *facts*; fine-tuning handles *behaviour/voice*.
 > Start with RAG (already built). Fine-tune only when a company needs a
 > consistent style, format, or domain phrasing that prompting alone can't hold.
 
@@ -24,9 +24,9 @@ llm:
 
 Model resolution (`config.py::CompanyProfile.effective_model`) checks in order:
 
-1. `fine_tuned_model` — if set, used directly.
-2. `model` — explicit Ollama model name.
-3. tier-mapped model — `fast`/`main`/`heavy` → `configs/default_config.yaml`.
+1. `fine_tuned_model` - if set, used directly.
+2. `model` - explicit Ollama model name.
+3. tier-mapped model - `fast`/`main`/`heavy` → `configs/default_config.yaml`.
 
 So flipping a company onto its tuned model is a **one-line config change**, no
 code edit. In the broader Aether architecture this mirrors L4-router tier
@@ -71,7 +71,7 @@ Guidelines:
   training and inference match.
 - **Preserve the citation style** (`[source.md]`) in assistant turns so the
   tuned model keeps grounding its answers.
-- **Scrub PII** — names, emails, order numbers, addresses. Never train on raw
+- **Scrub PII** - names, emails, order numbers, addresses. Never train on raw
   customer data without consent and redaction.
 
 ---
@@ -81,11 +81,11 @@ Guidelines:
 Because Aether defaults to **Ollama**, the most direct path keeps the tuned
 model in Ollama:
 
-### Option A — LoRA fine-tune, then import into Ollama (recommended)
+### Option A - LoRA fine-tune, then import into Ollama (recommended)
 
 1. Fine-tune a LoRA adapter on the base model (e.g. `qwen2.5:7b`) with a local
    trainer such as **Unsloth**, **axolotl**, or **Hugging Face PEFT**.
-   (See the repo's `flux-lora-finetune` reference for the QLoRA/VRAM playbook —
+   (See the repo's `flux-lora-finetune` reference for the QLoRA/VRAM playbook  - 
    the LoRA mechanics transfer from diffusion to LLMs.)
 2. Merge the adapter and convert to GGUF (`llama.cpp` `convert_hf_to_gguf.py`),
    or keep the adapter and reference it from a `Modelfile`.
@@ -103,12 +103,12 @@ model in Ollama:
    ```
 4. Point the company at it: `fine_tuned_model: "northwind-support:latest"`.
 
-### Option B — full SFT
+### Option B - full SFT
 
 Same data format; full-parameter SFT on a small base if you have the VRAM. More
 expensive, rarely needed for support-voice adaptation.
 
-### Option C — hosted fine-tune
+### Option C - hosted fine-tune
 
 If a company opts into a cloud provider, fine-tune there and set
 `fine_tuned_model` to the provider's model id (and switch `llm.provider` at the
@@ -133,8 +133,8 @@ Don't ship a tuned model on vibes. Before flipping `fine_tuned_model`:
 
 | Piece | Status |
 | --- | --- |
-| `fine_tuned_model` config field | **Real** — validated + honored at resolution |
-| Model-resolution priority | **Real** — `effective_model()` |
-| Ollama dispatch to a custom model | **Real** — works the moment the model exists in Ollama |
-| Training pipeline / data prep scripts | **Scaffold** — documented here, not implemented |
-| Per-company eval suite | **Scaffold** — wiring described, not implemented |
+| `fine_tuned_model` config field | **Real** - validated + honored at resolution |
+| Model-resolution priority | **Real** - `effective_model()` |
+| Ollama dispatch to a custom model | **Real** - works the moment the model exists in Ollama |
+| Training pipeline / data prep scripts | **Scaffold** - documented here, not implemented |
+| Per-company eval suite | **Scaffold** - wiring described, not implemented |

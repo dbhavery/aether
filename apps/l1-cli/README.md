@@ -21,7 +21,7 @@ them together in `src/adapter.rs`.
 - Rust toolchain (see `rust-toolchain.toml` at the repo root; install via
   [rustup](https://rustup.rs/)).
 
-No network, no model weights, no configuration — the demo uses a stub
+No network, no model weights, no configuration - the demo uses a stub
 `ReflexModelRouter` that echoes the prompt.
 
 ## Run it
@@ -52,19 +52,26 @@ aether> read /tmp/x
   turn-id      : turn-1
   final-state  : Completed
   state-trace  : Idle -> AwaitingPolicyApproval -> RouterDispatched -> Completed
-  policy       : Allow  (grant=g-1, audit=a-1)
-  route        : tier=reflex provider=reflex-stub
-  response     : [reflex] heard you: read /tmp/x
+  policy       : Allow
+  route        : tier=local-full provider=reflex-stub
+  response     : [local-full] heard you: read /tmp/x
 
 aether> shell ls
   turn-id      : turn-2
   final-state  : PolicyDenied
   state-trace  : Idle -> AwaitingPolicyApproval -> PolicyDenied
-  policy       : Deny   (ModeDeny, audit=a-2)
+  policy       : Deny
   blocked      : policy denied
+
+aether> write /tmp/x
+  turn-id      : turn-3
+  final-state  : AwaitingPolicyApproval
+  state-trace  : Idle -> AwaitingPolicyApproval
+  policy       : Ask
+  blocked      : awaiting user approval (Ask ticket open)
 ```
 
-Every line is a real output of a real engine — the policy engine wrote an
+Every line is a real output of a real engine - the policy engine wrote an
 audit row before the Allow returned, the L1 FSM actually transitioned
 through those states, and the router call really passed through the
 `TurnRouter → ModelRouter` adapter.
@@ -73,7 +80,7 @@ through those states, and the router call really passed through the
 
 The default engine uses in-memory grants and audit. To switch to the
 durable SQLite-backed backends (from Wave 4.5), rebuild with the feature
-enabled and pass a DB path via an env var (coming in a later wave — for
+enabled and pass a DB path via an env var (coming in a later wave - for
 now, the feature is wired but the CLI always uses in-memory). Engine-level
 SQLite integration is covered by
 `packages/l1-interaction/tests/turn_slice_sqlite.rs`.

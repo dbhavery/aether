@@ -32,7 +32,7 @@ personas/<persona_id>/
 
 **REQUIRED files:** `persona.yaml`, `avatar/portrait.png`, `avatar/states/{idle,listening,thinking,speaking}.png`, `voice/reference.wav`, `voice/sample.wav`, `metadata.yaml`.
 
-**OPTIONAL files:** everything else, including landmarks and clips — they'll be generated on first load via `scripts/preprocess_avatar.py` if missing.
+**OPTIONAL files:** everything else, including landmarks and clips - they'll be generated on first load via `scripts/preprocess_avatar.py` if missing.
 
 **Generated and cached** (not committed to git): `landmarks.json`, `clips/*.mp4`, `clips/manifest.json`. These are machine-generated from `portrait.png` and the four state images. A CI check ensures they're in `.gitignore`.
 
@@ -41,19 +41,19 @@ personas/<persona_id>/
 ## 2. `persona.yaml` schema
 
 ```yaml
-# REQUIRED — stable identifier. Lowercase, alphanumeric + hyphens. Never change after release.
+# REQUIRED - stable identifier. Lowercase, alphanumeric + hyphens. Never change after release.
 id: "aurora"
 
-# REQUIRED — display name shown in the UI. User can override in their config.
+# REQUIRED - display name shown in the UI. User can override in their config.
 display_name: "Aurora"
 
-# REQUIRED — short description shown in the wizard persona card (<=120 chars).
+# REQUIRED - short description shown in the wizard persona card (<=120 chars).
 tagline: "Warm and grounded. A calm presence for focused work."
 
-# REQUIRED — schema version. Bump when this file format changes.
+# REQUIRED - schema version. Bump when this file format changes.
 schema_version: 1
 
-# REQUIRED — the personality the LLM adopts.
+# REQUIRED - the personality the LLM adopts.
 personality:
   archetype: "warm_supportive"   # one of: warm_supportive, analytical_precise, playful_witty,
                                  # formal_executive, calm_zen, energetic_enthusiastic,
@@ -70,7 +70,7 @@ personality:
     humor: "light"               # none | light | dry | playful
     emoji_usage: "never"         # never | sparingly | natural
 
-# REQUIRED — TTS + voice cloning parameters.
+# REQUIRED - TTS + voice cloning parameters.
 voice:
   engine: "chatterbox"           # chatterbox | elevenlabs (if user has key)
   gender_hint: "female"          # informational only; used for ML-based fallbacks
@@ -84,7 +84,7 @@ voice:
     - "Give me a moment on that."
     - "Let me think about that one."
     - "One sec while I look into that."
-    - "Good question — let me work that out."
+    - "Good question - let me work that out."
 
   # Phrases for interruption / barge-in acknowledgment.
   interruption_phrases:
@@ -92,7 +92,7 @@ voice:
     - "Yes?"
     - "I'm listening."
 
-# REQUIRED — avatar metadata.
+# REQUIRED - avatar metadata.
 avatar:
   engine: "liveportrait"         # only option in v1.0
   resolution: [1024, 1024]       # source portrait dimensions
@@ -100,16 +100,16 @@ avatar:
   idle_blink_rate_hz: 0.28       # ~1 blink every 3.5s
   idle_micro_movement_scale: 0.6 # 0.0 (still) to 1.0 (lively)
 
-# OPTIONAL — memory behavior overrides.
+# OPTIONAL - memory behavior overrides.
 memory:
   isolation: true                # each persona has its own ChromaDB collection
   retention_days: 365            # 0 = forever
   persona_can_forget: true       # does this persona respect "forget this" commands
 
-# OPTIONAL — which LLM tier this persona prefers for main responses.
+# OPTIONAL - which LLM tier this persona prefers for main responses.
 # User's configured provider is still used; this only nudges tier selection.
 llm_preferences:
-  preferred_tier: "main"         # fast | main | heavy — overridable by complexity router
+  preferred_tier: "main"         # fast | main | heavy - overridable by complexity router
   temperature: 0.7
   max_output_tokens: 1024
 ```
@@ -157,7 +157,7 @@ creator: "Don Havery"
 created: "2026-04-17"
 last_updated: "2026-04-17"
 
-# REQUIRED — documents provenance of every shipped asset.
+# REQUIRED - documents provenance of every shipped asset.
 assets:
   portrait:
     source: "ai_generated"       # ai_generated | licensed | royalty_free | user_supplied
@@ -177,7 +177,7 @@ assets:
     source: "synthesized"        # synthesized from the reference via Chatterbox
     license: "custom_aether"
 
-# Optional — any legal or usage notes for this persona.
+# Optional - any legal or usage notes for this persona.
 notes: |
   Portrait produced through AI pipeline with no person likeness reference.
   Voice reference is CC0 from Pixabay; we own the derived cloned output under Chatterbox terms.
@@ -204,15 +204,15 @@ To add a new persona, use `scripts/persona_generator/` (built in P4):
 
 1. **`new_persona.py aurora --archetype warm_supportive --gender-hint female`**
    Creates a scaffold folder, writes empty `persona.yaml` with defaults.
-2. **Portrait generation** — runs SDXL + appropriate LoRA; produces 8 candidates; you pick one.
-3. **State image generation** — inpaints expression variants on the chosen portrait.
-4. **Landmark preprocessing** — `scripts/preprocess_avatar.py persona_id` — extracts 68-point landmarks, caches to `avatar/landmarks.json`.
-5. **Idle clip generation** — LivePortrait drives 4 transition clips, saved to `avatar/clips/`.
-6. **Voice reference sourcing** — you pick a CC0 voice sample from `assets/voice_candidates/` and copy to `voice/reference.wav`.
-7. **Voice sample synthesis** — `scripts/synthesize_sample.py persona_id "Hi, I'm Aurora. Nice to meet you."` — Chatterbox outputs the wizard preview to `voice/sample.wav`.
-8. **Personality prompt writing** — you fill `persona.yaml -> personality.system_prompt`. No LLM autowrite — quality control matters.
-9. **QA conversation** — `scripts/persona_qa.py aurora` — runs a 10-turn test conversation against the configured LLM; outputs a transcript for you to review.
-10. **Legal audit** — you fill `metadata.yaml`, confirm every asset's provenance.
+2. **Portrait generation** - runs SDXL + appropriate LoRA; produces 8 candidates; you pick one.
+3. **State image generation** - inpaints expression variants on the chosen portrait.
+4. **Landmark preprocessing** - `scripts/preprocess_avatar.py persona_id` - extracts 68-point landmarks, caches to `avatar/landmarks.json`.
+5. **Idle clip generation** - LivePortrait drives 4 transition clips, saved to `avatar/clips/`.
+6. **Voice reference sourcing** - you pick a CC0 voice sample from `assets/voice_candidates/` and copy to `voice/reference.wav`.
+7. **Voice sample synthesis** - `scripts/synthesize_sample.py persona_id "Hi, I'm Aurora. Nice to meet you."` - Chatterbox outputs the wizard preview to `voice/sample.wav`.
+8. **Personality prompt writing** - you fill `persona.yaml -> personality.system_prompt`. No LLM autowrite - quality control matters.
+9. **QA conversation** - `scripts/persona_qa.py aurora` - runs a 10-turn test conversation against the configured LLM; outputs a transcript for you to review.
+10. **Legal audit** - you fill `metadata.yaml`, confirm every asset's provenance.
 
 The full pipeline takes 2–4 hours per persona with your input at steps 2, 6, 8, and 9.
 
@@ -237,7 +237,7 @@ These are the baseline set to ship. Each has a locked `id` (never change), displ
 | `atlas`    | Atlas    | technical_engineer     | Deeply technical. Skips to the actual problem. |
 | `wren`     | Wren     | curious_inquisitive    | Asks the question you didn't. |
 
-12 is a cap for v1.0. If a persona doesn't pass QA (visual quality, voice consistency, personality coherence over 10 turns), it gets cut — 10 excellent personas beat 12 mediocre ones.
+12 is a cap for v1.0. If a persona doesn't pass QA (visual quality, voice consistency, personality coherence over 10 turns), it gets cut - 10 excellent personas beat 12 mediocre ones.
 
 **Persona ≠ avatar.** Users pick avatar and personality independently in the wizard. Any of the 12 avatars can be paired with any of the 12 archetypes. The `id` above is the *canonical pairing* we generate and test, but the user's combination may differ.
 

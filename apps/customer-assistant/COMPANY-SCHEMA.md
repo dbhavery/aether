@@ -10,7 +10,7 @@ tier/temperature to run.
 The profile is **compiled at runtime** into a support-assistant system prompt
 (see `src/customer_assistant/assistant.py::build_system_prompt`). The canonical,
 validated implementation of this schema is `src/customer_assistant/config.py`
-(Pydantic models, `extra="forbid"` — unknown keys fail loudly).
+(Pydantic models, `extra="forbid"` - unknown keys fail loudly).
 
 ---
 
@@ -34,17 +34,17 @@ Directories whose name starts with `_` are skipped (reserved for templates).
 ## Top-level fields
 
 ```yaml
-schema_version: 1          # int — bump when this format changes
+schema_version: 1          # int - bump when this format changes
 
-company:                   # REQUIRED — identity
-  id: "northwind-outdoors" # REQUIRED — lowercase slug (a-z, 0-9, hyphens). Stable; never change after launch.
-  display_name: "Northwind Outdoors"   # REQUIRED — shown in the widget header
+company:                   # REQUIRED - identity
+  id: "northwind-outdoors" # REQUIRED - lowercase slug (a-z, 0-9, hyphens). Stable; never change after launch.
+  display_name: "Northwind Outdoors"   # REQUIRED - shown in the widget header
   tagline: "Gear for people who'd rather be outside"   # optional
   website: "https://northwind-outdoors.example.com"    # optional
   support_email: "support@northwind-outdoors.example.com"  # optional
 ```
 
-### `branding` — visual + voice identity
+### `branding` - visual + voice identity
 
 ```yaml
 branding:
@@ -59,7 +59,7 @@ branding:
   greeting: "Hey there! I'm the Northwind assistant…"  # first message in the widget
 ```
 
-### `support` — scope guardrails
+### `support` - scope guardrails
 
 ```yaml
 support:
@@ -72,7 +72,7 @@ support:
   languages: ["en"]        # advisory; not enforced in the demo
 ```
 
-### `escalation` — human handoff
+### `escalation` - human handoff
 
 ```yaml
 escalation:
@@ -93,7 +93,7 @@ When a user message contains a trigger, the `/chat` response sets
 system prompt instructs the model to deliver the escalation `message` + contact
 details.
 
-### `tools` — allowed tool calls (SCAFFOLD)
+### `tools` - allowed tool calls (SCAFFOLD)
 
 ```yaml
 tools:
@@ -104,10 +104,10 @@ tools:
 
 In this demo, **enabled tools are described to the model but never executed**.
 Production tool execution would route through Aether's L5 policy layer
-(`packages/l5-policy`), the single writer for side effects — see the repo
+(`packages/l5-policy`), the single writer for side effects - see the repo
 `CLAUDE.md` §1.5.
 
-### `knowledge_base` — RAG configuration
+### `knowledge_base` - RAG configuration
 
 ```yaml
 knowledge_base:
@@ -117,15 +117,15 @@ knowledge_base:
   chunk_overlap: 120       # chars of overlap (< chunk_size)
 ```
 
-### `llm` — model dispatch
+### `llm` - model dispatch
 
 ```yaml
 llm:
-  tier: "fast"             # fast | main | heavy — maps to aether llm.tier_map
+  tier: "fast"             # fast | main | heavy - maps to aether llm.tier_map
   model: null              # explicit Ollama model; overrides tier when set
   temperature: 0.3         # 0.0–2.0
   max_tokens: 512          # 16–8192
-  fine_tuned_model: null   # per-company tuned model — see FINETUNING.md
+  fine_tuned_model: null   # per-company tuned model - see FINETUNING.md
 ```
 
 **Model resolution priority:** `fine_tuned_model` → `model` → tier-mapped model.
@@ -142,7 +142,7 @@ The default `tier_map` mirrors `configs/default_config.yaml`:
 ## Onboarding a new company
 
 1. `cp -r companies/northwind-outdoors companies/<your-company>` (or start fresh).
-2. Edit `company.yaml` — set `company.id` to your slug and fill in branding,
+2. Edit `company.yaml` - set `company.id` to your slug and fill in branding,
    scope, escalation, and LLM tier.
 3. Replace the markdown files under `knowledge/` with the company's real FAQs
    and policies.

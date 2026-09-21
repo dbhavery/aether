@@ -27,7 +27,7 @@ Returns Department
 1450 Cascade Way
 Bend, OR 97701
 
-Please don't send returns without a return label from **Account → Orders** —
+Please don't send returns without a return label from **Account → Orders**  - 
 unlabeled packages can't be matched to your order and may delay your refund.
 
 ## Speaking to a human

@@ -28,7 +28,7 @@ section (e.g. "ARCHITECTURE.md §Layers" or "docs/adr/ADR-0005-retrieval-wiring.
 ## Suggested correction
 
 <!-- A sentence, a rewritten paragraph, or a link. If you're comfortable
-opening a PR yourself, say so — small doc PRs are the friendliest first
+opening a PR yourself, say so - small doc PRs are the friendliest first
 contribution. -->
 
 ## Environment (only if relevant)

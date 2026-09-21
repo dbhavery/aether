@@ -45,7 +45,7 @@ Back navigation is allowed at every step except 1 and 8. Forward navigation requ
 
 ## 2. Screen specs
 
-### Screen 1 — Welcome
+### Screen 1 - Welcome
 
 **Content:**
 - Hero line: "Meet your AI companion."
@@ -57,20 +57,20 @@ Back navigation is allowed at every step except 1 and 8. Forward navigation requ
 **State written:** `wizard.started_at: <ISO timestamp>`.
 **Analytics event (opt-in only, not until step 7):** `onboarding_step` with `step=1`.
 
-### Screen 2 — Avatar
+### Screen 2 - Avatar
 
 **Content:**
 - 4x3 grid of 12 persona portrait cards.
 - Each card: portrait image, persona display name, 1-line tagline.
 - Hovering a card plays the `avatar/clips/idle_to_listening.mp4` idle clip muted, looped.
 - Selected card gets a highlighted border + check badge.
-- "Preview voice" mini-button on each card — plays `voice/sample.wav` (2-4s).
+- "Preview voice" mini-button on each card - plays `voice/sample.wav` (2-4s).
 
 **Validation:** exactly one avatar selected.
 **State written:** `wizard.selected_avatar_id: "<persona_id>"`.
 **Note:** this picks the AVATAR (visual). Step 3 picks PERSONALITY (behavior). They're independent.
 
-### Screen 3 — Personality
+### Screen 3 - Personality
 
 **Content:**
 - 3x4 grid of 12 archetype cards.
@@ -80,40 +80,40 @@ Back navigation is allowed at every step except 1 and 8. Forward navigation requ
 
 **Validation:** exactly one archetype selected.
 **State written:** `wizard.selected_archetype: "<archetype_id>"`.
-**Computation:** the wizard now has `(avatar_id, archetype_id)` — this pair defines the active persona. If it matches one of the canonical 12 pairings, use that `persona.yaml` directly. If not, synthesize a virtual persona: avatar assets from the chosen avatar, system prompt from the archetype template, voice from the avatar's voice dir.
+**Computation:** the wizard now has `(avatar_id, archetype_id)` - this pair defines the active persona. If it matches one of the canonical 12 pairings, use that `persona.yaml` directly. If not, synthesize a virtual persona: avatar assets from the chosen avatar, system prompt from the archetype template, voice from the avatar's voice dir.
 
-### Screen 4 — Name
+### Screen 4 - Name
 
 **Content:**
 - Single centered input field, pre-filled with the avatar's canonical `display_name`.
 - Below: "Most people keep the default. You can change this anytime."
 - Character counter (max 40).
-- Below input: live preview — "Your assistant: **Aurora**" (updates as they type).
+- Below input: live preview - "Your assistant: **Aurora**" (updates as they type).
 
-**Validation:** non-empty, <= 40 chars, no HTML/markdown, no emoji (v1.0 constraint — revisit later).
+**Validation:** non-empty, <= 40 chars, no HTML/markdown, no emoji (v1.0 constraint - revisit later).
 **State written:** `wizard.display_name: "<string>"`.
 
-### Screen 5 — LLM setup
+### Screen 5 - LLM setup
 
 **Content:** 3 provider cards, radio-style selection.
 
-**Card A — "Free & Local" (recommended for first-timers)**
+**Card A - "Free & Local" (recommended for first-timers)**
 - Requirement: Ollama must be installed.
 - Live detection: wizard makes a test call to `http://localhost:11434/api/tags`.
   - If Ollama not detected: show "Ollama is not running on this machine. [Install Ollama] [I have it elsewhere]."
   - If detected: show list of installed models, recommend `qwen2.5:7b`, offer to `ollama pull` if missing (bridged through backend to show progress).
 - Sub-setting: model name (default `qwen2.5:7b`).
 
-**Card B — "Bring your own key" (best quality)**
+**Card B - "Bring your own key" (best quality)**
 - Provider dropdown: Anthropic, OpenAI, Google, Groq, OpenRouter.
 - Key input (masked, with reveal toggle, with paste-from-clipboard detection).
 - Tier auto-mapping visible below input: "Fast: claude-haiku-4-5. Main: claude-sonnet-4-6. Heavy: claude-opus-4-7." (Values differ per provider.)
-- "Test key" button — makes one real call to the provider, returns checkmark or error message.
+- "Test key" button - makes one real call to the provider, returns checkmark or error message.
 - "Where do I get a key?" link per provider opens the provider's key page.
 
-**Card C — "Guest mode" (try before you commit)**
+**Card C - "Guest mode" (try before you commit)**
 - Uses Groq free tier with Aether's public rate-limited key.
-- Shown as "Limited — 10 messages/hour. Good for trying Aether out."
+- Shown as "Limited - 10 messages/hour. Good for trying Aether out."
 - No user action required beyond selecting.
 
 **Validation:**
@@ -128,22 +128,22 @@ wizard.llm_tier_map: { fast: "...", main: "...", heavy: "..." }
 # Keys go directly to OS keyring, not to wizard state or config.yaml.
 ```
 
-### Screen 6 — Voice setup
+### Screen 6 - Voice setup
 
 **Content:** 3 provider cards with a "skip voice" link.
 
-**Card A — "Local voice (recommended)"**
+**Card A - "Local voice (recommended)"**
 - Auto-detects GPU and VRAM via backend.
 - Shows detected hardware: "NVIDIA RTX 3090 Ti, 24 GB VRAM. Local voice will run smoothly."
 - If no GPU or < 6 GB VRAM: shows "Your hardware may be slow for local voice. Consider cloud voice below, or skip voice entirely."
 - Downloads required: faster-whisper base model (~200 MB) + Chatterbox Turbo (~800 MB).
 
-**Card B — "ElevenLabs (cloud, costs apply)"**
+**Card B - "ElevenLabs (cloud, costs apply)"**
 - API key input.
 - "Test key" button.
 - Note: "ElevenLabs charges per character. You'll see usage in Sandbox → Voice."
 
-**Card C — "Text only for now"**
+**Card C - "Text only for now"**
 - Skip voice setup. Can be enabled later in Sandbox.
 
 **Validation:**
@@ -157,7 +157,7 @@ wizard.voice_mode: "local" | "elevenlabs" | "off"
 wizard.voice_settings: { ... per-provider ... }
 ```
 
-### Screen 7 — Terms & Privacy
+### Screen 7 - Terms & Privacy
 
 **Content:**
 - Short plain-English summary (3-5 bullets):
@@ -178,7 +178,7 @@ wizard.accepted_terms_at: <ISO timestamp>
 wizard.telemetry: { crash_reports: bool, usage_counters: bool }
 ```
 
-### Screen 8 — Hand-off
+### Screen 8 - Hand-off
 
 **Content:** Short progress indicator while the backend:
 1. Writes `config.yaml` atomically.
@@ -199,7 +199,7 @@ Then navigates to Chat mode with the welcome message already shown, avatar in id
 | API key validation fails | Stay on the current step, show error inline, let user retry. Never advance. |
 | Ollama not available on Screen 5 Card A | Inline guidance + installer link. User can switch to a different card. |
 | Model download fails on Screen 6 | Retry button. If persistently failing, user can switch to Card C (text-only) and re-enable later. |
-| Config write fails on Screen 8 | Show a retry button with the error. User's data is still in wizard state — they're not locked out. |
+| Config write fails on Screen 8 | Show a retry button with the error. User's data is still in wizard state - they're not locked out. |
 | Wizard cancelled/closed on any step | Persist partial state to `%APPDATA%/aether/wizard_state.yaml`. Next launch resumes at the latest completed step. |
 
 ---
@@ -212,7 +212,7 @@ Wizard state is persisted to disk after every validated step, not just at the en
 2. Deletes `wizard_state.yaml`.
 3. Sets `aether.onboarding_complete: true` in `config.yaml`.
 
-If a user abandons the wizard and comes back weeks later, they pick up where they left off — no re-entering keys, no re-choosing personas.
+If a user abandons the wizard and comes back weeks later, they pick up where they left off - no re-entering keys, no re-choosing personas.
 
 ---
 
@@ -248,6 +248,6 @@ Deferred:
 ## 7. Implementation notes for P3
 
 - Wizard state is a single Zustand store on the frontend, persisted via `zustand/middleware/persist` to a local IndexedDB, AND mirrored to backend on each step via WebSocket message `{type: "wizard_state_update", state: {...}}`. Backend writes to `wizard_state.yaml`. Two sources of truth is deliberate: frontend keeps snappy, backend keeps durable.
-- All validating calls (API key test, Ollama probe, model download) go through backend, not directly from frontend — keeps CORS + key exposure clean.
+- All validating calls (API key test, Ollama probe, model download) go through backend, not directly from frontend - keeps CORS + key exposure clean.
 - No page reloads during the wizard. All transitions are React state changes.
 - Each step is its own route (`/onboarding/1-welcome`, `/onboarding/2-avatar`, etc.) so back button works and deep links work for testing.

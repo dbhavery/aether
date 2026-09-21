@@ -1,6 +1,6 @@
 # tools/lint-layer-boundaries
 
-**Status:** Wave 1 scaffold — config skeleton only. No enforcement yet.
+**Status:** Wave 1 scaffold - config skeleton only. No enforcement yet.
 
 Enforces the core boundary rule: sibling `packages/l*-*` crates/packages never import each other. Coordination must go through `packages/event-bus` or through `packages/l5-policy` / `packages/l6-persona` typed outputs.
 
@@ -16,8 +16,8 @@ Custom ESLint rule `@aether/no-cross-layer-import` that rejects imports matching
 
 ## References
 
-- `ARCHITECTURE.md` — the layer-boundary rule this lint enforces.
-- `CLAUDE.md` §1.4 — the no-cross-layer-import directive.
+- `ARCHITECTURE.md` - the layer-boundary rule this lint enforces.
+- `CLAUDE.md` §1.4 - the no-cross-layer-import directive.
 
 ## Wave 2 TODO
 

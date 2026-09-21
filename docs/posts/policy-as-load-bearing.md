@@ -4,7 +4,7 @@
 
 ---
 
-The first serious bug I ever shipped to production was a one-line config change that revoked a feature flag nobody knew was still wired to billing. I didn't cause it. A teammate did. But it went through code review — mine — and we all agreed the blast radius was fine, because the system had "approvals" in three places and it would be caught upstream.
+The first serious bug I ever shipped to production was a one-line config change that revoked a feature flag nobody knew was still wired to billing. I didn't cause it. A teammate did. But it went through code review - mine - and we all agreed the blast radius was fine, because the system had "approvals" in three places and it would be caught upstream.
 
 It was not caught upstream. The three places were all reachable around. One of them was commented out. One of them existed only in tests. The third was real, but the code path that hit production had acquired a fast-mode flag six months earlier and was now skipping it on purpose.
 
@@ -50,7 +50,7 @@ pub trait PolicyEngine: Send + Sync {
 }
 ```
 
-Every other engine — turn orchestration, memory, router, persona, trust UX — holds an `Arc<dyn PolicyEngine>` and must present a `Decision::Allow` before any side effect runs. The layer-boundary linter runs in CI and refuses any sibling-to-sibling import that would let one engine reach around the gate. Rust doesn't enforce architecture, but CI can.
+Every other engine - turn orchestration, memory, router, persona, trust UX - holds an `Arc<dyn PolicyEngine>` and must present a `Decision::Allow` before any side effect runs. The layer-boundary linter runs in CI and refuses any sibling-to-sibling import that would let one engine reach around the gate. Rust doesn't enforce architecture, but CI can.
 
 A decision is a typed value, not a boolean:
 
@@ -64,7 +64,7 @@ pub enum Decision {
 }
 ```
 
-Five states cover the space. `Ask` means a human must approve before the call proceeds. `DraftOnly` means produce the draft but do not commit side effects. `NeedsUpgrade` means the capability exists at a higher preset the user hasn't enabled — useful for Aether's tiered approval model, where "read files" and "delete files" live in different postures.
+Five states cover the space. `Ask` means a human must approve before the call proceeds. `DraftOnly` means produce the draft but do not commit side effects. `NeedsUpgrade` means the capability exists at a higher preset the user hasn't enabled - useful for Aether's tiered approval model, where "read files" and "delete files" live in different postures.
 
 Every decision carries an `audit_id`. The row is written synchronously, *before* the decision returns. If the audit write fails, the decision becomes `Deny { reason: AuditWriteFailed }`. A broken audit log cannot silently authorize anything. That's the deny-by-default posture, and it's the part most systems don't commit to.
 
@@ -77,25 +77,25 @@ Inside `evaluate`, an action request walks five stages:
 1. **Pre-gates.** Degraded modes deny everything. Hardcoded blocks reject at the door.
 2. **Feature.** Is this capability in the active preset? If not, `NeedsUpgrade`.
 3. **Action/resource.** Does an existing grant cover `(capability, resource, persona)`? If yes, reuse.
-4. **Mode.** The capability's approval mode — Auto, Ask, Deny, DraftOnly — decides what happens when no grant covers.
+4. **Mode.** The capability's approval mode - Auto, Ask, Deny, DraftOnly - decides what happens when no grant covers.
 5. **Duration.** Grants get Once, TaskScoped, Session, or Persistent-with-TTL.
 
 Grants are what keep the system usable. Once you say "yes, read files in `/tmp`", Aether won't ask again on the same session. But grants aren't forever. Eight things trigger a re-evaluation:
 
 ```
-CapabilityDiffers     — the request wants a different capability
-ResourceOutsidePattern— the request targets a different scope
-PersonaSwapped        — the active persona changed
-RemoteEscalationUncovered — a local grant cannot cover a remote-tier call
-ProvenanceElevated    — tainted context entered the prompt
-CostThresholdHit      — BYOK cost cap fired
-GrantOrEmergencyRevoked — a grant was revoked mid-turn
-TtlExpired            — grant aged out
+CapabilityDiffers     - the request wants a different capability
+ResourceOutsidePattern -  the request targets a different scope
+PersonaSwapped        - the active persona changed
+RemoteEscalationUncovered - a local grant cannot cover a remote-tier call
+ProvenanceElevated    - tainted context entered the prompt
+CostThresholdHit      - BYOK cost cap fired
+GrantOrEmergencyRevoked - a grant was revoked mid-turn
+TtlExpired            - grant aged out
 ```
 
 Those triggers are not a loose guideline. They're enumerated. Each produces a re-evaluation. Each has a test.
 
-The tenth time you ask Aether to read something, it will feel immediate — because the grant covers it. The first time it wants to escalate to a remote model, you will be asked — because the grant didn't cover that.
+The tenth time you ask Aether to read something, it will feel immediate - because the grant covers it. The first time it wants to escalate to a remote model, you will be asked - because the grant didn't cover that.
 
 ---
 
@@ -105,8 +105,8 @@ The tenth time you ask Aether to read something, it will feel immediate — beca
 
 The interesting attacker opens the SQLite file with another tool. So every row also stores `prev_hash`, `event_hash`, and `record_hmac`:
 
-- `event_hash = SHA256(prev_hash || canonical_payload)` — links this row to the previous one.
-- `record_hmac = HMAC-SHA256(key, event_hash)` — signs the link.
+- `event_hash = SHA256(prev_hash || canonical_payload)` - links this row to the previous one.
+- `record_hmac = HMAC-SHA256(key, event_hash)` - signs the link.
 
 A singleton row tracks the current chain tip. `verify_chain` walks the log, recomputes every hash and HMAC, and compares the computed tip to the stored one. Edit a payload, and the hash for that row no longer matches. Delete a row out-of-band, and the next row's `prev_hash` no longer lines up. Roll the chain tip back, and the tip comparison fails.
 
@@ -123,7 +123,7 @@ Architecture has a price. This one's is:
 - **Every action is slower by one synchronous policy evaluate and one synchronous audit write.** Sub-millisecond on in-memory backends. Storage-bound when sealed audit is on. Not free.
 - **Grants accumulate.** A long session with a "Bold" persona generates many session-scoped grants. They clear on revoke, TTL, or persona swap, but the steady-state ledger is larger than a "just call the tool" design.
 - **A broken audit log takes the system down.** Deny-by-default is correct, but it is also unforgiving. Operations needs to treat `verify_chain` failure as a paging event, not a warning.
-- **Every new capability is a schema change.** Capabilities are typed enums, not strings. Adding one means editing an enum, adding preset defaults, writing tests, and — if it's side-effectful — a hardcoded block entry. Deliberate friction.
+- **Every new capability is a schema change.** Capabilities are typed enums, not strings. Adding one means editing an enum, adding preset defaults, writing tests, and - if it's side-effectful - a hardcoded block entry. Deliberate friction.
 
 None of those are bugs. They're the shape of a system that takes authorization seriously.
 

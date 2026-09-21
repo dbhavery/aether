@@ -1,4 +1,4 @@
-# ADR-0012: Persona delivery — bundled previews + download-on-demand full packs
+# ADR-0012: Persona delivery - bundled previews + download-on-demand full packs
 
 - **Status:** **Accepted** (2026-04-28 night). Authority: cast creator under Don's 2026-04-28 directive ("you are the character creator. You choose look, voice, persona, etc. not me"). Don retains override.
 - **Date:** 2026-04-28
@@ -6,15 +6,15 @@
 - **Supersedes:** nothing (this is the first persona-delivery decision).
 - **Superseded by:** nothing yet.
 - **Related:**
-  - `personas/CHARACTERS.md` — the cast roster + lock-before-scale rule.
-  - `docs/adr/ADR-0001-memory-domain-reconciliation.md` — establishes that memory is user-keyed, not persona-keyed (load-bearing for §4 below).
-  - `docs/adr/ADR-0006-hardware-tier-model.md` — sets the hardware envelope inside which per-pack footprint matters.
+  - `personas/CHARACTERS.md` - the cast roster + lock-before-scale rule.
+  - `docs/adr/ADR-0001-memory-domain-reconciliation.md` - establishes that memory is user-keyed, not persona-keyed (load-bearing for §4 below).
+  - `docs/adr/ADR-0006-hardware-tier-model.md` - sets the hardware envelope inside which per-pack footprint matters.
 
 ## Context
 
 As of 2026-04-28 night, the cast is shipped: 9 personas (Aurora,
 Marcus, Sara, James, Nadia, Priya, Ray, Hannah, Tomás), each with a
-full asset pack — anchor + portrait + profile_left + profile_right
+full asset pack - anchor + portrait + profile_left + profile_right
 PNGs, voice reference + sample WAVs, voice.yaml + SOURCE.md +
 metadata.yaml + persona.yaml. Total per-pack disk footprint ~15 MB.
 
@@ -46,12 +46,12 @@ This ADR locks the model that prevents all three.
 **Bundled previews (Tier 1) + download-on-demand full packs (Tier 2)
 + atomic uninstall-then-install on switch.**
 
-### Tier 1 — Preview, bundled in the desktop installer
+### Tier 1 - Preview, bundled in the desktop installer
 
 For each of the 9 personas, the installer bakes in:
-- `preview.webp` — 256×256 WebP thumbnail derived from `avatar/portrait.png`.
-- `preview_voice.opus` — 3-second Opus 24 kbps mono derived from `voice/sample.wav`.
-- `preview.yaml` — display_name, tagline, archetype, archetype_notes excerpt.
+- `preview.webp` - 256×256 WebP thumbnail derived from `avatar/portrait.png`.
+- `preview_voice.opus` - 3-second Opus 24 kbps mono derived from `voice/sample.wav`.
+- `preview.yaml` - display_name, tagline, archetype, archetype_notes excerpt.
 
 Total budget: ≤ 130 KB per persona × 9 = ~1.2 MB bundled. Acceptable.
 
@@ -62,7 +62,7 @@ are derived at release-build time from the canonical
 `tools/build-persona-previews/`. Persona authors do not hand-make
 previews.
 
-### Tier 2 — Full pack, downloaded on selection
+### Tier 2 - Full pack, downloaded on selection
 
 The full ~15 MB pack (anchor set + voice pack + persona.yaml +
 metadata.yaml + voice.yaml + SOURCE.md) is downloaded from a
@@ -72,7 +72,7 @@ Only the chosen persona's full pack lives on disk in
 `%APPDATA%/dev.aether.desktop/personas/active/<slug>/` at any given
 time.
 
-### Switch flow — atomic uninstall-then-install
+### Switch flow - atomic uninstall-then-install
 
 Settings → Companion → Change character runs:
 1. Audit: `persona.switch start (current → next)`
@@ -83,7 +83,7 @@ Settings → Companion → Change character runs:
 5. Audit: `persona.switch complete`
 6. Hot-reload L6 persona engine
 7. Failure mid-switch leaves the current persona installed and
-   functional — never delete-then-download.
+   functional - never delete-then-download.
 
 ### User memory is persona-independent
 
@@ -213,7 +213,7 @@ the work, not proof the work landed.
 
 ## Open items (deferred to follow-on ADRs)
 
-- **OQ-1:** Update channel semantics — auto-update vs notify-only
+- **OQ-1:** Update channel semantics - auto-update vs notify-only
   when `persona-<slug>-1.1.0` ships. Default plan: notify-only.
   Confirms with the desktop-app update posture once that lands.
 - **OQ-2:** Telemetry on which persona is picked. Default plan: no
@@ -226,9 +226,9 @@ the work, not proof the work landed.
 
 ## References
 
-- `personas/CHARACTERS.md` — cast roster + lock-before-scale rules
-- `docs/adr/ADR-0001-memory-domain-reconciliation.md` — domain
+- `personas/CHARACTERS.md` - cast roster + lock-before-scale rules
+- `docs/adr/ADR-0001-memory-domain-reconciliation.md` - domain
   separation that lets §4 hold
-- `docs/adr/ADR-0006-hardware-tier-model.md` — hardware envelope
-- 2026-04-28 night session commits c98d5f7 → 9aea4f2 — the cast
+- `docs/adr/ADR-0006-hardware-tier-model.md` - hardware envelope
+- 2026-04-28 night session commits c98d5f7 → 9aea4f2 - the cast
   shipping that this ADR follows

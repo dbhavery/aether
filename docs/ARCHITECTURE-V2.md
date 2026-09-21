@@ -40,15 +40,15 @@
                          Cloud (optional)
 +-----------------------------------------------------------------+
 |  Anthropic  OpenAI  Google  Groq  OpenRouter  ElevenLabs        |
-|  (only when user has configured keys — default is local-only)   |
+|  (only when user has configured keys - default is local-only)   |
 +-----------------------------------------------------------------+
 ```
 
 Two OS processes on the user's machine:
-1. **Backend** — Python, headless, owns all models, database, LLM calls, audio IO, avatar rendering.
-2. **Desktop shell** — pywebview window hosting a WebView2 instance that loads the Next.js static export. All UI runs in the web view; backend talks to it over localhost WebSocket.
+1. **Backend** - Python, headless, owns all models, database, LLM calls, audio IO, avatar rendering.
+2. **Desktop shell** - pywebview window hosting a WebView2 instance that loads the Next.js static export. All UI runs in the web view; backend talks to it over localhost WebSocket.
 
-Rationale: the same Next.js bundle can be deployed to the portfolio website (the live widget), so **one UI codebase serves two surfaces** — desktop and web.
+Rationale: the same Next.js bundle can be deployed to the portfolio website (the live widget), so **one UI codebase serves two surfaces** - desktop and web.
 
 The legacy PySide6 app under `src/desktop_legacy/` (renamed from `src/desktop/` in P1) still boots via `python -m src.desktop_legacy.app` but is not the v1.0 product UI. It stays for historical/showcase purposes only.
 
@@ -130,20 +130,20 @@ aether/
 | 8767 | Health endpoint | 127.0.0.1 | No |
 | 8770 | Avatar MJPEG stream | 127.0.0.1 | No |
 
-All loopback-only. No LAN exposure in v1.0. The Tailscale pattern from the upstream codebase is **deferred** — if users want it later, they run Tailscale themselves and we add an explicit "allow LAN" config flag in a future version.
+All loopback-only. No LAN exposure in v1.0. The Tailscale pattern from the upstream codebase is **deferred** - if users want it later, they run Tailscale themselves and we add an explicit "allow LAN" config flag in a future version.
 
 ---
 
 ## 4. Module responsibilities and interface contracts
 
 ### 4.1 Core (`src/core/`)
-- WebSocket server on :8765, EventBus, health, auth (no-op in v1.0 — local only), shutdown.
+- WebSocket server on :8765, EventBus, health, auth (no-op in v1.0 - local only), shutdown.
 - Startup orchestration: boots modules in order, waits for MODULE_READY events.
 - **Interface:** `event_bus.subscribe(type, handler)`, `event_bus.publish(event)`.
 
 ### 4.2 Shared (`src/shared/`)
 - Config loader reads `aether_config.yaml` + env overrides.
-- `paths.py` — all file paths derived from `AETHER_DATA_DIR` (default `%APPDATA%/aether/`). **No hardcoded paths anywhere else in the codebase.**
+- `paths.py` - all file paths derived from `AETHER_DATA_DIR` (default `%APPDATA%/aether/`). **No hardcoded paths anywhere else in the codebase.**
 - Types: `EventType` enum, `AetherEvent` dataclass.
 - Logging: structured loguru.
 
@@ -167,10 +167,10 @@ All loopback-only. No LAN exposure in v1.0. The Tailscale pattern from the upstr
 - LLM selection: unified provider abstraction (see LLM-PROVIDERS.md).
 - Prompt construction: base prompt + persona prompt (from active persona pack) + recent memory context.
 - Streaming: emits RESPONSE_TEXT_CHUNK events; frontend assembles.
-- **Acknowledgment phrases** pool (from spec): when a tier-switch or long-running call is detected, brain emits a short filler via the fast local tier while the slow call streams — exact pool defined in persona's `voice.yaml`.
+- **Acknowledgment phrases** pool (from spec): when a tier-switch or long-running call is detected, brain emits a short filler via the fast local tier while the slow call streams - exact pool defined in persona's `voice.yaml`.
 
 ### 4.6 Memory (`src/memory/`)
-- ChromaDB at `%APPDATA%/aether/chroma/<persona_id>/` — one collection per persona for isolation.
+- ChromaDB at `%APPDATA%/aether/chroma/<persona_id>/` - one collection per persona for isolation.
 - Hybrid search: BM25 + dense vectors (nomic-embed-text via Ollama, or configurable).
 - Conversation history in SQLite at `%APPDATA%/aether/conversations.db`.
 - Exposes: `search(query, persona_id)`, `store_turn(role, content, persona_id)`, `store_fact(key, value, importance, persona_id)`, `clear_persona(persona_id)`.
@@ -192,14 +192,14 @@ All loopback-only. No LAN exposure in v1.0. The Tailscale pattern from the upstr
 Events unchanged from the upstream codebase: USER_MESSAGE, TRANSCRIPT_READY, RESPONSE_TEXT_READY, RESPONSE_TEXT_CHUNK, RESPONSE_AUDIO_CHUNK, RESPONSE_START, RESPONSE_END, AVATAR_STATE_CHANGED, MODULE_READY.
 
 Events added for v1.0:
-- `USER_SPEECH_START` / `USER_SPEECH_END` — push-to-talk events (replaces wake_word_detected + Silero auto-detect).
-- `PERSONA_CHANGED` — fires when user switches active persona in sandbox mode; data: `{persona_id: str, previous_id: str}`.
-- `PROVIDER_CHANGED` — user changed LLM/voice provider mid-session.
-- `ONBOARDING_STEP` — wizard progress events (for analytics if telemetry is on).
+- `USER_SPEECH_START` / `USER_SPEECH_END` - push-to-talk events (replaces wake_word_detected + Silero auto-detect).
+- `PERSONA_CHANGED` - fires when user switches active persona in sandbox mode; data: `{persona_id: str, previous_id: str}`.
+- `PROVIDER_CHANGED` - user changed LLM/voice provider mid-session.
+- `ONBOARDING_STEP` - wizard progress events (for analytics if telemetry is on).
 
 Events removed (from upstream):
-- `WAKE_WORD_DETECTED` — not emitted in v1.0.
-- `SPEAKER_VERIFIED` — not emitted (speaker verify disabled by default).
+- `WAKE_WORD_DETECTED` - not emitted in v1.0.
+- `SPEAKER_VERIFIED` - not emitted (speaker verify disabled by default).
 
 ---
 
@@ -292,4 +292,4 @@ It will **not** be packaged in the v1.0 installer. It is a development artifact,
 
 v1.0 ships Windows-only. macOS and Linux are **code-ready** (Python is cross-platform, pywebview supports all three) but not tested or packaged. P7 (post-launch) spin-up on macOS and Linux if there's demand.
 
-Paths in `src/shared/paths.py` use `platformdirs` to get the right per-OS directory. No hardcoded `%APPDATA%` anywhere — it's always `user_data_dir("aether")`.
+Paths in `src/shared/paths.py` use `platformdirs` to get the right per-OS directory. No hardcoded `%APPDATA%` anywhere - it's always `user_data_dir("aether")`.

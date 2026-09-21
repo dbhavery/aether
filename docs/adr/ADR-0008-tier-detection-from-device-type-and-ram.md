@@ -15,11 +15,11 @@ On 2026-04-24, the autonomous validation run executed the inspection on Don's RT
 
 | Backend | `max_buffer_size` reported | `vram_gb_estimate` | Tier impact |
 | --- | --- | --- | --- |
-| Vulkan | `18446744073709551615` (= u64::MAX, sentinel for "unlimited") | `4,294,967,295` (≈ 4 billion GB) | Forge (by accident — sentinel happens to be > 24) |
-| DX12 | `2147483647` (= 2^31-1, signed-int max — DX12 driver default cap) | `1` GB | Spark |
+| Vulkan | `18446744073709551615` (= u64::MAX, sentinel for "unlimited") | `4,294,967,295` (≈ 4 billion GB) | Forge (by accident - sentinel happens to be > 24) |
+| DX12 | `2147483647` (= 2^31-1, signed-int max - DX12 driver default cap) | `1` GB | Spark |
 | GL | `2147483647` | `1` GB | Spark |
 
-The current adapter-priority rule (`device_type` priority + `vram_gb_estimate` as tiebreaker) picks Vulkan because the sentinel makes it score highest. A 24 GB workstation card therefore gets classified Forge — but **only because the sentinel happened to be > 24**. On a system where the priority logic resolves DX12 first (different wgpu version, different driver, headless context), the same hardware would be classified Spark.
+The current adapter-priority rule (`device_type` priority + `vram_gb_estimate` as tiebreaker) picks Vulkan because the sentinel makes it score highest. A 24 GB workstation card therefore gets classified Forge - but **only because the sentinel happened to be > 24**. On a system where the priority logic resolves DX12 first (different wgpu version, different driver, headless context), the same hardware would be classified Spark.
 
 The heuristic is therefore not measuring VRAM. It is measuring "did the driver expose a sentinel." Lesson 1 from the Session A handoff (`HANDOFF_2026-04-24_M2_RUN_3_SESSION_A_COMPLETE.md` §7) anticipated this: `wgpu::Limits::max_buffer_size` is a single-allocation ceiling, not total VRAM. The validation data confirms the lesson is now an active correctness bug, not a future risk.
 
@@ -52,25 +52,25 @@ pub fn recommend_tier(snapshot: &HardwareSnapshot) -> Tier {
 
 **Rationale.** `sysinfo::System::total_memory` returns reliable RAM figures across every platform we care about. Workstation-class systems (the realistic Forge audience) have ≥32 GB RAM. Enthusiast/creator desktops (the Flame audience) have ≥16 GB. Sub-16-GB systems are realistically Spark territory regardless of GPU. The 50% headroom rule (ADR-0006 §Constraint 2) still applies: we recommend the tier whose envelope fits in *half* of detected resources.
 
-We give up one classification: the ADR-0006-test-named "discrete with low VRAM falls back to Spark" case (current `discrete_with_low_vram_falls_back_to_spark`). A 4 GB discrete card with 16 GB RAM would now be classified Flame instead of Spark. This is an acceptable trade — small discrete cards (GTX 1050-class) are increasingly rare, and the user-override surface (ADR-0006 §Decision 4) covers the case where the user wants a more conservative tier on weak discrete hardware.
+We give up one classification: the ADR-0006-test-named "discrete with low VRAM falls back to Spark" case (current `discrete_with_low_vram_falls_back_to_spark`). A 4 GB discrete card with 16 GB RAM would now be classified Flame instead of Spark. This is an acceptable trade - small discrete cards (GTX 1050-class) are increasingly rare, and the user-override surface (ADR-0006 §Decision 4) covers the case where the user wants a more conservative tier on weak discrete hardware.
 
 ### 3. `max_buffer_size` becomes diagnostic-only.
 
 Continue to populate `GpuInfo.vram_gb_estimate` so it shows up in the Settings UI and `tier.json::hardware_snapshot`. Add an inline comment + ADR cross-reference noting it is unreliable cross-backend and not a decision input.
 
-Rename to `vram_gb_diagnostic` in a future ergonomic commit if desired; not required for correctness. Field-rename would be a wire-shape change requiring TS regen — held as a separate, optional follow-up.
+Rename to `vram_gb_diagnostic` in a future ergonomic commit if desired; not required for correctness. Field-rename would be a wire-shape change requiring TS regen - held as a separate, optional follow-up.
 
 ### 4. Multi-adapter selection unchanged.
 
-The "highest-priority adapter wins" rule (`detect_best_gpu` in hardware.rs) remains in force. Discrete > integrated > virtual > cpu > other. The tiebreaker on equal priority becomes a no-op (since `vram_gb_estimate` is no longer a decision input — but kept as a stable ordering for diagnostic purposes).
+The "highest-priority adapter wins" rule (`detect_best_gpu` in hardware.rs) remains in force. Discrete > integrated > virtual > cpu > other. The tiebreaker on equal priority becomes a no-op (since `vram_gb_estimate` is no longer a decision input - but kept as a stable ordering for diagnostic purposes).
 
 ### 5. Unit-test updates.
 
 The existing tests in `tier.rs::tests` need updating:
-- `discrete_with_high_vram_and_high_ram_recommends_forge` — replace assertion to use `total_ram_gb`-based classification.
-- `discrete_with_mid_vram_recommends_flame` — same.
-- `discrete_with_too_little_ram_falls_back_to_spark` — preserved (low RAM still → Spark).
-- `discrete_with_low_vram_falls_back_to_spark` — **delete or invert.** Under the new rule, low-VRAM-discrete + high-RAM is no longer Spark.
+- `discrete_with_high_vram_and_high_ram_recommends_forge` - replace assertion to use `total_ram_gb`-based classification.
+- `discrete_with_mid_vram_recommends_flame` - same.
+- `discrete_with_too_little_ram_falls_back_to_spark` - preserved (low RAM still → Spark).
+- `discrete_with_low_vram_falls_back_to_spark` - **delete or invert.** Under the new rule, low-VRAM-discrete + high-RAM is no longer Spark.
 
 A new test `discrete_with_high_ram_and_unreliable_vram_estimate_picks_forge` should be added, seeding the snapshot with `vram_gb_estimate = u32::MAX` (mimicking the Vulkan sentinel) to prove the rule no longer depends on that field.
 
@@ -109,7 +109,7 @@ User override exists per ADR-0006 §Decision 4. But the *recommendation* is the 
 
 - One existing test inverts; one or two new tests need adding.
 - A small-discrete-GPU edge case loses its Spark classification (needs user override to recover). Real-world frequency: rare in 2026.
-- The Spark/Flame/Forge tier names lose their direct relationship to "VRAM-based" naming intuitions some readers might have. The names were always meant to be hardware-envelope identities, not "small/medium/large VRAM" — but this fix makes the disconnect explicit.
+- The Spark/Flame/Forge tier names lose their direct relationship to "VRAM-based" naming intuitions some readers might have. The names were always meant to be hardware-envelope identities, not "small/medium/large VRAM" - but this fix makes the disconnect explicit.
 
 **Neutral.**
 

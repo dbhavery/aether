@@ -1,11 +1,11 @@
 # Aether Frontend
 
-The product UI — a Next.js 15 + React 19 + TypeScript app that runs in two modes:
+The product UI - a Next.js 15 + React 19 + TypeScript app that runs in two modes:
 
-1. **Desktop mode** — bundled into the Aether Windows installer, loaded by pywebview in a native window. This is how users interact with Aether.
-2. **Portfolio widget mode** — a subset of the UI deployed to `dbhavery.ai` as an inline text-chat demo, backed by the rate-limited Aether Guest LLM.
+1. **Desktop mode** - bundled into the Aether Windows installer, loaded by pywebview in a native window. This is how users interact with Aether.
+2. **Portfolio widget mode** - a subset of the UI deployed to `dbhavery.ai` as an inline text-chat demo, backed by the rate-limited Aether Guest LLM.
 
-**Status:** Directory placeholder. Scaffolded in **P2 — Frontend scaffold** (see [../docs/PRODUCT-PLAN.md](../docs/PRODUCT-PLAN.md)).
+**Status:** Directory placeholder. Scaffolded in **P2 - Frontend scaffold** (see [../docs/PRODUCT-PLAN.md](../docs/PRODUCT-PLAN.md)).
 
 ---
 
@@ -26,7 +26,7 @@ The product UI — a Next.js 15 + React 19 + TypeScript app that runs in two mod
 
 ---
 
-## Directory structure (target — after P2)
+## Directory structure (target - after P2)
 
 ```
 frontend/
@@ -97,7 +97,7 @@ npm run build:widget  # → frontend/out-widget/
 - **Dark theme only in v1.0.** Light mode is a post-launch consideration.
 - **Fresh design, not `don-design-system`** (those tokens are locked-outdated per memory feedback 2026-03-22).
 - **Typography:** follow portfolio (IBM Plex Sans for body, per portfolio deploy 2026-04-13).
-- **Avatar view is the focal element** in Video mode — UI chrome recedes, avatar fills most of the frame.
+- **Avatar view is the focal element** in Video mode - UI chrome recedes, avatar fills most of the frame.
 - **Chat bubbles:** minimal, not skeuomorphic. Streaming responses show a subtle cursor/pulse.
 - **Push-to-talk:** dominant button in Voice/Video mode, subtle indicator in Chat mode.
 
@@ -112,7 +112,7 @@ A reduced build (`out-widget/`) containing:
 - Heavy rate-limiting warning banner.
 - "Try the full app →" CTA linking to download.
 
-This is what embeds in `dbhavery.ai` as an iframe. Design intent: prove the shell, the conversation feel, and the streaming UX — without promising what the product can't deliver in a web iframe (no local voice, no local avatar).
+This is what embeds in `dbhavery.ai` as an iframe. Design intent: prove the shell, the conversation feel, and the streaming UX - without promising what the product can't deliver in a web iframe (no local voice, no local avatar).
 
 ---
 
@@ -120,7 +120,7 @@ This is what embeds in `dbhavery.ai` as an iframe. Design intent: prove the shel
 
 - **Unit:** Vitest for component logic.
 - **Integration:** Playwright hitting the real backend.
-- **Visual regression:** later — not v1.0.
+- **Visual regression:** later - not v1.0.
 
 ---
 

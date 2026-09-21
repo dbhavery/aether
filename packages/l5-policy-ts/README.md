@@ -14,14 +14,14 @@ TypeScript facade over `packages/l5-policy`. Provides stable type shapes and the
 
 ```
 packages/l5-policy-ts/
-├── package.json      — pnpm workspace member, depends on @aether/types
+├── package.json      - pnpm workspace member, depends on @aether/types
 ├── tsconfig.json
 ├── README.md
 └── src/
-    ├── index.ts      — re-exports
-    ├── decision.ts   — Decision + Capability + Approval + DenyReason (+ Decision 3/4 items)
-    ├── support.ts    — ActionRequest + Grant + Audit + posture + BYOK
-    └── commands.ts   — PolicyCommands interface (16 commands)
+    ├── index.ts      - re-exports
+    ├── decision.ts   - Decision + Capability + Approval + DenyReason (+ Decision 3/4 items)
+    ├── support.ts    - ActionRequest + Grant + Audit + posture + BYOK
+    └── commands.ts   - PolicyCommands interface (16 commands)
 ```
 
 ## Locked-decision footprint

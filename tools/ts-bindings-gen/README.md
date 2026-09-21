@@ -12,6 +12,6 @@ Generates `packages/types/` from Rust structs annotated with `ts-rs` (or `specta
 
 ## Wave 2 TODO
 
-1. Choose `ts-rs` vs `specta`. (Default: `ts-rs` — wider community, simpler.)
+1. Choose `ts-rs` vs `specta`. (Default: `ts-rs` - wider community, simpler.)
 2. Scaffold the generator crate as a workspace member.
 3. Add derives to `aether-event-bus` types first, prove the end-to-end path, then propagate.

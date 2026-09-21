@@ -1,6 +1,6 @@
 # packages/
 
-Reusable libraries — shared infra + the 7 must-own layer packages. Wave 1 has scaffolded the shared infra only.
+Reusable libraries - shared infra + the 7 must-own layer packages. Wave 1 has scaffolded the shared infra only.
 
 ## Wave 1 scaffolds (present)
 
@@ -24,4 +24,4 @@ See `ARCHITECTURE.md` for the full layer-to-package mapping.
 
 ## Adding a new package
 
-Follow the protocol in `CLAUDE.md` §3 — docs PR first, coordinator approval, then scaffold PR.
+Follow the protocol in `CLAUDE.md` §3 - docs PR first, coordinator approval, then scaffold PR.

@@ -1,12 +1,12 @@
 # Code of Conduct
 
-The Free Aether — Community Edition project adopts the **Contributor Covenant, version 2.1**, as its code of conduct for all project spaces: the GitHub repository, issue tracker, pull-request discussions, and any future project forums.
+The Free Aether - Community Edition project adopts the **Contributor Covenant, version 2.1**, as its code of conduct for all project spaces: the GitHub repository, issue tracker, pull-request discussions, and any future project forums.
 
 - Canonical text: https://www.contributor-covenant.org/version/2/1/code_of_conduct/
 - Plain-text reference: https://www.contributor-covenant.org/version/2/1/code_of_conduct/code_of_conduct.txt
 - License of the covenant text: Creative Commons Attribution 4.0 International.
 
-By participating in this project — opening issues, commenting, submitting pull requests, or engaging in any project channel — you agree to follow the Contributor Covenant v2.1 as linked above.
+By participating in this project - opening issues, commenting, submitting pull requests, or engaging in any project channel - you agree to follow the Contributor Covenant v2.1 as linked above.
 
 ## Scope
 
@@ -29,7 +29,7 @@ The maintainer will determine the consequences of any action deemed in violation
 
 - https://www.contributor-covenant.org/version/2/1/code_of_conduct/#enforcement-guidelines
 
-Possible outcomes include private warnings, public warnings, temporary bans from project spaces, and permanent bans — calibrated to the severity and pattern of the behavior.
+Possible outcomes include private warnings, public warnings, temporary bans from project spaces, and permanent bans - calibrated to the severity and pattern of the behavior.
 
 ## Attribution
 

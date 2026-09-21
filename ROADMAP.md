@@ -1,9 +1,10 @@
-# Aether — Roadmap
+# Aether - Roadmap
 
-> Early, evolving roadmap for Free Aether — Community Edition. Priorities in
-> this document can change between waves; the `WAVE*_EXECUTION_REPORT_*.md`
-> files at the repo root are always the authoritative record of what actually
-> landed.
+> Early, evolving roadmap for Free Aether - Community Edition. Priorities in
+> this document can change between waves. The per-wave execution reports this
+> file used to cite were removed from the public history in the 2026-07-24
+> squash; where a wave is listed below, the code and tests in the tree are the
+> record of what landed.
 >
 > **Last updated:** 2026-04-19, after Wave 3.5 (storage substrate).
 
@@ -28,40 +29,34 @@ The roadmap reflects how the architecture was staged, not marketing priorities:
 
 ## Completed
 
-- **Wave 0 — Monorepo genesis.** Workspace manifests, planning import, root
-  governance docs. Report: `WAVE0_ASSIMILATION_REPORT_2026-04-19.md`.
-- **Wave 1 — Shared infra + governance.** `packages/event-bus`,
+- **Wave 0 - Monorepo genesis.** Workspace manifests, planning import, root
+  governance docs.
+- **Wave 1 - Shared infra + governance.** `packages/event-bus`,
   `packages/types`, `packages/storage` (no driver), `packages/ui-kit`,
   `packages/telemetry`, `packages/media-engine`; `tools/` lint scaffolds.
-  Report: `WAVE1_EXECUTION_REPORT_2026-04-19.md`.
-- **Wave 2 — L5 scaffold.** `packages/l5-policy` types, traits, IPC surface.
-  `packages/l5-policy-ts` hand-written mirror. Report:
-  `WAVE2_EXECUTION_REPORT_2026-04-19.md`.
-- **Wave 3 — First L5 logic slice.** In-memory ledger + audit store, five-stage
-  evaluator, 10 integration tests, audit-before-Allow invariant. Report:
-  `WAVE3_EXECUTION_REPORT_2026-04-19.md`.
-- **Wave 4 — Engine stub shells.** L1, L2, L3, L4, L6, L7 traits + core enums
+- **Wave 2 - L5 scaffold.** `packages/l5-policy` types, traits, IPC surface.
+  `packages/l5-policy-ts` hand-written mirror.
+- **Wave 3 - First L5 logic slice.** In-memory ledger + audit store, five-stage
+  evaluator, 10 integration tests, audit-before-Allow invariant.
+- **Wave 4 - Engine stub shells.** L1, L2, L3, L4, L6, L7 traits + core enums
   + smoke tests. The seven-layer architecture in `ARCHITECTURE.md` elevated to
-  doctrine. Report: `WAVE4_EXECUTION_REPORT_2026-04-19.md`.
-- **Wave 3.5 — Storage substrate.** `rusqlite` bundled into
+  doctrine.
+- **Wave 3.5 - Storage substrate.** `rusqlite` bundled into
   `packages/storage`, `open_with_migrations()` runs the drafted DDL,
-  integration test proves it. L5 persistence still in-memory — this wave
-  delivers the substrate only. Report:
-  `WAVE3_5_EXECUTION_REPORT_2026-04-19.md`.
+  integration test proves it. L5 persistence still in-memory - this wave
+  delivers the substrate only.
 - **Final pre-publication hardening + push.** CI rewired onto Rust +
   pnpm + governance jobs, licence metadata normalised, `cargo fmt --all`
-  applied, `dev` pushed to `origin/dev`. Reports:
-  `FINAL_PUBLICATION_CHECKPOINT_2026-04-19.md`,
-  `SESSION_HANDOFF_2026-04-19_END_OF_DAY.md`.
+  applied, `dev` pushed to `origin/dev`.
 - **First OSS preview tag.** `v0.1.0-oss-preview.0` created locally on
   the pushed HEAD; release notes at
   `RELEASE_NOTES_OSS_PREVIEW_2026-04-19.md`. Tag push deferred to a
   future session.
-- **Wave 4.1 — Layer-boundary enforcement.** `tools/lint-layer-boundaries/`
+- **Wave 4.1 - Layer-boundary enforcement.** `tools/lint-layer-boundaries/`
   now runs a real linter over `cargo metadata`; the CI `layer-boundaries`
   job rejects any forbidden `packages/*/Cargo.toml` edge. No current
-  violations. Report: `WAVE4_1_EXECUTION_REPORT_2026-04-19.md`.
-- **Wave 4.5 — L5 durable persistence (opt-in).** `SqliteGrantLedger`
+  violations.
+- **Wave 4.5 - L5 durable persistence (opt-in).** `SqliteGrantLedger`
   + `SqliteAuditStore` implementing the existing `GrantLedger` /
   `AuditStore` traits behind a new `sqlite-backend` cargo feature on
   `aether-l5-policy`; `DurableBackends::open(path)` convenience builder;
@@ -70,19 +65,18 @@ The roadmap reflects how the architecture was staged, not marketing priorities:
   `DefaultPolicyEngine` refactored to accept `Arc<dyn GrantLedger>` +
   `Arc<dyn AuditStore>` so either backend plugs in. Default build stays
   in-memory. 5 SQLite integration tests (grant + revoke + audit survival
-  across restart, append-only trigger enforcement, engine smoke). Report:
-  `WAVE4_5_EXECUTION_REPORT_2026-04-19.md`.
+  across restart, append-only trigger enforcement, engine smoke).
 
 ---
 
-## Next — in priority order
+## Next - in priority order
 
 ### 1. First engine first-logic slice
 
-- Candidate A: **L1 turn FSM** — unlocks the first end-to-end demo path.
-- Candidate B: **L4 provider adapter + L5 gate wire-through** — unlocks a real
+- Candidate A: **L1 turn FSM** - unlocks the first end-to-end demo path.
+- Candidate B: **L4 provider adapter + L5 gate wire-through** - unlocks a real
   remote call going through the policy engine.
-- Pick one; produce a `WAVE*_EXECUTION_REPORT_*.md` alongside.
+- Pick one; land it with tests that prove the slice works.
 
 ### 2. Community demo slice
 
@@ -110,7 +104,7 @@ The roadmap reflects how the architecture was staged, not marketing priorities:
 
 ---
 
-## Further out — not yet scheduled
+## Further out - not yet scheduled
 
 - L2 memory kernel first-logic slice (embeddings, provenance).
 - L3 presence / avatar scheduler first-logic slice.
@@ -130,7 +124,7 @@ items land.
 - Chatbot-style UI that bypasses the seven-layer stack.
 - General-purpose LLM wrapper features unrelated to the companion
   architecture.
-- Hosted / SaaS edition of the Community preview — the project is
+- Hosted / SaaS edition of the Community preview - the project is
   local-first on purpose.
 - Feature work inside the legacy v1.0 Python tree beyond what X2 and X4
   explicitly port forward.

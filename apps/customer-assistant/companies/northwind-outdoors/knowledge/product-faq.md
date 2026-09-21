@@ -21,7 +21,7 @@ stops beading.
 
 **How do I wash a waterproof jacket?** Use a technical wash (not regular
 detergent), run a gentle cycle, and tumble dry low to reactivate the DWR. Skip
-fabric softener — it clogs the membrane.
+fabric softener - it clogs the membrane.
 
 **How do I care for a down sleeping bag?** Store it uncompressed in the cotton
 sack it ships with. Wash rarely, with down-specific soap, and dry on low with

@@ -1,6 +1,6 @@
 # Security Policy
 
-Free Aether — Community Edition is an early-preview, local-first architecture project. Security of the policy gate, the audit log, and the local data boundary is load-bearing to the product vision, so security reports are welcome and taken seriously even at this stage.
+Free Aether - Community Edition is an early-preview, local-first architecture project. Security of the policy gate, the audit log, and the local data boundary is load-bearing to the product vision, so security reports are welcome and taken seriously even at this stage.
 
 ## Scope
 
@@ -11,7 +11,7 @@ The following are considered in-scope for security reports:
 - **Capability confusion.** Any case where a call that should require a specific capability is evaluated against the wrong capability, or where grant matching accepts a resource scope outside the grant.
 - **BYOK / credential leakage.** Any path that exposes a user-supplied API key, token, or secret in logs, telemetry, error messages, crash reports, or persisted artifacts.
 - **Persona privilege escalation.** Any path that lets a non-privileged persona run with the rights of a privileged persona (for example, acquiring a privileged capability without the configured precondition).
-- **Cross-layer import violation.** Any supply-chain path that bypasses the seven-layer boundary rules enforced in `tools/lint-layer-boundaries/` in a way that creates a real vulnerability — not merely a lint-rule miss.
+- **Cross-layer import violation.** Any supply-chain path that bypasses the seven-layer boundary rules enforced in `tools/lint-layer-boundaries/` in a way that creates a real vulnerability - not merely a lint-rule miss.
 
 Out of scope for this preview:
 
@@ -55,4 +55,4 @@ The project does not currently run a paid bug bounty. Credit in the advisory is 
 
 ## Safe-harbor
 
-Security research conducted in good faith against this repository — including running the local binary, exercising the policy gate with unusual input, and reporting findings through the channels above — will not result in legal action from the project. This does not grant permission to test against third-party systems or services that Aether integrates with; please respect those services' own policies.
+Security research conducted in good faith against this repository - including running the local binary, exercising the policy gate with unusual input, and reporting findings through the channels above - will not result in legal action from the project. This does not grant permission to test against third-party systems or services that Aether integrates with; please respect those services' own policies.

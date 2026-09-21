@@ -1,6 +1,6 @@
 # Module 10: Android
 
-Native Android client for Aether — full chat on the user's Samsung Galaxy S24.
+Native Android client for Aether - full chat on the user's Samsung Galaxy S24.
 
 ## Responsibility
 
@@ -12,7 +12,7 @@ contract that the Kotlin app must fulfill.
 
 ## Key Files
 
-- `__init__.py` — empty; no Python code exists here yet.
+- `__init__.py` - empty; no Python code exists here yet.
 
 ## Interface Contract
 
@@ -36,6 +36,6 @@ the same bearer token scheme as the desktop client.
 
 ## Status
 
-[NOT IMPLEMENTED] — Python side has no code. Android Kotlin app is the
+[NOT IMPLEMENTED] - Python side has no code. Android Kotlin app is the
 deliverable for this module. See `.claude/rules/module-10-android.md` for the
 full done-when criteria.

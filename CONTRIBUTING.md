@@ -1,4 +1,4 @@
-# Contributing to Free Aether — Community Edition
+# Contributing to Free Aether - Community Edition
 
 Thank you for considering a contribution. This document explains what kinds of
 contributions help, how the work is organized, and what to expect from review.
@@ -33,17 +33,17 @@ matrices, contract refinements, first-logic slices.
 - **Test expansions.** Each layer has a `tests/smoke.rs` that could be much
   deeper. `packages/l5-policy/tests/engine_slice.rs` is the richest example.
 - **Linter / governance tooling.** The scaffolds under `tools/` need real
-  rules — `cargo-deny` bans, ESLint rules, policy-bypass detection.
+  rules - `cargo-deny` bans, ESLint rules, policy-bypass detection.
 - **CI.** The existing `.github/workflows/ci.yml` is tuned to the legacy v1.0
   Python tree and needs a pass for the Rust + pnpm workspace.
 
 ### For deeper contributors
 
-- **Wave 3.5** — rusqlite wire-up in `packages/storage`, swap L5's in-memory
+- **Wave 3.5** - rusqlite wire-up in `packages/storage`, swap L5's in-memory
   backends behind a feature flag. See Wave 3 report §2 for the locked design.
-- **Wave 4.1** — activate the `[bans]` block in
+- **Wave 4.1** - activate the `[bans]` block in
   `tools/lint-layer-boundaries/deny.toml`.
-- **First-logic slices for L1/L2/L3/L4/L6/L7** — each layer crate under
+- **First-logic slices for L1/L2/L3/L4/L6/L7** - each layer crate under
   `packages/l*-*/` defines its target surface in its `README.md` and
   `src/lib.rs` traits/enums. Pick one, open an issue to claim it, produce a
   wave report.
@@ -83,7 +83,7 @@ Commit messages follow the repo's existing pattern:
 ```
 <type>(<scope>): short imperative summary
 
-Optional body — what changed and why. Reference planning docs or wave
+Optional body - what changed and why. Reference planning docs or wave
 reports where relevant.
 ```
 
@@ -91,7 +91,7 @@ reports where relevant.
 `<scope>` is the package or area (`l5`, `engines`, `repo`, `tooling`, etc.).
 
 Commits should be atomic. If a single change touches three layers, it is
-probably three commits — or it is crossing a layer boundary and needs
+probably three commits - or it is crossing a layer boundary and needs
 rethinking.
 
 ### Tests
@@ -105,8 +105,8 @@ rethinking.
 
 ### Docs-first policy for major changes
 
-Anything that changes a **contract** — an event field, an enum variant, a
-trait signature, an architecture decision — lands as docs first:
+Anything that changes a **contract** - an event field, an enum variant, a
+trait signature, an architecture decision - lands as docs first:
 
 1. Propose in a PR that touches only the architecture docs (`ARCHITECTURE.md`,
    `docs/`, or a new ADR under `docs/adr/`) and the relevant `README.md`.
@@ -137,7 +137,7 @@ Architecture proposals follow a fixed shape:
 1. Open an issue using the **Feature request** template and select the
    "architecture proposal" path.
 2. Reference the specific planning doc(s) you would change.
-3. State the reversibility cost — is this a one-way door? A two-way door?
+3. State the reversibility cost - is this a one-way door? A two-way door?
 4. Wait for a maintainer to invite a `DECISION_LOCK_PASS` update.
 5. The decision lock is written first. The implementation follows.
 
@@ -147,24 +147,24 @@ Unilateral doctrine edits get closed without review. This is by design.
 
 ## 5. Reporting blockers honestly
 
-If you hit a blocker — missing tooling, unclear contract, conflict between two
-planning docs — say so. The project favors an accurate partial report over a
+If you hit a blocker - missing tooling, unclear contract, conflict between two
+planning docs - say so. The project favors an accurate partial report over a
 confident-sounding wrong one. The Wave 3 and Wave 4 execution reports both
 contain explicit deferrals; emulate that style.
 
 Examples of acceptable outcomes on a PR:
 
 - "I scaffolded X but could not validate with `cargo check` because I don't
-  have rustup installed on my CI environment — flagging so reviewers can run
+  have rustup installed on my CI environment - flagging so reviewers can run
   it."
 - "I hit a contract conflict between L4 interface pack §3 and the event
   contracts master §7. I've paused implementation and opened issue #NN."
 
 Examples that get pushed back:
 
-- "Added silently removes the audit write under a flag" — policy bypass is
+- "Added silently removes the audit write under a flag" - policy bypass is
   never acceptable, even behind a flag.
-- "Refactored while I was in there" — opportunistic refactors cause drift.
+- "Refactored while I was in there" - opportunistic refactors cause drift.
 
 ---
 
@@ -194,6 +194,6 @@ and at least one engine first-logic slice (L1 or L4) are merged.
 ## 8. Contact
 
 - Issues: GitHub issue tracker on this repo.
-- Security: see `SECURITY.md` — do not file public issues.
+- Security: see `SECURITY.md` - do not file public issues.
 - Questions about doctrine: open a `question` issue or flag on the relevant
   planning doc.

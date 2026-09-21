@@ -4,8 +4,15 @@
 > non-bypassable policy gate, explicit trust surfaces. Early preview: the
 > foundations are in place, most engine logic is not yet.
 
-**Status:** `dev` branch, pre-0.1 preview. The repository is under active
-architecture. Expect breaking changes.
+**Status:** pre-0.1 preview. The repository is under active architecture.
+Expect breaking changes.
+
+**Which branch you are reading.** `master` is the curated public snapshot and
+is what this README describes. Day-to-day work happens on `dev`, which carries
+the Tauri desktop shell under `apps/desktop/` and the retrieval implementation
+that ADRs 0005 through 0010 specify. Those files are not on `master`, so an
+ADR here can name a path you will not find in this checkout. Every command and
+count in this README was run against `master`.
 
 ---
 
@@ -84,7 +91,7 @@ REPO / INFRA
 L5 - POLICY ENGINE
 [##########] 100%  Wave 3 - first real logic slice
                    (in-memory ledger + audit + 5-stage evaluator,
-                    18 tests across engine_slice + ipc + sink + audit_store,
+                    20 tests across engine_slice + smoke + lib,
                     audit-before-Allow invariant)
 [##########] 100%  Wave 3.5 - SQLite storage substrate
                    (rusqlite bundled, open_with_migrations() runs the
@@ -117,10 +124,12 @@ PRODUCT INTEGRATION
 - `cargo check --workspace` is **green** on stable Rust (toolchain pinned in
   `rust-toolchain.toml`).
 - `cargo test --workspace` is **green**: every crate's tests pass. Highlights:
-  - `aether-l5-policy`: 18 tests by default; +5 SQLite integration tests
-    with `--features sqlite-backend` (grant survives restart, revoke
-    persists, audit rows survive + time-window filter, append-only
-    trigger enforcement, engine-accepts-trait-objects smoke).
+  - `aether-l5-policy`: 20 tests by default (2 lib + 11 `engine_slice` +
+    7 `smoke`); 36 with `--features sqlite-backend`, which adds 5
+    `audit_seal` tests, 5 `sqlite_backends` integration tests (grant
+    survives restart, revoke persists, audit rows survive + time-window
+    filter, append-only trigger enforcement, engine-accepts-trait-objects
+    smoke) and 6 more lib tests.
   - `aether-storage`: 8 tests, including 3 integration tests that open a
     real SQLite file, run both migrations (`0001_init`, `0002_audit_chain`),
     assert every expected table exists, assert the append-only trigger
@@ -138,9 +147,9 @@ PRODUCT INTEGRATION
   lost on exit. Enabling the `sqlite-backend` cargo feature on
   `aether-l5-policy` unlocks `SqliteGrantLedger`, `SqliteAuditStore`,
   and a `DurableBackends::open(path)` convenience builder that wires
-  both onto a single SQLite file. See
-  [`WAVE4_5_EXECUTION_REPORT_2026-04-19.md`](WAVE4_5_EXECUTION_REPORT_2026-04-19.md)
-  for limitations (hash-chain + HMAC row sealing still future).
+  both onto a single SQLite file. Hash-chain and HMAC row sealing are
+  described under "Tamper-evident audit log" below; key compromise,
+  host root and remote attestation are out of scope.
 - No LLM, STT, TTS, or avatar pipeline. Nothing remote is reachable from
   the preview; runtime bound to the local process.
 
@@ -186,8 +195,7 @@ aether/
 │
 ├── Cargo.toml             # Rust workspace manifest.
 ├── pnpm-workspace.yaml    # TS workspace manifest.
-├── rust-toolchain.toml    # Pinned Rust version.
-└── WAVE{0..4}_*_2026-04-19.md   # Per-wave execution reports.
+└── rust-toolchain.toml    # Pinned Rust version.
 ```
 
 ---
@@ -214,13 +222,13 @@ pnpm -r --if-present typecheck
 # Rust workspace (requires rustup)
 cargo check --workspace                                  # green
 cargo test --workspace                                    # green default build
-cargo test -p aether-l5-policy                            # 18 in-memory tests
-cargo test -p aether-l5-policy --features sqlite-backend  # +5 SQLite tests
+cargo test -p aether-l5-policy                            # 20 in-memory tests
+cargo test -p aether-l5-policy --features sqlite-backend  # 36 tests
 cargo test -p aether-storage                              # 8 storage tests
 ```
 
-If any of these fail on a clean clone, please open a Bug report: the wave
-reports assume they all pass on stable Rust.
+If any of these fail on a clean clone, please open a Bug report. They are
+expected to pass on stable Rust with no network access.
 
 ### Try the L1 demo
 
@@ -233,15 +241,26 @@ cargo run -p aether-l1-cli
 
 ```
 aether> read /tmp/x
+  turn-id      : turn-1
   final-state  : Completed
-  policy       : Allow  (grant=g-1, audit=a-1)
-  route        : tier=reflex provider=reflex-stub
-  response     : [reflex] heard you: read /tmp/x
+  state-trace  : Idle -> AwaitingPolicyApproval -> RouterDispatched -> Completed
+  policy       : Allow
+  route        : tier=local-full provider=reflex-stub
+  response     : [local-full] heard you: read /tmp/x
 
 aether> shell ls
+  turn-id      : turn-2
   final-state  : PolicyDenied
-  policy       : Deny   (ModeDeny, audit=a-2)
+  state-trace  : Idle -> AwaitingPolicyApproval -> PolicyDenied
+  policy       : Deny
   blocked      : policy denied
+
+aether> write /tmp/x
+  turn-id      : turn-3
+  final-state  : AwaitingPolicyApproval
+  state-trace  : Idle -> AwaitingPolicyApproval
+  policy       : Ask
+  blocked      : awaiting user approval (Ask ticket open)
 ```
 
 Full command table and architecture notes in
@@ -268,8 +287,8 @@ let engine = DefaultPolicyEngine::new(
 );
 ```
 
-Known limitations of the Wave 4.5 SQLite mode are listed in
-[`WAVE4_5_EXECUTION_REPORT_2026-04-19.md`](WAVE4_5_EXECUTION_REPORT_2026-04-19.md).
+SQLite mode is opt-in and is not the default build. Its limitations are
+listed under "Tamper-evident audit log" below.
 
 ### Tamper-evident audit log (Wave 4.6)
 
@@ -305,8 +324,8 @@ integration, asymmetric checkpoint signing).
    architecture detail.
 4. [`docs/PRODUCT-PLAN.md`](docs/PRODUCT-PLAN.md): product direction and the
    port plan for the legacy v1.0 tree.
-5. `WAVE3_EXECUTION_REPORT_2026-04-19.md` and `WAVE4_EXECUTION_REPORT_2026-04-19.md`:
-   what was done last, with honest deferrals called out.
+5. [`ROADMAP.md`](ROADMAP.md): what was done last and what is next, with the
+   deferrals called out.
 
 ---
 
@@ -326,8 +345,8 @@ moves, in priority order:
    L5, the storage substrate, and one engine slice.
 
 Wave 4.1 (layer-boundary enforcement) landed 2026-04-19: see
-[`tools/lint-layer-boundaries/`](tools/lint-layer-boundaries/) and
-`WAVE4_1_EXECUTION_REPORT_2026-04-19.md`.
+[`tools/lint-layer-boundaries/`](tools/lint-layer-boundaries/), which CI runs
+as the `layer-boundaries` job.
 
 ---
 

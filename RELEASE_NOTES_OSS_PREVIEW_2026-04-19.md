@@ -1,8 +1,8 @@
-# Free Aether — Community Edition
+# Free Aether - Community Edition
 
-## OSS Preview 0 — `v0.1.0-oss-preview.0` (2026-04-19)
+## OSS Preview 0 - `v0.1.0-oss-preview.0` (2026-04-19)
 
-This is the first public preview tag of Free Aether — Community Edition. It
+This is the first public preview tag of Free Aether - Community Edition. It
 is **architecture-forward and intentionally incomplete**: the doctrine,
 workspace, governance, and the first real slice of the policy engine are in
 place; almost everything user-facing is not. Treat this as an invitation to
@@ -27,7 +27,7 @@ seven-layer architecture:
 
 Shared infrastructure (`event-bus`, `storage`, `telemetry`, `types`,
 `ui-kit`, `media-engine`) sits underneath. Every side-effectful action
-routes through **L5** — there is no back door. This preview ships that
+routes through **L5** - there is no back door. This preview ships that
 spine and the first real logic inside L5.
 
 Full architecture and guardrails live in
@@ -39,13 +39,13 @@ product direction in [`docs/PRODUCT-PLAN.md`](docs/PRODUCT-PLAN.md).
 ## 2. What's in this preview
 
 ### Architecture and decisions
-- `ARCHITECTURE.md` — canonical architecture; the seven-layer design and the
+- `ARCHITECTURE.md` - canonical architecture; the seven-layer design and the
   non-bypassable policy gate.
-- `docs/ARCHITECTURE-V2.md` and `docs/PRODUCT-PLAN.md` — the current
+- `docs/ARCHITECTURE-V2.md` and `docs/PRODUCT-PLAN.md` - the current
   architecture detail and product direction, covering family, UX,
   architecture, memory, avatar, trust, tiers, updates, tech stack, persona
   schema, and model router.
-- `docs/adr/` — the Architecture Decision Record log: the locked decisions
+- `docs/adr/` - the Architecture Decision Record log: the locked decisions
   for model defaults, retrieval wiring, storage shape, hardware tiers,
   embeddings onboarding, persona delivery, and mobile sync.
 - The five control-plane decisions are captured in the L5 ADRs and
@@ -55,11 +55,11 @@ product direction in [`docs/PRODUCT-PLAN.md`](docs/PRODUCT-PLAN.md).
 - Cargo workspace with 11 member crates; pnpm workspace with three TS
   packages.
 - `tools/lint-layer-boundaries/`, `tools/lint-policy-bypass/`,
-  `tools/ts-bindings-gen/` —
+  `tools/ts-bindings-gen/`  - 
   governance scaffolds (rules activated in future waves).
 - `.github/CODEOWNERS` with per-layer ownership lines.
 
-### L5 policy engine — first logic slice (Wave 3)
+### L5 policy engine - first logic slice (Wave 3)
 - `packages/l5-policy/` carries a real five-stage evaluator with:
   - in-memory grant ledger + audit store,
   - audit-before-Allow invariant,
@@ -70,12 +70,12 @@ product direction in [`docs/PRODUCT-PLAN.md`](docs/PRODUCT-PLAN.md).
 ### Engine stub shells (Wave 4)
 - `packages/l1-interaction/`, `packages/l2-memory/`,
   `packages/l3-presence/`, `packages/l4-router/`,
-  `packages/l6-persona/`, `packages/l7-trust/` — each with traits,
+  `packages/l6-persona/`, `packages/l7-trust/` - each with traits,
   core enums, error types, and a smoke test. Logic lands in future
   waves; the trait surface is deliberate.
 
 ### Storage substrate (Wave 3.5)
-- `packages/storage/` now wires `rusqlite` (bundled — no system SQLite
+- `packages/storage/` now wires `rusqlite` (bundled - no system SQLite
   required).
 - `open_with_migrations(path)` opens a database and runs the drafted
   DDL in `migrations/0001_init.sql` (policy_grants, policy_audit_log
@@ -84,7 +84,7 @@ product direction in [`docs/PRODUCT-PLAN.md`](docs/PRODUCT-PLAN.md).
 - Three integration tests prove the migration runner works, that the
   append-only trigger rejects `DELETE`, and that warm reopens are
   idempotent.
-- **L5 still uses in-memory backends today** — see §3 below.
+- **L5 still uses in-memory backends today** - see §3 below.
 
 ### OSS launch pack
 - `README.md`, `LICENSE` (MIT), `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`
@@ -150,7 +150,7 @@ companion that runs offline, you are welcome.
 
 ### Prerequisites
 
-- **Rust toolchain** — install via [rustup](https://rustup.rs/).
+- **Rust toolchain** - install via [rustup](https://rustup.rs/).
   `rust-toolchain.toml` pins the channel; `rustup show` should
   auto-install on first `cargo` run.
 - **Node 20+** and **pnpm 9+**:
@@ -185,42 +185,42 @@ cargo test -p aether-storage      # 5 unit + 3 integration (SQLite)
 
 Read order:
 
-1. [`README.md`](README.md) — section 3 has the honest status snapshot.
-2. [`ARCHITECTURE.md`](ARCHITECTURE.md) — the seven-layer architecture and the non-bypassable gate.
-3. [`docs/PRODUCT-PLAN.md`](docs/PRODUCT-PLAN.md) — product direction and hard rules.
-4. [`docs/ARCHITECTURE-V2.md`](docs/ARCHITECTURE-V2.md) — layer map and current architecture detail.
-5. [`docs/REPO_TOUR.md`](docs/REPO_TOUR.md) — fifteen-minute guided walk.
+1. [`README.md`](README.md) - section 3 has the honest status snapshot.
+2. [`ARCHITECTURE.md`](ARCHITECTURE.md) - the seven-layer architecture and the non-bypassable gate.
+3. [`docs/PRODUCT-PLAN.md`](docs/PRODUCT-PLAN.md) - product direction and hard rules.
+4. [`docs/ARCHITECTURE-V2.md`](docs/ARCHITECTURE-V2.md) - layer map and current architecture detail.
+5. [`docs/REPO_TOUR.md`](docs/REPO_TOUR.md) - fifteen-minute guided walk.
 6. `packages/l5-policy/src/lib.rs` → `engine.rs` →
-   `tests/engine_slice.rs` — the richest code in the repo.
+   `tests/engine_slice.rs` - the richest code in the repo.
 7. `WAVE3_EXECUTION_REPORT_2026-04-19.md` and
-   `WAVE3_5_EXECUTION_REPORT_2026-04-19.md` — how Wave 3 and 3.5 got
+   `WAVE3_5_EXECUTION_REPORT_2026-04-19.md` - how Wave 3 and 3.5 got
    here, with honest deferrals.
 
 ---
 
 ## 5. How to contribute
 
-- [CONTRIBUTING.md](CONTRIBUTING.md) — scoping, branch / commit /
+- [CONTRIBUTING.md](CONTRIBUTING.md) - scoping, branch / commit /
   review expectations, docs-first policy for architecture changes.
-- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — Contributor Covenant v2.1.
-- [SECURITY.md](SECURITY.md) — scope, reporting channels
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) - Contributor Covenant v2.1.
+- [SECURITY.md](SECURITY.md) - scope, reporting channels
   (GitHub private advisory preferred), disclosure timeline.
-- [SUPPORT.md](SUPPORT.md) — where to ask what; what the
+- [SUPPORT.md](SUPPORT.md) - where to ask what; what the
   single-maintainer preview promises (and does not).
-- [ROADMAP.md](ROADMAP.md) — the priority stack.
+- [ROADMAP.md](ROADMAP.md) - the priority stack.
 - Issue templates cover bugs, feature / architecture proposals, and
   docs fixes. PR template enforces the layer-boundary / L5-single-
   writer / no-private-asset-leak checks.
 
 The most contributor-friendly entry points today:
 
-- Docs fixes and clarifications — anywhere in `docs/`
+- Docs fixes and clarifications - anywhere in `docs/`
   or the root community docs.
-- Test expansions — especially `packages/l5-policy/tests/engine_slice.rs`
+- Test expansions - especially `packages/l5-policy/tests/engine_slice.rs`
   and the stub-crate smoke tests.
-- Governance tooling — `tools/lint-layer-boundaries/`,
+- Governance tooling - `tools/lint-layer-boundaries/`,
   `tools/lint-policy-bypass/`, and `tools/ts-bindings-gen/`.
-- CI improvements — the three active jobs have room to grow.
+- CI improvements - the three active jobs have room to grow.
 
 ---
 
@@ -228,7 +228,7 @@ The most contributor-friendly entry points today:
 
 In priority order, per [ROADMAP.md](ROADMAP.md):
 
-1. **Wave 4.1 — Layer-boundary enforcement.** Activate the bans /
+1. **Wave 4.1 - Layer-boundary enforcement.** Activate the bans /
    rules in `tools/lint-layer-boundaries/` now that all six sibling
    engine crates exist. Wire into CI.
 2. **L5 durable persistence.** Introduce `SqliteGrantLedger` +
@@ -236,10 +236,10 @@ In priority order, per [ROADMAP.md](ROADMAP.md):
    L5 onto them behind a feature flag first, then as default. Add
    migration `0002_audit_chain.sql` for hash-chain + HMAC.
 3. **First engine first-logic slice.** Either L1 turn FSM or L4
-   provider adapter + L5 gate wire-through — either unlocks a visible
+   provider adapter + L5 gate wire-through - either unlocks a visible
    end-to-end demo path.
 4. **Community demo slice.** A single small binary that exercises the
-   policy engine, the storage substrate, and one engine slice —
+   policy engine, the storage substrate, and one engine slice  - 
    intended to make the architecture legible in under fifteen minutes.
 
 Further out: L2 memory kernel, L3 presence scheduler, L6 persona
@@ -251,7 +251,7 @@ lower-numbered items land.
 
 ## 7. License
 
-MIT © 2026 Don Havery — see [LICENSE](LICENSE).
+MIT © 2026 Don Havery - see [LICENSE](LICENSE).
 
 ---
 
@@ -261,7 +261,7 @@ MIT © 2026 Don Havery — see [LICENSE](LICENSE).
   of pre-existing `missing_docs` warnings; tightening is a small
   future PR.
 - Wave execution reports use absolute `file:///C:/Users/dbhav/...`
-  paths internally — a mild Windows-username disclosure. Cosmetic
+  paths internally - a mild Windows-username disclosure. Cosmetic
   cleanup is a candidate for a future docs pass.
 - Secret scanning for this preview was best-effort; a dedicated run
   (e.g. `gitleaks`) is recommended before the repo sees significant

@@ -17,7 +17,7 @@ shipped.
 
 Orders can be changed or canceled only before they ship. Because in-stock
 orders often ship within an hour, contact support as soon as possible. Once an
-order has a tracking number, it can't be canceled — but you can refuse delivery
+order has a tracking number, it can't be canceled - but you can refuse delivery
 or return it under our returns policy.
 
 **Adding an item to an existing order.** We can't add items to an order once

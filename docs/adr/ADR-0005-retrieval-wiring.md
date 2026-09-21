@@ -1,4 +1,4 @@
-# ADR-0005: Retrieval wiring — capability, timing, rank, lookup
+# ADR-0005: Retrieval wiring - capability, timing, rank, lookup
 
 - **Status:** Accepted
 - **Date:** 2026-04-25
@@ -6,11 +6,11 @@
 - **Supersedes:** nothing.
 - **Superseded by:** nothing.
 - **Related:** `docs/adr/ADR-0002-embeddings-provider-and-vector-backend.md` (embedding store shape), `docs/adr/ADR-0003-model-defaults-supersession.md` (bge-m3 default), `docs/adr/ADR-0004-durable-store-shape.md` (Durable lane), `ROADMAP_2026-04-24_MILESTONE_2.md` (Run 2), `HANDOFF_2026-04-25_M2_RUN_1_COMPLETE.md` §§5, 7.
-- **Cleanup follow-up:** `docs/adr/ADR-0009-retrieval-augmented-utterance-audit-reach.md` (Accepted 2026-04-25, commit `b577105`) cleaned up the audit-row asymmetry this ADR introduced — specifically, `submit_turn` here passes the augmented `router_utterance` as a single field, but the L5 audit row should record the user's *original* utterance, not the augmented form. ADR-0009 splits `TurnRequest` into `original_utterance` + `model_input_utterance` and bumps the audit row to schema v2 with `retrieval_provenance`. The pipeline described in this ADR is otherwise unchanged.
+- **Cleanup follow-up:** `docs/adr/ADR-0009-retrieval-augmented-utterance-audit-reach.md` (Accepted 2026-04-25, commit `b577105`) cleaned up the audit-row asymmetry this ADR introduced - specifically, `submit_turn` here passes the augmented `router_utterance` as a single field, but the L5 audit row should record the user's *original* utterance, not the augmented form. ADR-0009 splits `TurnRequest` into `original_utterance` + `model_input_utterance` and bumps the audit row to schema v2 with `retrieval_provenance`. The pipeline described in this ADR is otherwise unchanged.
 
 ## Context
 
-Memory V2 (ADR-0001 / ADR-0002) shipped an embeddings lane that today has **no consumer**. Runs 0–4 of Milestone 1 built the write path; Mini-Run 0 (ADR-0003) picked BGE-M3 as the default vectoriser; ADR-0004 gave Durable a real backing store so there is something to embed. Run 2's job is to close the loop — make the turn engine actually read from `EmbeddingStore::query_nearest` so turning the `embeddings.enabled` flag on has a user-visible effect.
+Memory V2 (ADR-0001 / ADR-0002) shipped an embeddings lane that today has **no consumer**. Runs 0–4 of Milestone 1 built the write path; Mini-Run 0 (ADR-0003) picked BGE-M3 as the default vectoriser; ADR-0004 gave Durable a real backing store so there is something to embed. Run 2's job is to close the loop - make the turn engine actually read from `EmbeddingStore::query_nearest` so turning the `embeddings.enabled` flag on has a user-visible effect.
 
 Four design questions surfaced while proposing Run 2:
 
@@ -54,7 +54,7 @@ Rationale for a new variant rather than reusing `MemoryRead`: audit distinguisha
 Rank contract:
 
 1. Primary sort: cosine similarity **descending** (higher = closer).
-2. Tiebreak: `timestamp_ms` **descending** (newer first). Timestamp is sourced from the memory row reached via the lookup method (Decision 4) — never from the embedding row, which does not carry one.
+2. Tiebreak: `timestamp_ms` **descending** (newer first). Timestamp is sourced from the memory row reached via the lookup method (Decision 4) - never from the embedding row, which does not carry one.
 3. Truncate to a fixed **top-K**. Default **K = 5**. Configurable via a new additive field `memory.json::retrieval.max_items: u32` (default 5 on missing / null, same additive-on-read shape every other field in `memory.json` uses).
 4. No rerank stage in Run 2. A later ADR may add cross-encoder rerank, LLM-judge rerank, or other post-processing; this ADR explicitly punts.
 
@@ -62,7 +62,7 @@ Rank applies ONLY to the retrieval output. Session recall and retrieval occupy *
 
 Rationale: score+recency+K is the minimum stable contract that:
 - tests can assert against (higher scores first; for equal scores, newer first; never exceed K);
-- survives backend swaps (swap BGE-M3 for another provider, swap the flat-file store for sqlite-vec — the rank contract is unchanged);
+- survives backend swaps (swap BGE-M3 for another provider, swap the flat-file store for sqlite-vec - the rank contract is unchanged);
 - leaves room for future rerank without breaking downstream shape.
 
 ### 4. Lookup: `SessionMemoryStore::fetch_one(session_id, sequence)`. (New; #M2-15.)
@@ -79,16 +79,16 @@ fn fetch_one(
 ) -> Result<Option<TurnMemoryRecord>, L2Error>;
 ```
 
-- `Ok(Some(row))` — row present.
-- `Ok(None)` — row evicted / never existed. Orchestrator drops the hit and moves on; the embedding row is now orphaned and will be cleaned on the next per-item forget.
-- `Err(_)` — store failure. Propagates up; orchestrator decides whether to bail or continue with partial results.
+- `Ok(Some(row))` - row present.
+- `Ok(None)` - row evicted / never existed. Orchestrator drops the hit and moves on; the embedding row is now orphaned and will be cleaned on the next per-item forget.
+- `Err(_)` - store failure. Propagates up; orchestrator decides whether to bail or continue with partial results.
 
-Implemented on both `InMemorySessionMemoryStore` (trivial filter on the per-session ring) and `SqliteSessionMemoryStore` (parameterised SELECT on `{table_name}`). The parameterised query inherits the ADR-0004 table routing for free — a `fetch_one` on the Durable-lane store hits `durable_log`, same row semantics as `recent`.
+Implemented on both `InMemorySessionMemoryStore` (trivial filter on the per-session ring) and `SqliteSessionMemoryStore` (parameterised SELECT on `{table_name}`). The parameterised query inherits the ADR-0004 table routing for free - a `fetch_one` on the Durable-lane store hits `durable_log`, same row semantics as `recent`.
 
 **Rejected alternative: denormalise `content` into `EmbeddingRow`.** Would be slightly faster (one fewer read per hit) but:
 - content is now stored in two places (memory + embeddings);
 - edits via the Memory tab leave the embedding copy stale until a sync path is wired;
-- any existing embedding JSONL files need regenerating — ADR-0002 shape change.
+- any existing embedding JSONL files need regenerating - ADR-0002 shape change.
 The speed win does not justify the correctness tax. `fetch_one` is additive, backwards-compatible, and keeps content single-source.
 
 ### 5. `memory_id` parse contract.
@@ -98,12 +98,12 @@ The speed win does not justify the correctness tax. `fetch_one` is additive, bac
 - **(a) Carry `(session_id, sequence)` inline on `EmbeddingRow`** (ADR-0002 shape change).
 - **(b) Reverse-parse `memory_id` at the orchestrator.**
 
-Choose **(b)**. Parse `memory_id` with a stable regex at the orchestrator boundary; no store shape change. Failures on parse (malformed id, unknown shape) drop the hit with a `warn!` — same failure mode as a stale embedding row. Document the shape in one place (`mk_memory_id` + orchestrator parser) so rotating the format is a paired change.
+Choose **(b)**. Parse `memory_id` with a stable regex at the orchestrator boundary; no store shape change. Failures on parse (malformed id, unknown shape) drop the hit with a `warn!` - same failure mode as a stale embedding row. Document the shape in one place (`mk_memory_id` + orchestrator parser) so rotating the format is a paired change.
 
 ## Consequences
 
 - **New L5 variant** `RetrievalContext`. `packages/l5-policy` tests grow by one coverage row (default posture Auto, parallel to MemoryRead).
-- **New trait method** `SessionMemoryStore::fetch_one`. Every existing implementation (`InMemorySessionMemoryStore`, `SqliteSessionMemoryStore`) gains a small implementation. Trait extensions land additively — consumers that only call `append`/`recent`/etc. compile unchanged. Default impl is NOT provided (trait method without body would break L5 consumers that currently implement the trait in tests via a shell stub; force explicit implementation).
+- **New trait method** `SessionMemoryStore::fetch_one`. Every existing implementation (`InMemorySessionMemoryStore`, `SqliteSessionMemoryStore`) gains a small implementation. Trait extensions land additively - consumers that only call `append`/`recent`/etc. compile unchanged. Default impl is NOT provided (trait method without body would break L5 consumers that currently implement the trait in tests via a shell stub; force explicit implementation).
 - **New config field** `memory.json::retrieval.max_items: u32` with default 5. Additive; existing files without the field read the default.
 - **New orchestrator module** likely `apps/desktop/src-tauri/src/retrieval.rs` (or inline in `memory_router.rs` if Don prefers fewer files). Holds the embed → query → fetch → rank pipeline + the 5s bailout.
 - **Wire integration** in `MemoryAwareRouter::dispatch` and `RoleTaggedOllamaRouter::dispatch`: insert the retrieval call between `self.store.recent(session_id)` and `self.inner.dispatch(...)`.
@@ -138,4 +138,4 @@ Choose **(b)**. Parse `memory_id` with a stable regex at the orchestrator bounda
 
 ## Notes
 
-This ADR is the last "structural" decision Milestone 2 Run 2 needs. Everything after is mechanical implementation of the four decisions above. If ADR-0006 emerges in a later run, it should be for retrieval *extensions* (web retrieval, rerank, code-aware retrieval) — not for re-opening these four choices.
+This ADR is the last "structural" decision Milestone 2 Run 2 needs. Everything after is mechanical implementation of the four decisions above. If ADR-0006 emerges in a later run, it should be for retrieval *extensions* (web retrieval, rerank, code-aware retrieval) - not for re-opening these four choices.

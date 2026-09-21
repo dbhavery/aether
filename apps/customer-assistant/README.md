@@ -3,7 +3,7 @@
 A **per-company, fine-tunable AI customer-support assistant** built on the
 Aether Companion concept. Where Aether's [persona packs](../../docs/PERSONA-SCHEMA.md)
 describe *a character*, this app's `company.yaml` profiles describe *a
-business's support surface* — branding, scope, escalation, tools, knowledge
+business's support surface* - branding, scope, escalation, tools, knowledge
 base, and LLM tier. Each company gets a grounded assistant that answers from
 its own docs, escalates on its own rules, and is themed in its own colors.
 
@@ -58,7 +58,7 @@ PYTHONPATH=src python -m customer_assistant.server
 #   → http://127.0.0.1:8200
 ```
 
-Then open **http://127.0.0.1:8200/** — the demo page loads with the chat bubble
+Then open **http://127.0.0.1:8200/** - the demo page loads with the chat bubble
 in the bottom-right. Try:
 
 - "How long do I have to return something?"
@@ -102,7 +102,7 @@ Endpoints: `GET /health`, `GET /companies`, `GET /companies/{id}/branding`,
 
 ## Embedding the widget on a real site
 
-One script tag — it themes itself from the company's branding:
+One script tag - it themes itself from the company's branding:
 
 ```html
 <script
@@ -119,7 +119,7 @@ CSS.
 
 1. Copy `companies/northwind-outdoors/` to `companies/<your-company>/`.
 2. Edit `company.yaml` (set `company.id`, branding, scope, escalation, LLM tier)
-   — full field reference in `COMPANY-SCHEMA.md`.
+   - full field reference in `COMPANY-SCHEMA.md`.
 3. Replace `knowledge/*.md` with the company's real FAQs/policies.
 4. `python scripts/ingest.py <your-company>` then restart the server.
 5. Point the widget at it with `data-company="<your-company>"`.
@@ -131,8 +131,8 @@ CSS.
   compiled system prompt; Ollama-by-default dispatch matching
   `configs/default_config.yaml`; local ChromaDB retrieval mirroring
   `src/memory/`) in a small Python service.
-- **`company.yaml` ≈ `persona.yaml`.** Same idea — a typed, inspectable,
-  shareable profile compiled at runtime — applied to a business instead of a
+- **`company.yaml` ≈ `persona.yaml`.** Same idea - a typed, inspectable,
+  shareable profile compiled at runtime - applied to a business instead of a
   character.
 - **Ollama is the default**, models pulled from Aether's `llm.tier_map`
   (`fast` → `qwen2.5:7b`).
@@ -141,7 +141,7 @@ CSS.
 
 | Working in this demo | Scaffolded / production-TODO |
 | --- | --- |
-| `company.yaml` schema + strict validation | Tool **execution** (advertised, not run — would route through L5 policy) |
+| `company.yaml` schema + strict validation | Tool **execution** (advertised, not run - would route through L5 policy) |
 | RAG ingest + retrieval + citations | Auth / API keys / per-company rate limiting |
 | Ollama chat + graceful offline stub | Streaming responses (currently single-shot) |
 | Multi-company discovery + isolation | Conversation memory across turns (stateless per request today) |

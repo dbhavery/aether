@@ -8,9 +8,9 @@ iterating on the UI and as the shipping product shell in the installer.
 
 The shell probes `http://127.0.0.1:3000/` on launch (1 s timeout):
 
-- **Dev mode** — if the dev server answers, load it directly. Changes to
+- **Dev mode** - if the dev server answers, load it directly. Changes to
   `frontend/` hot-reload inside the window.
-- **Packaged mode** — otherwise load `frontend/out/index.html` produced by
+- **Packaged mode** - otherwise load `frontend/out/index.html` produced by
   `cd frontend && npm run build`.
 
 No explicit flag needed; start (or stop) the dev server to switch modes.
@@ -23,14 +23,14 @@ From the repo root, with a Python 3.13 `.venv` created and `pywebview`,
 **Dev mode** (recommended while editing the UI):
 
 ```powershell
-# Terminal 1 — start Next.js dev server
+# Terminal 1 - start Next.js dev server
 cd frontend
 npm install --legacy-peer-deps
 npm run dev
 ```
 
 ```powershell
-# Terminal 2 — launch the shell (from repo root)
+# Terminal 2 - launch the shell (from repo root)
 .\desktop\launcher.ps1
 ```
 
@@ -55,7 +55,7 @@ For debugging the shell itself (logs on stderr instead of hidden):
 | Port 8765 free | Spawn `python -m src.main` as a child. Terminate it when the window closes. |
 
 This means running the shell while a separate `python -m src.main` is active
-is safe — the shell will never kill a backend it didn't start.
+is safe - the shell will never kill a backend it didn't start.
 
 ## JavaScript bridge
 
@@ -77,11 +77,11 @@ use the bridge to launch arbitrary local files.
 - Minimum: 1024x720.
 - Background color: `#0B0B0F` (matches the dark theme).
 - Text selection enabled.
-- No close confirmation dialog — closing the window shuts down the shell.
+- No close confirmation dialog - closing the window shuts down the shell.
 
 ## Rebuilding after frontend edits
 
-- In dev mode: nothing — Next.js hot-reloads.
+- In dev mode: nothing - Next.js hot-reloads.
 - In packaged mode: `cd frontend && npm run build`, then relaunch the shell.
 
 ## Troubleshooting
@@ -95,7 +95,7 @@ The v1.0 Inno Setup installer will bundle the bootstrapper so this error
 won't surface for end users.
 
 **"Port 8765 already in use" at backend startup.** Another Aether is already
-running. The shell attaches to it rather than failing — open the existing
+running. The shell attaches to it rather than failing - open the existing
 window, or close the other process if you want a fresh backend.
 
 **Closing the window doesn't kill the backend.** Expected only when the

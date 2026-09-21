@@ -30,7 +30,7 @@ days), we issue the refund. Refunds post to your original payment method within
 
 The fastest way to exchange for a different size or color is to return the
 original item for a refund and place a new order. If the item you want is in
-stock, we can also process a direct size exchange with free reshipping — just
+stock, we can also process a direct size exchange with free reshipping - just
 ask support.
 
 ## Non-returnable items
@@ -42,7 +42,7 @@ ask support.
 
 ## Damaged or defective items
 
-If an item arrives damaged or is defective, don't start a standard return —
+If an item arrives damaged or is defective, don't start a standard return  - 
 contact support within 30 days so we can replace it at no cost and cover return
 shipping. Defects after 30 days may be covered under our warranty (see
 warranty.md).

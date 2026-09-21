@@ -2,12 +2,12 @@
 
 **Status:** Wave 4 stub.
 
-L3 owns presence — behavior scheduling, visemes, gaze/blink control. Borrowed rendering surface, custom control plane.
+L3 owns presence - behavior scheduling, visemes, gaze/blink control. Borrowed rendering surface, custom control plane.
 
 ## References
 
-- `ARCHITECTURE.md` — the L3 presence engine layer.
-- `docs/ARCHITECTURE-V2.md` — current architecture detail.
+- `ARCHITECTURE.md` - the L3 presence engine layer.
+- `docs/ARCHITECTURE-V2.md` - current architecture detail.
 
 ## Wave 4 contents
 
@@ -17,4 +17,4 @@ L3 owns presence — behavior scheduling, visemes, gaze/blink control. Borrowed 
 
 ## Next wave
 
-Wave 5+ — behavior scheduler with the 30–60 Hz update loop, Three.js rendering surface for OSS Preview, viseme-sync against `packages/media-engine` TTS output.
+Wave 5+ - behavior scheduler with the 30–60 Hz update loop, Three.js rendering surface for OSS Preview, viseme-sync against `packages/media-engine` TTS output.

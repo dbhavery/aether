@@ -1,13 +1,13 @@
 # @aether/telemetry
 
-**Status:** Wave 1 placeholder — local-only default.
+**Status:** Wave 1 placeholder - local-only default.
 
 Telemetry wrapper. Local-only by default; OTLP export is an opt-in capability gated by an L5 policy grant.
 
 ## References
 
-- `ARCHITECTURE.md` — telemetry posture and the L5-gated export capability.
-- `SECURITY.md` — the trust and reporting model.
+- `ARCHITECTURE.md` - telemetry posture and the L5-gated export capability.
+- `SECURITY.md` - the trust and reporting model.
 
 ## Wave 1 contents
 

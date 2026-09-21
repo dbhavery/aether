@@ -1,6 +1,6 @@
 # LLM Provider Abstraction
 
-**Purpose:** Aether supports many LLM providers through a single internal abstraction. Users pick one in the onboarding wizard (or multiple, one per tier). The brain module never imports a specific provider's SDK directly — it always goes through `litellm`.
+**Purpose:** Aether supports many LLM providers through a single internal abstraction. Users pick one in the onboarding wizard (or multiple, one per tier). The brain module never imports a specific provider's SDK directly - it always goes through `litellm`.
 
 ---
 
@@ -24,7 +24,7 @@ Docs: https://docs.litellm.ai/
 | **OpenAI** | Cloud, paid | GPT-5.x series. |
 | **Google** | Cloud, paid | Gemini 2.5 Pro / Flash / Flash-Lite. Strong grounding for real-time queries. |
 | **Groq** | Cloud, free tier + paid | Llama 3.x / Mixtral at very high speed. Good for fast tier. |
-| **OpenRouter** | Cloud, pay-as-you-go | Aggregator — one key, many models. Useful for power users. |
+| **OpenRouter** | Cloud, pay-as-you-go | Aggregator - one key, many models. Useful for power users. |
 | **Ollama** | Local, free | Any model the user has pulled. Default fast-tier option. |
 | **Aether Guest** | Hosted by us, rate-limited | Groq-backed; used only by "Guest mode" on Screen 5 Card C. |
 
@@ -58,9 +58,9 @@ llm:
 ```
 
 Tiers defined:
-- **fast** — simple greetings, intent classification, instant acknowledgments, idle backchannels. Must return first token in < 200 ms under good conditions.
-- **main** — general conversation, normal chat turns. < 1500 ms first-token acceptable.
-- **heavy** — complex reasoning, long-form, research. No hard latency budget; takes as long as it needs.
+- **fast** - simple greetings, intent classification, instant acknowledgments, idle backchannels. Must return first token in < 200 ms under good conditions.
+- **main** - general conversation, normal chat turns. < 1500 ms first-token acceptable.
+- **heavy** - complex reasoning, long-form, research. No hard latency budget; takes as long as it needs.
 
 Some wizard presets:
 
@@ -82,14 +82,14 @@ Advanced users can override any of these in Sandbox → LLM settings.
 
 Brain decides which tier to call for a given input by a three-stage classifier (same pattern as the upstream codebase):
 
-1. **Level 1 — Instant match.** Regex for greetings, farewells, thanks → FAST.
-2. **Level 2 — Keyword match.** Regex for "research", "explain", "deep", "analyze", "code" → HEAVY. Regex for "what time", "weather", "news", "search" → MAIN with grounding if provider supports it.
-3. **Level 3 — LLM classify.** Fast-tier model classifies intent with a tiny prompt; output cached in LRU-100.
+1. **Level 1 - Instant match.** Regex for greetings, farewells, thanks → FAST.
+2. **Level 2 - Keyword match.** Regex for "research", "explain", "deep", "analyze", "code" → HEAVY. Regex for "what time", "weather", "news", "search" → MAIN with grounding if provider supports it.
+3. **Level 3 - LLM classify.** Fast-tier model classifies intent with a tiny prompt; output cached in LRU-100.
 
 Routing decision includes:
 - Tier selection (fast/main/heavy).
 - Whether to emit an acknowledgment phrase first (when tier ≠ fast AND expected-latency > 600 ms).
-- Whether to enable tool grounding (search, code execution) — v1.0: always off.
+- Whether to enable tool grounding (search, code execution) - v1.0: always off.
 
 ---
 
@@ -103,9 +103,9 @@ HEAVY → MAIN → FAST → Aether Guest (if user opted in) → Error
 
 Failure categories handled:
 - Network timeout (10s default).
-- 401/403 (key invalid — notify user, don't silently retry).
-- 429 (rate limit — back off, try next tier).
-- 500/503 (provider issue — try next tier).
+- 401/403 (key invalid - notify user, don't silently retry).
+- 429 (rate limit - back off, try next tier).
+- 500/503 (provider issue - try next tier).
 
 Users are never told "Anthropic is down" mid-conversation. They see the response come through the next tier. In Sandbox → Status, they can see "2 calls fell back to MAIN in the last hour" as observability.
 
@@ -156,7 +156,7 @@ For BYOK providers, display rolling costs:
 - Sandbox → LLM → Usage shows: last-hour, today, this-month spend per provider.
 - Based on litellm's token-counting + provider pricing tables.
 - Budgets optional: user can set "warn at $X/day", "hard cap at $Y/day".
-- No PII in cost logs — just aggregate tokens and estimated USD.
+- No PII in cost logs - just aggregate tokens and estimated USD.
 
 For Ollama and Aether Guest: display "$0.00" but still show token counts for parity.
 
@@ -179,7 +179,7 @@ async for chunk in route_tier(tier="main", messages=[...], stream=True):
 
 **Not in v1.0.** The existing upstream tool system (PC control, file ops, shell exec) is intentionally not ported. v1.0 is a conversational product, not an agent. Tool use returns in the v2 ground-up rebuild.
 
-One exception: built-in, safe tool calls that the frontend needs — `get_current_time`, `get_persona_context`, `change_persona`. These bypass litellm entirely and run as local Python functions gated by a tiny allow-list. They exist so the LLM can answer "what time is it" without hallucinating.
+One exception: built-in, safe tool calls that the frontend needs - `get_current_time`, `get_persona_context`, `change_persona`. These bypass litellm entirely and run as local Python functions gated by a tiny allow-list. They exist so the LLM can answer "what time is it" without hallucinating.
 
 ---
 

@@ -10,7 +10,7 @@ on 2026-04-25 (Path A of the eval scenario-broadening work)
 so that `requires_any` regex unions encode "Aurora's product-correct
 surface" as a *family* of acceptable phrasings. That makes the gate
 honest about Aurora's persona discipline, but it loses the ability to
-notice when Aurora's surface itself drifts — every paraphrase looks
+notice when Aurora's surface itself drifts - every paraphrase looks
 the same to a regex union.
 
 This canary suite is the opposite contract: literal-token `requires`
@@ -22,7 +22,7 @@ two things has happened:
    wasn't documented at baseline (e.g. the 10th paraphrase variant
    `"Got it. Let's leave that out of it."` surfaced on 2026-04-25
    outside the 9 documented `requires_any` patterns). Update the
-   canary literal to match the new surface — but ONLY after deciding
+   canary literal to match the new surface - but ONLY after deciding
    the new surface is desirable.
 
 2. **Persona regressed.** Aurora started over-explaining, hedging,
@@ -56,7 +56,7 @@ python tools/evals/__main__.py \
   --capture-into out/canary_capture/
 ```
 
-The runner emits exit code 1 when any scenario fails — for canaries,
+The runner emits exit code 1 when any scenario fails - for canaries,
 ignore it. Read the markdown / JSON report to see which canary tripped
 and decide whether the new Aurora surface is desirable.
 
@@ -81,6 +81,6 @@ When you decide an Aurora surface evolution is desirable:
 3. Commit with `chore(canaries):` prefix. Atomic, one canary per
    commit so blame survives.
 
-Do NOT relax canaries to `requires_any` — that defeats the contract.
+Do NOT relax canaries to `requires_any` - that defeats the contract.
 If a literal is too brittle to maintain, the right move is to delete
 the canary, not loosen it.

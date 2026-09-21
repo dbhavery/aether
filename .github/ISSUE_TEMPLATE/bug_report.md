@@ -39,7 +39,7 @@ compiler error. If the output is long, put it in a `<details>` block. -->
 ## Does documentation need an update?
 
 - [ ] No
-- [ ] Yes — specifically: <!-- file + section -->
+- [ ] Yes - specifically: <!-- file + section -->
 
 ## Extra context
 
