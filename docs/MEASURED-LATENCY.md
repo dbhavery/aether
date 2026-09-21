@@ -188,10 +188,23 @@ turn 2, first audio came out at 34,425 ms while total synthesis ran to
 - **Turn to turn variance is large.** Turn 2 and turn 3 differ by 14 seconds,
   mostly because the replies differ in length. Two warm turns are not a
   distribution. Quote the range, not one number.
-- **`llm_complete` is still slow for the token count.** 27,112 ms for 84 tokens
-  on a 4B model is roughly 300 ms per token, far off what this card should do.
-  Chatterbox is resident on the same GPU during the run, and that has not been
-  isolated. Unexplained, not fixed.
+- **`llm_complete` is still slow for the token count, and part of it is not
+  generation.** 27,112 ms for 84 tokens reads as roughly 300 ms per token.
+  Measured 2026-09-20 against qwen3:14b at its full 40960 context, three
+  identical back-to-back calls reported load 0.04 s, 0.00 s, 0.00 s and
+  generation of 99.1, 103.9 and 102.1 ms per token. Warm, the model sustains
+  about 100 ms per token. A turn that arrives after Ollama has evicted the
+  model pays the load instead, measured between 8.1 s and 16.5 s, and that
+  load lands inside `llm_complete`. Over a short reply it reads as several
+  hundred extra milliseconds per token.
+
+  Context size is a real but smaller cost: same model and prompt,
+  81.7 ms/token at `num_ctx` 4096, 84.2 at 8192, 118.1 at 40960.
+
+  So the stage total is honest; calling all of it generation was not.
+  `llm.ollama_keep_alive` exists now and is unset by default, because this
+  model takes 19 GB of a 24 GB card. Chatterbox sharing that card during a run
+  is still not isolated.
 - **TTS is now the largest single stage.** Synthesis runs at several times real
   time. Sentence chunking hides some of it behind playback; it does not make
   synthesis faster.
