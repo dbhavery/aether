@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
-description = "L3 — presence engine / behavior scheduler shell (Wave 4 stub)."
+description = "L3: presence engine / behavior scheduler shell (Wave 4 stub)."
 
 [lib]
 path = "src/lib.rs"

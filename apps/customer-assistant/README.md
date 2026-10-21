@@ -42,7 +42,7 @@ Ollama isn't running.
 
 ## Run the demo locally
 
-From the repo root (`C:/Users/dbhav/Projects/aether`):
+From the repo root:
 
 ```bash
 # 1. Install deps (CPU-only, no API keys)

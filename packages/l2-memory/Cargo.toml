@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
-description = "L2 — memory kernel shell (Wave 4 stub)."
+description = "L2: memory kernel shell (Wave 4 stub)."
 
 [lib]
 path = "src/lib.rs"

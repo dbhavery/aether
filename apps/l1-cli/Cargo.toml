@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
-description = "Community demo — stdin REPL that drives the L1 turn engine through an L4 router adapter."
+description = "Community demo: stdin REPL that drives the L1 turn engine through an L4 router adapter."
 publish = false
 
 [[bin]]
