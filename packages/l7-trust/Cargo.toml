@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
-description = "L7 — trust UX / onboarding backend shell (Wave 4 stub)."
+description = "L7: trust UX / onboarding backend shell (Wave 4 stub)."
 
 [lib]
 path = "src/lib.rs"
