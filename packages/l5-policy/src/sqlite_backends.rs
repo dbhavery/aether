@@ -1,4 +1,4 @@
-//! Wave 4.5 — SQLite-backed `GrantLedger` and `AuditStore` implementations.
+//! Wave 4.5 - SQLite-backed `GrantLedger` and `AuditStore` implementations.
 //!
 //! Feature-gated behind the `sqlite-backend` cargo feature. The default build
 //! of `aether-l5-policy` does not compile this module, keeping cold builds
@@ -29,17 +29,16 @@
 //!
 //! ## Limitations (explicit)
 //!
-//! - `verify_chain` currently returns `Ok(())` unconditionally. The 0001
-//!   append-only triggers already reject `UPDATE` / `DELETE`, which gives
-//!   us the weak-tamper guarantee the in-memory store also promised.
-//!   Full hash-chain + HMAC verification is a future wave once
-//!   `key_id`-driven rotation and a keyring integration land.
+//! - `verify_chain` re-walks the hash chain and HMACs (see `audit_seal`).
+//!   Rows written before the 0003 seal migration have no `event_hash` and
+//!   are skipped. Key rotation by `key_id` and a keyring integration are
+//!   not implemented yet.
 //! - `covers` fetches matching active grants via `snapshot` + Rust-side
 //!   filtering. Works correctly on the preview's expected grant counts
 //!   (tens to low hundreds). A future wave can push the `ResourceScope`
 //!   coverage logic into SQL for very large ledgers.
 //! - The `query` / `snapshot` filters do not yet push `capability`,
-//!   `persona`, or `decisions` filters into SQL — they filter in Rust
+//!   `persona`, or `decisions` filters into SQL - they filter in Rust
 //!   after a broad `SELECT`. Correct but not optimal at scale.
 
 #![cfg(feature = "sqlite-backend")]
@@ -228,7 +227,7 @@ fn scope_covers(pattern: &ResourceScope, target: &ResourceScope) -> bool {
 // ---------------------------------------------------------------------------
 
 /// SQLite-backed [`AuditStore`]. Writes append-only rows to
-/// `policy_audit_log` — `UPDATE` / `DELETE` are rejected by triggers
+/// `policy_audit_log` - `UPDATE` / `DELETE` are rejected by triggers
 /// declared in `0001_init.sql`, and every row is sealed with the Wave 4.6
 /// hash-chain + HMAC pipeline (`audit_seal` module).
 #[derive(Debug)]
@@ -395,7 +394,7 @@ impl AuditStore for SqliteAuditStore {
                 continue;
             };
 
-            // Chain linkage — stored prev_hash must match expected prev.
+            // Chain linkage - stored prev_hash must match expected prev.
             if !crate::audit_seal::ct_eq(&row.prev_hash, &expected_prev) {
                 return Err(AuditVerifyError::ChainBreak { row_id });
             }
@@ -422,7 +421,7 @@ impl AuditStore for SqliteAuditStore {
         }
 
         // If any sealed rows were seen, the chain tip must equal the
-        // singleton's head_hash — catches chain-tip rollback.
+        // singleton's head_hash - catches chain-tip rollback.
         if sealed_rows > 0 {
             if let Some(last) = last_computed {
                 let stored_head: Option<Vec<u8>> = conn
@@ -487,7 +486,7 @@ fn update_chain_head(
 /// ```
 ///
 /// The connection is wrapped in an `Arc<Mutex<_>>` so the ledger and the
-/// audit store serialize writes on the same underlying driver — SQLite is a
+/// audit store serialize writes on the same underlying driver - SQLite is a
 /// single-writer system and this keeps the single-writer invariant honest.
 pub struct DurableBackends {
     /// Trait-object handle suitable for `DefaultPolicyEngine::new`.

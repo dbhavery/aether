@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
-description = "Aether L5 — policy / authorization engine. Wave 2 scaffold: types, traits, and command surface. No evaluator logic, no persistence."
+description = "Aether L5 policy and authorization engine: evaluator, grants, approval tickets, audit before allow. Optional SQLite storage with hash-chain and HMAC audit sealing."
 
 [lib]
 path = "src/lib.rs"
@@ -21,7 +21,7 @@ aether-event-bus = { path = "../event-bus" }
 aether-storage   = { path = "../storage" }
 aether-telemetry = { path = "../telemetry" }
 
-# Wave 4.6 — audit sealing. Optional; only compiled when `sqlite-backend`
+# Wave 4.6 - audit sealing. Optional; only compiled when `sqlite-backend`
 # is enabled (see [features]).
 sha2 = { workspace = true, optional = true }
 hmac = { workspace = true, optional = true }
@@ -29,7 +29,7 @@ rand = { workspace = true, optional = true }
 
 [features]
 default = []
-# Wave 4.5 — SQLite-backed GrantLedger + AuditStore. When enabled, the
+# Wave 4.5 - SQLite-backed GrantLedger + AuditStore. When enabled, the
 # `sqlite_backends` module compiles and exposes `SqliteGrantLedger`,
 # `SqliteAuditStore`, and the `DurableBackends` convenience builder. The
 # driver itself lives in `aether-storage` (already a dep); this feature

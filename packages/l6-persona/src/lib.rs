@@ -1,6 +1,7 @@
 //! # aether-l6-persona
 //!
-//! **Status:** Wave 4 stub.
+//! **Status:** first slice. Traits, plus a deterministic `DefaultPersonaCompiler`
+//! (`default_compiler.rs`). No hot-reload and no signature verification yet.
 //!
 //! L6 compiles persona packs into the six typed artifacts consumed by
 //! L1/L3/L4/L5. Deterministic compilation, signature-verified privileged

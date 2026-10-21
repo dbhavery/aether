@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
-description = "Aether local storage substrate — SQLite schema, migrations, audit chain primitives (Wave 1 scaffold)."
+description = "Aether local storage substrate: SQLite schema and migrations, including the append-only audit table and audit chain columns."
 
 [lib]
 path = "src/lib.rs"
@@ -15,7 +15,7 @@ path = "src/lib.rs"
 thiserror = { workspace = true }
 serde = { workspace = true }
 tracing = { workspace = true }
-# Wave 3.5 — SQLite substrate. `bundled` vendors SQLite; no system lib needed.
+# Wave 3.5 - SQLite substrate. `bundled` vendors SQLite; no system lib needed.
 rusqlite = { workspace = true }
 
 [dev-dependencies]

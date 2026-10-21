@@ -1,239 +1,188 @@
-# Free Aether: Community Edition (OSS Preview)
+# Aether: Community Edition (preview)
 
-> A local-first, desktop-native AI companion architecture. Rust-first engines, a
-> non-bypassable policy gate, explicit trust surfaces. Early preview: the
-> foundations are in place, most engine logic is not yet.
+A design and partial build of a local-first AI assistant in which every action
+that touches files, runs commands or calls a remote model has to pass a policy
+gate first, and every decision is written to an audit log that cannot be edited
+without detection.
 
-**Status:** pre-0.1 preview. The repository is under active architecture.
-Expect breaking changes.
-
-**Which branch you are reading.** `master` is the curated public snapshot and
-is what this README describes. Day-to-day work happens on `dev`, which carries
-the Tauri desktop shell under `apps/desktop/` and the retrieval implementation
-that ADRs 0005 through 0010 specify. Those files are not on `master`, so an
-ADR here can name a path you will not find in this checkout. Every command and
-count in this README was run against `master`.
+This is a pre-0.1 preview. There is no end-to-end app yet, and interfaces will
+change.
 
 ---
 
-## 1. What Aether is
+## The problem
 
-Aether is not a chatbot UI and not a general-purpose "AI app." It is an
-architecture for a **long-lived companion** that runs locally on a user's
-machine and treats the user relationship, memory, presence, timing, trust,
-as first-class engines, not afterthoughts.
+A personal assistant with access to files, commands and cloud models can act without asking the user, and it usually leaves no record the user can trust afterward. Most assistants also send the user's data to remote services
+by default.
 
-The project is organized into **seven layers**, each an independent engine
-with explicit contracts:
+## How it solves it
 
-| Layer | Name              | Responsibility                                          |
-|-------|-------------------|---------------------------------------------------------|
-| L1    | Interaction       | Turn FSM, reflex classifier, STT/TTS adapters, timing   |
-| L2    | Memory            | Local memory kernel, embeddings, provenance             |
-| L3    | Presence          | Avatar scheduler, behavior frames, rendering surface    |
-| L4    | Router            | Model / tool router (local + remote providers)          |
-| L5    | **Policy**        | Non-bypassable authorization gate, audit, grants, BYOK  |
-| L6    | Persona           | YAML → compiled persona artifacts, hot-reload           |
-| L7    | Trust UX          | Onboarding, approvals, posture banners                  |
+- **One policy gate for every action.** A policy engine evaluates each request. The possible decisions are allow, ask, deny, draft-only and needs-upgrade. Grants can be issued and revoked, and "ask" opens an approval
+  ticket for the user.
+- **Audit before action.** An audit row is written before any allow decision is
+  returned. If the write fails, the action does not go ahead.
+- **A log that shows tampering.** In the SQLite build, each audit row is
+  chained to the previous row by a SHA-256 hash and signed with HMAC-SHA256.
+  A verify call walks the log and reports edited rows, inserted or deleted
+  rows, a rolled-back chain tip, or the wrong key. SQLite triggers also reject
+  `UPDATE` and `DELETE` on the audit table.
+- **Local first.** Data the assistant keeps about the user, such as memory and persona state, is meant to stay on the
+  user's machine, with remote calls made only through the gate.
 
-Shared infrastructure (`event-bus`, `storage`, `telemetry`, `types`, `ui-kit`,
-`media-engine`) sits underneath. Everything routes through L5 for
-side-effectful actions: there is no back door.
+**What the gate does not cover yet.** The older Python tree in this repository
+(`src/`, `desktop/`, `frontend/`) has a push-to-talk voice loop, memory, an
+avatar process and clients for cloud models (Anthropic and Google Gemini).
+That code does not call the policy gate. It reads and writes files, starts processes and sends requests to cloud APIs directly. The same is true of the
+customer-assistant demo under `apps/customer-assistant/`. Only the Rust
+workspace goes through the gate today.
 
-**Free Aether: Community Edition** is the open-source preview track.
+## Who it helps
 
----
-
-## 2. Why Aether
-
-Most "AI companion" projects collapse into chat UIs on top of an LLM API.
-Aether refuses that shape on purpose:
-
-- **Companion, not chatbot.** Long-lived relationship, not single-session Q&A.
-- **Local-first.** User data, memory, and persona state live on the user's
-  machine. Remote calls are deliberate, visible, and policy-governed.
-- **Policy is load-bearing.** Grants, audit, cost caps, degraded modes, and
-  re-evaluation triggers are in the type system, not bolted on later.
-- **Rust-first for engines.** Timing, policy, storage, routing, and memory
-  engines are Rust crates. TypeScript is for UI and generated bindings only.
-- **Desktop-first product.** Tauri long-term, pywebview tactical for the
-  preview. Browser UI is an implementation detail, not the core product.
-
-If you want a two-hour "chat with my notes" demo, this is the wrong repo. If
-you want to help build durable architecture for a companion that still works
-offline, you're in the right place.
+- Developers building local assistants or agents that must ask before they act
+  and keep an audit trail.
+- People who want an assistant that keeps its data on the user's machine.
+- Anyone studying how to put a policy check and a tamper-evident log in front
+  of an agent's actions.
 
 ---
 
-## 3. Current status: honest snapshot
+## Technical details
 
-```
-FREE AETHER - COMMUNITY EDITION - STATUS 2026-04-19
+### Stack
 
-FOUNDATION / DOCTRINE
-[##########] 100%  Vision & guardrails locked
-[##########] 100%  Product doctrine
-[##########] 100%  7-layer orchestration map
-[##########] 100%  5 control-plane decisions locked
+- **Rust workspace** (toolchain pinned in `rust-toolchain.toml`): the policy
+  engine, storage, the engine crates and a command-line demo. SQLite through
+  `rusqlite` with the bundled library, `sha2` and `hmac` for audit sealing.
+- **TypeScript workspace** (pnpm): shared types and UI primitives, typecheck
+  only.
+- **Legacy Python tree** (Python 3.13): the earlier voice assistant, kept in
+  place while its parts are ported into the Rust layers. It is not routed
+  through the policy gate (see above).
 
-DESIGN / PREP
-[##########] 100%  L1–L7 system designs
-[##########] 100%  L1–L7 interface packs
-[##########] 100%  Event contracts master
-[##########] 100%  SQLite schema pack (DDL drafted)
-[##########] 100%  Test matrix master
+### Architecture
 
-REPO / INFRA
-[##########] 100%  Wave 0 - monorepo assimilation
-[##########] 100%  Wave 1 - workspace + shared crates + governance
-[##########] 100%  Wave 2 - L5 scaffold (types, traits, IPC surface)
+The design splits the assistant into layers, and each layer is a separate crate with explicit contracts:
 
-L5 - POLICY ENGINE
-[##########] 100%  Wave 3 - first real logic slice
-                   (in-memory ledger + audit + 5-stage evaluator,
-                    20 tests across engine_slice + smoke + lib,
-                    audit-before-Allow invariant)
-[##########] 100%  Wave 3.5 - SQLite storage substrate
-                   (rusqlite bundled, open_with_migrations() runs the
-                    drafted DDL, 3 integration tests incl. append-only
-                    trigger + warm-open idempotency.)
-[##########] 100%  Wave 4.5 - SqliteGrantLedger + SqliteAuditStore
-                   behind `sqlite-backend` cargo feature + migration
-                   0002_audit_chain.sql (payload columns, key_id,
-                   chain-head singleton). Default build remains
-                   in-memory; durable mode is opt-in. 5 integration
-                   tests cover grant/audit survival across restart
-                   + append-only enforcement.
-[..........]   0%  Future - hash-chain + HMAC row sealing +
-                   BYOK cost-cap
+| Layer | Name        | Responsibility                                         |
+|-------|-------------|--------------------------------------------------------|
+| L1    | Interaction | Turn state machine, reflex classifier, STT/TTS adapters |
+| L2    | Memory      | Local memory kernel, embeddings, provenance            |
+| L3    | Presence    | Avatar scheduler, behavior frames                      |
+| L4    | Router      | Model and tool router (local and remote providers)     |
+| L5    | Policy      | Authorization gate, audit, grants, BYOK cost counters  |
+| L6    | Persona     | Persona profiles compiled into typed artifacts         |
+| L7    | Trust UX    | Onboarding, approvals, posture banners                 |
 
-OTHER ENGINES - STUB SHELLS (Wave 4)
-[##########] 100%  L1/L2/L3/L4/L6/L7 traits + core enums + smoke tests
-[..........]   0%  L1–L7 first-logic slices
+Shared crates (`event-bus`, `storage`, `telemetry`, `media-engine`) sit
+underneath. In the Rust workspace, side-effecting actions are meant to go
+through L5. A layer-boundary linter in CI rejects dependencies between crates
+that the architecture does not allow.
 
-PRODUCT INTEGRATION
-[..........]   0%  apps/desktop (Tauri shell)
-[..........]   0%  apps/guest  (Cloudflare Worker + Groq endpoint)
-[..........]   0%  apps/docs-site
-[..........]   0%  End-to-end onboarding → first turn
-```
+### Status
 
-### What runs today
+What is built in the Rust workspace (on `master`):
 
-- `pnpm -r --if-present typecheck` is green across the TS packages.
-- `cargo check --workspace` is **green** on stable Rust (toolchain pinned in
-  `rust-toolchain.toml`).
-- `cargo test --workspace` is **green**: every crate's tests pass. Highlights:
-  - `aether-l5-policy`: 20 tests by default (2 lib + 11 `engine_slice` +
-    7 `smoke`); 36 with `--features sqlite-backend`, which adds 5
-    `audit_seal` tests, 5 `sqlite_backends` integration tests (grant
-    survives restart, revoke persists, audit rows survive + time-window
-    filter, append-only trigger enforcement, engine-accepts-trait-objects
-    smoke) and 6 more lib tests.
-  - `aether-storage`: 8 tests, including 3 integration tests that open a
-    real SQLite file, run both migrations (`0001_init`, `0002_audit_chain`),
-    assert every expected table exists, assert the append-only trigger
-    rejects `DELETE`, and assert a warm reopen is idempotent.
-  - Six engine stub crates (L1–L7 minus L5): smoke tests only.
+| Area | State |
+|------|-------|
+| L5 policy engine | Built. Five-stage evaluator; grants with revoke; approval tickets; audit before allow. |
+| L5 storage | In-memory by default. SQLite grant ledger and audit store behind the `sqlite-backend` feature. |
+| Audit sealing | Built behind `sqlite-backend`: SHA-256 hash chain, HMAC-SHA256 per row, chain-head record, `verify_chain()`. |
+| Storage migrations | `0001_init`, `0002_audit_chain`, `0003_audit_seal`, with append-only triggers on the audit table. |
+| L1 interaction | First slice built: a turn state machine that calls the L5 gate, then dispatches to a router or stops. |
+| L6 persona | First slice built: a deterministic compiler from a persona profile to compiled artifacts. |
+| L2, L3, L4, L7 | Traits and enums with smoke tests. No working logic yet. |
+| BYOK cost caps | Types and events defined in L5. Not enforced by the engine yet. |
+| Command-line demo | `apps/l1-cli` runs one turn through L1 and L5 with a stub router. It always uses in-memory storage. |
 
-### What does not run yet
+What is not built:
 
-- No end-to-end user-facing flow. There is no runnable desktop app in this
-  repository yet.
-- No LLM, STT, TTS, or avatar pipeline is wired up. The engine stubs declare
-  the right traits and enums; none of the I/O is hooked up.
-- **L5 persistence is opt-in.** The default build uses in-memory
-  `InMemoryGrantLedger` + `InMemoryAuditStore`: fast, process-local,
-  lost on exit. Enabling the `sqlite-backend` cargo feature on
-  `aether-l5-policy` unlocks `SqliteGrantLedger`, `SqliteAuditStore`,
-  and a `DurableBackends::open(path)` convenience builder that wires
-  both onto a single SQLite file. Hash-chain and HMAC row sealing are
-  described under "Tamper-evident audit log" below; key compromise,
-  host root and remote attestation are out of scope.
-- No LLM, STT, TTS, or avatar pipeline. Nothing remote is reachable from
-  the preview; runtime bound to the local process.
+- No end-to-end assistant. No model, STT, TTS or avatar is wired to the Rust
+  layers; the demo's router returns a canned reply and does no inference.
+- No desktop app on `master`. The Tauri shell is on the `dev` branch.
+- The legacy Python tree and the customer-assistant demo bypass the gate.
+- Audit sealing does not protect against theft of the signing key, root access
+  on the host, or verification by a third party without the key.
 
-### What is in `src/`, `desktop/`, `frontend/`
+**Branches.** `master` is the public snapshot this README describes. Work in
+progress is on `dev`, which also carries the Tauri desktop shell under
+`apps/desktop/`. Some ADRs name paths that exist only on that branch.
 
-The legacy **v1.0 Python tree** is intentionally left in place. It is the
-predecessor product; its useful content is being ported forward into the new
-architecture capability-by-capability. Do not import from it into Rust or TS
-workspace members, and do not "clean it up." See
-[`docs/PRODUCT-PLAN.md`](docs/PRODUCT-PLAN.md) for the port plan.
-
----
-
-## 4. Repo layout
+### Repository layout
 
 ```
 aether/
-├── packages/              # Cargo + pnpm workspace members.
-│   ├── event-bus/         # Typed envelopes (Rust).
-│   ├── storage/           # Local persistence substrate (Rust; migrations drafted).
-│   ├── media-engine/      # Media I/O surface (Rust, stub).
-│   ├── telemetry/         # Structured logging (Rust, stub).
-│   ├── types/             # Shared TS types.
-│   ├── ui-kit/            # Shared TS UI primitives + tokens.
-│   ├── l5-policy/         # THE policy engine. First logic slice landed.
-│   ├── l5-policy-ts/      # Hand-written TS mirror of stable L5 types.
-│   ├── l1-interaction/    # Engine stubs - traits, enums, smoke tests only.
-│   ├── l2-memory/         # Engine stubs.
-│   ├── l3-presence/       # Engine stubs.
-│   ├── l4-router/         # Engine stubs.
-│   ├── l6-persona/        # Engine stubs.
-│   └── l7-trust/          # Engine stubs.
-│
-├── apps/                  # Scaffolds only; no runnable app yet.
-├── infra/                 # Deployment / ops scaffolds.
-├── tools/                 # Governance linters (cargo-deny, ESLint rules, ts-rs).
-├── research/              # Research notes.
-│
-├── src/, desktop/,        # Legacy v1.0 Python tree. Frozen; being ported out.
-│   frontend/, configs/,
-│   personas/, scripts/,
-│   tests/
-│
-├── Cargo.toml             # Rust workspace manifest.
-├── pnpm-workspace.yaml    # TS workspace manifest.
-└── rust-toolchain.toml    # Pinned Rust version.
+├── packages/              # Cargo and pnpm workspace members
+│   ├── l5-policy/         # Policy engine, grants, audit, sealing
+│   ├── l5-policy-ts/      # Hand-written TS mirror of stable L5 types
+│   ├── storage/           # SQLite substrate and migrations
+│   ├── event-bus/         # Typed envelopes
+│   ├── telemetry/         # Structured logging (stub)
+│   ├── media-engine/      # Media I/O surface (stub)
+│   ├── l1-interaction/    # Turn state machine slice
+│   ├── l6-persona/        # Persona compiler slice
+│   ├── l2-memory/ l3-presence/ l4-router/ l7-trust/   # Traits only
+│   ├── types/             # Shared TS types
+│   └── ui-kit/            # Shared TS UI primitives
+├── apps/
+│   ├── l1-cli/            # Command-line demo of one turn through L1 and L5
+│   └── customer-assistant/  # Python support-bot demo (does not use L5)
+├── tools/                 # Layer-boundary linter and other governance tools
+├── infra/, research/, docs/
+├── src/, desktop/, frontend/, configs/, personas/, scripts/, tests/
+│                          # Legacy Python tree
+├── Cargo.toml             # Rust workspace manifest
+├── pnpm-workspace.yaml    # TS workspace manifest
+└── rust-toolchain.toml    # Pinned Rust version
 ```
-
----
-
-## 5. Getting started
 
 ### Prerequisites
 
-- **Rust toolchain**: install via [rustup](https://rustup.rs/). The workspace
-  pins the toolchain in `rust-toolchain.toml`.
-- **Node 20+** and **pnpm 9+**: `corepack enable && corepack prepare pnpm@latest --activate`.
-- **Git**. That's it for the preview.
+- Rust through [rustup](https://rustup.rs/). The toolchain is pinned in
+  `rust-toolchain.toml`.
+- Node 20 or later and pnpm 9 or later (`corepack enable`).
+- Python 3 for the layer-boundary linter.
 
-### First run
+### Build and test
 
 ```bash
 git clone https://github.com/dbhavery/aether.git
 cd aether
 
+# Rust workspace (no network needed after dependencies download)
+cargo fmt --all -- --check
+cargo check --workspace --all-targets
+cargo test --workspace --all-targets
+
+# Policy engine with SQLite storage and audit sealing
+cargo test -p aether-l5-policy --features sqlite-backend
+
+# Layer-boundary lint
+python tools/lint-layer-boundaries/check.py
+
 # TypeScript workspace
 pnpm install
 pnpm -r --if-present typecheck
-
-# Rust workspace (requires rustup)
-cargo check --workspace                                  # green
-cargo test --workspace                                    # green default build
-cargo test -p aether-l5-policy                            # 20 in-memory tests
-cargo test -p aether-l5-policy --features sqlite-backend  # 36 tests
-cargo test -p aether-storage                              # 8 storage tests
 ```
 
-If any of these fail on a clean clone, please open a Bug report. They are
-expected to pass on stable Rust with no network access.
+What the tests check:
 
-### Try the L1 demo
+- `aether-l5-policy`: the evaluator's decisions and audit-before-allow, plus issuing and revoking grants. With `sqlite-backend`: grants and audit rows survive a restart, the
+  append-only triggers reject edits, and `verify_chain()` passes on a clean log
+  and fails on a tampered payload, a rolled-back chain tip and the wrong key.
+- `aether-storage`: migrations create every expected table, the append-only
+  trigger rejects `DELETE`, and reopening a database is idempotent.
+- `aether-l1-interaction`: a turn moves through the right states for each
+  policy decision, including against the SQLite backends.
+- The other engine crates: smoke tests only.
 
-A tiny stdin REPL that drives one turn through the real L1 engine, real
-L5 policy gate, and a stub L4 router, just to see the layers interlock.
+CI (`.github/workflows/ci.yml`) runs the Rust checks and tests, the
+layer-boundary lint, the TypeScript typecheck, a required-files check and a
+secrets grep. It also runs the legacy Python unit tests as a non-blocking job.
+
+### Try the command-line demo
+
+`apps/l1-cli` is a small stdin loop that sends one turn through the real L1
+state machine and the real L5 gate, with a stub router that does no inference.
 
 ```bash
 cargo run -p aether-l1-cli
@@ -263,16 +212,13 @@ aether> write /tmp/x
   blocked      : awaiting user approval (Ask ticket open)
 ```
 
-Full command table and architecture notes in
-[`apps/l1-cli/README.md`](apps/l1-cli/README.md). The demo uses a stub
-`ReflexModelRouter` that does no inference: the honest part is the
-engine path itself (FSM transitions, policy evaluate with audit write,
-`TurnRouter → ModelRouter` adapter).
+The full command table is in [`apps/l1-cli/README.md`](apps/l1-cli/README.md).
 
-### Opting into durable L5
+### Using SQLite storage for L5
 
-The default build uses in-memory policy backends. To use SQLite-backed
-grants + audit, enable the `sqlite-backend` feature on `aether-l5-policy`:
+The default build keeps grants and audit rows in memory, and they are lost on
+exit. To keep them in SQLite, enable the `sqlite-backend` feature on
+`aether-l5-policy`:
 
 ```rust
 use aether_l5_policy::{DefaultPolicyEngine, DurableBackends, EngineConfig, InMemorySink};
@@ -287,113 +233,71 @@ let engine = DefaultPolicyEngine::new(
 );
 ```
 
-SQLite mode is opt-in and is not the default build. Its limitations are
-listed under "Tamper-evident audit log" below.
+### How audit sealing works
 
-### Tamper-evident audit log (Wave 4.6)
+With `sqlite-backend` enabled, each audit row is sealed before it is inserted:
 
-When the `sqlite-backend` feature is active, every audit row is sealed
-with a SHA-256 hash chain and HMAC-SHA256 signature before insertion:
-
-- Row N stores `event_hash = SHA256(prev_hash || canonical_payload)`.
+- `event_hash = SHA256(prev_hash || canonical_payload)`, where `prev_hash` is
+  the previous row's `event_hash` (a fixed genesis value for the first row).
 - `record_hmac = HMAC-SHA256(key, event_hash)`.
-- A singleton `policy_audit_chain_head` points at the current tip.
+- A single `policy_audit_chain_head` row records the current tip.
 - `SqliteAuditStore::verify_chain()` walks the log in order and returns
-  `AuditVerifyError::ChainBreak` or `HmacMismatch` if anything was
-  altered out-of-band (DB edits, row splicing, tip rollback, wrong key).
+  `AuditVerifyError::ChainBreak` or `HmacMismatch` when a row was changed,
+  inserted, removed, the tip was rolled back, or the key is wrong.
 
-The signing key is loaded in this priority:
+The signing key is loaded from, in order:
 
-1. `AETHER_AUDIT_HMAC_KEY_HEX` env var (64-char hex = 32 bytes), or
-2. A 32-byte file at `<db_path>.hmac.key`, auto-generated on first run.
+1. the `AETHER_AUDIT_HMAC_KEY_HEX` environment variable (64 hex characters,
+   32 bytes), or
+2. a 32-byte file at `<db_path>.hmac.key`, created on first run.
 
-What this protects: local DB mutation (someone editing `payload`,
-deleting rows, or rolling the chain tip back) becomes detectable on the
-next `verify_chain()` call. What it does **not** protect: key compromise
-(reading the key file lets an attacker re-seal tampered history), host
-root, or remote attestation. Those are future waves (OS-keyring
-integration, asymmetric checkpoint signing).
+Anyone who can read the key file can re-seal altered history, so the key file
+needs the same protection as the database. Root access on the host and remote
+attestation are out of scope.
 
 ### Where to start reading
 
-1. [`docs/REPO_TOUR.md`](docs/REPO_TOUR.md): start here. A short guided walk
-   through the directories.
-2. [`ARCHITECTURE.md`](ARCHITECTURE.md): the seven-layer architecture, the
-   non-bypassable policy gate, and how the layers fit together.
-3. [`docs/ARCHITECTURE-V2.md`](docs/ARCHITECTURE-V2.md): the current
-   architecture detail.
+1. [`docs/REPO_TOUR.md`](docs/REPO_TOUR.md): a short walk through the
+   directories.
+2. [`ARCHITECTURE.md`](ARCHITECTURE.md): the layers and the policy gate.
+3. [`docs/ARCHITECTURE-V2.md`](docs/ARCHITECTURE-V2.md): architecture detail.
 4. [`docs/PRODUCT-PLAN.md`](docs/PRODUCT-PLAN.md): product direction and the
-   port plan for the legacy v1.0 tree.
-5. [`ROADMAP.md`](ROADMAP.md): what was done last and what is next, with the
-   deferrals called out.
+   port plan for the legacy Python tree.
+5. [`ROADMAP.md`](ROADMAP.md): planned work.
 
 ---
 
-## 6. Roadmap
+## Contributing
 
-See [ROADMAP.md](ROADMAP.md) for the full list. The next three meaningful
-moves, in priority order:
+See [CONTRIBUTING.md](CONTRIBUTING.md). In short:
 
-1. **L5 durable persistence**: introduce `SqliteGrantLedger` +
-   `SqliteAuditStore` behind the existing ledger / audit traits, flip
-   L5 onto them behind a feature flag first, then as default. Add
-   migration `0002_audit_chain.sql` for hash-chain + HMAC. This is the
-   real follow-up to Wave 3.5.
-2. **An L1 or L4 first-logic slice**: either unblocks a visible end-to-end
-   demo path: L1 turn FSM, or L4 provider adapter + policy gate.
-3. **Community demo slice**: smallest runnable surface that exercises
-   L5, the storage substrate, and one engine slice.
-
-Wave 4.1 (layer-boundary enforcement) landed 2026-04-19: see
-[`tools/lint-layer-boundaries/`](tools/lint-layer-boundaries/), which CI runs
-as the `layer-boundaries` job.
-
----
-
-## 7. Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the long version. Short version:
-
-- **Docs, tests, and tooling PRs** are the friendliest entry points.
-- **Engine logic** should be scoped to a single layer and produce a wave
-  execution report alongside the code.
-- **Architecture changes** require extra care: [`ARCHITECTURE.md`](ARCHITECTURE.md)
-  and the seven-layer doctrine it describes are load-bearing. Do not edit
-  without prior discussion.
-- **Never bypass L5** for any side-effectful action. If you need a new
-  capability, add it to the L5 contract, not around it.
+- Docs, tests and tooling changes are the easiest place to start.
+- Engine logic should stay inside one layer.
+- Architecture changes need discussion first; see
+  [`ARCHITECTURE.md`](ARCHITECTURE.md) and the ADRs under [`docs/adr/`](docs/adr/).
+- Do not add a side-effecting action to the Rust workspace that skips L5. If a
+  new capability is needed, add it to the L5 contract.
 
 By participating you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
 
----
+## Design rules
 
-## 8. Guardrails (short form)
+The full list is in [`ARCHITECTURE.md`](ARCHITECTURE.md). In summary:
 
-Full list: [`ARCHITECTURE.md`](ARCHITECTURE.md). In summary:
+1. Keep the layers separate.
+2. L5 is the only path for side effects in the Rust workspace: file I/O,
+   network, subprocesses and tool execution.
+3. The system must stay useful offline or with remote services degraded.
+4. Packages depend on each other only in approved directions, checked by
+   `tools/lint-layer-boundaries/`.
+5. Significant architecture changes are recorded in `ARCHITECTURE.md` and the
+   ADR log before they land in code.
 
-1. **Seven-layer architecture is non-negotiable.** No collapsing layers into
-   each other "for convenience."
-2. **L5 is the single writer for side effects.** All file I/O, network,
-   subprocess, and tool execution goes through `packages/l5-policy`.
-3. **No uncontrolled remote dependence.** The system must remain useful in
-   degraded or offline modes.
-4. **No "just a chat app" pivot.** Any chat UI is a skin on top of the full
-   companion stack.
-5. **No ad-hoc cross-package dependencies.** Packages depend only along
-   approved directions, enforced by `tools/lint-layer-boundaries/`.
-6. **Docs-first for significant changes.** Architecture moves are recorded in
-   [`ARCHITECTURE.md`](ARCHITECTURE.md) and the ADR log under
-   [`docs/adr/`](docs/adr/) before they land in code.
+## Security
 
----
+See [SECURITY.md](SECURITY.md) to report a vulnerability. Do not file public
+issues for security problems.
 
-## 9. Security & reporting
+## License
 
-Please see [SECURITY.md](SECURITY.md) for how to report vulnerabilities
-responsibly. Do **not** file public issues for security problems.
-
----
-
-## 10. License
-
-Aether Community Edition is released under the [MIT License](LICENSE).
+[MIT](LICENSE).

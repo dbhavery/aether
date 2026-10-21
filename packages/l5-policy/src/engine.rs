@@ -1,4 +1,4 @@
-//! `DefaultPolicyEngine` — Wave 3 slice implementation of `PolicyEngine`.
+//! `DefaultPolicyEngine` - Wave 3 slice implementation of `PolicyEngine`.
 //!
 //! ## What is implemented
 //!
@@ -9,9 +9,9 @@
 //! - Ask-mode capability returns `Decision::Ask` with a pending ticket; a
 //!   subsequent `respond_approval(Allow*)` issues a grant and future
 //!   `evaluate`s short-circuit via `ledger.covers(...)`.
-//! - Decision 1 — `NeedsUpgrade(CapabilityPath)` returned for capabilities
+//! - Decision 1 - `NeedsUpgrade(CapabilityPath)` returned for capabilities
 //!   absent from the active preset.
-//! - Decision 2 — `UserChoice::DeferToDraft` resolves to
+//! - Decision 2 - `UserChoice::DeferToDraft` resolves to
 //!   `Decision::DraftOnly { source: UserChoice }`.
 //! - Decision 4 re-eval triggers covered: TTL expiry (runs every `evaluate`
 //!   before cover-check) and explicit revoke (grant dropped from `covers`).
@@ -20,9 +20,7 @@
 //!
 //! ## What is **not** implemented (deferred)
 //!
-//! - SQLite persistence — `aether-storage` driver wire-up lands in Wave 3.5.
-//! - Audit hash-chain + HMAC — Wave 4.
-//! - Pre-evaluator hardcoded blocks table (§2.3 L5 source) — only `Deny` mode
+//! - Pre-evaluator hardcoded blocks table (§2.3 L5 source) - only `Deny` mode
 //!   on `ShellExec` is wired.
 //! - Privacy-posture gate on remote routes.
 //! - Cost-cap evaluator Stage 0.
@@ -420,12 +418,12 @@ impl PolicyEngine for DefaultPolicyEngine {
             )
         };
 
-        // Stage 1 — pre-gates: degraded mode denies everything.
+        // Stage 1 - pre-gates: degraded mode denies everything.
         if let Some(mode) = degraded {
             return Err(PolicyEngineError::Degraded(mode));
         }
 
-        // Stage 2 — feature: is capability in the active preset?
+        // Stage 2 - feature: is capability in the active preset?
         let Some(policy) = policy else {
             let audit_id = self.write_audit(
                 &req,
@@ -442,7 +440,7 @@ impl PolicyEngine for DefaultPolicyEngine {
             return Ok(d);
         };
 
-        // Stage 5 (mode-only fast paths) — Deny / DraftOnly short-circuit
+        // Stage 5 (mode-only fast paths) - Deny / DraftOnly short-circuit
         // before we consult the ledger.
         match policy.mode {
             ApprovalMode::Deny => {
@@ -477,7 +475,7 @@ impl PolicyEngine for DefaultPolicyEngine {
             _ => {}
         }
 
-        // Stage 3+4 — action / resource: does an active grant already cover?
+        // Stage 3+4 - action / resource: does an active grant already cover?
         if let Some(grant_id) =
             self.ledger
                 .covers(&req.capability, &req.resource, &req.actor_persona)
@@ -491,7 +489,7 @@ impl PolicyEngine for DefaultPolicyEngine {
             return Ok(d);
         }
 
-        // No covering grant — mode decides.
+        // No covering grant - mode decides.
         match policy.mode {
             ApprovalMode::Auto => {
                 let audit_id = self.write_audit(&req, DecisionKind::Allow, &change_id, None)?;
@@ -578,7 +576,7 @@ impl PolicyEngine for DefaultPolicyEngine {
         let revoked = match &scope {
             EmergencyScope::All => self.ledger.revoke_all(RevokeReason::EmergencyRevoke),
             EmergencyScope::Category(_cap) => {
-                // Wave 3 simplification — treat any non-All scope as All. A
+                // Wave 3 simplification - treat any non-All scope as All. A
                 // narrower per-category implementation arrives in Wave 4.
                 self.ledger.revoke_all(RevokeReason::EmergencyRevoke)
             }
