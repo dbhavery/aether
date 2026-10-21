@@ -68,7 +68,7 @@ After that: generate the remaining 9 canonical personas via `scripts/persona_gen
 ## How to resume
 
 ```bash
-cd C:/Users/dbhav/Projects/aether
+cd aether
 git checkout dev && git pull
 py -3.13 -m venv .venv   # if not already
 .venv/Scripts/python.exe -m pip install -r requirements.txt

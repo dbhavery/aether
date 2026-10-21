@@ -25,7 +25,7 @@ Scripts detect available backends automatically and fall back in order:
 ## One-persona recipe (end-to-end)
 
 ```bash
-cd C:/Users/dbhav/Projects/aether-personas
+cd aether-personas
 
 # 1. Generate base portrait (1024x1024 square, writes personas/<id>/avatar/portrait.png)
 python scripts/persona_generator/generate_portrait.py aurora
