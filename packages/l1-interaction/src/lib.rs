@@ -1,7 +1,8 @@
 //! # aether-l1-interaction
 //!
-//! **Status:** Wave 4 stub. Traits + key enums only. No turn loop, no reflex
-//! classifier, no media plumbing.
+//! **Status:** first slice. Traits and key enums, plus a minimal turn state
+//! machine (`turn.rs`) that calls the L5 policy gate and then dispatches to a
+//! router or stops. No reflex classifier and no media plumbing yet.
 //!
 //! L1 owns interaction timing, the turn state machine, and the reflex router.
 //! Source: `ARCHITECTURE.md`.

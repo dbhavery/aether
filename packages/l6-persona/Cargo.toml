@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
-description = "L6 — persona compiler / companion-identity shell (Wave 4 stub)."
+description = "L6 persona layer: traits plus a deterministic persona profile compiler."
 
 [lib]
 path = "src/lib.rs"
